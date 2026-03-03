@@ -1,0 +1,346 @@
+{
+  "version": "v1",
+  "method": "semantic-huffman",
+  "source": "MEMORY.md",
+  "entries": 59,
+  "compression": {
+    "original_chars": 9436,
+    "compressed_chars": 7751,
+    "ratio": 1.22,
+    "original_tokens": 2359,
+    "compressed_tokens": 1937
+  },
+  "alphabet": {
+    "": {
+      "means": "## ",
+      "type": "format",
+      "frequency": 18
+    },
+    "→": {
+      "means": "glyph",
+      "type": "noun",
+      "frequency": 26
+    },
+    "✓": {
+      "means": "FIXÉ",
+      "type": "state",
+      "frequency": 2
+    },
+    "←": {
+      "means": "session",
+      "type": "entity",
+      "frequency": 14
+    },
+    "×": {
+      "means": "concept",
+      "type": "noun",
+      "frequency": 14
+    },
+    ".j": {
+      "means": ".json",
+      "type": "path",
+      "frequency": 23
+    },
+    "∑": {
+      "means": "Yggdrasil",
+      "type": "entity",
+      "frequency": 7
+    },
+    "∂": {
+      "means": "chunks",
+      "type": "noun",
+      "frequency": 11
+    },
+    "ds/": {
+      "means": "data/scan/",
+      "type": "path",
+      "frequency": 7
+    },
+    "∫": {
+      "means": "spectral",
+      "type": "entity",
+      "frequency": 7
+    },
+    "∘": {
+      "means": "concepts",
+      "type": "noun",
+      "frequency": 7
+    },
+    "∇": {
+      "means": "glyphes",
+      "type": "noun",
+      "frequency": 8
+    },
+    "∙": {
+      "means": "arXiv",
+      "type": "entity",
+      "frequency": 11
+    },
+    "dc/": {
+      "means": "data/core/",
+      "type": "path",
+      "frequency": 6
+    },
+    "◆": {
+      "means": "OpenAlex",
+      "type": "entity",
+      "frequency": 6
+    },
+    "◇": {
+      "means": "snapshot",
+      "type": "noun",
+      "frequency": 6
+    },
+    "et/": {
+      "means": "engine/topology/",
+      "type": "path",
+      "frequency": 3
+    },
+    "eng/": {
+      "means": "engine/",
+      "type": "path",
+      "frequency": 12
+    },
+    "§": {
+      "means": "scanner",
+      "type": "noun",
+      "frequency": 6
+    },
+    "¶": {
+      "means": "blind test",
+      "type": "entity",
+      "frequency": 4
+    },
+    "▹": {
+      "means": "frames",
+      "type": "noun",
+      "frequency": 7
+    },
+    "†": {
+      "means": "pipeline",
+      "type": "noun",
+      "frequency": 5
+    },
+    "▸": {
+      "means": "2026",
+      "type": "number",
+      "frequency": 11
+    },
+    "‡": {
+      "means": "papers",
+      "type": "noun",
+      "frequency": 6
+    },
+    "ea/": {
+      "means": "engine/analysis/",
+      "type": "path",
+      "frequency": 2
+    },
+    "a0": {
+      "means": "symboles",
+      "type": "noun",
+      "frequency": 4
+    },
+    "a1": {
+      "means": "formules",
+      "type": "noun",
+      "frequency": 4
+    },
+    ".p": {
+      "means": ".py",
+      "type": "path",
+      "frequency": 23
+    },
+    "em/": {
+      "means": "engine/mining/",
+      "type": "path",
+      "frequency": 2
+    },
+    "a6": {
+      "means": "co-occurrence",
+      "type": "entity",
+      "frequency": 2
+    },
+    "a5": {
+      "means": "Cohen's d",
+      "type": "entity",
+      "frequency": 3
+    },
+    "a3": {
+      "means": "Recall@",
+      "type": "entity",
+      "frequency": 4
+    },
+    "a4": {
+      "means": "espèces",
+      "type": "noun",
+      "frequency": 4
+    },
+    "a7": {
+      "means": "domaines",
+      "type": "noun",
+      "frequency": 3
+    },
+    "a9": {
+      "means": "347,999,931",
+      "type": "number",
+      "frequency": 2
+    },
+    "b0": {
+      "means": "108,301,944",
+      "type": "number",
+      "frequency": 2
+    },
+    "a2": {
+      "means": "2015",
+      "type": "number",
+      "frequency": 8
+    },
+    "a8": {
+      "means": "21,524",
+      "type": "number",
+      "frequency": 4
+    },
+    "b1": {
+      "means": "graines",
+      "type": "noun",
+      "frequency": 3
+    },
+    "b2": {
+      "means": "matrice",
+      "type": "noun",
+      "frequency": 3
+    },
+    "b3": {
+      "means": "Laplacien",
+      "type": "entity",
+      "frequency": 2
+    },
+    "b4": {
+      "means": "strate",
+      "type": "noun",
+      "frequency": 3
+    },
+    "eg/": {
+      "means": "engine/glyphs/",
+      "type": "path",
+      "frequency": 1
+    },
+    "b6": {
+      "means": "Mann-Whitney",
+      "type": "entity",
+      "frequency": 1
+    },
+    "b7": {
+      "means": "Sedov-Taylor",
+      "type": "entity",
+      "frequency": 1
+    },
+    ".h": {
+      "means": ".html",
+      "type": "path",
+      "frequency": 3
+    },
+    "b9": {
+      "means": "Winter Tree",
+      "type": "entity",
+      "frequency": 1
+    },
+    "c0": {
+      "means": "prédictions",
+      "type": "noun",
+      "frequency": 1
+    },
+    "b5": {
+      "means": "1337",
+      "type": "number",
+      "frequency": 4
+    },
+    "b8": {
+      "means": "65,026",
+      "type": "number",
+      "frequency": 2
+    },
+    "∅": {
+      "means": "SUPPRIMÉ",
+      "type": "state",
+      "frequency": 1
+    },
+    "◉": {
+      "means": "PRÊT",
+      "type": "state",
+      "frequency": 2
+    },
+    "c1": {
+      "means": "mycélium",
+      "type": "entity",
+      "frequency": 1
+    },
+    "c2": {
+      "means": "581/581",
+      "type": "number",
+      "frequency": 1
+    }
+  },
+  "encode": {
+    "- ": "",
+    "glyph": "→",
+    ".json": ".j",
+    "COMPLET": "✓",
+    "session": "←",
+    "concept": "×",
+    "**": "",
+    "- **": "",
+    "engine/": "eng/",
+    "data/scan/": "ds/",
+    ".py": ".p",
+    "chunks": "∂",
+    "Yggdrasil": "∑",
+    "data/core/": "dc/",
+    "spectral": "∫",
+    "glyphes": "∇",
+    "concepts": "∘",
+    "arXiv": "∙",
+    "## ": "",
+    "OpenAlex": "◆",
+    "snapshot": "◇",
+    "engine/topology/": "et/",
+    "2026": "▸",
+    "frames": "▹",
+    "scanner": "§",
+    "blind test": "¶",
+    "pipeline": "†",
+    "papers": "‡",
+    "symboles": "a0",
+    "formules": "a1",
+    "engine/analysis/": "ea/",
+    "2015": "a2",
+    "Recall@": "a3",
+    "espèces": "a4",
+    "engine/mining/": "em/",
+    "Cohen's d": "a5",
+    "co-occurrence": "a6",
+    "domaines": "a7",
+    "21,524": "a8",
+    "347,999,931": "a9",
+    "108,301,944": "b0",
+    "graines": "b1",
+    "matrice": "b2",
+    "VALIDÉ": "✓",
+    "Laplacien": "b3",
+    "strate": "b4",
+    "1337": "b5",
+    ".html": ".h",
+    "engine/glyphs/": "eg/",
+    "Mann-Whitney": "b6",
+    "Sedov-Taylor": "b7",
+    "65,026": "b8",
+    "Winter Tree": "b9",
+    "prédictions": "c0",
+    "FIXÉ": "✓",
+    "PRÊT": "◉",
+    "SUPPRIMÉ": "∅",
+    "mycélium": "c1",
+    "581/581": "c2"
+  }
+}
