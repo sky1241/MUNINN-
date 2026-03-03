@@ -1,0 +1,4 @@
+✓BUG BLOQUANT (22 fév 2026):
+  concept_id injecté dans les 21.5K/21.5K symboles de v2 (100%)
+  Index inverse: data/core/concept_index.json (20.9K entries, concept_id → symbol info)
+  Script: engine/mining/map_#c.py (renommé depuis inject_concept_ids.py)

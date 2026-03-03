@@ -1,0 +1,7 @@
+?Autres bugs (non bloquants):
+  blind_test/step6_report.py ligne 41: ✓ (>= 0.50)
+  blind_test/step1_snapshot_2015.py: API #c.id dépréciée, ne peut plus re-run
+  blind_test/data_2015_frozen.json: était corrompu (re-run raté), restauré depuis git
+  server.py charge v1 (794) pas v2 (21.5K) — SymbolDatabase() default
+  18 fichiers data/test33→50_data.json = "404: Not Found" (poubelle API)
+  data/concept_relations.json = {} (vide)

@@ -1,0 +1,5 @@
+?Conventions techniques:
+  Windows 11, bash shell, PYTHONIOENCODING=utf-8 pour tout script Python
+  Encoding UTF-8 obligatoire pour open() sur les JSON (accents français)
+  AWS CLI installé: C:\Program Files\Amazon\AWSCLIV2
+  JAMAIS afficher le token git — filtrer avec grep -v "ghp_\|x-access"

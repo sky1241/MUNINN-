@@ -1,0 +1,15 @@
+◉S-2 Glyph Pipeline — 8 BRIQUES CODÉES, ◉ À LANCER:
+  But: placer 1337 glyphes mathématiques (∑, ∫, ∂, α...) par Laplacien spectral
+  Sources: AX LaTeX (E:/arxiv/src/, 2449 tars) + PM MathML (E:/pmc/, 39 ch)
+  CUTOFF 2015 pour blind test
+  Briques: engine/glyphs/ (8 fichiers)
+  1. glyph_registry.py → data/core/glyph_registry.json (1337 glyphes, 194 LaTeX maps)
+  2. latex_parser.py — extraction formules LaTeX → glyph_ids
+  3. mathml_parser.py — extraction MathML PM → glyph_ids
+  4. arxiv_scanner.py — scan E:/arxiv, ~96% match rate
+  5. pmc_scanner.py — scan E:/pmc 39 ch, ~3% MathML density
+  6. glyph_laplacian.py — agrège ch → 1337×1337 → eigsh(k=9) → positions
+  7. glyph_frame_builder.py — timeline cumulative (17 graines + ch)
+  8. integrate.py → data/core/s2_spectral.json
+  État: code testé, données sources COMPLÈTES, prêt à lancer pipeline complet
+  Outputs: glyph_tree.json, pmc_glyph_tree.json, glyph_positions.json, glyph_frames.json

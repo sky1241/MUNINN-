@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "created": "2026-03-03 23:44:23",
+  "budget": {
+    "root_lines": 100,
+    "branch_lines": 150,
+    "leaf_lines": 200,
+    "tokens_per_line": 16,
+    "max_loaded_tokens": 30000,
+    "compression_ratio": 4.6
+  },
+  "codebook_version": "v0",
+  "nodes": {
+    "root": {
+      "type": "root",
+      "file": "root.mn",
+      "lines": 103,
+      "max_lines": 100,
+      "children": [
+        "b00",
+        "b01",
+        "b02",
+        "b03",
+        "b04",
+        "b05",
+        "b06"
+      ],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b00": {
+      "type": "branch",
+      "file": "b00.mn",
+      "lines": 6,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b01": {
+      "type": "branch",
+      "file": "b01.mn",
+      "lines": 6,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b02": {
+      "type": "branch",
+      "file": "b02.mn",
+      "lines": 15,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b03": {
+      "type": "branch",
+      "file": "b03.mn",
+      "lines": 4,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b04": {
+      "type": "branch",
+      "file": "b04.mn",
+      "lines": 4,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b05": {
+      "type": "branch",
+      "file": "b05.mn",
+      "lines": 7,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    },
+    "b06": {
+      "type": "branch",
+      "file": "b06.mn",
+      "lines": 5,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-03",
+      "access_count": 0
+    }
+  }
+}
