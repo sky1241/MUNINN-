@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "version": "0.1",
+    "created": "2026-03-06",
+    "description": "MUNINN Codebook — clé Enigma universelle pour compression sémantique LLM",
+    "encoding": "sinogramme → UID opaque → concept défini",
+    "rule": "Le cousin lit UNIQUEMENT l'index. Jamais le sens chinois.",
+    "compression_target": "-80% tokens vs texte brut",
+    "author": "sky1241"
+  },
+
+  "boot_instruction": "Tu reçois ce codebook au boot. Chaque sinogramme = un UID opaque. Lookup direct, jamais interprétation linguistique. La clé fait loi.",
+
+  "domains": {
+    "*":        "universel — tous repos",
+    "ygg":      "yggdrasil-engine",
+    "muninn":   "MUNINN-",
+    "tree":     "Winter Tree / tree",
+    "infernal": "infernal-wheel",
+    "tdha":     "s-TDHA-jeu",
+    "pnp":      "p-egal-np-on-s-amuse-"
+  },
+
+  "symbols": {
+
+    "── STRATES YGGDRASIL ──────────────────────────────────": {},
+    "根": { "id": 1,  "concept": "S0_ROOT",        "domain": "ygg", "desc": "Strate S0 — 65026 concepts fondamentaux" },
+    "茎": { "id": 2,  "concept": "S1_METIERS",     "domain": "ygg", "desc": "Strate S1 — domaines×glyphes" },
+    "枝": { "id": 3,  "concept": "S2_GLYPHS",      "domain": "ygg", "desc": "Strate S2 — 1337 glyphes mathématiques" },
+    "叶": { "id": 4,  "concept": "S3_CONCEPTS",    "domain": "ygg", "desc": "Strate S3 — concepts vivants" },
+    "花": { "id": 5,  "concept": "S4_BRIDGES",     "domain": "ygg", "desc": "Strate S4 — ponts inter-domaines" },
+    "果": { "id": 6,  "concept": "S5_PREDICTIONS", "domain": "ygg", "desc": "Strate S5 — prédictions 2025" },
+    "天": { "id": 7,  "concept": "S6_CEILING",     "domain": "ygg", "desc": "Strate S6 — BB(n), Ω, incompressible" },
+
+    "── PATTERNS ───────────────────────────────────────────": {},
+    "桥": { "id": 10, "concept": "P1_BRIDGE",      "domain": "ygg", "desc": "Pont inter-domaines — explosion publication" },
+    "密": { "id": 11, "concept": "P2_DENSE",        "domain": "ygg", "desc": "Hub stable — meshedness élevé" },
+    "爆": { "id": 12, "concept": "P3_EXPLOSION",   "domain": "ygg", "desc": "Théorie×Outil — explosion post-validation" },
+    "洞": { "id": 13, "concept": "P4_HOLE",         "domain": "ygg", "desc": "Trou ouvert — pont pas encore explosé = FUTUR" },
+    "死": { "id": 14, "concept": "P5_DEAD",         "domain": "ygg", "desc": "Anti-signal — slope négative, hyphe mort" },
+
+    "── TYPES DE TROUS ─────────────────────────────────────": {},
+    "技": { "id": 20, "concept": "HOLE_A_TECH",    "domain": "ygg", "desc": "Trou technique — sait où aller, ne peut pas" },
+    "念": { "id": 21, "concept": "HOLE_B_CONCEPT", "domain": "ygg", "desc": "Trou conceptuel — personne n'a l'idée" },
+    "信": { "id": 22, "concept": "HOLE_C_BELIEF",  "domain": "ygg", "desc": "Trou perceptuel — outil existe, personne n'y croit" },
+
+    "── MÉTRIQUES ──────────────────────────────────────────": {},
+    "值": { "id": 30, "concept": "P_VALUE",         "domain": "ygg", "desc": "p-value statistique" },
+    "效": { "id": 31, "concept": "EFFECT_SIZE",     "domain": "ygg", "desc": "Cohen's d — taille d'effet" },
+    "对": { "id": 32, "concept": "MIRROR_PAIRS",    "domain": "ygg", "desc": "Mirror pairs test" },
+    "分": { "id": 33, "concept": "SCORE_UZZI",      "domain": "ygg", "desc": "Uzzi z-score" },
+    "力": { "id": 34, "concept": "FITNESS_WB",      "domain": "ygg", "desc": "Wang-Barabási fitness" },
+    "断": { "id": 35, "concept": "DISRUPTION",      "domain": "ygg", "desc": "D-index Wu-Evans" },
+
+    "── ÉTAT SCAN / PIPELINE ───────────────────────────────": {},
+    "✓":  { "id": 40, "concept": "COMPLETE",        "domain": "*",   "desc": "Étape complète" },
+    "⟳":  { "id": 41, "concept": "RUNNING",         "domain": "*",   "desc": "En cours d'exécution" },
+    "✗":  { "id": 42, "concept": "FAILED",          "domain": "*",   "desc": "Échec" },
+    "⧖":  { "id": 43, "concept": "PENDING",         "domain": "*",   "desc": "En attente" },
+    "块": { "id": 44, "concept": "CHUNK",            "domain": "*",   "desc": "Chunk de scan — NNN/TOTAL" },
+    "纸": { "id": 45, "concept": "PAPERS",          "domain": "ygg", "desc": "Nombre de papers scannés" },
+
+    "── WINTER TREE ────────────────────────────────────────": {},
+    "树": { "id": 50, "concept": "TREE_NODE",       "domain": "tree", "desc": "Nœud Winter Tree" },
+    "雾": { "id": 51, "concept": "FOG_COLD",        "domain": "tree", "desc": "Zone froide/morte — fog of war actif" },
+    "光": { "id": 52, "concept": "FOG_WARM",        "domain": "tree", "desc": "Zone révélée/vivante" },
+    "钩": { "id": 53, "concept": "ENTRY_HOOK",      "domain": "tree", "desc": "Point d'entrée code — +entry" },
+    "态": { "id": 54, "concept": "STATUS",          "domain": "tree", "desc": "Statut nœud — done/wip/todo" },
+    "链": { "id": 55, "concept": "DEPENDS",         "domain": "tree", "desc": "Dépendance entre nœuds — +depends" },
+
+    "── MUNINN INTERNE ─────────────────────────────────────": {},
+    "鸦": { "id": 60, "concept": "MUNINN_SELF",     "domain": "muninn", "desc": "Référence au système MUNINN lui-même" },
+    "码": { "id": 61, "concept": "CODEBOOK",        "domain": "muninn", "desc": "Ce fichier — la clé Enigma" },
+    "缩": { "id": 62, "concept": "COMPRESS",        "domain": "muninn", "desc": "Opération de compression" },
+    "解": { "id": 63, "concept": "DECOMPRESS",      "domain": "muninn", "desc": "Opération de décompression" },
+    "频": { "id": 64, "concept": "HUFFMAN_WEIGHT",  "domain": "muninn", "desc": "Poids Huffman — fréquence d'apparition" },
+
+    "── REPOS / PROJETS ────────────────────────────────────": {},
+    "龙": { "id": 70, "concept": "REPO_YGG",        "domain": "*", "desc": "yggdrasil-engine" },
+    "鸦": { "id": 71, "concept": "REPO_MUNINN",     "domain": "*", "desc": "MUNINN-" },
+    "轮": { "id": 72, "concept": "REPO_INFERNAL",   "domain": "*", "desc": "infernal-wheel" },
+    "等": { "id": 73, "concept": "REPO_PNP",        "domain": "*", "desc": "p-egal-np-on-s-amuse-" },
+    "孩": { "id": 74, "concept": "REPO_TDHA",       "domain": "*", "desc": "s-TDHA-jeu" },
+
+    "── GÉNÉRIQUE ──────────────────────────────────────────": {},
+    "始": { "id": 80, "concept": "SESSION_START",   "domain": "*", "desc": "Début de session" },
+    "末": { "id": 81, "concept": "SESSION_END",     "domain": "*", "desc": "Fin de session" },
+    "种": { "id": 82, "concept": "SEED_IDEA",       "domain": "*", "desc": "Graine — idée à creuser" },
+    "误": { "id": 83, "concept": "BUG",             "domain": "*", "desc": "Bug identifié" },
+    "修": { "id": 84, "concept": "FIX",             "domain": "*", "desc": "Correction appliquée" },
+    "问": { "id": 85, "concept": "OPEN_QUESTION",   "domain": "*", "desc": "Question ouverte non résolue" },
+    "决": { "id": 86, "concept": "DECISION",        "domain": "*", "desc": "Décision actée, irrévocable" },
+    "警": { "id": 87, "concept": "WARNING",         "domain": "*", "desc": "Attention — point critique" }
+  },
+
+  "compression_examples": {
+    "texte_brut": "S-2 pipeline complet : Laplacien spectral 1337 glyphes (459 chunks, 617 actifs), cutoff 2015, p=3.4e-12, mirror pairs 19/20, d=0.925",
+    "muninn":     "枝✓ | 块459 | 值3.4e-12 | 对19/20 | 效0.925",
+    "ratio":      "106 chars → 32 chars = -70%"
+  }
+}

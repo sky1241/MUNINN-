@@ -1,0 +1,112 @@
+name: MUNINN CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Codebook + Codec
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate CODEBOOK.json
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+
+          with open("CODEBOOK.json", encoding="utf-8") as f:
+              cb = json.load(f)
+
+          errors = []
+
+          # Check meta
+          assert "meta" in cb, "Missing meta"
+          assert "symbols" in cb, "Missing symbols"
+          assert "domains" in cb, "Missing domains"
+
+          # Check no duplicate IDs
+          ids = {}
+          for sym, data in cb["symbols"].items():
+              if not isinstance(data, dict) or "id" not in data:
+                  continue
+              uid = data["id"]
+              if uid in ids:
+                  errors.append(f"Duplicate ID {uid}: {sym} vs {ids[uid]}")
+              ids[uid] = sym
+
+          # Check required fields
+          for sym, data in cb["symbols"].items():
+              if not isinstance(data, dict) or "concept" not in data:
+                  continue
+              for field in ["id", "concept", "domain", "desc"]:
+                  if field not in data:
+                      errors.append(f"Symbol '{sym}' missing field '{field}'")
+
+          if errors:
+              print("ERRORS:")
+              for e in errors:
+                  print(f"  {e}")
+              sys.exit(1)
+
+          symbols = {k: v for k, v in cb["symbols"].items()
+                     if isinstance(v, dict) and "concept" in v}
+          print(f"✓ CODEBOOK valid — {len(symbols)} symbols, {len(ids)} unique IDs")
+          EOF
+
+      - name: Test Codec
+        run: |
+          python3 - <<'EOF'
+          import subprocess, sys
+
+          # Test stats
+          r = subprocess.run(["python3", "engine/core/muninn_codec.py", "stats"], capture_output=True, text=True)
+          assert r.returncode == 0, f"stats failed: {r.stderr}"
+          print(r.stdout)
+
+          # Test encode
+          r = subprocess.run(
+              ["python3", "engine/core/muninn_codec.py", "encode", "S-2 pipeline complet, 459 chunks, p=3.4e-12"],
+              capture_output=True, text=True
+          )
+          assert r.returncode == 0, f"encode failed: {r.stderr}"
+          print(f"encode: {r.stdout.strip()}")
+
+          # Test decode roundtrip
+          encoded = r.stdout.strip()
+          r2 = subprocess.run(
+              ["python3", "engine/core/muninn_codec.py", "decode", encoded],
+              capture_output=True, text=True
+          )
+          assert r2.returncode == 0, f"decode failed: {r2.stderr}"
+          print(f"decode: {r2.stdout.strip()}")
+
+          print("✓ Codec OK")
+          EOF
+
+      - name: Compression ratio check
+        run: |
+          python3 - <<'EOF'
+          import json
+
+          with open("CODEBOOK.json", encoding="utf-8") as f:
+              cb = json.load(f)
+
+          ex = cb.get("compression_examples", {})
+          if ex:
+              orig = len(ex["texte_brut"])
+              comp = len(ex["muninn"])
+              ratio = 100 * (orig - comp) // orig
+              print(f"Compression example: {orig} → {comp} chars ({ratio}% reduction)")
+              assert ratio >= 50, f"Compression ratio {ratio}% below 50% threshold"
+              print(f"✓ Ratio {ratio}% >= 50% threshold")
+          EOF
