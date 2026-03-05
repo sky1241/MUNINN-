@@ -1,0 +1,12 @@
+?OA Snapshot Local — E:\openalex\data\:
+  MIGRE D:\ -> E:\ (5 TB) @s 10, 28 fev 2026
+  Works: 692 GB, 328 dossiers, 1981 fichiers .gz — ✓ (manifest 478.9M #p)
+  Authors: 62 GB — ✓
+  Concepts: 6.4 MB (65K) — ✓
+  Topics: 5 MB (4.5K) — ✓
+  Reste (sources, institutions, etc.): ~3 GB (awards, etc.) — ✓
+  legacy-data/: SUPPRIME @s 9 (173 GB doublon ancien snapshot)
+  Format Works: 1 ligne = 1 paper JSON, champs: #c[], topics[], publication_year, type, is_retracted
+  Snapshot = UN dump complet, dossiers updated_date= = date derniere modif par OA
+  0 doublons par ID dans le snapshot (verifie), 0.10% titres generiques partages (bruit)
+  0.3% erratum + 0.03% retraction -> filtres dans scanner V2

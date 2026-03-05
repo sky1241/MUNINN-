@@ -4,7 +4,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
-MEMORY = Path(r"C:\Users\ludov\.claude\projects\c--Users-ludov-Desktop-ygg-yggdrasil-engine\memory\MEMORY.md")
+ROOT = Path(__file__).resolve().parent.parent.parent
+MEMORY = ROOT / "memory" / "root.mn"
 
 text = MEMORY.read_text(encoding="utf-8")
 

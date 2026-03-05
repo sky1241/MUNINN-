@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "created": "2026-03-03 23:44:23",
+  "updated": "2026-03-06",
   "budget": {
     "root_lines": 100,
     "branch_lines": 150,
@@ -9,12 +10,12 @@
     "max_loaded_tokens": 30000,
     "compression_ratio": 4.6
   },
-  "codebook_version": "v0",
+  "codebook_version": "v0.1",
   "nodes": {
     "root": {
       "type": "root",
       "file": "root.mn",
-      "lines": 103,
+      "lines": 66,
       "max_lines": 100,
       "children": [
         "b00",
@@ -23,10 +24,20 @@
         "b03",
         "b04",
         "b05",
-        "b06"
+        "b06",
+        "b07"
       ],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 2,
+      "tags": [
+        "yggdrasil",
+        "architecture",
+        "strates",
+        "scan",
+        "prediction",
+        "glyph",
+        "spectral"
+      ]
     },
     "b00": {
       "type": "branch",
@@ -34,8 +45,14 @@
       "lines": 6,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 1,
+      "tags": [
+        "glyph",
+        "archaeology",
+        "S2_GLYPHS",
+        "history"
+      ]
     },
     "b01": {
       "type": "branch",
@@ -43,8 +60,14 @@
       "lines": 6,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 0,
+      "tags": [
+        "pipeline",
+        "scan",
+        "arxiv",
+        "mapper"
+      ]
     },
     "b02": {
       "type": "branch",
@@ -52,8 +75,16 @@
       "lines": 15,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 1,
+      "tags": [
+        "glyph",
+        "pipeline",
+        "spectral",
+        "S2_GLYPHS",
+        "latex",
+        "mathml"
+      ]
     },
     "b03": {
       "type": "branch",
@@ -61,8 +92,14 @@
       "lines": 4,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 0,
+      "tags": [
+        "film",
+        "frames",
+        "meteorites",
+        "prediction"
+      ]
     },
     "b04": {
       "type": "branch",
@@ -70,8 +107,13 @@
       "lines": 4,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 0,
+      "tags": [
+        "bug",
+        "fix",
+        "concept_id"
+      ]
     },
     "b05": {
       "type": "branch",
@@ -79,17 +121,41 @@
       "lines": 7,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 0,
+      "tags": [
+        "bug"
+      ]
     },
     "b06": {
       "type": "branch",
       "file": "b06.mn",
-      "lines": 5,
+      "lines": 8,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-03",
-      "access_count": 0
+      "last_access": "2026-03-06",
+      "access_count": 0,
+      "tags": [
+        "convention",
+        "python",
+        "encoding",
+        "aws"
+      ]
+    },
+    "b07": {
+      "type": "branch",
+      "file": "b07.mn",
+      "lines": 12,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-06",
+      "access_count": 0,
+      "tags": [
+        "openalex",
+        "snapshot",
+        "data",
+        "scan"
+      ]
     }
   }
 }

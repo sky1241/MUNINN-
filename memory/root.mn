@@ -1,103 +1,67 @@
-# MUNINN|codebook=v0
+# MUNINN|codebook=v0.1
 ?Projet:
   Repo: c:\Users\ludov\Desktop\ygg\yggdrasil-engine (github: sky1241/yggdrasil-engine)
-  Famille: Baobab (remplir le tronc avant d'étendre les branches)
-  User: Sky — parle français, notation informelle, veut aller vite
+  Famille: Baobab (remplir le tronc avant d'etendre les branches)
+  User: Sky — parle francais, notation informelle, veut aller vite
   Focus: uniquement Yggdrasil (PAS les cross-projets)
 ?Architecture:
-  9 strates S-2→S6 basées sur la Hiérarchie Arithmétique de Post
-  S-2=Glyphes, S-1=Métiers, S0=Formules (le SOL), S1→S6=Arbre
-  Mycelium = co-occurrences, vit dans S-2 à S0 (PAS au-dessus)
-  C1 = prouvé/validé, C2 = conjectures/hypothèses, C3 = fusion C1+C2
-  Viz V3: viz/yggdrasil_rain_v3.html — Canvas 2D, 9 continents, vivant/musée/fusion
-  Viz V4: viz/yggdrasil_rain_v4.html — Film cube 3D, 1534 frames, points progressifs
-  Données v1: data/core/strates_export.json (794 symboles, 53 domaines)
-  Données v2: data/core/strates_export_v2.json (21.5K symboles, 95 domaines)
+  9 strates S-2->S6 basees sur la Hierarchie Arithmetique de Post
+  S-2=Glyphes, S-1=Metiers, S0=Formules (le SOL), S1->S6=Arbre
+  Mycelium = co-occurrences, vit dans S-2 a S0 (PAS au-dessus)
+  C1 = prouve/valide, C2 = conjectures/hypotheses, C3 = fusion C1+C2
+  Viz V3: viz/yggdrasil_rain_v3.html — Canvas 2D, 9 continents
+  Viz V4: viz/yggdrasil_rain_v4.html — Film cube 3D, 1534 frames
+  Donnees v1: data/core/strates_export.json (794 symboles, 53 domaines)
+  Donnees v2: data/core/strates_export_v2.json (21.5K symboles, 95 domaines)
   Core: engine/core/symbols.py + engine/core/holes.py + engine/core/scisci.py
   Formules: docs/formulas.tex (LaTeX, toutes les formules + sources DOI)
-  SOL.md = source de vérité inter-@ss
-?OA Snapshot Local — E:\openalex\data\:
-  MIGRÉ D:\ → E:\ (5 TB) @s 10, 28 fév 2026
-  Works: 692 GB, 328 dossiers, 1981 fichiers .gz — ✓ (manifest 478.9M #p)
-  Authors: 62 GB — ✓
-  Concepts: 6.4 MB (65K) — ✓
-  Topics: 5 MB (4.5K) — ✓
-  Reste (sources, institutions, etc.): ~3 GB (awards, etc.) — ✓
-  legacy-data/: SUPPRIMÉ @s 9 (173 GB doublon ancien snapshot)
-  Format Works: 1 ligne = 1 paper JSON, champs: #c[], topics[], publication_year, type, is_retracted
-  Snapshot = UN dump complet, dossiers updated_date= = date dernière modif par OA
-  0 doublons par ID dans le snapshot (vérifié), 0.10% titres génériques partagés (bruit)
-  0.3% erratum + 0.03% retraction → filtrés dans scanner V2
-?Python:
-  Bon interpréteur: C:/Users/ludov/AppData/Local/Programs/Python/Python313/python.exe
-  Le python du bash pointe vers Windows Store (VIDE, pas de numpy)
-  Toujours utiliser le chemin complet ou PYTHONIOENCODING=utf-8
-✓État V1:
+  SOL.md = source de verite inter-sessions
+✓Etat V1:
   100 tests pipeline: 87/100 (87%)
   32 tests historiques: 97%
-  Blind test semi-aveugle 2015→2025: R@100=50%, p=0.000011, d=1.53
-  Co-occurrence réelle: matrice 85×85 domaines (296M #p)
-  Escaliers: 200 géo + 69 passe-partout
+  Blind test semi-aveugle 2015->2025: R@100=50%, p=0.000011, d=1.53
+  Co-occurrence reelle: matrice 85x85 domaines (296M #p)
+  Escaliers: 200 geo + 69 passe-partout
   Cross-analyse: 806 isolated hubs, 1220 hidden bridges, 1567 P4 voids
-✓État V2@s10:
-  Winter tree scan V2: 581/581 ch ✓, 692 GB, 348.0M #p
-  65.0K #c × année/mois, 108.3M paires non-zero, 1.6K périodes
+✓Etat V2@s10:
+  WT scan V2: 581/581 ch ✓, 692 GB, 348.0M #p
+  65.0K #c x annee/mois, 108.3M paires non-zero, 1.6K periodes
   Scanner: engine/topology/winter_tree_scanner.py
   Filtres: erratum/retraction/is_retracted + poids 1/C(n,2)
-  MONTH_FROM_YEAR=1980 (avant=par année, après=par mois)
+  MONTH_FROM_YEAR=1980 (avant=par annee, apres=par mois)
   Output: data/scan/ch/chunk_NNN/ (cooc.json.gz, activity.json.gz, meta.json)
-  E:\ = 4.6 TB libre (disque 5 TB, migré @s 10)
-✓État S-2 Graines@s10:
-  17 graines S-2 à l'an 1100 : 10 chiffres (0-9) + 7 symboles alchimiques (☉☽♂♀♃♄☿)
-  Patient t=0: tally | ~43K av. J-C (Lebombo), Brahmi 1-9 ~257 av. J-C, 0 = 628 (Brahmagupta), alchimie ~300 (Zosimos)
-  Mutation documentée: ☉→Au→79, ☽→Ag→47, ♂→Fe→26, ♀→Cu→29, ♃→Sn→50, ♄→Pb→82, ☿→Hg→80
-  Zodiac (♈♉♊...) EXCLU (pas de mutation scientifique), alphabet latin/grec EXCLU (substrat)
-  S-2 = glyphes inventés POUR la science uniquement
-  9 espèces = 9 spores indépendantes, t=0 différents, fusionnent en grandissant
-  Aristote (~350 av. J-C) = mega-hub, 1 spore → 4 espèces (spéciation)
-  Données: data/scan/early_#c.json, data/scan/species_65k.json
-  Types mycologiques: endo (Physiq 73%, BioCli 71%), ecto (TerGeo), sapro (HumEco 42%, BioLab 40%)
-  Sources: Sarton, Wentrup 2024 ChemPlusChem, Marx 2022 IJC
-?V4 — Film Mycélium@s10:
-  viz/yggdrasil_rain_v4.html: film intégré dans le cube 3D
+  E:\ = 4.6 TB libre (disque 5 TB, migre @s 10)
+✓Etat S-2 Graines@s10:
+  17 graines S-2 a l'an 1100: 10 chiffres (0-9) + 7 symboles alchimiques
+  9 especes = 9 spores independantes, fusionnent en grandissant
+  Aristote (~350 av. J-C) = mega-hub, 1 spore -> 4 especes
+  Donnees: data/scan/early_#c.json, data/scan/species_65k.json
+  Types mycologiques: endo (Physiq 73%, BioCli 71%), ecto (TerGeo), sapro (HumEco 42%)
+?V4 — Film Mycelium@s10:
+  viz/yggdrasil_rain_v4.html: film integre dans le cube 3D
   engine/topology/frame_builder.py: 1534 frames, 4h20 de scan
-  engine/topology/concept_births.py: 65.0K births, 13min de scan
   data/scan/frames.json (2.5 MB) + data/scan/concept_births.json (1.6 MB)
-  Sidebar compacte en mode film (.film-on)
   Serveur: lancer depuis RACINE du repo (pas viz/)
 ✓BT V2@s11:
-  Commit a446268, dossier blind_test_v2/
-  65.0K #c, cutoff 2015, 82.7M paires scorées
-  Mann-Whitney p=3.4e-12, d=0.44
-  Spectral K=9 sur données 2015 ONLY (pas de look-ahead)
+  65.0K #c, cutoff 2015, 82.7M paires scorees
+  Mann-Whitney p=3.4e-12, d=0.44, K=9 sur donnees 2015 ONLY
 ✓P4 2025@s11:
-  Commit b07d891, dossier predictions_2025/
   Scan: 581 ch, 348.0M #p, 108.3M paires non-zero
-  P4 = activity_A × activity_B × (1 - cooc_norm) × |z_uzzi|
-  z_uzzi = (observed - E) / std, E = works_i × works_j / total_works_sum
-  Top 10K INTER-espèces + INTRA classés par P4 score
-  Matrice collision 9×9: CS×Physics (82), Humanities×Physics (72), CS×Humanities (56)
-  Analyse top 100 INTER: 18 BANAL (18%), 30 INTÉRESSANT (30%), 41 WTF (41%), 11 BRUIT (11%)
-  20/20 vérifications web positives, 0 faux positif
-  BRUIT = artefacts tagging OA (Nucleofection, TSG101, Dysgeusia, etc.)
-  Pipeline: step1_full_scan → step1_merge → step2_species_full → step3_p4_both → step4_report → step5_collision
+  P4 = activity_A x activity_B x (1 - cooc_norm) x |z_uzzi|
+  Top 10K INTER-especes + INTRA classes par P4 score
+  Collision 9x9: CSxPhysics (82), HumanitiesxPhysics (72), CSxHumanities (56)
+  Analyse top 100: 18 BANAL, 30 INTERESSANT, 41 WTF, 11 BRUIT
+  20/20 verifications web positives, 0 faux positif
 ✓GL@s12:
-  Script: engine/analysis/glyph_laplacian.py (~350 lignes)
-  64 glyphes = eigenvecteurs du Laplacien normalisé (D^{-1/2} W D^{-1/2})
-  Matrice: snapshot_2015_65k.npz (cutoff 2015), log1p-transformée
-  eigsh K=64 en 130s via LinearOperator (zero-copy CSC transpose)
-  Blind test: R@100=70% (14/20), R@1K=85%, R@10K=100%
-  d=8.78 (×20 vs P4 0.44), p=2.76e-12, median rank=8
-  7 percées au rang 1 (AlphaGo, GPT, CAR-T, Microbiome, GAN, Liquid biopsy, Gravitational waves)
-  Score spectral: Score(i,j) = Σ_k λ_k × v_k(i) × v_k(j)
-  Chaque prédiction = formule (décomposition en top-5 glyphes contributeurs)
-  3.3K prédictions inter-espèces, zero-cooc only
-  Outputs: data/scan/glyphs.json, spectral_predictions.json, spectral_embeddings.npy, spectral_blind_test.json
-  Innovations mémoire: deferred scipy imports, streaming float64→float32 from zip, zero-copy CSC transpose
-→b00:✓AR Glyphes S-2@s14:
-→b01:✓AX Pipeline — SCANS ✓S@s15:
-→b02:◉S-2 Glyph Pipeline — 8 BRIQUES CODÉES, ◉ À LANCER:
-→b03:◉État V3 — CODE ◉, FRAMES DISPONIBLES@s7:
-→b04:✓BUG BLOQUANT (22 fév 2026):
-→b05:?Autres bugs (non bloquants):
-→b06:?Conventions techniques:
+  64 glyphes = eigenvecteurs Laplacien normalise
+  R@100=70%, R@1K=85%, R@10K=100%, d=8.78, p=2.76e-12, mrank=8
+  7 percees rang 1 (AlphaGo, GPT, CAR-T, Microbiome, GAN, Liquid biopsy, Grav waves)
+  Score: Sum_k lambda_k x v_k(i) x v_k(j), 3.3K pred inter-especes, zero-cooc
+→b00:✓AR Glyphes S-2@s14
+→b01:✓AX Pipeline — SCANS@s15
+→b02:◉S-2 Glyph Pipeline — 8 briques codees
+→b03:◉Etat V3 — code pret, frames dispo@s7
+→b04:✓BUG BLOQUANT (22 fev 2026)
+→b05:?Autres bugs (non bloquants)
+→b06:?Conventions techniques + Python
+→b07:?OA Snapshot Local — E:\openalex\data\

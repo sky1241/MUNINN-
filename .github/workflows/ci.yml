@@ -110,3 +110,79 @@ jobs:
               assert ratio >= 50, f"Compression ratio {ratio}% below 50% threshold"
               print(f"✓ Ratio {ratio}% >= 50% threshold")
           EOF
+
+      - name: Validate Tree Integrity
+        run: |
+          python3 - <<'EOF'
+          import json, sys, os
+
+          with open("memory/tree.json", encoding="utf-8") as f:
+              tree = json.load(f)
+
+          errors = []
+          nodes = tree["nodes"]
+          budget = tree["budget"]
+
+          # Check all node files exist
+          for name, node in nodes.items():
+              filepath = os.path.join("memory", node["file"])
+              if not os.path.exists(filepath):
+                  errors.append(f"Node '{name}': file '{filepath}' not found")
+                  continue
+
+              # Count actual lines
+              with open(filepath, encoding="utf-8") as f:
+                  actual_lines = sum(1 for _ in f)
+
+              # Check budget (R1)
+              max_lines = node["max_lines"]
+              if actual_lines > max_lines:
+                  errors.append(f"Node '{name}': {actual_lines} lines > budget {max_lines} (R1 VIOLATION)")
+
+              # Check declared lines match actual
+              declared = node["lines"]
+              if abs(actual_lines - declared) > 2:
+                  errors.append(f"Node '{name}': declared {declared} lines but actual {actual_lines}")
+
+          # Check root has children listed
+          root = nodes.get("root", {})
+          for child in root.get("children", []):
+              if child not in nodes:
+                  errors.append(f"Root child '{child}' not in nodes")
+
+          # Check required node fields
+          for name, node in nodes.items():
+              for field in ["type", "file", "lines", "max_lines"]:
+                  if field not in node:
+                      errors.append(f"Node '{name}' missing field '{field}'")
+
+          if errors:
+              print("TREE ERRORS:")
+              for e in errors:
+                  print(f"  {e}")
+              sys.exit(1)
+
+          print(f"✓ Tree valid — {len(nodes)} nodes, all within budget")
+          EOF
+
+      - name: Test Engine Commands
+        run: |
+          python3 - <<'EOF'
+          import subprocess, sys
+
+          # Test status
+          r = subprocess.run(["python3", "engine/core/muninn.py", "status"],
+                             capture_output=True, text=True)
+          assert r.returncode == 0, f"status failed: {r.stderr}"
+          assert "MUNINN TREE" in r.stdout, "status output missing header"
+          assert "OVER!" not in r.stdout, f"Budget violation detected:\n{r.stdout}"
+          print(r.stdout)
+
+          # Test prune (dry run)
+          r = subprocess.run(["python3", "engine/core/muninn.py", "prune"],
+                             capture_output=True, text=True)
+          assert r.returncode == 0, f"prune failed: {r.stderr}"
+          print(r.stdout)
+
+          print("✓ Engine commands OK")
+          EOF

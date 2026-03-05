@@ -17,7 +17,7 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-MEMORY = Path(r"C:\Users\ludov\.claude\projects\c--Users-ludov-Desktop-ygg-yggdrasil-engine\memory\MEMORY.md")
+MEMORY = ROOT / "memory" / "root.mn"
 OUTPUT = ROOT / "engine" / "core" / "alphabet_v1.json"
 
 
