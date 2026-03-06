@@ -17,6 +17,7 @@ Usage:
     python muninn.py prune [--force]            # Elagage R4
     python muninn.py decode <fichier>           # Decompresse
     python muninn.py feed [--history]           # Nourrit le mycelium depuis transcripts
+    python muninn.py verify <fichier>          # Verifie qualite compression (facts, ratio)
 """
 import argparse
 import hashlib
@@ -1136,7 +1137,7 @@ def verify_compression(filepath: Path):
     comp_facts = extract_facts(compressed)
 
     # Find preserved and lost facts
-    preserved = [f for f in orig_facts if any(f in compressed for f in [f])]
+    preserved = [f for f in orig_facts if f in compressed]
     lost = [f for f in orig_facts if f not in compressed]
 
     # Token estimates

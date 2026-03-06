@@ -28,7 +28,7 @@
         "b07"
       ],
       "last_access": "2026-03-06",
-      "access_count": 4,
+      "access_count": 8,
       "tags": [
         "yggdrasil",
         "architecture",
@@ -39,7 +39,7 @@
         "spectral"
       ],
       "hash": "f94c0000",
-      "temperature": 0.72
+      "temperature": 0.82
     },
     "b00": {
       "type": "branch",
@@ -48,7 +48,7 @@
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-06",
-      "access_count": 3,
+      "access_count": 7,
       "tags": [
         "glyph",
         "archaeology",
@@ -56,7 +56,7 @@
         "history"
       ],
       "hash": "db585362",
-      "temperature": 0.59
+      "temperature": 0.71
     },
     "b01": {
       "type": "branch",
@@ -65,7 +65,7 @@
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-06",
-      "access_count": 2,
+      "access_count": 6,
       "tags": [
         "pipeline",
         "scan",
@@ -73,7 +73,7 @@
         "mapper"
       ],
       "hash": "3f11ab5f",
-      "temperature": 0.53
+      "temperature": 0.67
     },
     "b02": {
       "type": "branch",
@@ -82,7 +82,7 @@
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-06",
-      "access_count": 3,
+      "access_count": 7,
       "tags": [
         "glyph",
         "pipeline",
@@ -92,7 +92,7 @@
         "mathml"
       ],
       "hash": "cfed09ab",
-      "temperature": 0.59
+      "temperature": 0.71
     },
     "b03": {
       "type": "branch",

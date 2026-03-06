@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 6 briques vivantes, 5 supprimees (nettoyage P3)
+Etat: 7 briques vivantes, 3 supprimees (nettoyage P3)
 
 ## Anatomie
 
