@@ -1338,6 +1338,23 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
 
     result = "\n".join(output)
 
+    # Layer 8: LLMLingua-2 (BERT-based token scoring, optional)
+    try:
+        from llmlingua import PromptCompressor
+        compressor = PromptCompressor(
+            model_name="microsoft/llmlingua-2-xlm-roberta-large-meetingbank",
+            use_llmlingua2=True,
+            device_map="cpu",
+        )
+        lingua_result = compressor.compress_prompt([result], rate=0.5)
+        lingua_compressed = lingua_result["compressed_prompt"]
+        if len(lingua_compressed) < len(result):
+            result = lingua_compressed
+    except ImportError:
+        pass  # LLMLingua not installed — skip Layer 8
+    except Exception as e:
+        print(f"  LLMLingua warning: {e}")
+
     # Write to .muninn/sessions/
     sessions_dir = repo_path / ".muninn" / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
