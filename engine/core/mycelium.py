@@ -60,11 +60,25 @@ class Mycelium:
         }
 
     def save(self):
-        """Persist mycelium to disk."""
+        """Persist mycelium to disk (atomic write via tempfile + rename)."""
+        import tempfile
         self.mycelium_dir.mkdir(exist_ok=True)
         self.data["updated"] = time.strftime("%Y-%m-%d")
-        with open(self.mycelium_path, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=2)
+        # Write to temp file first, then atomic rename
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(self.mycelium_dir), suffix=".tmp", prefix="mycelium_"
+        )
+        try:
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+            import os
+            os.replace(tmp_path, str(self.mycelium_path))
+        except Exception:
+            # Clean up temp file on failure
+            import os
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
 
     def _key(self, a: str, b: str) -> str:
         """Canonical key for a pair (alphabetical order)."""

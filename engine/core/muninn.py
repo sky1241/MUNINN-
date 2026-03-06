@@ -344,9 +344,20 @@ def load_tree():
 
 
 def save_tree(tree):
+    """Save tree metadata (atomic write via tempfile + rename)."""
+    import tempfile, os
     tree["updated"] = time.strftime("%Y-%m-%d")
-    with open(TREE_META, "w", encoding="utf-8") as f:
-        json.dump(tree, f, ensure_ascii=False, indent=2)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(TREE_DIR), suffix=".tmp", prefix="tree_"
+    )
+    try:
+        with open(fd, "w", encoding="utf-8") as f:
+            json.dump(tree, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, str(TREE_META))
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def compute_hash(filepath: Path) -> str:
