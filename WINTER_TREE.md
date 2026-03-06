@@ -37,14 +37,16 @@ Etat: 10 briques, 4 a poncer, 3 a virer, 3 OK
 
 ## TODO — par priorite
 
-### P0 — Le pivot fondamental
-- [ ] Definir le nouveau format de compression (anglais compact, zero codebook)
-- [ ] Repondre a la question: comment je compresse l'input de Sky dans MON format et comment ca roundtrip?
-- [ ] Valider que le format compressed coute moins de tokens que le texte brut (mesurer avec tiktoken)
-- [ ] Ecrire FORMAT_RULES.json (regles, pas traduction)
+### P0 — Le mycelium (nouveau coeur)
+- [ ] Designer mycelium.json (format co-occurrences persistant)
+- [ ] Implementer le tracker de co-occurrences dans muninn.py
+- [ ] Implementer la fusion automatique (concepts frequemment lies -> 1 bloc)
+- [ ] Implementer le decay (connexions mortes disparaissent)
+- [ ] Tester: run sur 3 sessions simulees, verifier que le mycelium pousse
 
-### P1 — Reconstruire le compresseur
-- [ ] Reecrire compress dans muninn.py pour appliquer les nouvelles regles
+### P1 — Compresseur mycelium-aware
+- [ ] Reecrire compress pour utiliser mycelium.json au lieu de CODEBOOK.json
+- [ ] Format output: anglais compact natif BPE (zero sinogrammes)
 - [ ] Supprimer tout le code sinogramme (load_universal_codebook, etc.)
 - [ ] Tester compression sur root.mn -> mesurer gain tokens reel
 - [ ] Tester sur un 2e repo (infernal-wheel)
@@ -77,6 +79,58 @@ Le bon paradigme = compression semantique en anglais compact natif au tokenizer 
 Personne dans la litterature n'a resolu la compression semantique de memoire persistante pour LLM.
 Les papiers existants (MemGPT, LLMLingua, ICAE) font du paging ou du pruning, pas du recodage semantique.
 Sky est seul a cet etage. C'est pour ca que c'est dur.
+
+## PIVOT 2 — Le Mycelium (fin de session, idee majeure)
+
+L'arbre (tree) c'est la structure statique. Le mycelium c'est le reseau vivant.
+
+### Le concept
+Le mycelium de Muninn = un tracker de co-occurrences entre concepts, qui POUSSE
+a chaque session et persiste sur le disque (pas dans le contexte LLM).
+
+Exactement comme le mycelium d'Yggdrasil tracke les co-occurrences entre domaines
+scientifiques dans 348M papers — sauf qu'ici on tracke les co-occurrences dans
+les sessions utilisateur.
+
+### Comment ca marche
+1. Session N: l'utilisateur parle de `bug` + `codec` + `utf8` ensemble
+2. Le mycelium enregistre cette co-occurrence dans un fichier persistant
+3. Session N+1: au boot, le mycelium est charge. On SAIT que ces concepts sont lies
+4. Le compresseur les regroupe en un bloc compact
+5. Session N+15: ces 3 concepts ont toujours coexiste -> le mycelium les fusionne
+   en un seul noeud. 3 concepts = 1 unite compresse
+
+### Le mycelium EST le codebook
+- Pas un dictionnaire statique (CODEBOOK.json) -> un organisme vivant
+- Pas de regles manuelles -> apprentissage par co-occurrence reelle
+- Pas universel-figé -> specifique a chaque repo, pousse avec l'usage
+- Le codebook local (.muninn/local.json) devient .muninn/mycelium.json
+
+### Architecture
+```
+Session input (texte brut Sky)
+        |
+        v
+[Mycelium tracker] -- observe les co-occurrences
+        |                    |
+        v                    v
+[Compresseur] <--------- [mycelium.json] (persistant sur disque)
+        |                    ^
+        v                    |
+[Memoire .mn] ------------- mise a jour du mycelium
+```
+
+### Ce qu'on a deja
+- Yggdrasil a un moteur de co-occurrence (matrice 85x85 domaines, 296M papers)
+- Le scan dans muninn.py fait deja de l'extraction de frequence
+- tree.json a deja access_count et last_access (proto-temperature)
+
+### Ce qu'il faut construire
+- [ ] mycelium.json: format de stockage des co-occurrences (concept_a, concept_b, count, last_seen)
+- [ ] Tracker: a chaque compress/write, extraire les concepts et maj le mycelium
+- [ ] Fusion: quand count >= seuil, fusionner les concepts en un noeud compact
+- [ ] Boot: charger le mycelium au demarrage, l'utiliser pour la compression
+- [ ] Decay: les connexions non-revues decroissent (comme les hyphes morts dans Yggdrasil)
 
 ## Refs
 - Lindenmayer (1968) — L-Systems
