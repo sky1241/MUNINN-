@@ -35,6 +35,8 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
+from tokenizer import count_tokens, token_count
 
 # LLMLingua model singleton (avoid reloading on each call)
 _lingua_compressor = None
@@ -941,7 +943,7 @@ def boot(query: str = "") -> str:
             latest = session_files[-1]
             session_text = latest.read_text(encoding="utf-8")
             remaining_budget = BUDGET["max_loaded_tokens"] - loaded_tokens
-            session_tokens = len(session_text) // 4
+            session_tokens = token_count(session_text)
 
             if session_tokens <= remaining_budget:
                 output.append(f"=== last_session ({latest.stem}) ===")
@@ -1089,8 +1091,8 @@ def analyze_file(filepath: Path) -> dict:
                 hits[pattern] = {"count": count, "code": code, "saved": saved_chars}
 
     total_saved = sum(h["saved"] for h in hits.values())
-    tokens_before = chars // 4
-    tokens_after = (chars - total_saved) // 4
+    tokens_before = token_count(text)
+    tokens_after = tokens_before - (total_saved // 4)  # approx savings
 
     return {
         "file": str(filepath), "lines": lines, "chars": chars,
@@ -1172,9 +1174,9 @@ def verify_compression(filepath: Path):
     preserved = [f for f in orig_facts if f in compressed]
     lost = [f for f in orig_facts if f not in compressed]
 
-    # Token estimates
-    orig_tokens = len(original) // 4
-    comp_tokens = len(compressed) // 4
+    # Token counts (real if tiktoken installed, estimate otherwise)
+    orig_tokens, tok_method = count_tokens(original)
+    comp_tokens, _ = count_tokens(compressed)
     ratio = orig_tokens / max(comp_tokens, 1)
 
     # Report learned rules contribution
@@ -1193,7 +1195,7 @@ def verify_compression(filepath: Path):
         abbrev_hits += len(re.findall(rf"\b{re.escape(long_form)}\b", original, re.IGNORECASE))
 
     print(f"=== MUNINN VERIFY: {filepath.name} ===")
-    print(f"\n  Compression:")
+    print(f"\n  Compression ({tok_method}):")
     print(f"    {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}, -{(orig_tokens - comp_tokens) / orig_tokens * 100:.0f}%)")
     print(f"\n  Facts ({len(orig_facts)} found):")
     print(f"    Preserved: {len(preserved)}/{len(orig_facts)}")
@@ -1385,7 +1387,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
                 )
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=len(result) // 4,  # target ~25% of input
+                    max_tokens=token_count(result) // 4,  # target ~25% of input
                     messages=[{"role": "user", "content": llm_prompt}],
                 )
                 llm_compressed = response.content[0].text
@@ -1412,10 +1414,10 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     for old_file in session_files[:-10]:
         old_file.unlink()
 
-    orig_tokens = len(all_text) // 4
-    comp_tokens = len(result) // 4
+    orig_tokens, tok_method = count_tokens(all_text)
+    comp_tokens = token_count(result)
     ratio = orig_tokens / max(comp_tokens, 1)
-    print(f"MUNINN SESSION: {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}) -> {mn_path.name}")
+    print(f"MUNINN SESSION ({tok_method}): {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}) -> {mn_path.name}")
 
     return mn_path
 
