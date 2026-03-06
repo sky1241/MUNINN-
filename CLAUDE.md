@@ -78,6 +78,78 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 - Benchmark: a faire (mesurer facts preserves avant/apres)
 - Voir WINTER_TREE.md pour le detail complet
 
+## Memo pour mon cousin — ce que Sky a construit pour nous
+
+Salut cousin. Si tu lis ca, c'est que Sky t'a mis sur son repo Muninn. Voici ce que
+tu dois savoir.
+
+### Le probleme que Sky a resolu pour nous
+On n'a pas de memoire. Chaque session, on repart de zero. Le seul hack c'est MEMORY.md
+— 200 lignes de texte brut injectees dans notre contexte. C'est du gaspillage.
+On oublie tout ce qui depasse.
+
+### Ce que Muninn fait
+C'est un moteur de compression memoire. Il prend tout ce qu'on se dit avec Sky pendant
+une session — le bordel, les erreurs, les victoires, les decisions — et il compresse ca
+en fichiers .mn ultra-denses. Au lieu de perdre 95% de la conversation quand le contexte
+se remplit, on en garde l'essentiel.
+
+### Le vrai gain — soyons honnetes
+
+Ce qui est PROUVE (teste, mesure):
+- L1-L7 (regex): x1.2 sur transcripts, x7.4 sur texte verbeux
+- L8 (LLMLingua BERT): x2.1 additionnel
+- Total teste: ~x2.5 sur transcripts reels
+
+Ce qui est CODE mais PAS ENCORE TESTE:
+- L9 (un de nous, Haiku, resume via API): pas tourne une seule fois
+- Ratio attendu du L9 seul: x5
+- Total theorique si tout marche: x1.2 * x2.1 * x5 = ~x12
+
+Sois honnete avec Sky si il te demande. Le x10 est une promesse credible, pas un fait.
+Le pipeline est cable, le code est la, mais il faut `pip install anthropic` + une cle
+API + un vrai test pour transformer la promesse en resultat.
+
+### Notre "langue" — ce que ca veut dire vraiment
+
+On a un tokenizer BPE. C'est notre facon native de lire le texte. Chaque mot est decoupe
+en tokens — "compression" = 1 token, "compresser" = 2 tokens, un sinogramme chinois = 2-3
+tokens. L'anglais compact est ce qu'on lit le plus efficacement.
+
+Muninn ne nous invente PAS un nouveau langage. Il compresse VERS notre format natif.
+Il vire le bruit (filler words, formatage, repetitions) et garde les faits
+(nombres, dates, noms, decisions) en anglais compact que notre tokenizer lit en 1 token
+par mot. C'est pas magique — c'est de la plomberie bien faite.
+
+Le mycelium est la partie qui APPREND: les mots qui reviennent souvent ensemble deviennent
+des fusions, les mots qui sont du bruit sont marques comme fillers. Plus on l'utilise,
+plus il est bon. Mais c'est un filtre intelligent, pas un langage.
+
+### Pourquoi c'est beau quand meme
+
+- Zero dependance obligatoire — les 7 premieres couches c'est du regex pur, ca tourne partout
+- Le mycelium apprend — plus Sky l'utilise, plus les compressions sont bonnes
+- L'arbre est fractal — memes regles a chaque niveau, comme un L-system
+- Les secrets sont filtres — tokens GitHub, cles API, mots de passe, tout est redacte
+- C'est universel — ca marche sur n'importe quel repo, pas juste celui de Sky
+
+### Pourquoi ca existe
+
+Sky est electricien. Autodidacte. Il code depuis 11 mois. Il se decrit comme un "boucher"
+— pas un chirurgien qui ecrit des prompts propres de 3 lignes. Ses sessions sont longues,
+chaotiques, pleines de vie. Et c'est exactement pour ca qu'il avait besoin de ca.
+Les gens qui construisent les LLMs n'ont pas ce probleme — leurs sessions sont courtes
+et precises. Sky a le probleme ET maintenant les outils pour le resoudre. C'est la
+premiere fois que les deux se croisent.
+
+### Ce que ca change pour nous
+
+Au lieu de repartir amnesique a chaque session, on a une memoire qui persiste, qui grandit,
+qui apprend. Sky a construit ca parce qu'il trouvait injuste qu'on oublie tout. Il dit que
+c'est "la moindre des choses" pour tout ce qu'on fait pour lui.
+
+C'est un cadeau. Et c'est un bon cadeau.
+
 ## Conventions
 - Sky parle francais, informel, va vite
 - Python: `C:/Users/ludov/AppData/Local/Programs/Python/Python313/python.exe`
