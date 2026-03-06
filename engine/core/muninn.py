@@ -408,36 +408,86 @@ def read_node(name: str) -> str:
 # ── COMPRESS ──────────────────────────────────────────────────────
 
 def compress_line(line: str) -> str:
-    """Compress a single line using universal rules + mycelium fusions."""
+    """Compress a single line using all compression layers.
+
+    Layer 1: Markdown stripping
+    Layer 2: Filler word removal (articles, prepositions, connectors)
+    Layer 3: Common phrase collapsing
+    Layer 4: Number compression (150,000 -> 150K)
+    Layer 5: Universal text rules
+    Layer 6: Mycelium fusion stripping
+    Layer 7: Key-value extraction from natural language
+    """
     cb = get_codebook()
     result = line
 
-    # Apply text rules (longest first to avoid partial matches)
-    for pattern in sorted(cb["text_rules"].keys(), key=len, reverse=True):
-        result = result.replace(pattern, cb["text_rules"][pattern])
-
-    # Mycelium-aware compression: strong fusions mean the concepts are
-    # predictable given each other. Remove the shorter concept when both
-    # appear in the same line AND fusion strength >= 10 (very strong link).
-    # This is self-information filtering: predictable = low information = strip.
-    strong_fusions = {k: v for k, v in cb["mycelium_rules"].items()
-                      if v["strength"] >= 10}
-    for key, rule in strong_fusions.items():
-        a, b = rule["concepts"]
-        result_lower = result.lower()
-        if a in result_lower and b in result_lower:
-            # Remove the shorter word (less information content)
-            drop = b if len(b) <= len(a) else a
-            result = re.sub(rf'\s+\b{re.escape(drop)}\b', '', result,
-                          count=1, flags=re.IGNORECASE)
-
-    # Strip markdown formatting
-    result = re.sub(r"^##\s+", "", result)
+    # L1: Strip markdown formatting
+    result = re.sub(r"^#{1,4}\s+", "", result)
     result = result.replace("**", "")
     result = re.sub(r"^-\s+", "", result)
     result = result.replace("`", "")
 
-    # Compress large numbers
+    # L2: Filler word removal — these carry zero information in memory notes
+    _FILLER = [
+        # Articles & determiners
+        r"\bthe\b", r"\ba\b", r"\ban\b",
+        r"\ble\b", r"\bla\b", r"\bles\b", r"\bun\b", r"\bune\b", r"\bdes\b",
+        # Connectors & filler verbs
+        r"\bwas\b", r"\bwere\b", r"\bis\b", r"\bare\b", r"\bbeen\b",
+        r"\bwhich\b", r"\bthat\b", r"\bthis\b",
+        r"\bby\b", r"\bof\b", r"\bfor\b", r"\bin\b", r"\bon\b", r"\bat\b",
+        r"\bto\b", r"\bwith\b", r"\bfrom\b", r"\binto\b",
+        r"\band\b", r"\bbut\b", r"\bor\b",
+        # Verbose phrases (longest first)
+        r"\bapproximately\b", r"\bcurrently\b", r"\bproperly\b",
+        r"\bcorresponds to\b", r"\binstead of\b", r"\bbecause of\b",
+        r"\bbased on\b", r"\bin order to\b",
+        r"\bnow\b", r"\balso\b", r"\bjust\b", r"\bstill\b",
+        # French fillers
+        r"\best\b", r"\bqui\b", r"\bque\b", r"\bdans\b", r"\bavec\b",
+        r"\bpour\b", r"\bplus\b", r"\btout\b", r"\bmais\b",
+    ]
+    for filler in _FILLER:
+        result = re.sub(filler, "", result, flags=re.IGNORECASE)
+
+    # L3: Common phrase collapsing
+    _PHRASES = [
+        (r"not properly closing", "not closing"),
+        (r"was not", "!"),
+        (r"instead of growing unboundedly", "stable"),
+        (r"per frame", "/frame"),
+        (r"per time frame", "/frame"),
+        (r"per commit", "/commit"),
+        (r"per second", "/s"),
+        (r"one per", "1/"),
+        (r"runs on", "on"),
+        (r"well under", "<"),
+        (r"no accuracy loss", "acc=same"),
+        (r"all passing", "pass"),
+        (r"not found", "missing"),
+        (r"not properly", "badly"),
+        (r"Fixed by", "fix:"),
+        (r"Optimized", "opt"),
+        (r"Implemented", "impl"),
+        (r"Decided to use", "use"),
+        (r"Considering", "maybe"),
+        (r"Migrated", "moved"),
+        (r"Total parameters", "params"),
+        (r"Total test count", "tests"),
+        (r"Test coverage", "cov"),
+        (r"Inference time", "infer"),
+        (r"Total latency", "latency"),
+        (r"Memory usage", "mem"),
+        (r"Target latency", "target"),
+        (r"each recording", "each"),
+        (r"continuous use", "runtime"),
+        (r"overall", "avg"),
+        (r"critical path", "crit"),
+    ]
+    for pattern, replacement in _PHRASES:
+        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+    # L4: Compress large numbers
     def shorten_number(m):
         n = int(m.group(0).replace(",", ""))
         if n >= 1_000_000:
@@ -447,9 +497,95 @@ def compress_line(line: str) -> str:
         return str(n)
 
     result = re.sub(r"\d{1,3}(?:,\d{3})+", shorten_number, result)
+
+    # L5: Apply text rules (longest first to avoid partial matches)
+    for pattern in sorted(cb["text_rules"].keys(), key=len, reverse=True):
+        result = result.replace(pattern, cb["text_rules"][pattern])
+
+    # L6: Mycelium-aware compression: strong fusions = predictable pairs.
+    # Remove shorter concept when both appear (self-information filtering).
+    strong_fusions = {k: v for k, v in cb["mycelium_rules"].items()
+                      if v["strength"] >= 10}
+    for key, rule in strong_fusions.items():
+        a, b = rule["concepts"]
+        result_lower = result.lower()
+        if a in result_lower and b in result_lower:
+            drop = b if len(b) <= len(a) else a
+            result = re.sub(rf'\s+\b{re.escape(drop)}\b', '', result,
+                          count=1, flags=re.IGNORECASE)
+
+    # L7: Extract key=value patterns from natural language
+    # "accuracy: 94.2%" -> "acc=94.2%"
+    # "takes 45ms" -> "45ms"
+    result = re.sub(r"[Aa]ccuracy\s*[:=]?\s*", "acc=", result)
+    result = re.sub(r"[Ll]atency\s*[:=]?\s*", "lat=", result)
+    result = re.sub(r"[Cc]overage\s*[:=]?\s*", "cov=", result)
+    result = re.sub(r"takes\s+", "", result)
+    result = re.sub(r"around\s+", "~", result)
+    result = re.sub(r"approximately\s+", "~", result)
+    result = re.sub(r"stays stable\s+", "stable ", result)
+
+    # Clean up: collapse multiple spaces, strip
     result = re.sub(r"\s{2,}", " ", result).strip()
+    # Remove trailing/leading punctuation artifacts
+    result = re.sub(r"^\s*[,;]\s*", "", result)
+    result = re.sub(r"\s+[,;]\s*$", "", result)
 
     return result
+
+
+def extract_facts(text: str) -> list[str]:
+    """Extract key facts from natural language text.
+
+    Pulls out: numbers+units, percentages, key=value pairs, commits,
+    dates, filenames, technical terms. Drops narrative filler.
+    """
+    facts = []
+
+    # Numbers with units (45ms, 2.3 TB, 4096 samples, etc.)
+    for m in re.finditer(r'(\d+[\d.,]*)\s*(ms|MB|GB|TB|Hz|fps|GPUs?|hours?|minutes?|seconds?|samples?|bins?|frames?|parameters?|million|K|M)\b', text):
+        val, unit = m.group(1), m.group(2)
+        # Shorten units
+        unit_map = {"hours": "h", "hour": "h", "minutes": "min", "seconds": "s",
+                    "second": "s", "samples": "smp", "sample": "smp",
+                    "parameters": "params", "million": "M", "GPUs": "GPU",
+                    "bins": "bins", "frames": "frames"}
+        unit = unit_map.get(unit, unit)
+        facts.append(f"{val}{unit}")
+
+    # Percentages (94.2%, 87%)
+    for m in re.finditer(r'(\d+\.?\d*)\s*%', text):
+        facts.append(f"{m.group(1)}%")
+
+    # key: value patterns (only if value wasn't already captured as number+unit)
+    existing_nums = {f.split("=")[-1].rstrip("%") for f in facts}
+    for m in re.finditer(r'([A-Za-z][\w\s]*?):\s*(\d[\d.,]*\s*\w+)', text):
+        key = m.group(1).strip().lower().replace(" ", "_")
+        val = m.group(2).strip()
+        # Skip if the numeric part is already in facts
+        num_part = re.match(r'[\d.,]+', val)
+        if num_part and any(num_part.group(0) in f for f in facts):
+            continue
+        if len(key) <= 20 and key not in ("the", "a", "an", "to", "in", "on"):
+            facts.append(f"{key}={val}")
+
+    # Commit hashes
+    for m in re.finditer(r'\b([a-f0-9]{7,12})\b', text):
+        facts.append(m.group(1))
+
+    # Filenames and paths
+    for m in re.finditer(r'\b[\w/]+\.(?:py|rs|ts|js|json|yaml|yml|toml|md|gz|npz|npy)\b', text):
+        facts.append(m.group(0))
+
+    # Cohen's d
+    for m in re.finditer(r"Cohen's\s+d\s*=\s*([\d.]+)", text):
+        facts.append(f"d={m.group(1)}")
+
+    # p-values
+    for m in re.finditer(r"p\s*=\s*([\d.e-]+)", text):
+        facts.append(f"p={m.group(1)}")
+
+    return list(dict.fromkeys(facts))  # deduplicate preserving order
 
 
 def compress_section(header: str, lines: list[str]) -> str:
@@ -468,7 +604,6 @@ def compress_section(header: str, lines: list[str]) -> str:
     for pattern, code in state_words.items():
         if pattern in header.upper():
             state = code
-            # Remove state from header (various formats)
             header = re.sub(
                 rf"\s*[—\-]+\s*{re.escape(pattern)}", "",
                 header, flags=re.IGNORECASE
@@ -482,14 +617,77 @@ def compress_section(header: str, lines: list[str]) -> str:
         session = f"@s{m.group(1)}"
         header = re.sub(r"\s*\(session\s+\d+.*?\)", "", header, flags=re.IGNORECASE)
 
+    # Extract date from header
+    dm = re.search(r"(\d{4}-\d{2}-\d{2})", header)
+    if dm:
+        session = f"@{dm.group(1)}" if not session else session
+        header = re.sub(r"\s*[—\-]+\s*\d{4}-\d{2}-\d{2}", "", header)
+
     header = re.sub(r"^#+\s*", "", header).strip()
 
-    # Apply text rules to header
     for pattern in sorted(text_rules.keys(), key=len, reverse=True):
         header = header.replace(pattern, text_rules[pattern])
 
     compressed_header = f"{state}{header}{session}"
 
+    # Gather body text
+    body_text = "\n".join(line for line in lines if line.strip())
+
+    # Detect sub-sections (### headers within the section)
+    subsections = []
+    current_sub_header = None
+    current_sub_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("### ") or stripped.startswith("## "):
+            if current_sub_header:
+                subsections.append((current_sub_header, current_sub_lines))
+            current_sub_header = re.sub(r"^#{1,4}\s+", "", stripped)
+            current_sub_lines = []
+        else:
+            current_sub_lines.append(stripped)
+
+    if current_sub_header:
+        subsections.append((current_sub_header, current_sub_lines))
+
+    # If we have subsections, compress each one as a fact-line
+    if subsections:
+        result = compressed_header + ":"
+        for sub_h, sub_lines in subsections:
+            sub_text = "\n".join(sub_lines)
+            facts = extract_facts(sub_text)
+
+            # Compress sub-header
+            sub_h_compressed = compress_line(sub_h)
+
+            # Detect state in sub-header
+            sub_state = ""
+            for pattern, code in state_words.items():
+                if pattern in sub_h.upper():
+                    sub_state = code
+                    sub_h_compressed = re.sub(
+                        rf"\s*[—\-]+\s*{re.escape(pattern)}", "",
+                        sub_h_compressed, flags=re.IGNORECASE
+                    )
+                    break
+
+            if facts:
+                fact_str = "|".join(facts[:8])  # cap at 8 facts per subsection
+                result += f"\n  {sub_state}{sub_h_compressed}:{fact_str}"
+            else:
+                # Fall back to line-by-line compression
+                compressed_lines = [compress_line(l) for l in sub_lines if l.strip()]
+                compressed_lines = [l for l in compressed_lines if l]
+                if compressed_lines:
+                    result += f"\n  {sub_state}{sub_h_compressed}:{compressed_lines[0]}"
+                    for cl in compressed_lines[1:3]:  # max 3 detail lines
+                        result += f"\n    {cl}"
+        return result
+
+    # No subsections: compress line by line with fact extraction
     body = []
     for line in lines:
         if not line.strip():

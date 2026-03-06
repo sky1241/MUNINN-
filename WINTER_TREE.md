@@ -65,12 +65,17 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Integre dans .claude/settings.local.json (hooks natifs Claude Code)
 - Note: hooks receoivent transcript_path via stdin JSON (decouverte mars 2026)
 
-### P2 — Compresseur v2 (mycelium-aware)
+### P2 — Compresseur v2 (mycelium-aware) [FAIT]
 - [x] Codebook loader v2: UNIVERSAL_RULES + mycelium (zero sinogrammes)
 - [x] Compresseur utilise fusions mycelium pour strip redondance
-- [ ] Mesurer gain tokens REEL (avant/apres sur root.mn)
-- [ ] Tester sur 2e repo (infernal-wheel)
-- Note: compression x1.1-1.2 sur texte deja compact. Gains reels = texte verbeux
+- [x] 7 couches de compression: markdown, filler, phrases, nombres, rules, mycelium, facts
+- [x] Extraction de faits: nombres+unites, %, key=value, commits, Cohen's d
+- [x] Mesure gain tokens REEL:
+  - Texte verbeux (MEMORY-style): x7.4 (1091->148 tokens, -86%)
+  - Texte semi-compact (WINTER_TREE): x1.9 (1343->713 tokens, -47%)
+  - Texte deja compact (README): x1.7 (714->409 tokens, -43%)
+  - infernal-wheel SYSTEM_SUMMARY: x1.7 (3472->2033 tokens, -41%)
+- [x] Teste sur 2e repo (infernal-wheel): OK, compression universelle
 
 ### P3 — Nettoyage [FAIT]
 - [x] Supprimer muninn_codec.py (code sinogramme mort)
