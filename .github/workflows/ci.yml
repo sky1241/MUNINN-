@@ -171,6 +171,7 @@ jobs:
               assert r.returncode == 0, f"feed failed: {r.stderr}"
               assert "MUNINN FEED" in r.stdout, f"feed output missing header: {r.stdout}"
               assert "3 messages" in r.stdout, f"Expected 3 messages: {r.stdout}"
+              assert "MUNINN SESSION" in r.stdout, f"session compression missing: {r.stdout}"
               print(f"feed from file: OK — {r.stdout.strip()}")
 
               # Verify mycelium was actually fed
@@ -181,6 +182,13 @@ jobs:
               assert len(data["connections"]) > 0, "No connections created"
               assert len(data["fusions"]) >= 0, "Fusions field missing"
               print(f"  mycelium: {len(data['connections'])} connections, {len(data['fusions'])} fusions")
+
+              # Verify session .mn was created
+              sessions_dir = os.path.join(".muninn", "sessions")
+              assert os.path.exists(sessions_dir), "sessions dir not created"
+              mn_files = [f for f in os.listdir(sessions_dir) if f.endswith(".mn")]
+              assert len(mn_files) > 0, "No session .mn file created"
+              print(f"  session file: {mn_files[0]}")
 
           finally:
               os.unlink(tmp_path)

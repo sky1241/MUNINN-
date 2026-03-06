@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Muninn v0.6 — Moteur de compression memoire LLM.
+Muninn v0.7 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
 Deux couches de compression:
@@ -929,6 +929,34 @@ def boot(query: str = "") -> str:
         output.append(f"=== {name} ===")
         output.append(text)
 
+    # Load latest session .mn if it exists (tail-first if too large)
+    sessions_dir = _REPO_PATH / ".muninn" / "sessions" if _REPO_PATH else MUNINN_ROOT / ".muninn" / "sessions"
+    if sessions_dir.exists():
+        session_files = sorted(sessions_dir.glob("*.mn"))
+        if session_files:
+            latest = session_files[-1]
+            session_text = latest.read_text(encoding="utf-8")
+            remaining_budget = BUDGET["max_loaded_tokens"] - loaded_tokens
+            session_tokens = len(session_text) // 4
+
+            if session_tokens <= remaining_budget:
+                output.append(f"=== last_session ({latest.stem}) ===")
+                output.append(session_text)
+            elif remaining_budget > 200:
+                # Take tail (most recent context) that fits budget
+                max_chars = remaining_budget * 4
+                session_lines = session_text.split("\n")
+                tail_lines = []
+                char_count = 0
+                for line in reversed(session_lines):
+                    if char_count + len(line) + 1 > max_chars:
+                        break
+                    tail_lines.insert(0, line)
+                    char_count += len(line) + 1
+                if tail_lines:
+                    output.append(f"=== last_session ({latest.stem}) [tail] ===")
+                    output.append("\n".join(tail_lines))
+
     return "\n".join(output)
 
 
@@ -1244,6 +1272,92 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     return len(texts)
 
 
+def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
+    """Compress a transcript JSONL into a dense .mn session file.
+
+    Extracts user+assistant messages, compresses each with the 7-layer
+    pipeline, writes result to .muninn/sessions/<timestamp>.mn.
+    Returns the path to the written .mn file.
+    """
+    texts = parse_transcript(jsonl_path)
+    if not texts:
+        return None
+
+    # Strip secrets before compression
+    secret_patterns = [
+        r'ghp_[A-Za-z0-9]{36,}',       # GitHub tokens
+        r'sk-[A-Za-z0-9]{20,}',         # API keys
+        r'token[=:]\s*\S{20,}',         # Generic tokens
+        r'password[=:]\s*\S+',          # Passwords
+    ]
+    for i, text in enumerate(texts):
+        for pat in secret_patterns:
+            texts[i] = re.sub(pat, '[REDACTED]', texts[i])
+
+    # Build a pseudo-markdown from transcript messages for compress_section
+    sections = []
+    current_topic = []
+    current_header = "## Session context"
+
+    for text in texts:
+        # If text looks like a new topic (long enough, starts with capital or #)
+        if text.startswith("## ") or text.startswith("# "):
+            if current_topic:
+                sections.append((current_header, current_topic))
+            current_header = text if text.startswith("## ") else f"## {text.lstrip('# ')}"
+            current_topic = []
+        else:
+            current_topic.append(text)
+
+    if current_topic:
+        sections.append((current_header, current_topic))
+
+    # If no markdown headers found, chunk by message groups
+    if len(sections) == 1 and len(texts) > 10:
+        sections = []
+        chunk_size = max(5, len(texts) // 6)  # ~6 sections max
+        for i in range(0, len(texts), chunk_size):
+            chunk = texts[i:i + chunk_size]
+            # Use first non-trivial line as header
+            header_text = chunk[0][:80].strip()
+            header_text = re.sub(r"[#\n]", "", header_text)
+            sections.append((f"## {header_text}", chunk))
+
+    # Compress each section
+    output = ["# MUNINN|session_compressed"]
+    for header, lines in sections:
+        compressed = compress_section(header, lines)
+        if compressed and len(compressed) > 5:
+            output.append(compressed)
+
+    # Add facts summary at the end
+    all_text = "\n".join(texts)
+    facts = extract_facts(all_text)
+    if facts:
+        output.append(f"?FACTS:{' | '.join(facts[:30])}")
+
+    result = "\n".join(output)
+
+    # Write to .muninn/sessions/
+    sessions_dir = repo_path / ".muninn" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    mn_path = sessions_dir / f"{timestamp}.mn"
+    mn_path.write_text(result, encoding="utf-8")
+
+    # Keep only last 10 session files (oldest get pruned)
+    session_files = sorted(sessions_dir.glob("*.mn"))
+    for old_file in session_files[:-10]:
+        old_file.unlink()
+
+    orig_tokens = len(all_text) // 4
+    comp_tokens = len(result) // 4
+    ratio = orig_tokens / max(comp_tokens, 1)
+    print(f"MUNINN SESSION: {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}) -> {mn_path.name}")
+
+    return mn_path
+
+
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
     try:
@@ -1262,10 +1376,14 @@ def feed_from_hook(repo_path: Path):
         print(f"ERROR: transcript not found: {jsonl_path}")
         sys.exit(1)
 
+    # 1. Feed mycelium (co-occurrences)
     count = feed_from_transcript(jsonl_path, repo_path)
     print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
-    # Refresh tree temperatures
+    # 2. Compress transcript into a .mn session file
+    compress_transcript(jsonl_path, repo_path)
+
+    # 3. Refresh tree temperatures
     tree = load_tree()
     refresh_tree_metadata(tree)
     save_tree(tree)
@@ -1416,6 +1534,7 @@ def main():
             # Direct file mode: feed from a specific transcript
             count = feed_from_transcript(Path(args.file), repo)
             print(f"MUNINN FEED: {count} messages -> mycelium ({repo.name})")
+            compress_transcript(Path(args.file), repo)
         else:
             # Hook mode: read transcript_path from stdin
             feed_from_hook(repo)

@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 7 briques vivantes, 3 supprimees (nettoyage P3)
+Etat: 8 briques vivantes, 3 supprimees (nettoyage P3)
 
 ## Anatomie
 
@@ -24,13 +24,14 @@ Etat: 7 briques vivantes, 3 supprimees (nettoyage P3)
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B2 | muninn.py v0.6 | OK | Moteur: bootstrap, compress, tree, boot, feed, verify |
+| B2 | muninn.py v0.7 | OK | Moteur: bootstrap, compress, tree, boot, feed, verify |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Memoire vivante |
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
 | B9 | docs/ | OK | LITERATURE.md enrichi (15+ papiers) |
 | B10 | ci.yml | OK | Tests: tree, engine, mycelium, feed |
-| NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd -> feed |
+| NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd -> feed + compress |
+| NEW | .muninn/sessions/*.mn | OK | Transcripts compresses (auto-prune 10 derniers) |
 | ~~B1~~ | ~~CODEBOOK.json~~ | SUPPRIME | Remplace par UNIVERSAL_RULES + mycelium |
 | ~~B3~~ | ~~muninn_codec.py~~ | SUPPRIME | Code sinogramme mort |
 | ~~B8~~ | ~~CODEBOOK_TREE.md~~ | SUPPRIME | Index sinogrammes mort |
@@ -101,6 +102,17 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] `muninn.py verify` — mesure qualite compression (facts preserved, ratio, score)
 - [x] Boucle complete: feed -> mycelium apprend -> compresseur s'ameliore
 - Note: abbreviations emergent quand fusion strength >= 8 (apres ~10+ sessions)
+
+### P6 — Session compression (memoire post-compaction) [FAIT]
+- [x] compress_transcript(): transcript JSONL -> .mn compresse dans .muninn/sessions/
+- [x] Secret filtering: ghp_ tokens, sk_ API keys, passwords redacted avant compression
+- [x] Hook PreCompact: feed mycelium + compress transcript (2 actions en 1)
+- [x] Hook feed direct: meme chose en mode CLI
+- [x] Boot charge le dernier .mn de session (tail-first si trop gros pour budget)
+- [x] Auto-prune: garde les 10 derniers .mn, supprime les anciens
+- Mesure: session 2730 JSONL -> 50K tokens brut -> 41K compresse (x1.2)
+- Note: ratio modeste car transcript deja semi-compact (dialogue technique)
+- Note: sur texte verbeux le compresseur fait x7.4 (cf P2)
 
 ## Pivots de la session 2026-03-06
 
