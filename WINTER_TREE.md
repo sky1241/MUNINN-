@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 7 briques vivantes, 3 supprimees
+Etat: 5 briques vivantes, 5 supprimees (nettoyage P3)
 
 ## Anatomie
 
@@ -24,14 +24,15 @@ Etat: 7 briques vivantes, 3 supprimees
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B1 | CODEBOOK.json | MORT | Remplace par UNIVERSAL_RULES + mycelium |
-| B2 | muninn.py | OK | Codebook loader v2 branche sur mycelium, bootstrap cmd |
-| B3 | muninn_codec.py | DOUBLON | Fusionner dans B2 |
+| B2 | muninn.py v0.4 | OK | Moteur principal, bootstrap, compress, tree, boot |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
-| B5 | *.mn files | OK | Reconvertir en anglais compact |
-| NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay, cold start |
+| B5 | *.mn files | OK | Memoire vivante |
+| NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
 | B9 | docs/ | OK | LITERATURE.md enrichi (15+ papiers) |
-| B10 | ci.yml | OK | Adapter |
+| B10 | ci.yml | OK | Tests: tree, engine, mycelium |
+| ~~B1~~ | ~~CODEBOOK.json~~ | SUPPRIME | Remplace par UNIVERSAL_RULES + mycelium |
+| ~~B3~~ | ~~muninn_codec.py~~ | SUPPRIME | Code sinogramme mort |
+| ~~B8~~ | ~~CODEBOOK_TREE.md~~ | SUPPRIME | Index sinogrammes mort |
 
 ## Pourquoi c'est dur et pourquoi personne l'a fait
 
@@ -67,11 +68,13 @@ La partie dure (comprendre QUOI construire) est faite.
 - [ ] Tester sur 2e repo (infernal-wheel)
 - Note: compression x1.1-1.2 sur texte deja compact. Gains reels = texte verbeux
 
-### P3 — Nettoyage
-- [ ] Fusionner muninn_codec.py dans muninn.py (B3)
-- [ ] Supprimer CODEBOOK.json (remplace par UNIVERSAL_RULES)
-- [ ] Mettre a jour la CI pour tester le mycelium
-- [ ] Supprimer sys.stdout wrapper quand PYTHONIOENCODING suffit
+### P3 — Nettoyage [FAIT]
+- [x] Supprimer muninn_codec.py (code sinogramme mort)
+- [x] Supprimer CODEBOOK.json (remplace par UNIVERSAL_RULES + mycelium)
+- [x] Supprimer CODEBOOK_TREE.md (index sinogrammes mort)
+- [x] Nettoyer muninn.py: virer sym_to_concept, concept_to_sym, CODEBOOK_PATH
+- [x] Reecrire CI: tester tree, engine commands, mycelium (zero sinogramme)
+- [x] Fix sys.stdout wrapper (condition encoding != utf-8)
 
 ### P4 — Enrichir l'arbre
 - [ ] tree.json: hash de contenu par noeud

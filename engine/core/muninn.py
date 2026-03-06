@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Muninn v0.3 — Moteur de compression memoire LLM.
+Muninn v0.4 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
 Deux couches de compression:
-  1. Universelle (CODEBOOK.json) — sinogrammes + etats + generique
-  2. Locale (<repo>/.muninn/local.json) — auto-generee par scan du repo
+  1. Universelle (UNIVERSAL_RULES) — BPE-native English compact
+  2. Mycelium (<repo>/.muninn/mycelium.json) — codebook vivant par co-occurrences
 
 Usage:
+    python muninn.py bootstrap <repo-path>      # Cold start: nourrit le mycelium
     python muninn.py scan <repo-path>           # Scanne un repo, genere codebook local
-    python muninn.py compress <fichier>         # Compresse avec universel + local
+    python muninn.py compress <fichier>         # Compresse avec universel + mycelium
     python muninn.py tree <fichier>             # Construit l'arbre L-system
     python muninn.py status                     # Etat de l'arbre
     python muninn.py boot [query]               # Charge root + branches pertinentes
@@ -35,8 +36,6 @@ MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 # 1. Universal rules (hardcoded, BPE-native English)
 # 2. Mycelium (living codebook, per-repo, grows with usage)
 
-CODEBOOK_PATH = MUNINN_ROOT / "CODEBOOK.json"
-
 # Universal compression: state words -> short English (BPE-native)
 UNIVERSAL_RULES = {
     # French -> English compact (1 token each)
@@ -55,35 +54,18 @@ def load_codebook(repo_path: Path = None) -> dict:
     """Load compression rules: universal + mycelium (if available)."""
     text_rules = dict(UNIVERSAL_RULES)
 
-    # Try loading CODEBOOK.json for backwards compat (will be removed)
-    sym_to_concept = {}
-    concept_to_sym = {}
-    if CODEBOOK_PATH.exists():
-        with open(CODEBOOK_PATH, encoding="utf-8") as f:
-            cb = json.load(f)
-        for sym, data in cb["symbols"].items():
-            if isinstance(data, dict) and "concept" in data:
-                sym_to_concept[sym] = data
-                concept_to_sym[data["concept"]] = sym
-
     # Load mycelium compression rules (living codebook)
     mycelium_rules = {}
     if repo_path:
         try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
             from mycelium import Mycelium
             m = Mycelium(repo_path)
             mycelium_rules = m.get_compression_rules()
         except (ImportError, Exception):
-            # Fallback: try loading local.json (old format)
-            local_path = repo_path / ".muninn" / "local.json"
-            if local_path.exists():
-                with open(local_path, encoding="utf-8") as f:
-                    local = json.load(f)
-                text_rules.update(local.get("encode", {}))
+            pass
 
     return {
-        "sym_to_concept": sym_to_concept,
-        "concept_to_sym": concept_to_sym,
         "text_rules": text_rules,
         "mycelium_rules": mycelium_rules,
     }
@@ -570,17 +552,16 @@ def build_tree(filepath: Path):
 
 def extract_tags(text: str) -> list[str]:
     """Extract semantic tags from text — repo-agnostic.
-    Uses word frequency + codebook concept matching."""
+    Uses word frequency + mycelium concept matching."""
     tags = set()
     text_lower = text.lower()
 
-    # Match codebook concepts present in text
+    # Match mycelium fused concepts present in text
     cb = get_codebook()
-    for concept in cb["concept_to_sym"]:
-        for part in concept.lower().split("_"):
-            if len(part) > 2 and part in text_lower:
+    for key, rule in cb["mycelium_rules"].items():
+        for concept in rule["concepts"]:
+            if concept in text_lower:
                 tags.add(concept)
-                break
 
     # Extract high-frequency capitalized words as tags (entity detection)
     entities = re.findall(r'\b[A-Z][a-z]{2,}\b', text)
@@ -661,10 +642,6 @@ def boot(query: str = "") -> str:
 def decode_line(line: str) -> str:
     cb = get_codebook()
     result = line
-
-    for sym, data in cb["sym_to_concept"].items():
-        if sym in result:
-            result = result.replace(sym, f"[{data['concept']}]")
 
     reverse_rules = {v: k for k, v in cb["text_rules"].items()
                      if len(v) > 0 and v != k}

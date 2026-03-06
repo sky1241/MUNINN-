@@ -9,7 +9,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    name: Validate Codebook + Codec
+    name: Validate Engine + Mycelium + Tree
 
     steps:
       - uses: actions/checkout@v4
@@ -18,98 +18,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Validate CODEBOOK.json
-        run: |
-          python3 - <<'EOF'
-          import json, sys
-
-          with open("CODEBOOK.json", encoding="utf-8") as f:
-              cb = json.load(f)
-
-          errors = []
-
-          # Check meta
-          assert "meta" in cb, "Missing meta"
-          assert "symbols" in cb, "Missing symbols"
-          assert "domains" in cb, "Missing domains"
-
-          # Check no duplicate IDs
-          ids = {}
-          for sym, data in cb["symbols"].items():
-              if not isinstance(data, dict) or "id" not in data:
-                  continue
-              uid = data["id"]
-              if uid in ids:
-                  errors.append(f"Duplicate ID {uid}: {sym} vs {ids[uid]}")
-              ids[uid] = sym
-
-          # Check required fields
-          for sym, data in cb["symbols"].items():
-              if not isinstance(data, dict) or "concept" not in data:
-                  continue
-              for field in ["id", "concept", "domain", "desc"]:
-                  if field not in data:
-                      errors.append(f"Symbol '{sym}' missing field '{field}'")
-
-          if errors:
-              print("ERRORS:")
-              for e in errors:
-                  print(f"  {e}")
-              sys.exit(1)
-
-          symbols = {k: v for k, v in cb["symbols"].items()
-                     if isinstance(v, dict) and "concept" in v}
-          print(f"✓ CODEBOOK valid — {len(symbols)} symbols, {len(ids)} unique IDs")
-          EOF
-
-      - name: Test Codec
-        run: |
-          python3 - <<'EOF'
-          import subprocess, sys
-
-          # Test stats
-          r = subprocess.run(["python3", "engine/core/muninn_codec.py", "stats"], capture_output=True, text=True)
-          assert r.returncode == 0, f"stats failed: {r.stderr}"
-          print(r.stdout)
-
-          # Test encode
-          r = subprocess.run(
-              ["python3", "engine/core/muninn_codec.py", "encode", "S-2 pipeline complet, 459 chunks, p=3.4e-12"],
-              capture_output=True, text=True
-          )
-          assert r.returncode == 0, f"encode failed: {r.stderr}"
-          print(f"encode: {r.stdout.strip()}")
-
-          # Test decode roundtrip
-          encoded = r.stdout.strip()
-          r2 = subprocess.run(
-              ["python3", "engine/core/muninn_codec.py", "decode", encoded],
-              capture_output=True, text=True
-          )
-          assert r2.returncode == 0, f"decode failed: {r2.stderr}"
-          print(f"decode: {r2.stdout.strip()}")
-
-          print("✓ Codec OK")
-          EOF
-
-      - name: Compression ratio check
-        run: |
-          python3 - <<'EOF'
-          import json
-
-          with open("CODEBOOK.json", encoding="utf-8") as f:
-              cb = json.load(f)
-
-          ex = cb.get("compression_examples", {})
-          if ex:
-              orig = len(ex["texte_brut"])
-              comp = len(ex["muninn"])
-              ratio = 100 * (orig - comp) // orig
-              print(f"Compression example: {orig} → {comp} chars ({ratio}% reduction)")
-              assert ratio >= 50, f"Compression ratio {ratio}% below 50% threshold"
-              print(f"✓ Ratio {ratio}% >= 50% threshold")
-          EOF
 
       - name: Validate Tree Integrity
         run: |
@@ -123,34 +31,28 @@ jobs:
           nodes = tree["nodes"]
           budget = tree["budget"]
 
-          # Check all node files exist
           for name, node in nodes.items():
               filepath = os.path.join("memory", node["file"])
               if not os.path.exists(filepath):
                   errors.append(f"Node '{name}': file '{filepath}' not found")
                   continue
 
-              # Count actual lines
               with open(filepath, encoding="utf-8") as f:
                   actual_lines = sum(1 for _ in f)
 
-              # Check budget (R1)
               max_lines = node["max_lines"]
               if actual_lines > max_lines:
                   errors.append(f"Node '{name}': {actual_lines} lines > budget {max_lines} (R1 VIOLATION)")
 
-              # Check declared lines match actual
               declared = node["lines"]
               if abs(actual_lines - declared) > 2:
                   errors.append(f"Node '{name}': declared {declared} lines but actual {actual_lines}")
 
-          # Check root has children listed
           root = nodes.get("root", {})
           for child in root.get("children", []):
               if child not in nodes:
                   errors.append(f"Root child '{child}' not in nodes")
 
-          # Check required node fields
           for name, node in nodes.items():
               for field in ["type", "file", "lines", "max_lines"]:
                   if field not in node:
@@ -162,7 +64,7 @@ jobs:
                   print(f"  {e}")
               sys.exit(1)
 
-          print(f"✓ Tree valid — {len(nodes)} nodes, all within budget")
+          print(f"OK Tree valid — {len(nodes)} nodes, all within budget")
           EOF
 
       - name: Test Engine Commands
@@ -184,5 +86,47 @@ jobs:
           assert r.returncode == 0, f"prune failed: {r.stderr}"
           print(r.stdout)
 
-          print("✓ Engine commands OK")
+          # Test compress
+          r = subprocess.run(["python3", "engine/core/muninn.py", "compress", "README.md"],
+                             capture_output=True, text=True)
+          assert r.returncode == 0, f"compress failed: {r.stderr}"
+          assert "MUNINN" in r.stdout, "compress output missing header"
+          print("compress: OK")
+
+          # Test boot
+          r = subprocess.run(["python3", "engine/core/muninn.py", "boot"],
+                             capture_output=True, text=True)
+          assert r.returncode == 0, f"boot failed: {r.stderr}"
+          assert "root" in r.stdout.lower(), "boot output missing root"
+          print("boot: OK")
+
+          print("OK Engine commands all pass")
+          EOF
+
+      - name: Test Mycelium
+        run: |
+          python3 - <<'EOF'
+          import subprocess, sys
+
+          # Test mycelium simulate
+          r = subprocess.run(
+              ["python3", "engine/core/mycelium.py", "simulate", "."],
+              capture_output=True, text=True
+          )
+          assert r.returncode == 0, f"simulate failed: {r.stderr}"
+          assert "MYCELIUM" in r.stdout, "simulate output missing header"
+          assert "Fusions" in r.stdout, "simulate should produce fusions"
+          print(r.stdout[:500])
+
+          # Test bootstrap on this repo
+          r = subprocess.run(
+              ["python3", "engine/core/muninn.py", "bootstrap", "."],
+              capture_output=True, text=True
+          )
+          assert r.returncode == 0, f"bootstrap failed: {r.stderr}"
+          assert "BOOTSTRAP" in r.stdout, "bootstrap output missing header"
+          assert "Scanned" in r.stdout, "bootstrap should report scanned files"
+          print("bootstrap: OK")
+
+          print("OK Mycelium tests pass")
           EOF
