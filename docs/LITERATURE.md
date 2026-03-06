@@ -65,6 +65,22 @@ qui entre dans la fenetre de contexte. Seules les techniques text-level comptent
 | Query-agnostic compression | KVzip | Le mycelium compresse AVANT de savoir la query (offline) |
 | Living codebook | LLM-Codebook | Codebooks appris > statiques. Notre mycelium APPREND par co-occurrence |
 
+### Outils open-source concurrents (decouverts session 2026-03-06 #2)
+
+| Outil | Ce qu'il fait | Ratio | Utilisable ? |
+|-------|-------------|-------|-------------|
+| Claude-Mem (21K stars) | Capture tool calls, compresse via Claude API, SQLite + FTS | x10 | OUI — pip install, hooks Claude Code |
+| Letta Code (ex-MemGPT) | Memory-first agent, git-backed markdown, subagents | N/A | OUI — agent complet (pas une brique) |
+| PCToolkit (IJCAI 2025) | API unifiee: 5 compresseurs, 10 datasets, benchmark | N/A | OUI — pip install, benchmark |
+| ACON (Oct 2025) | Compression guidelines optimisees, gradient-free | -26-54% | OUI — zero GPU, closed-source compatible |
+
+Refs additionnelles:
+- Claude-Mem: github.com/thedotmack/claude-mem
+- Letta Code: github.com/letta-ai/letta-code
+- Letta Context Repos: letta.com/blog/context-repositories
+- PCToolkit: github.com/3DAgentWorld/Toolkit-for-Prompt-Compression (IJCAI 2025)
+- ACON: arxiv.org/abs/2510.00615
+
 ## Ce qui est unique a Muninn (pas dans la litterature)
 
 - **Mycelium vivant** — codebook qui POUSSE par co-occurrence, decay biologique.

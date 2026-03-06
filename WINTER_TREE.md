@@ -114,6 +114,39 @@ La partie dure (comprendre QUOI construire) est faite.
 - Note: ratio modeste car transcript deja semi-compact (dialogue technique)
 - Note: sur texte verbeux le compresseur fait x7.4 (cf P2)
 
+### P7 — Compression pro (LLMLingua + benchmark) [TODO]
+
+Briques a implementer, dans l'ordre :
+
+#### Brique 1 : Benchmark (mesurer avant d'optimiser)
+- [ ] Prendre 5 transcripts reels (Muninn + Yggdrasil)
+- [ ] Mesurer: faits preserves AVANT compaction vs APRES (avec et sans Muninn)
+- [ ] Avoir des vrais chiffres: "sans Muninn X% perdu, avec Muninn Y% perdu"
+
+#### Brique 2 : LLMLingua-2 comme Layer 8
+- [ ] pip install llmlingua (modele BERT ~1 GB, tourne sur CPU, zero API)
+- [ ] Integrer comme couche 8 dans compress_transcript()
+- [ ] Ratio attendu: x5-10 au lieu de x1.2 sur transcripts
+- [ ] Tester: facts preserved >= 95%
+
+#### Brique 3 : Resume LLM (self-compress)
+- [ ] Au PreCompact, Claude resume lui-meme en format .mn
+- [ ] Pas d'appel API externe — c'est le Claude courant qui resume
+- [ ] Ratio attendu: x10+ avec ~100% facts
+- [ ] Cout: ~5K tokens pour economiser ~50K+
+
+Concurrence connue:
+- Claude-Mem (21K stars): SQLite + Claude API, x10, pas d'arbre ni mycelium
+- Letta Code (ex-MemGPT): git-backed markdown, agent complet
+- LLMLingua-2 (Microsoft): BERT scorer, x3-20, pas de persistance
+- ACON: gradient-free compression guidelines, -26-54% tokens
+
+Ce que Muninn a que les autres n'ont pas:
+- Mycelium vivant (codebook qui apprend par co-occurrence)
+- L-system fractal (memes regles a chaque niveau)
+- Secret filtering
+- Zero dependance externe (regex only, pas de GPU, pas d'API)
+
 ## Pivots de la session 2026-03-06
 
 ### Pivot 1 — Sinogrammes = mauvais chemin
