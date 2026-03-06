@@ -29,94 +29,63 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# ── CODEBOOK LOADER ──────────────────────────────────────────────
+# ── COMPRESSION RULES LOADER ────────────────────────────────────
+# Two sources of compression rules:
+# 1. Universal rules (hardcoded, BPE-native English)
+# 2. Mycelium (living codebook, per-repo, grows with usage)
 
 CODEBOOK_PATH = MUNINN_ROOT / "CODEBOOK.json"
 
-
-def load_universal_codebook() -> dict:
-    """Load CODEBOOK.json — universal symbols only."""
-    with open(CODEBOOK_PATH, encoding="utf-8") as f:
-        cb = json.load(f)
-
-    sym_to_concept = {}
-    concept_to_sym = {}
-
-    for sym, data in cb["symbols"].items():
-        if not isinstance(data, dict) or "concept" not in data:
-            continue
-        sym_to_concept[sym] = data
-        concept_to_sym[data["concept"]] = sym
-
-    # Universal text rules — ONLY from CODEBOOK.json domain="*"
-    text_rules = {}
-    for sym, data in sym_to_concept.items():
-        domain = data.get("domain", "")
-        concept = data["concept"]
-
-        # Only auto-map universal (*) state symbols
-        if domain == "*":
-            if concept == "COMPLETE":
-                for w in ("COMPLET", "COMPLETE", "complet", "VALIDE", "VALIDÉ",
-                          "FIXE", "FIXÉ", "done", "Done", "DONE"):
-                    text_rules[w] = sym
-            elif concept == "RUNNING":
-                for w in ("EN COURS", "en cours", "running", "in progress"):
-                    text_rules[w] = sym
-            elif concept == "FAILED":
-                for w in ("ECHOUE", "ECHOUÉ", "FAILED", "failed", "CASSE", "CASSÉ"):
-                    text_rules[w] = sym
-            elif concept == "PENDING":
-                for w in ("EN ATTENTE", "PENDING", "pending", "todo", "TODO"):
-                    text_rules[w] = sym
-            elif concept == "BUG":
-                text_rules["BUG"] = sym
-            elif concept == "FIX":
-                text_rules["FIX"] = sym
-            elif concept == "WARNING":
-                text_rules["WARNING"] = sym
-            elif concept == "DECISION":
-                for w in ("DECISION", "DÉCISION", "decision"):
-                    text_rules[w] = sym
-
-    return {
-        "raw": cb,
-        "sym_to_concept": sym_to_concept,
-        "concept_to_sym": concept_to_sym,
-        "text_rules": text_rules,
-        "domains": cb.get("domains", {}),
-    }
-
-
-def load_local_codebook(repo_path: Path) -> dict:
-    """Load repo-specific local codebook if it exists."""
-    local_path = repo_path / ".muninn" / "local.json"
-    if not local_path.exists():
-        return {"text_rules": {}, "repo_name": repo_path.name}
-
-    with open(local_path, encoding="utf-8") as f:
-        local = json.load(f)
-
-    return {
-        "text_rules": local.get("encode", {}),
-        "repo_name": local.get("repo_name", repo_path.name),
-        "domain": local.get("domain", ""),
-    }
+# Universal compression: state words -> short English (BPE-native)
+UNIVERSAL_RULES = {
+    # French -> English compact (1 token each)
+    "COMPLET": "done", "COMPLETE": "done", "complet": "done",
+    "VALIDE": "done", "VALIDÉ": "done", "FIXE": "done", "FIXÉ": "done",
+    "EN COURS": "wip", "en cours": "wip",
+    "ECHOUE": "fail", "ECHOUÉ": "fail", "FAILED": "fail",
+    "EN ATTENTE": "todo", "PENDING": "todo",
+    "DÉCISION": "decided", "DECISION": "decided",
+    # Markdown stripping
+    "## ": "", "**": "", "- ": "",
+}
 
 
 def load_codebook(repo_path: Path = None) -> dict:
-    """Load universal + local codebook merged."""
-    cb = load_universal_codebook()
+    """Load compression rules: universal + mycelium (if available)."""
+    text_rules = dict(UNIVERSAL_RULES)
 
+    # Try loading CODEBOOK.json for backwards compat (will be removed)
+    sym_to_concept = {}
+    concept_to_sym = {}
+    if CODEBOOK_PATH.exists():
+        with open(CODEBOOK_PATH, encoding="utf-8") as f:
+            cb = json.load(f)
+        for sym, data in cb["symbols"].items():
+            if isinstance(data, dict) and "concept" in data:
+                sym_to_concept[sym] = data
+                concept_to_sym[data["concept"]] = sym
+
+    # Load mycelium compression rules (living codebook)
+    mycelium_rules = {}
     if repo_path:
-        local = load_local_codebook(repo_path)
-        # Local rules override universal on conflict
-        cb["text_rules"].update(local["text_rules"])
-        cb["local"] = local
-    else:
-        cb["local"] = {"text_rules": {}, "repo_name": ""}
+        try:
+            from mycelium import Mycelium
+            m = Mycelium(repo_path)
+            mycelium_rules = m.get_compression_rules()
+        except (ImportError, Exception):
+            # Fallback: try loading local.json (old format)
+            local_path = repo_path / ".muninn" / "local.json"
+            if local_path.exists():
+                with open(local_path, encoding="utf-8") as f:
+                    local = json.load(f)
+                text_rules.update(local.get("encode", {}))
 
-    return cb
+    return {
+        "sym_to_concept": sym_to_concept,
+        "concept_to_sym": concept_to_sym,
+        "text_rules": text_rules,
+        "mycelium_rules": mycelium_rules,
+    }
 
 
 # Lazy-loaded global

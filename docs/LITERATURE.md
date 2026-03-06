@@ -42,12 +42,40 @@ qui entre dans la fenetre de contexte. Seules les techniques text-level comptent
 5. **Log de navigation** — tracker les chemins parcourus dans l'arbre pour
    feeder R4 promotion/elagage (MemWalker)
 
+### Nouveaux papiers 2025-2026 (decouverts session 2026-03-06)
+
+| Papier | Idee cle | Ratio | Pertinence Muninn |
+|--------|----------|-------|-------------------|
+| MemOS (Li 2025) | Memory OS 3 couches: API/scheduling/storage | N/A | Architecture proche — mais top-down corporate, pas bottom-up boucher |
+| MemoryOS (EMNLP 2025 Oral) | OS memoire pour agents personnalises | N/A | Persistent memory + user profiles |
+| KVzip (NeurIPS 2025 Oral, top 0.35%) | Compression KV cache 3-4x, query-agnostic | 3-4x | Bas niveau (KV cache), nous = haut niveau (semantique) |
+| Mem0 (commercial) | "Memory layer for AI apps" | N/A | Produit commercial, pas open-research |
+| Word2Vec (Mikolov 2013) | Co-occurrence = meaning, vectors from context | N/A | FONDATION du mycelium — mots qui co-apparaissent = sens lie |
+| GloVe (Pennington 2014) | Global vectors from co-occurrence matrix | N/A | Matrice co-occurrence -> embedding. Notre mycelium = GloVe artisanal |
+| LLM-Codebook (2025) | Codebooks appris > codebooks manuels | Extreme | Confirme: codebook statique (CODEBOOK.json) est sous-optimal |
+| Huff-LLM (2025) | Huffman sur poids LLM end-to-end | N/A | Modele-level, pas applicable directement |
+
+### Concepts fondamentaux empruntes
+
+| Concept | Source | Application Muninn |
+|---------|--------|-------------------|
+| Co-occurrence = sens | Word2Vec, GloVe | Le mycelium tracke les co-occurrences pour fusionner les concepts |
+| Gulf of execution/evaluation | Norman (1988) | Les chirurgiens construisent pour des chirurgiens, pas pour des bouchers |
+| Layered memory hierarchy | MemOS | Root (working) / branches (long-term) / leaves (cold archive) |
+| Query-agnostic compression | KVzip | Le mycelium compresse AVANT de savoir la query (offline) |
+| Living codebook | LLM-Codebook | Codebooks appris > statiques. Notre mycelium APPREND par co-occurrence |
+
 ## Ce qui est unique a Muninn (pas dans la litterature)
 
+- **Mycelium vivant** — codebook qui POUSSE par co-occurrence, decay biologique.
+  Inspire de Word2Vec/GloVe mais a l'echelle d'un utilisateur, pas d'un corpus.
 - **L-system fractal** — memes regles a chaque niveau d'arbre. Novel.
-- **Codebook texte Huffman semantique** — les autres = embeddings model-level.
-  Nous = alphabet texte. Novel.
-- **Zero acces modele** — pur fichier texte a 3-4x compression. Sous-explore.
+- **Approche boucher** — construit depuis le cote utilisateur non-expert,
+  pas depuis le cote chercheur. Le probleme est invisible aux chirurgiens.
+- **Zero acces modele** — pur fichier texte, pas de fine-tuning, pas de KV cache.
+  Fonctionne sur n'importe quel LLM, n'importe quel provider.
+- **BPE-native output** — compresse en anglais compact que le tokenizer lit nativement.
+  Pas de codebook lookup, pas de sinogrammes, zero overhead de traduction.
 
 ## Refs
 - MemGPT: arxiv.org/abs/2310.08560
@@ -59,3 +87,10 @@ qui entre dans la fenetre de contexte. Seules les techniques text-level comptent
 - AutoCompressors: arxiv.org/abs/2305.14788
 - ICAE: arxiv.org/abs/2307.06945
 - COCOM: arxiv.org/abs/2407.09252
+- MemOS: arxiv.org/abs/2507.03724
+- MemoryOS: github.com/BAI-LAB/MemoryOS
+- KVzip: arxiv.org/abs/2511.01815
+- Mem0: mem0.ai
+- Word2Vec: arxiv.org/abs/1301.3781
+- GloVe: nlp.stanford.edu/projects/glove/
+- Norman: "The Design of Everyday Things" (1988)
