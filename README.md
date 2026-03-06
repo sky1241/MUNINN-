@@ -1,74 +1,105 @@
 # Muninn
 
-> *Le corbeau de la mémoire — celui qui revient toujours.*
+> *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression sémantique sub-token pour mémoire persistante LLM.
+Moteur de compression memoire pour LLM. 9 couches de compression, zero dependance obligatoire.
 
-## Les 4 points cardinaux
+## Le probleme
 
-### NORD — Le problème
-Les LLM n'ont pas de mémoire persistante. Chaque session repart de zéro.
-Les hacks actuels (fichiers markdown, RAG, vector stores) sont du texte brut
-injecté dans le contexte — gaspillage massif de tokens.
-200 lignes × 16 tokens/ligne = 3,200 tokens pour stocker ce qu'un codebook
-compressé dirait en 800.
+Les LLM n'ont pas de memoire persistante. Chaque session repart de zero.
+Le hack actuel = fichier MEMORY.md (200 lignes, ~3K tokens). C'est du texte brut
+injecte dans le contexte. Gaspillage massif.
 
-### EST — L'idée
-Compression sémantique **sous le niveau du token**.
-Un alphabet de classement conçu pour les LLM — pas du texte humain,
-un langage machine-natif qui maximise le sens par token.
+## Ce que fait Muninn
 
-Inspiré de :
-- **L-systems** (Lindenmayer) — croissance fractale depuis un axiome
-- **Machines de Turing** — codebook = table de transition
-- **Enigma** — le codebook est la clé, le LLM sait décoder
+Muninn compresse la memoire et les transcripts de session pour que le LLM
+garde x2.5 a x12 plus d'information dans le meme budget de tokens.
 
-### SUD — L'architecture
-Des moteurs modulaires câblables en boucle :
+### 9 couches de compression
 
 ```
-[Moteur Mémoire v10] ←→ [Moteur Principal v12] ←→ [Moteur Auto-Optim]
-        ↑                                                    ↓
-        └────────────── boucle de rétroaction ───────────────┘
+L1: markdown strip          L5: universal rules (FR->EN compact)
+L2: filler word removal     L6: mycelium (abbreviations apprises)
+L3: phrase compression      L7: fact extraction
+L4: number shortening       L8: LLMLingua-2 (BERT scorer, optionnel)
+                            L9: LLM self-compress (Claude API, optionnel)
 ```
 
-Chaque moteur = un module autonome (un repo).
-Une phrase en entrée → la chaîne fait le reste.
+- **L1-L7** : regex pur, zero dependance, instantane
+- **L8** : `pip install llmlingua` — modele BERT ~1GB, CPU, x2.1 additionnel
+- **L9** : `pip install anthropic` — Claude Haiku resume via API, x5 additionnel
 
-### OUEST — Les briques existantes
-- **Yggdrasil Engine** — compression de 348M papers en strates (S-2→S6)
-- **Winter Tree Scanner** — scan incrémental par chunks avec arbre d'état
-- **L-system mémoire** — arbre MEMORY.md → branches → feuilles (prototype dans Claude Code)
-- **Codebook proto** — format compact `BT2✓11|65K|c15|d0.44` (à formaliser)
-- **Règles UX** — (à extraire des autres repos)
+### Le mycelium (codebook vivant)
 
-## Feuille de route
+Reseau de co-occurrences qui pousse a chaque session :
+- Concepts frequents ensemble → connexion forte → fusion
+- Connexions mortes → decay → disparition
+- Plus tu l'utilises, mieux il compresse
 
-### Phase 0 — Spécification (maintenant)
-- [ ] Définir le format du codebook (alphabet, séparateurs, règles d'encodage)
-- [ ] Spécifier l'arbre L-system (profondeur max, règles de réécriture)
-- [ ] Lister les briques existantes à importer
-- [ ] Benchmark : texte brut vs codebook compressé (ratio tokens/information)
+### L'arbre (memoire structuree)
 
-### Phase 1 — Codebook v0.1
-- [ ] Table de symboles : concepts fréquents → codes compacts
-- [ ] Encoder/décoder une session Yggdrasil en format Muninn
-- [ ] Mesurer la compression réelle
+Arbre fractal L-system :
+- Racine (100 lignes, toujours chargee) → pointeurs vers branches
+- Branches (150 lignes, chargees si pertinentes)
+- Temperature par noeud : chaud = lu souvent, froid = oublie
+- Budget : 30K tokens max = 15% du contexte
 
-### Phase 2 — Arbre L-system
-- [ ] Structure racine → branches → feuilles avec pointeurs
-- [ ] Règles de réécriture (quand un nœud déborde → split)
-- [ ] Navigation intelligente (quel chemin descendre selon le contexte)
+## Commandes
 
-### Phase 3 — Boucle auto-optimisation
-- [ ] Le LLM évalue sa propre compression
-- [ ] Feedback loop : ce qui a été utile remonte, ce qui est mort descend
-- [ ] Élagage automatique des branches mortes
+```bash
+muninn.py status              # Etat de l'arbre + temperatures
+muninn.py boot [query]        # Charge root + branches pertinentes + derniere session
+muninn.py compress <fichier>  # Compresse un fichier markdown
+muninn.py feed <transcript>   # Nourrit le mycelium + compresse en .mn
+muninn.py feed --history      # Rattrape tous les transcripts passes
+muninn.py bootstrap <repo>    # Cold start sur un nouveau repo
+muninn.py prune [--force]     # Elagage (froid -> supprime)
+muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
+muninn.py scan <repo>         # Genere codebook local
+```
+
+## Resultats mesures
+
+| Input | Ratio | Details |
+|-------|-------|---------|
+| Texte verbeux (MEMORY.md style) | x7.4 | 1091 → 148 tokens, -86% |
+| WINTER_TREE.md | x2.9 | 96% facts preserves, EXCELLENT |
+| README.md | x1.7 | 75% facts preserves, GOOD |
+| Transcript de session | x2.5 | Avec L8 (LLMLingua) |
+
+## Installation
+
+```bash
+# Minimum (L1-L7, zero dependance)
+git clone https://github.com/sky1241/MUNINN-.git
+python engine/core/muninn.py status
+
+# Optionnel: L8 (BERT compression)
+pip install llmlingua
+
+# Optionnel: L9 (LLM self-compress)
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-...
+```
+
+## Hooks Claude Code
+
+Ajouter dans `.claude/settings.local.json` :
+```json
+{
+  "hooks": {
+    "PreCompact": [{ "type": "command", "command": "python path/to/muninn.py feed --repo ." }],
+    "SessionEnd": [{ "type": "command", "command": "python path/to/muninn.py feed --repo ." }]
+  }
+}
+```
 
 ## Origine
-Né d'une conversation entre Sky et Claude, session 16 d'Yggdrasil.
-Sky a vu en 30 minutes ce que personne n'a publié :
-la mémoire LLM n'est pas un problème de stockage, c'est un problème de **compression**.
+
+Cree par Sky (electricien, autodidacte, 11 mois de code).
+Ne de l'observation que la memoire LLM n'est pas un probleme de stockage
+mais un probleme de compression.
 
 ## Licence
-À définir.
+
+MIT

@@ -1507,25 +1507,30 @@ def feed_history(repo_path: Path):
 
             fed.add(file_key)
 
-        # Subagent transcripts
-        subagents_dir = project_dir / "subagents" if (project_dir / "subagents").exists() else None
-        if subagents_dir:
-            # Also check inside session subdirectories
-            for sub_dir in project_dir.iterdir():
-                if sub_dir.is_dir():
-                    sa_dir = sub_dir / "subagents"
-                    if sa_dir.exists():
-                        for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
-                            file_key = str(jsonl_file)
-                            if file_key in fed:
-                                continue
-                            texts = parse_transcript(jsonl_file)
-                            if texts:
-                                for text in texts:
-                                    m.observe_text(text)
-                                total_messages += len(texts)
-                                new_files += 1
-                            fed.add(file_key)
+        # Subagent transcripts (top-level and inside session subdirectories)
+        subagent_dirs = []
+        top_sa = project_dir / "subagents"
+        if top_sa.exists():
+            subagent_dirs.append(top_sa)
+        for sub_dir in project_dir.iterdir():
+            if sub_dir.is_dir():
+                sa_dir = sub_dir / "subagents"
+                if sa_dir.exists():
+                    subagent_dirs.append(sa_dir)
+
+        for sa_dir in subagent_dirs:
+            for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
+                file_key = str(jsonl_file)
+                if file_key in fed:
+                    continue
+                texts = parse_transcript(jsonl_file)
+                if texts:
+                    m.start_session()
+                    for text in texts:
+                        m.observe_text(text)
+                    total_messages += len(texts)
+                    new_files += 1
+                fed.add(file_key)
 
     if total_messages > 0:
         m.save()
@@ -1552,7 +1557,7 @@ def feed_history(repo_path: Path):
 def main():
     global _REPO_PATH
 
-    parser = argparse.ArgumentParser(description="Muninn v0.6 — Universal memory compression")
+    parser = argparse.ArgumentParser(description="Muninn v0.8 — Universal memory compression")
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
