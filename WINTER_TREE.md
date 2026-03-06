@@ -24,13 +24,13 @@ Etat: 7 briques vivantes, 3 supprimees
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B1 | CODEBOOK.json | A REMPLACER | Le mycelium le remplace (codebook vivant) |
-| B2 | muninn.py | WIP | Brancher sur mycelium au lieu de CODEBOOK |
+| B1 | CODEBOOK.json | MORT | Remplace par UNIVERSAL_RULES + mycelium |
+| B2 | muninn.py | OK | Codebook loader v2 branche sur mycelium, bootstrap cmd |
 | B3 | muninn_codec.py | DOUBLON | Fusionner dans B2 |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Reconvertir en anglais compact |
-| NEW | mycelium.py | FAIT | Tracker co-occurrences, fusion, decay |
-| B9 | docs/ | OK | Garder |
+| NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay, cold start |
+| B9 | docs/ | OK | LITERATURE.md enrichi (15+ papiers) |
 | B10 | ci.yml | OK | Adapter |
 
 ## Pourquoi c'est dur et pourquoi personne l'a fait
@@ -54,22 +54,24 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Tester: simulation 20 sessions -> 69 connexions, 34 fusions
 
 ### P1 — La plomberie (le tuyau qui manque)
+- [x] Cold start: `muninn.py bootstrap <repo>` — scanne et nourrit le mycelium
 - [ ] Hook de fin de session: capturer la conversation, nourrir le mycelium
 - [ ] Hook de debut de session: charger le mycelium, pre-compiler les fusions
-- [ ] Cold start: scan initial du repo pour bootstrap (on a deja `scan`)
 - [ ] Integrer mycelium dans le flow reel de Claude Code (hooks .claude/)
+- Note: hooks Claude Code = commandes shell, pas acces au contenu conversation
 
 ### P2 — Compresseur v2 (mycelium-aware)
-- [ ] Reecrire compress pour utiliser mycelium.json au lieu de CODEBOOK.json
-- [ ] Format output: anglais compact natif BPE (zero sinogrammes)
-- [ ] Supprimer tout le code sinogramme (load_universal_codebook, etc.)
+- [x] Codebook loader v2: UNIVERSAL_RULES + mycelium (zero sinogrammes)
+- [x] Compresseur utilise fusions mycelium pour strip redondance
 - [ ] Mesurer gain tokens REEL (avant/apres sur root.mn)
 - [ ] Tester sur 2e repo (infernal-wheel)
+- Note: compression x1.1-1.2 sur texte deja compact. Gains reels = texte verbeux
 
 ### P3 — Nettoyage
 - [ ] Fusionner muninn_codec.py dans muninn.py (B3)
-- [ ] Supprimer CODEBOOK.json une fois mycelium en place
+- [ ] Supprimer CODEBOOK.json (remplace par UNIVERSAL_RULES)
 - [ ] Mettre a jour la CI pour tester le mycelium
+- [ ] Supprimer sys.stdout wrapper quand PYTHONIOENCODING suffit
 
 ### P4 — Enrichir l'arbre
 - [ ] tree.json: hash de contenu par noeud

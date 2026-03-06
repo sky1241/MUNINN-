@@ -25,7 +25,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -345,13 +346,28 @@ def read_node(name: str) -> str:
 # ── COMPRESS ──────────────────────────────────────────────────────
 
 def compress_line(line: str) -> str:
-    """Compress a single line using universal + local codebook."""
+    """Compress a single line using universal rules + mycelium fusions."""
     cb = get_codebook()
     result = line
 
     # Apply text rules (longest first to avoid partial matches)
     for pattern in sorted(cb["text_rules"].keys(), key=len, reverse=True):
         result = result.replace(pattern, cb["text_rules"][pattern])
+
+    # Mycelium-aware compression: strong fusions mean the concepts are
+    # predictable given each other. Remove the shorter concept when both
+    # appear in the same line AND fusion strength >= 10 (very strong link).
+    # This is self-information filtering: predictable = low information = strip.
+    strong_fusions = {k: v for k, v in cb["mycelium_rules"].items()
+                      if v["strength"] >= 10}
+    for key, rule in strong_fusions.items():
+        a, b = rule["concepts"]
+        result_lower = result.lower()
+        if a in result_lower and b in result_lower:
+            # Remove the shorter word (less information content)
+            drop = b if len(b) <= len(a) else a
+            result = re.sub(rf'\s+\b{re.escape(drop)}\b', '', result,
+                          count=1, flags=re.IGNORECASE)
 
     # Strip markdown formatting
     result = re.sub(r"^##\s+", "", result)
@@ -780,6 +796,56 @@ def analyze_file(filepath: Path) -> dict:
     }
 
 
+# ── BOOTSTRAP (cold start) ────────────────────────────────────────
+
+def bootstrap_mycelium(repo_path: Path):
+    """Cold start: scan repo files and feed the mycelium.
+
+    Reads all human-written files (code, docs, config) and feeds them
+    to the mycelium as co-occurrence observations. This bootstraps the
+    living codebook from scratch on a new repo.
+    """
+    repo_path = repo_path.resolve()
+    print(f"=== MUNINN BOOTSTRAP: {repo_path.name} ===")
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mycelium import Mycelium
+
+    m = Mycelium(repo_path)
+    m.start_session()
+
+    skip_dirs = {".git", "node_modules", "__pycache__", "venv", ".venv",
+                 "dist", "build", "coverage", ".gradle", ".idea",
+                 "data", "output", "cache", "caches", ".muninn"}
+
+    file_count = 0
+    for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
+                    "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
+                    "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini",
+                    "**/*.mn"]:
+        for f in repo_path.glob(pattern):
+            parts = f.relative_to(repo_path).parts
+            if any(p.startswith(".") or p in skip_dirs for p in parts):
+                continue
+            try:
+                text = f.read_text(encoding="utf-8", errors="ignore")
+                if len(text) < 50_000:
+                    m.observe_text(text)
+                    file_count += 1
+            except (PermissionError, OSError):
+                continue
+
+    m.save()
+    print(f"  Scanned: {file_count} files")
+    print(f"\n{m.status()}")
+
+    rules = m.get_compression_rules()
+    if rules:
+        print(f"\n  Compression rules ({len(rules)}):")
+        for key, rule in list(rules.items())[:15]:
+            print(f"    {rule['concepts']} -> '{rule['form']}' (strength={rule['strength']})")
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -788,7 +854,7 @@ def main():
     parser = argparse.ArgumentParser(description="Muninn v0.3 — Universal memory compression")
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
-        "boot", "decode", "prune", "scan",
+        "boot", "decode", "prune", "scan", "bootstrap",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -811,6 +877,13 @@ def main():
             print("ERROR: repo path required. Usage: muninn.py scan <repo-path>")
             sys.exit(1)
         scan_repo(Path(args.file))
+        return
+
+    if args.command == "bootstrap":
+        if not args.file:
+            print("ERROR: repo path required. Usage: muninn.py bootstrap <repo-path>")
+            sys.exit(1)
+        bootstrap_mycelium(Path(args.file))
         return
 
     if args.command == "boot":
