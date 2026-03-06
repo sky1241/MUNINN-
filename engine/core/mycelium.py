@@ -142,16 +142,19 @@ class Mycelium:
         fusions = self.data["fusions"]
 
         for key, conn in conns.items():
-            if conn["count"] >= self.FUSION_THRESHOLD and key not in fusions:
-                a, b = key.split("|")
-                # Create fusion: shortest combined form
-                fused_form = f"{a}+{b}"
-                fusions[key] = {
-                    "concepts": [a, b],
-                    "form": fused_form,
-                    "strength": conn["count"],
-                    "fused_at": time.strftime("%Y-%m-%d"),
-                }
+            if conn["count"] >= self.FUSION_THRESHOLD:
+                if key not in fusions:
+                    a, b = key.split("|")
+                    fused_form = f"{a}+{b}"
+                    fusions[key] = {
+                        "concepts": [a, b],
+                        "form": fused_form,
+                        "strength": conn["count"],
+                        "fused_at": time.strftime("%Y-%m-%d"),
+                    }
+                else:
+                    # Update strength to match current count
+                    fusions[key]["strength"] = conn["count"]
 
     def _prune_weakest(self):
         """Remove weakest connections to stay under MAX_CONNECTIONS."""
@@ -274,11 +277,11 @@ class Mycelium:
     def get_learned_abbreviations(self) -> dict:
         """Generate abbreviation rules from strong fusions.
 
-        Strong fusions (strength >= 8) indicate concepts that are so
-        tightly linked they can be abbreviated. The shorter concept
-        can stand for both when the other is predictable.
+        Only creates abbreviations when one concept is a prefix/substring
+        of the other (e.g., "compression" -> "comp", "encoding" -> "enc").
+        Random co-occurrences like "compression|lines" are NOT abbreviations.
 
-        Returns dict {long_phrase: short_form}.
+        Returns dict {long_form: short_form}.
         """
         fusions = self.data["fusions"]
         if not fusions:
@@ -288,11 +291,11 @@ class Mycelium:
         for key, fusion in fusions.items():
             if fusion["strength"] >= 8:
                 a, b = fusion["concepts"]
-                # The longer concept can be dropped when short one is present
-                if len(a) > len(b):
-                    abbrevs[a] = b  # "compression" -> "comp" (if b is shorter)
-                else:
-                    abbrevs[b] = a
+                # Only abbreviate when short is a prefix of long
+                # (e.g., "comp" is prefix of "compression")
+                long, short = (a, b) if len(a) > len(b) else (b, a)
+                if long.startswith(short) and len(short) >= 3:
+                    abbrevs[long] = short
         return abbrevs
 
     def start_session(self):
