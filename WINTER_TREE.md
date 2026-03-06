@@ -76,10 +76,13 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Reecrire CI: tester tree, engine commands, mycelium (zero sinogramme)
 - [x] Fix sys.stdout wrapper (condition encoding != utf-8)
 
-### P4 — Enrichir l'arbre
-- [ ] tree.json: hash de contenu par noeud
-- [ ] tree.json: score temperature auto-calcule
-- [ ] Ratios biologiques du Winter Tree (budgets dynamiques)
+### P4 — Enrichir l'arbre [FAIT]
+- [x] tree.json: hash SHA-256 (8 chars) par noeud — detecte changements
+- [x] tree.json: score temperature auto-calcule (access + recency + fill)
+- [x] Ratios biologiques: budget dynamique par temperature (COCOM 2025)
+- [x] Prune utilise temperature au lieu de access_count brut
+- [x] Boot utilise temperature pour ranking des branches
+- [x] Status affiche barre de temperature visuelle
 
 ## Pivots de la session 2026-03-06
 

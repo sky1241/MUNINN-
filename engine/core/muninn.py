@@ -18,12 +18,14 @@ Usage:
     python muninn.py decode <fichier>           # Decompresse
 """
 import argparse
+import hashlib
 import io
 import json
 import re
 import sys
 import time
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 if sys.stdout.encoding != "utf-8":
@@ -257,6 +259,30 @@ BUDGET = {
     "compression_ratio": 4.6,
 }
 
+# Biological ratios: compression varies by temperature (COCOM 2025)
+# Hot nodes get more space (detail), cold nodes get compressed harder
+COMPRESSION_BY_TEMP = {
+    "hot":  1.5,   # t >= 0.5 — light compression, keep detail
+    "warm": 3.0,   # 0.2 <= t < 0.5 — moderate compression
+    "cold": 6.0,   # t < 0.2 — heavy compression, summary only
+}
+
+
+def effective_budget(node: dict) -> int:
+    """Dynamic budget: hot nodes get more lines, cold nodes fewer.
+
+    Instead of fixed max_lines, scale by temperature.
+    Hot nodes: max_lines * 1.5 (more room)
+    Cold nodes: max_lines * 0.5 (compress harder)
+    """
+    base = node.get("max_lines", 150)
+    temp = node.get("temperature", 0.3)
+    if temp >= 0.5:
+        return int(base * 1.3)  # hot: 30% more room
+    elif temp < 0.2:
+        return int(base * 0.6)  # cold: 40% less room
+    return base  # warm: standard
+
 # ── TREE STRUCTURE ────────────────────────────────────────────────
 
 TREE_DIR = MUNINN_ROOT / "memory"
@@ -304,8 +330,61 @@ def load_tree():
 
 
 def save_tree(tree):
+    tree["updated"] = time.strftime("%Y-%m-%d")
     with open(TREE_META, "w", encoding="utf-8") as f:
         json.dump(tree, f, ensure_ascii=False, indent=2)
+
+
+def compute_hash(filepath: Path) -> str:
+    """SHA-256 hash of file content (first 8 hex chars)."""
+    if not filepath.exists():
+        return "0" * 8
+    content = filepath.read_bytes()
+    return hashlib.sha256(content).hexdigest()[:8]
+
+
+def compute_temperature(node: dict) -> float:
+    """Temperature score: how "hot" is this node (0.0=frozen, 1.0=burning).
+
+    Based on:
+    - access_count (more access = hotter)
+    - recency (accessed recently = hotter)
+    - fill ratio (fuller = hotter, needs attention)
+
+    Inspired by COCOM (2025): variable compression by importance.
+    Root 1.5x, hot branches 3x, cold leaves 6x.
+    """
+    access = node.get("access_count", 0)
+    last = node.get("last_access", "2026-01-01")
+    fill = node.get("lines", 0) / max(node.get("max_lines", 1), 1)
+
+    # Recency: days since last access (0 = today)
+    try:
+        days_cold = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
+    except ValueError:
+        days_cold = 90
+
+    # Access heat: log scale, caps at ~1.0 for 10+ accesses
+    import math
+    access_heat = min(1.0, math.log1p(access) / math.log1p(10))
+
+    # Recency heat: 1.0 = today, decays to 0 over 90 days
+    recency_heat = max(0.0, 1.0 - days_cold / 90)
+
+    # Fill pressure: nodes near budget get hotter (need split/compress)
+    fill_heat = fill ** 2  # quadratic: only significant near full
+
+    # Weighted combination
+    temp = 0.5 * access_heat + 0.3 * recency_heat + 0.2 * fill_heat
+    return round(temp, 2)
+
+
+def refresh_tree_metadata(tree: dict):
+    """Recompute hash + temperature for all nodes."""
+    for name, node in tree["nodes"].items():
+        filepath = TREE_DIR / node["file"]
+        node["hash"] = compute_hash(filepath)
+        node["temperature"] = compute_temperature(node)
 
 
 def read_node(name: str) -> str:
@@ -598,8 +677,8 @@ def boot(query: str = "") -> str:
             tag_score = sum(1 for t in tags if any(
                 q in t.lower() for q in query_lower.split()
             ))
-            access_score = node.get("access_count", 0) * 0.1
-            total = tag_score + access_score
+            temp_score = node.get("temperature", 0) * 0.5
+            total = tag_score + temp_score
             if total > 0:
                 scored.append((name, total))
 
@@ -617,7 +696,7 @@ def boot(query: str = "") -> str:
     else:
         ranked = sorted(
             [(n, d) for n, d in nodes.items() if n != "root"],
-            key=lambda x: x[1].get("access_count", 0),
+            key=lambda x: x[1].get("temperature", 0),
             reverse=True,
         )
         loaded_tokens = nodes["root"]["lines"] * BUDGET["tokens_per_line"]
@@ -655,47 +734,42 @@ def decode_line(line: str) -> str:
 # ── PRUNE (R4) ───────────────────────────────────────────────────
 
 def prune(dry_run: bool = True):
-    """R4: promote hot, demote cold, kill dead."""
+    """R4: promote hot, demote cold, kill dead. Uses temperature score."""
     tree = load_tree()
     nodes = tree["nodes"]
-    today = time.strftime("%Y-%m-%d")
+    refresh_tree_metadata(tree)
 
     branches = {n: d for n, d in nodes.items() if d["type"] == "branch"}
     if not branches:
         print("  No branches to prune.")
         return
 
-    counts = [d.get("access_count", 0) for d in branches.values()]
-    median_access = sorted(counts)[len(counts) // 2] if counts else 0
-
     print(f"=== MUNINN PRUNE (R4) === {'[DRY RUN]' if dry_run else ''}")
-    print(f"  Branches: {len(branches)}, Median access: {median_access}")
+    print(f"  Branches: {len(branches)}")
     print()
 
     hot, cold, dead = [], [], []
 
     for name, node in branches.items():
+        temp = node.get("temperature", 0)
         acc = node.get("access_count", 0)
         last = node.get("last_access", "2026-01-01")
-
         try:
-            from datetime import datetime
-            days_cold = (datetime.strptime(today, "%Y-%m-%d") -
-                        datetime.strptime(last, "%Y-%m-%d")).days
+            days_ago = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
         except ValueError:
-            days_cold = 0
+            days_ago = 90
 
-        if acc > median_access and acc > 0:
-            hot.append((name, acc))
-            print(f"  HOT  {name}: acc={acc}")
-        elif acc == 0 and days_cold >= 90:
-            dead.append((name, days_cold))
-            print(f"  DEAD {name}: cold {days_cold}d")
-        elif acc == 0 and days_cold >= 30:
-            cold.append((name, days_cold))
-            print(f"  COLD {name}: cold {days_cold}d")
+        if temp >= 0.4:
+            hot.append((name, temp))
+            print(f"  HOT  {name}: t={temp:.2f} acc={acc}")
+        elif temp == 0 and days_ago >= 90:
+            dead.append((name, days_ago))
+            print(f"  DEAD {name}: t={temp:.2f} cold {days_ago}d")
+        elif temp < 0.1 and days_ago >= 30:
+            cold.append((name, days_ago))
+            print(f"  COLD {name}: t={temp:.2f} cold {days_ago}d")
         else:
-            print(f"  OK   {name}: acc={acc}, {days_cold}d")
+            print(f"  OK   {name}: t={temp:.2f} acc={acc}")
 
     if not dry_run:
         for name, days in dead:
@@ -719,9 +793,13 @@ def show_status():
     tree = load_tree()
     nodes = tree["nodes"]
 
+    # Refresh hash + temperature
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
     print("=== MUNINN TREE ===")
     print(f"  Version: {tree['version']}")
-    print(f"  Codebook: {tree.get('codebook_version', '?')}")
+    print(f"  Updated: {tree.get('updated', '?')}")
     print(f"  Nodes: {len(nodes)}")
     print()
 
@@ -732,11 +810,12 @@ def show_status():
         fill = node["lines"] / node["max_lines"] * 100
         over = " OVER!" if node["lines"] > node["max_lines"] else ""
         total_lines += node["lines"]
-        children = f" ch=[{','.join(node['children'])}]" if node.get("children") else ""
-        tags = f" tags=[{','.join(node.get('tags', [])[:3])}]" if node.get("tags") else ""
-        access = node.get("access_count", 0)
+        h = node.get("hash", "?")[:8]
+        temp = node.get("temperature", 0)
+        temp_bar = "=" * int(temp * 10) + "-" * (10 - int(temp * 10))
+        tags = f" [{','.join(node.get('tags', [])[:3])}]" if node.get("tags") else ""
         print(f"  [{prefix}] {name}: {node['lines']}/{node['max_lines']} "
-              f"({fill:.0f}%){over} acc={access}{children}{tags}")
+              f"({fill:.0f}%){over} t={temp:.2f}[{temp_bar}] #{h}{tags}")
 
     est_tokens = total_lines * BUDGET["tokens_per_line"]
     est_compressed = est_tokens / BUDGET["compression_ratio"]
