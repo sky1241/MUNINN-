@@ -237,6 +237,64 @@ class Mycelium:
 
         return rules
 
+    def get_learned_fillers(self) -> list[str]:
+        """Identify filler words from the mycelium.
+
+        A filler = a word that appears in MANY connections but NEVER fuses.
+        High connectivity + zero fusion = noise word, carries no information.
+        These are candidates for L2 (filler word removal).
+        """
+        conns = self.data["connections"]
+        fusions = self.data["fusions"]
+
+        if not conns:
+            return []
+
+        # Count how many connections each concept participates in
+        concept_conn_count = {}
+        for key in conns:
+            a, b = key.split("|")
+            concept_conn_count[a] = concept_conn_count.get(a, 0) + 1
+            concept_conn_count[b] = concept_conn_count.get(b, 0) + 1
+
+        # Concepts that appear in fusions
+        fused_concepts = set()
+        for key, fusion in fusions.items():
+            for c in fusion["concepts"]:
+                fused_concepts.add(c)
+
+        # Fillers: in 10+ connections but never fused = noise
+        fillers = []
+        for concept, count in concept_conn_count.items():
+            if count >= 10 and concept not in fused_concepts:
+                fillers.append(concept)
+
+        return sorted(fillers)
+
+    def get_learned_abbreviations(self) -> dict:
+        """Generate abbreviation rules from strong fusions.
+
+        Strong fusions (strength >= 8) indicate concepts that are so
+        tightly linked they can be abbreviated. The shorter concept
+        can stand for both when the other is predictable.
+
+        Returns dict {long_phrase: short_form}.
+        """
+        fusions = self.data["fusions"]
+        if not fusions:
+            return {}
+
+        abbrevs = {}
+        for key, fusion in fusions.items():
+            if fusion["strength"] >= 8:
+                a, b = fusion["concepts"]
+                # The longer concept can be dropped when short one is present
+                if len(a) > len(b):
+                    abbrevs[a] = b  # "compression" -> "comp" (if b is shorter)
+                else:
+                    abbrevs[b] = a
+        return abbrevs
+
     def start_session(self):
         """Mark the beginning of a new session."""
         self.data["session_count"] = self.data.get("session_count", 0) + 1

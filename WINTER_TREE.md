@@ -24,7 +24,7 @@ Etat: 6 briques vivantes, 5 supprimees (nettoyage P3)
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B2 | muninn.py v0.5 | OK | Moteur principal, bootstrap, compress, tree, boot, feed |
+| B2 | muninn.py v0.6 | OK | Moteur: bootstrap, compress, tree, boot, feed, verify |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Memoire vivante |
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
@@ -92,6 +92,15 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Prune utilise temperature au lieu de access_count brut
 - [x] Boot utilise temperature pour ranking des branches
 - [x] Status affiche barre de temperature visuelle
+
+### P5 — Auto-evolution (compresseur qui apprend) [FAIT]
+- [x] Mycelium: get_learned_fillers() — mots noise (10+ connexions, zero fusion)
+- [x] Mycelium: get_learned_abbreviations() — fusions fortes -> abreviations
+- [x] L2b: fillers dynamiques injectes dans le compresseur depuis mycelium
+- [x] L3b: abbreviations dynamiques injectees depuis mycelium
+- [x] `muninn.py verify` — mesure qualite compression (facts preserved, ratio, score)
+- [x] Boucle complete: feed -> mycelium apprend -> compresseur s'ameliore
+- Note: abbreviations emergent quand fusion strength >= 8 (apres ~10+ sessions)
 
 ## Pivots de la session 2026-03-06
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Muninn v0.5 — Moteur de compression memoire LLM.
+Muninn v0.6 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
 Deux couches de compression:
@@ -59,18 +59,24 @@ def load_codebook(repo_path: Path = None) -> dict:
 
     # Load mycelium compression rules (living codebook)
     mycelium_rules = {}
+    learned_fillers = []
+    learned_abbreviations = {}
     if repo_path:
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             from mycelium import Mycelium
             m = Mycelium(repo_path)
             mycelium_rules = m.get_compression_rules()
+            learned_fillers = m.get_learned_fillers()
+            learned_abbreviations = m.get_learned_abbreviations()
         except (ImportError, Exception):
             pass
 
     return {
         "text_rules": text_rules,
         "mycelium_rules": mycelium_rules,
+        "learned_fillers": learned_fillers,
+        "learned_abbreviations": learned_abbreviations,
     }
 
 
@@ -450,6 +456,10 @@ def compress_line(line: str) -> str:
     for filler in _FILLER:
         result = re.sub(filler, "", result, flags=re.IGNORECASE)
 
+    # L2b: Learned fillers from mycelium (words in 10+ connections, never fused)
+    for filler_word in cb.get("learned_fillers", []):
+        result = re.sub(rf"\b{re.escape(filler_word)}\b", "", result, flags=re.IGNORECASE)
+
     # L3: Common phrase collapsing
     _PHRASES = [
         (r"not properly closing", "not closing"),
@@ -486,6 +496,12 @@ def compress_line(line: str) -> str:
     ]
     for pattern, replacement in _PHRASES:
         result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+    # L3b: Learned abbreviations from mycelium (strong fusions -> shorter form)
+    for long_form, short_form in cb.get("learned_abbreviations", {}).items():
+        if long_form in result.lower():
+            result = re.sub(rf"\b{re.escape(long_form)}\b", short_form, result,
+                          count=1, flags=re.IGNORECASE)
 
     # L4: Compress large numbers
     def shorten_number(m):
@@ -1101,6 +1117,73 @@ def bootstrap_mycelium(repo_path: Path):
             print(f"    {rule['concepts']} -> '{rule['form']}' (strength={rule['strength']})")
 
 
+# ── VERIFY (compression quality check) ────────────────────────────
+
+def verify_compression(filepath: Path):
+    """Compress -> report what was kept, what was lost, quality score.
+
+    Checks:
+    1. Fact retention: are all numbers/metrics preserved?
+    2. Entity retention: are all named entities preserved?
+    3. Compression ratio achieved
+    4. Learned rules report (what the mycelium contributed)
+    """
+    original = filepath.read_text(encoding="utf-8")
+    compressed = compress_file(filepath)
+
+    # Extract facts from original and compressed
+    orig_facts = extract_facts(original)
+    comp_facts = extract_facts(compressed)
+
+    # Find preserved and lost facts
+    preserved = [f for f in orig_facts if any(f in compressed for f in [f])]
+    lost = [f for f in orig_facts if f not in compressed]
+
+    # Token estimates
+    orig_tokens = len(original) // 4
+    comp_tokens = len(compressed) // 4
+    ratio = orig_tokens / max(comp_tokens, 1)
+
+    # Report learned rules contribution
+    cb = get_codebook()
+    learned_fillers = cb.get("learned_fillers", [])
+    learned_abbrevs = cb.get("learned_abbreviations", {})
+
+    # Count how many learned fillers were actually stripped
+    filler_hits = 0
+    for filler in learned_fillers:
+        filler_hits += len(re.findall(rf"\b{re.escape(filler)}\b", original, re.IGNORECASE))
+
+    # Count abbreviation hits
+    abbrev_hits = 0
+    for long_form in learned_abbrevs:
+        abbrev_hits += len(re.findall(rf"\b{re.escape(long_form)}\b", original, re.IGNORECASE))
+
+    print(f"=== MUNINN VERIFY: {filepath.name} ===")
+    print(f"\n  Compression:")
+    print(f"    {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}, -{(orig_tokens - comp_tokens) / orig_tokens * 100:.0f}%)")
+    print(f"\n  Facts ({len(orig_facts)} found):")
+    print(f"    Preserved: {len(preserved)}/{len(orig_facts)}")
+    if lost:
+        print(f"    Lost: {lost[:10]}")
+    else:
+        print(f"    Lost: none")
+    print(f"\n  Mycelium contribution:")
+    print(f"    Learned fillers: {len(learned_fillers)} rules, {filler_hits} hits in this file")
+    print(f"    Learned abbreviations: {len(learned_abbrevs)} rules, {abbrev_hits} hits in this file")
+    print(f"    Mycelium fusions (L6): {len(cb['mycelium_rules'])} rules")
+    print(f"\n  Quality score: ", end="")
+    fact_retention = len(preserved) / max(len(orig_facts), 1)
+    if fact_retention >= 0.9 and ratio >= 2.0:
+        print(f"EXCELLENT (facts={fact_retention:.0%}, ratio=x{ratio:.1f})")
+    elif fact_retention >= 0.7 and ratio >= 1.5:
+        print(f"GOOD (facts={fact_retention:.0%}, ratio=x{ratio:.1f})")
+    elif fact_retention >= 0.5:
+        print(f"OK (facts={fact_retention:.0%}, ratio=x{ratio:.1f})")
+    else:
+        print(f"POOR (facts={fact_retention:.0%}, ratio=x{ratio:.1f}) — losing too many facts")
+
+
 # ── FEED (P1 — hooks pipeline) ────────────────────────────────────
 
 def parse_transcript(jsonl_path: Path) -> list[str]:
@@ -1288,10 +1371,10 @@ def feed_history(repo_path: Path):
 def main():
     global _REPO_PATH
 
-    parser = argparse.ArgumentParser(description="Muninn v0.5 — Universal memory compression")
+    parser = argparse.ArgumentParser(description="Muninn v0.6 — Universal memory compression")
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
-        "boot", "decode", "prune", "scan", "bootstrap", "feed",
+        "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -1354,6 +1437,13 @@ def main():
             text = sys.stdin.read()
         for line in text.split("\n"):
             print(decode_line(line))
+        return
+
+    if args.command == "verify":
+        if not args.file:
+            print("ERROR: file required. Usage: muninn.py verify <file>")
+            sys.exit(1)
+        verify_compression(Path(args.file))
         return
 
     if not args.file:
