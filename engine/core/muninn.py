@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Muninn v0.7 — Moteur de compression memoire LLM.
+Muninn v0.8 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
-Deux couches de compression:
-  1. Universelle (UNIVERSAL_RULES) — BPE-native English compact
-  2. Mycelium (<repo>/.muninn/mycelium.json) — codebook vivant par co-occurrences
+9 couches de compression:
+  L1-L7: Regex (markdown, filler, phrases, nombres, rules, mycelium, facts)
+  L8: LLMLingua-2 (BERT scorer, optional, pip install llmlingua)
+  L9: LLM self-compress (Claude API, optional, pip install anthropic)
 
 Usage:
     python muninn.py bootstrap <repo-path>      # Cold start: nourrit le mycelium
@@ -34,6 +35,9 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# LLMLingua model singleton (avoid reloading on each call)
+_lingua_compressor = None
 
 # ── COMPRESSION RULES LOADER ────────────────────────────────────
 # Two sources of compression rules:
@@ -1339,21 +1343,62 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     result = "\n".join(output)
 
     # Layer 8: LLMLingua-2 (BERT-based token scoring, optional)
-    try:
-        from llmlingua import PromptCompressor
-        compressor = PromptCompressor(
-            model_name="microsoft/llmlingua-2-xlm-roberta-large-meetingbank",
-            use_llmlingua2=True,
-            device_map="cpu",
-        )
-        lingua_result = compressor.compress_prompt([result], rate=0.5)
-        lingua_compressed = lingua_result["compressed_prompt"]
-        if len(lingua_compressed) < len(result):
-            result = lingua_compressed
-    except ImportError:
-        pass  # LLMLingua not installed — skip Layer 8
-    except Exception as e:
-        print(f"  LLMLingua warning: {e}")
+    # Skip if text already small (not worth 9s model load for <500 tokens)
+    if len(result) > 2000:
+        try:
+            from llmlingua import PromptCompressor
+            global _lingua_compressor
+            if _lingua_compressor is None:
+                _lingua_compressor = PromptCompressor(
+                    model_name="microsoft/llmlingua-2-xlm-roberta-large-meetingbank",
+                    use_llmlingua2=True,
+                    device_map="cpu",
+                )
+            lingua_result = _lingua_compressor.compress_prompt([result], rate=0.5)
+            lingua_compressed = lingua_result["compressed_prompt"]
+            if len(lingua_compressed) < len(result):
+                result = lingua_compressed
+        except ImportError:
+            pass  # LLMLingua not installed — skip Layer 8
+        except Exception as e:
+            print(f"  LLMLingua warning: {e}")
+
+    # Layer 9: LLM self-compress (Claude summarizes via API, optional)
+    # Only for large texts where the cost (~2K tokens) is worth the savings (>10K tokens)
+    if len(result) > 4000:
+        try:
+            import os
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if api_key:
+                import anthropic
+                client = anthropic.Anthropic(api_key=api_key)
+                llm_prompt = (
+                    "Compress this session transcript into ultra-dense notes. Rules:\n"
+                    "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
+                    "- Strip all filler, transitions, greetings, confirmations\n"
+                    "- Use shorthand: -> for leads to, = for equals, | for separators\n"
+                    "- One fact per line, no full sentences\n"
+                    "- Preserve code snippets and error messages verbatim but minimal\n"
+                    "- Target: 20% of original length, 100% of facts\n"
+                    "- Output raw compressed text, no preamble\n\n"
+                    f"TRANSCRIPT ({len(result)} chars):\n{result}"
+                )
+                response = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=len(result) // 4,  # target ~25% of input
+                    messages=[{"role": "user", "content": llm_prompt}],
+                )
+                llm_compressed = response.content[0].text
+                if len(llm_compressed) < len(result) * 0.8:  # only use if >20% savings
+                    input_tokens = response.usage.input_tokens
+                    output_tokens = response.usage.output_tokens
+                    print(f"  Layer 9 (LLM): {len(result)//4} -> {len(llm_compressed)//4} tokens "
+                          f"(API cost: {input_tokens}in+{output_tokens}out)")
+                    result = llm_compressed
+        except ImportError:
+            pass  # anthropic not installed — skip Layer 9
+        except Exception as e:
+            print(f"  Layer 9 warning: {e}")
 
     # Write to .muninn/sessions/
     sessions_dir = repo_path / ".muninn" / "sessions"
