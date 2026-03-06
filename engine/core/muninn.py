@@ -440,6 +440,23 @@ def compress_line(line: str) -> str:
     result = re.sub(r"^-\s+", "", result)
     result = result.replace("`", "")
 
+    # L2 pre-pass: protect fillers that carry meaning between numbers/math
+    # "2 of the 5" must not become "2 5", "log of n" must stay
+    _PROTECTED = re.findall(
+        r'\d+\s+(?:of|to|in|at|by|for)\s+(?:the\s+)?\d+',
+        result, flags=re.IGNORECASE
+    )
+    _MATH_PROTECTED = re.findall(
+        r'(?:log|sum|product|ratio|percentage)\s+of\b',
+        result, flags=re.IGNORECASE
+    )
+    # Replace protected spans with placeholders
+    _placeholders = {}
+    for i, span in enumerate(_PROTECTED + _MATH_PROTECTED):
+        placeholder = f"__PROT{i}__"
+        _placeholders[placeholder] = span
+        result = result.replace(span, placeholder, 1)
+
     # L2: Filler word removal — these carry zero information in memory notes
     _FILLER = [
         # Articles & determiners
@@ -466,6 +483,10 @@ def compress_line(line: str) -> str:
     # L2b: Learned fillers from mycelium (words in 10+ connections, never fused)
     for filler_word in cb.get("learned_fillers", []):
         result = re.sub(rf"\b{re.escape(filler_word)}\b", "", result, flags=re.IGNORECASE)
+
+    # L2 post-pass: restore protected spans
+    for placeholder, original_span in _placeholders.items():
+        result = result.replace(placeholder, original_span)
 
     # L3: Common phrase collapsing
     _PHRASES = [
