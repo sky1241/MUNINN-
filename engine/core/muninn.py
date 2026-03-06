@@ -547,7 +547,7 @@ def compress_line(line: str) -> str:
         result = result.replace(pattern, cb["text_rules"][pattern])
 
     # L6: Mycelium-aware compression: strong fusions = predictable pairs.
-    # Remove shorter concept when both appear (self-information filtering).
+    # Only drop shorter concept if it appears exactly once AND near the other.
     strong_fusions = {k: v for k, v in cb["mycelium_rules"].items()
                       if v["strength"] >= 10}
     for key, rule in strong_fusions.items():
@@ -555,8 +555,15 @@ def compress_line(line: str) -> str:
         result_lower = result.lower()
         if a in result_lower and b in result_lower:
             drop = b if len(b) <= len(a) else a
-            result = re.sub(rf'\s+\b{re.escape(drop)}\b', '', result,
-                          count=1, flags=re.IGNORECASE)
+            keep = a if drop == b else b
+            # Only drop if the concept appears exactly once (not used independently)
+            drop_count = len(re.findall(rf'\b{re.escape(drop)}\b', result_lower))
+            if drop_count == 1:
+                # Only drop if within 5 words of the kept concept
+                pattern = rf'\b{re.escape(keep)}\b.{{0,40}}\b{re.escape(drop)}\b|\b{re.escape(drop)}\b.{{0,40}}\b{re.escape(keep)}\b'
+                if re.search(pattern, result_lower):
+                    result = re.sub(rf'\s+\b{re.escape(drop)}\b', '', result,
+                                  count=1, flags=re.IGNORECASE)
 
     # L7: Extract key=value patterns from natural language
     # "accuracy: 94.2%" -> "acc=94.2%"
