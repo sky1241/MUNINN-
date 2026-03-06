@@ -13,7 +13,7 @@ injecte dans le contexte. Gaspillage massif.
 ## Ce que fait Muninn
 
 Muninn compresse la memoire et les transcripts de session pour que le LLM
-garde x2.5 a x12 plus d'information dans le meme budget de tokens.
+garde x1.6 a x4.1 plus d'information dans le meme budget de tokens (mesure tiktoken).
 
 ### 9 couches de compression
 
@@ -26,7 +26,7 @@ L4: number shortening       L8: LLMLingua-2 (BERT scorer, optionnel)
 ```
 
 - **L1-L7** : regex pur, zero dependance, instantane
-- **L8** : `pip install llmlingua` — modele BERT ~1GB, CPU, x2.1 additionnel
+- **L8** : `pip install llmlingua` — modele BERT ~1GB, CPU (ratio additionnel variable)
 - **L9** : `pip install anthropic` — Claude Haiku resume via API, x5 additionnel
 
 ### Le mycelium (codebook vivant)
@@ -60,12 +60,16 @@ muninn.py scan <repo>         # Genere codebook local
 
 ## Resultats mesures
 
-| Input | Ratio | Details |
-|-------|-------|---------|
-| Texte verbeux (MEMORY.md style) | x7.4 | 1091 → 148 tokens, -86% |
-| WINTER_TREE.md | x2.9 | 96% facts preserves, EXCELLENT |
-| README.md | x1.7 | 75% facts preserves, GOOD |
-| Transcript de session | x2.5 | Avec L8 (LLMLingua) |
+Tous les ratios mesures avec tiktoken (vrais tokens, pas estimations).
+
+| Input | Ratio | Facts | Score |
+|-------|-------|-------|-------|
+| verbose_memory.md (texte verbeux) | x4.1 | 100% (36/36) | EXCELLENT |
+| WINTER_TREE.md (roadmap) | x2.6 | 96% (26/27) | EXCELLENT |
+| README.md (deja compact) | x1.6 | 93% (13/14) | GOOD |
+| sample_session.md (transcript) | x1.7 | 80% (12/15) | PASS |
+
+Benchmark global: **37/40 questions factuelles retrouvees (92%)**
 
 ## Installation
 

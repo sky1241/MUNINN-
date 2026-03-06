@@ -71,11 +71,11 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Compresseur utilise fusions mycelium pour strip redondance
 - [x] 7 couches de compression: markdown, filler, phrases, nombres, rules, mycelium, facts
 - [x] Extraction de faits: nombres+unites, %, key=value, commits, Cohen's d
-- [x] Mesure gain tokens REEL:
-  - Texte verbeux (MEMORY-style): x7.4 (1091->148 tokens, -86%)
-  - Texte semi-compact (WINTER_TREE): x1.9 (1343->713 tokens, -47%)
-  - Texte deja compact (README): x1.7 (714->409 tokens, -43%)
-  - infernal-wheel SYSTEM_SUMMARY: x1.7 (3472->2033 tokens, -41%)
+- [x] Mesure gain tokens REEL (tiktoken, corrige mars 2026):
+  - Texte verbeux (verbose_memory): x4.1 (1005->244 tokens, -76%, 100% facts)
+  - Roadmap (WINTER_TREE): x2.6 (2751->1043 tokens, -62%, 96% facts)
+  - README (deja compact): x1.6 (989->630 tokens, -36%, 93% facts)
+  - ATTENTION: anciens chiffres (x7.4 etc) etaient bases sur len//4, faux de ~40%
 - [x] Teste sur 2e repo (infernal-wheel): OK, compression universelle
 
 ### P3 — Nettoyage [FAIT]
@@ -110,27 +110,26 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Hook feed direct: meme chose en mode CLI
 - [x] Boot charge le dernier .mn de session (tail-first si trop gros pour budget)
 - [x] Auto-prune: garde les 10 derniers .mn, supprime les anciens
-- Mesure: session 2730 JSONL -> 50K tokens brut -> 41K compresse (x1.2)
-- Note: ratio modeste car transcript deja semi-compact (dialogue technique)
-- Note: sur texte verbeux le compresseur fait x7.4 (cf P2)
+- Note: ratio sur transcripts modeste (~x1.7) car dialogue deja semi-compact
 
 ### P7 — Compression pro (9 couches) [FAIT]
 
-#### Brique 1 : Benchmark [TODO]
-- [ ] Prendre 5 transcripts reels, mesurer facts preserves avant/apres
+#### Brique 1 : Benchmark [FAIT]
+- [x] 3 samples (verbose, session, compact) + 40 questions factuelles
+- [x] Resultat: 37/40 (92%) PASS — pure text search, zero API
+- [x] Token counting reel: tiktoken (ancien len//4 etait faux de ~40%)
 
-#### Brique 2 : LLMLingua-2 comme Layer 8 [FAIT]
+#### Brique 2 : LLMLingua-2 comme Layer 8 [FAIT — a optimiser]
 - [x] pip install llmlingua (BERT ~1 GB, CPU, zero API)
 - [x] Integre comme couche 8, singleton cache, skip si <2K chars
-- [x] Rate=0.5 optimal (garde tous les faits, x2.1 additionnel)
+- ATTENTION: sur texte pre-compresse, L8 perd 72% des faits (rate=0.5)
+- TODO: ajuster le rate ou changer l'ordre (L8 avant L1-L7)
 
-#### Brique 3 : Resume LLM comme Layer 9 [FAIT]
+#### Brique 3 : Resume LLM comme Layer 9 [CODE — PAS TESTE]
 - [x] Claude Haiku resume via API Anthropic (pip install anthropic)
-- [x] Prompt optimise: garde 100% facts, cible 20% longueur
 - [x] Fallback gracieux si pas de cle API ou pas de SDK
-- [x] Seuil: seulement si >4K chars (cout API justifie)
-- Ratio attendu: x5-10 additionnel avec ~100% facts
-- Cout: ~2K tokens input + ~500 output pour economiser ~10K+
+- [x] Seuil: seulement si >4K chars
+- PAS ENCORE EXECUTE — zero mesure de ratio ou fact retention
 
 Pipeline complet (9 couches):
   L1: markdown strip | L2: filler words | L3: phrase compression

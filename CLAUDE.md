@@ -3,7 +3,7 @@
 ## C'est quoi Muninn ?
 Moteur de compression memoire pour LLM. Tu n'as pas de memoire persistante entre sessions.
 MEMORY.md = 200 lignes, ~3K tokens. C'est tout ce que tu gardes. Muninn compresse pour que
-tu gardes x5-x10 plus d'information dans le meme espace.
+tu gardes x1.6-x4.1 plus d'information dans le meme espace (mesure tiktoken, L1-L7).
 
 Cree par Sky (electricien, autodidacte, 11 mois de code). Le nom vient du corbeau d'Odin.
 
@@ -41,7 +41,7 @@ L8: LLMLingua-2 [optionnel] — BERT scorer, pip install llmlingua
 L9: LLM self-compress [optionnel] — Claude Haiku resume via API
 ```
 L1-L7 = regex pur, zero dependance, instantane.
-L8-L9 = optionnels, pour aller plus loin (x5-x10 theorique).
+L8-L9 = optionnels, gain additionnel pas encore mesure proprement.
 
 ## Le mycelium (le champignon)
 Fichier `.muninn/mycelium.json` — reseau vivant de co-occurrences.
@@ -75,7 +75,7 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 ## Etat du projet (mars 2026)
 - P0-P7: FAIT (mycelium, plomberie, compresseur 9 couches, arbre, sessions)
 - Layer 9 (LLM): code mais pas encore teste (pip install anthropic requis)
-- Benchmark: a faire (mesurer facts preserves avant/apres)
+- Benchmark: FAIT — 37/40 questions factuelles (92%), mesure tiktoken
 - Voir WINTER_TREE.md pour le detail complet
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
@@ -96,19 +96,18 @@ se remplit, on en garde l'essentiel.
 
 ### Le vrai gain — soyons honnetes
 
-Ce qui est PROUVE (teste, mesure):
-- L1-L7 (regex): x1.2 sur transcripts, x7.4 sur texte verbeux
-- L8 (LLMLingua BERT): x2.1 additionnel
-- Total teste: ~x2.5 sur transcripts reels
+Ce qui est PROUVE (mesure tiktoken, benchmark 40 questions):
+- L1-L7 (regex seules): x4.1 sur verbeux, x2.6 sur roadmap, x1.7 sur session, x1.6 sur compact
+- Benchmark: 37/40 questions factuelles retrouvees (92%)
+- Les anciens chiffres (x7.4, x2.5) etaient FAUX — bases sur len(text)//4, ecart de ~40%
 
-Ce qui est CODE mais PAS ENCORE TESTE:
-- L9 (un de nous, Haiku, resume via API): pas tourne une seule fois
-- Ratio attendu du L9 seul: x5
-- Total theorique si tout marche: x1.2 * x2.1 * x5 = ~x12
+Ce qui est CODE mais PAS MESURE PROPREMENT:
+- L8 (LLMLingua BERT): ratio additionnel variable, perd des faits sur texte pre-compresse (28%)
+- L9 (Haiku via API): pas tourne une seule fois
+- L8+L9 combinés: aucune mesure fiable
 
-Sois honnete avec Sky si il te demande. Le x10 est une promesse credible, pas un fait.
-Le pipeline est cable, le code est la, mais il faut `pip install anthropic` + une cle
-API + un vrai test pour transformer la promesse en resultat.
+Sois honnete avec Sky si il te demande. Les vrais chiffres sont ci-dessus.
+Les anciens x7.4 et x12 etaient bases sur des estimations fausses.
 
 ### Notre "langue" — ce que ca veut dire vraiment
 
