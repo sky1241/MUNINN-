@@ -1,0 +1,17 @@
+[
+  {"question": "What storage format was chosen for mycelium?", "answer": "JSON"},
+  {"question": "Why was SQLite rejected?", "answer": "too heavy"},
+  {"question": "What is the fusion threshold?", "answer": "5"},
+  {"question": "What is the max connections cap?", "answer": "500"},
+  {"question": "What is the decay half-life in days?", "answer": "30"},
+  {"question": "What commit fixed the duplicate connections bug?", "answer": "f8a2b1c"},
+  {"question": "How long does bootstrap take on Yggdrasil?", "answer": "4.2"},
+  {"question": "What encoding was Windows defaulting to?", "answer": "cp1252"},
+  {"question": "What is the root node max lines?", "answer": "100"},
+  {"question": "What is the branch node max lines?", "answer": "150"},
+  {"question": "What is the total token budget?", "answer": "30,000"},
+  {"question": "What temperature threshold marks a hot node?", "answer": "0.5"},
+  {"question": "After how many days are dead nodes deleted?", "answer": "90"},
+  {"question": "What is the minimum concept length?", "answer": "3"},
+  {"question": "What year is the Lindenmayer reference from?", "answer": "1968"}
+]

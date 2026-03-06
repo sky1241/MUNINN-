@@ -1,0 +1,12 @@
+[
+  {"question": "How many compression layers does Muninn have?", "answer": "9"},
+  {"question": "What is the max token budget?", "answer": "30K"},
+  {"question": "What is the compression ratio on verbose_memory.md?", "answer": "4.1"},
+  {"question": "What percentage of facts preserved on WINTER_TREE?", "answer": "96"},
+  {"question": "What is the main engine filename?", "answer": "muninn.py"},
+  {"question": "What version is the engine?", "answer": "0.8"},
+  {"question": "What Python version is required?", "answer": "3.13"},
+  {"question": "What file stores tree metadata?", "answer": "tree.json"},
+  {"question": "What is the mycelium file path?", "answer": "mycelium.json"},
+  {"question": "What package provides L8 compression?", "answer": "llmlingua"}
+]

@@ -1,0 +1,17 @@
+[
+  {"question": "What was the FFT buffer size that caused the crash?", "answer": "4096"},
+  {"question": "What frequency does A4 correspond to?", "answer": "440"},
+  {"question": "What is the single note detection accuracy?", "answer": "94.2"},
+  {"question": "What is the chord detection accuracy?", "answer": "78.5"},
+  {"question": "What commit fixed the audio pipeline crash?", "answer": "a1b2c3d"},
+  {"question": "How many piano recordings in the dataset?", "answer": "150,000"},
+  {"question": "What is the total dataset size?", "answer": "2.3 TB"},
+  {"question": "How many GPUs for training?", "answer": "4"},
+  {"question": "How long does full training take?", "answer": "18 hours"},
+  {"question": "What is Cohen's d comparing to baseline?", "answer": "1.23"},
+  {"question": "What was the memory leak stabilized at?", "answer": "256 MB"},
+  {"question": "What is the total test count?", "answer": "342"},
+  {"question": "What is the test coverage?", "answer": "87%"},
+  {"question": "What is the post-optimization total latency?", "answer": "12ms"},
+  {"question": "How many model parameters?", "answer": "12.4 million"}
+]
