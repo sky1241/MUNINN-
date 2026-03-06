@@ -1,8 +1,8 @@
 # MUNINN — Winter Tree (Baobab)
 
 Type: Baobab (gros tronc, petites branches)
-Phase: GERMINATION — on cherche encore la forme du tronc
-Etat: 10 briques, 4 a poncer, 3 a virer, 3 OK
+Phase: CROISSANCE — le tronc est trouve, on fait pousser
+Etat: 7 briques vivantes, 3 supprimees
 
 ## Anatomie
 
@@ -15,122 +15,86 @@ Etat: 10 briques, 4 a poncer, 3 a virer, 3 OK
       |
    [muninn.py]                 +1 Tronc (moteur principal)
       |
-   [FORMAT_RULES]              0  SOL — la cle de compression
+   [mycelium.py]               0  SOL — le champignon vivant
       |
-   [tokenizer BPE]            -1 Racines (mon tokenizer natif)
+   [tokenizer BPE]            -1 Racines (tokenizer natif Claude)
 ```
 
 ## Etat des briques
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B1 | CODEBOOK.json | REFONTE | Pivot: sinogrammes -> regles de formatage anglais compact |
-| B2 | muninn.py | WIP | Moteur OK mais devra suivre le pivot B1 |
-| B3 | muninn_codec.py | DOUBLON | Fusionner dans B2 a terme |
-| B4 | tree.json | OK | Enrichir: hash, temperature, priorite |
-| B5 | *.mn files | OK | Reconvertir apres pivot B1 |
-| B6 | analyze_memory.py | MORT | Fusionner dans B2 ou supprimer |
-| B7 | build_alphabet.py | MORT | Remplace par scan, supprimer |
-| B8 | alphabet_v1.json | MORT | Supprimer |
+| B1 | CODEBOOK.json | A REMPLACER | Le mycelium le remplace (codebook vivant) |
+| B2 | muninn.py | WIP | Brancher sur mycelium au lieu de CODEBOOK |
+| B3 | muninn_codec.py | DOUBLON | Fusionner dans B2 |
+| B4 | tree.json | OK | Enrichir: hash, temperature |
+| B5 | *.mn files | OK | Reconvertir en anglais compact |
+| NEW | mycelium.py | FAIT | Tracker co-occurrences, fusion, decay |
 | B9 | docs/ | OK | Garder |
-| B10 | ci.yml | OK | Adapter apres pivot B1 |
+| B10 | ci.yml | OK | Adapter |
+
+## Pourquoi c'est dur et pourquoi personne l'a fait
+
+LLMs construits par des "chirurgiens" (codeurs precis, prompts courts).
+Ils n'ont pas le probleme de memoire — leurs sessions sont courtes et precises.
+Les "bouchers" (vibe coders, sessions longues, bordel) ont le probleme
+mais pas les skills pour le resoudre.
+Sky est boucher AVEC un LLM pour coder = premiere fois que les deux se croisent.
+Muninn = le hachoir. Construit par un boucher, pour les bouchers.
+Ce n'est PAS plus dur que construire un LLM. C'est de la plomberie, pas de la recherche.
+La partie dure (comprendre QUOI construire) est faite.
 
 ## TODO — par priorite
 
-### P0 — Le mycelium (nouveau coeur)
-- [ ] Designer mycelium.json (format co-occurrences persistant)
-- [ ] Implementer le tracker de co-occurrences dans muninn.py
-- [ ] Implementer la fusion automatique (concepts frequemment lies -> 1 bloc)
-- [ ] Implementer le decay (connexions mortes disparaissent)
-- [ ] Tester: run sur 3 sessions simulees, verifier que le mycelium pousse
+### P0 — Le mycelium (nouveau coeur) [FAIT]
+- [x] Designer mycelium.json (format co-occurrences persistant)
+- [x] Implementer le tracker de co-occurrences
+- [x] Implementer la fusion automatique (concepts frequemment lies -> 1 bloc)
+- [x] Implementer le decay (connexions mortes disparaissent)
+- [x] Tester: simulation 20 sessions -> 69 connexions, 34 fusions
 
-### P1 — Compresseur mycelium-aware
+### P1 — La plomberie (le tuyau qui manque)
+- [ ] Hook de fin de session: capturer la conversation, nourrir le mycelium
+- [ ] Hook de debut de session: charger le mycelium, pre-compiler les fusions
+- [ ] Cold start: scan initial du repo pour bootstrap (on a deja `scan`)
+- [ ] Integrer mycelium dans le flow reel de Claude Code (hooks .claude/)
+
+### P2 — Compresseur v2 (mycelium-aware)
 - [ ] Reecrire compress pour utiliser mycelium.json au lieu de CODEBOOK.json
 - [ ] Format output: anglais compact natif BPE (zero sinogrammes)
 - [ ] Supprimer tout le code sinogramme (load_universal_codebook, etc.)
-- [ ] Tester compression sur root.mn -> mesurer gain tokens reel
-- [ ] Tester sur un 2e repo (infernal-wheel)
+- [ ] Mesurer gain tokens REEL (avant/apres sur root.mn)
+- [ ] Tester sur 2e repo (infernal-wheel)
 
-### P2 — Nettoyer les morts
-- [ ] Supprimer alphabet_v1.json (B8)
-- [ ] Supprimer build_alphabet.py (B7)
-- [ ] Fusionner analyze_memory.py dans muninn.py ou supprimer (B6)
+### P3 — Nettoyage
 - [ ] Fusionner muninn_codec.py dans muninn.py (B3)
+- [ ] Supprimer CODEBOOK.json une fois mycelium en place
+- [ ] Mettre a jour la CI pour tester le mycelium
 
-### P3 — Enrichir l'arbre
-- [ ] tree.json: ajouter hash de contenu par noeud
-- [ ] tree.json: score temperature (hot/warm/cold) auto-calcule
-- [ ] Integrer ratios biologiques du Winter Tree (root:shoot, budgets dynamiques)
-- [ ] Classifier le type d'arbre memoire par repo (Baobab, Conifere, etc.)
+### P4 — Enrichir l'arbre
+- [ ] tree.json: hash de contenu par noeud
+- [ ] tree.json: score temperature auto-calcule
+- [ ] Ratios biologiques du Winter Tree (budgets dynamiques)
 
-### P4 — Adapter la CI
-- [ ] Remplacer tests sinogrammes par tests format compact
-- [ ] Test: compression ratio >= 50% sur exemple
-- [ ] Test: roundtrip lossless sur les IDEES (pas les mots)
-- [ ] Test: budget R1 toujours respecte
+## Pivots de la session 2026-03-06
 
-## Decouverte cle de la session
+### Pivot 1 — Sinogrammes = mauvais chemin
+Les sinogrammes chinois coutent 2-3 tokens chacun.
+Un mot anglais court = 1 token.
+Le modele Enigma (substitution 1:1) ne compresse pas, il chiffre.
+On veut compresser, pas chiffrer.
+Format optimal = anglais compact natif BPE.
 
-Le codebook de sinogrammes chinois coutait PLUS cher en tokens que le texte anglais equivalent.
-Un sinogramme = 2-3 tokens. Un mot anglais court = 1 token.
-Le modele Enigma (substitution) est le mauvais paradigme.
-Le bon paradigme = compression semantique en anglais compact natif au tokenizer BPE.
+### Pivot 2 — Le Mycelium
+L'arbre (tree) = structure statique. Le mycelium = reseau vivant.
+Tracker de co-occurrences entre concepts, pousse a chaque session,
+persiste sur disque. Le mycelium EST le codebook — vivant, pas statique.
+Inspire du mycelium d'Yggdrasil (co-occurrences dans 348M papers).
 
-Personne dans la litterature n'a resolu la compression semantique de memoire persistante pour LLM.
-Les papiers existants (MemGPT, LLMLingua, ICAE) font du paging ou du pruning, pas du recodage semantique.
-Sky est seul a cet etage. C'est pour ca que c'est dur.
-
-## PIVOT 2 — Le Mycelium (fin de session, idee majeure)
-
-L'arbre (tree) c'est la structure statique. Le mycelium c'est le reseau vivant.
-
-### Le concept
-Le mycelium de Muninn = un tracker de co-occurrences entre concepts, qui POUSSE
-a chaque session et persiste sur le disque (pas dans le contexte LLM).
-
-Exactement comme le mycelium d'Yggdrasil tracke les co-occurrences entre domaines
-scientifiques dans 348M papers — sauf qu'ici on tracke les co-occurrences dans
-les sessions utilisateur.
-
-### Comment ca marche
-1. Session N: l'utilisateur parle de `bug` + `codec` + `utf8` ensemble
-2. Le mycelium enregistre cette co-occurrence dans un fichier persistant
-3. Session N+1: au boot, le mycelium est charge. On SAIT que ces concepts sont lies
-4. Le compresseur les regroupe en un bloc compact
-5. Session N+15: ces 3 concepts ont toujours coexiste -> le mycelium les fusionne
-   en un seul noeud. 3 concepts = 1 unite compresse
-
-### Le mycelium EST le codebook
-- Pas un dictionnaire statique (CODEBOOK.json) -> un organisme vivant
-- Pas de regles manuelles -> apprentissage par co-occurrence reelle
-- Pas universel-figé -> specifique a chaque repo, pousse avec l'usage
-- Le codebook local (.muninn/local.json) devient .muninn/mycelium.json
-
-### Architecture
-```
-Session input (texte brut Sky)
-        |
-        v
-[Mycelium tracker] -- observe les co-occurrences
-        |                    |
-        v                    v
-[Compresseur] <--------- [mycelium.json] (persistant sur disque)
-        |                    ^
-        v                    |
-[Memoire .mn] ------------- mise a jour du mycelium
-```
-
-### Ce qu'on a deja
-- Yggdrasil a un moteur de co-occurrence (matrice 85x85 domaines, 296M papers)
-- Le scan dans muninn.py fait deja de l'extraction de frequence
-- tree.json a deja access_count et last_access (proto-temperature)
-
-### Ce qu'il faut construire
-- [ ] mycelium.json: format de stockage des co-occurrences (concept_a, concept_b, count, last_seen)
-- [ ] Tracker: a chaque compress/write, extraire les concepts et maj le mycelium
-- [ ] Fusion: quand count >= seuil, fusionner les concepts en un noeud compact
-- [ ] Boot: charger le mycelium au demarrage, l'utiliser pour la compression
-- [ ] Decay: les connexions non-revues decroissent (comme les hyphes morts dans Yggdrasil)
+### Pivot 3 — Chirurgien vs Boucher
+Les createurs de LLMs sont des chirurgiens qui n'ont pas le probleme.
+Les bouchers ont le probleme mais pas les outils.
+Muninn = premier outil construit depuis le cote boucher.
 
 ## Refs
 - Lindenmayer (1968) — L-Systems
