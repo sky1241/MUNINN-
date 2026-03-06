@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 5 briques vivantes, 5 supprimees (nettoyage P3)
+Etat: 6 briques vivantes, 5 supprimees (nettoyage P3)
 
 ## Anatomie
 
@@ -24,12 +24,13 @@ Etat: 5 briques vivantes, 5 supprimees (nettoyage P3)
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B2 | muninn.py v0.4 | OK | Moteur principal, bootstrap, compress, tree, boot |
+| B2 | muninn.py v0.5 | OK | Moteur principal, bootstrap, compress, tree, boot, feed |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Memoire vivante |
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
 | B9 | docs/ | OK | LITERATURE.md enrichi (15+ papiers) |
-| B10 | ci.yml | OK | Tests: tree, engine, mycelium |
+| B10 | ci.yml | OK | Tests: tree, engine, mycelium, feed |
+| NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd -> feed |
 | ~~B1~~ | ~~CODEBOOK.json~~ | SUPPRIME | Remplace par UNIVERSAL_RULES + mycelium |
 | ~~B3~~ | ~~muninn_codec.py~~ | SUPPRIME | Code sinogramme mort |
 | ~~B8~~ | ~~CODEBOOK_TREE.md~~ | SUPPRIME | Index sinogrammes mort |
@@ -54,12 +55,15 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Implementer le decay (connexions mortes disparaissent)
 - [x] Tester: simulation 20 sessions -> 69 connexions, 34 fusions
 
-### P1 — La plomberie (le tuyau qui manque)
+### P1 — La plomberie (le tuyau qui manque) [FAIT]
 - [x] Cold start: `muninn.py bootstrap <repo>` — scanne et nourrit le mycelium
-- [ ] Hook de fin de session: capturer la conversation, nourrir le mycelium
-- [ ] Hook de debut de session: charger le mycelium, pre-compiler les fusions
-- [ ] Integrer mycelium dans le flow reel de Claude Code (hooks .claude/)
-- Note: hooks Claude Code = commandes shell, pas acces au contenu conversation
+- [x] Hook PreCompact: parse transcript JSONL, nourrit le mycelium avant compaction
+- [x] Hook SessionEnd: meme chose, filet de securite en fin de session
+- [x] `muninn.py feed <transcript.jsonl>` — nourrit depuis un fichier specifique
+- [x] `muninn.py feed --history` — rattrapage: digere tous les transcripts passes
+- [x] Idempotent: tracked via .muninn/fed_transcripts.json
+- [x] Integre dans .claude/settings.local.json (hooks natifs Claude Code)
+- Note: hooks receoivent transcript_path via stdin JSON (decouverte mars 2026)
 
 ### P2 — Compresseur v2 (mycelium-aware)
 - [x] Codebook loader v2: UNIVERSAL_RULES + mycelium (zero sinogrammes)

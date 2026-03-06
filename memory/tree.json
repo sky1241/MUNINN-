@@ -39,7 +39,7 @@
         "spectral"
       ],
       "hash": "f94c0000",
-      "temperature": 0.68
+      "temperature": 0.72
     },
     "b00": {
       "type": "branch",
@@ -56,7 +56,7 @@
         "history"
       ],
       "hash": "db585362",
-      "temperature": 0.53
+      "temperature": 0.59
     },
     "b01": {
       "type": "branch",
@@ -73,7 +73,7 @@
         "mapper"
       ],
       "hash": "3f11ab5f",
-      "temperature": 0.44
+      "temperature": 0.53
     },
     "b02": {
       "type": "branch",
@@ -92,7 +92,7 @@
         "mathml"
       ],
       "hash": "cfed09ab",
-      "temperature": 0.53
+      "temperature": 0.59
     },
     "b03": {
       "type": "branch",

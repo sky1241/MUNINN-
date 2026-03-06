@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Muninn v0.4 — Moteur de compression memoire LLM.
+Muninn v0.5 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
 Deux couches de compression:
@@ -16,6 +16,7 @@ Usage:
     python muninn.py boot [query]               # Charge root + branches pertinentes
     python muninn.py prune [--force]            # Elagage R4
     python muninn.py decode <fichier>           # Decompresse
+    python muninn.py feed [--history]           # Nourrit le mycelium depuis transcripts
 """
 import argparse
 import hashlib
@@ -902,18 +903,201 @@ def bootstrap_mycelium(repo_path: Path):
             print(f"    {rule['concepts']} -> '{rule['form']}' (strength={rule['strength']})")
 
 
+# ── FEED (P1 — hooks pipeline) ────────────────────────────────────
+
+def parse_transcript(jsonl_path: Path) -> list[str]:
+    """Parse a Claude Code transcript JSONL and extract text messages.
+
+    Returns a list of text strings (user + assistant messages).
+    Skips thinking blocks, tool calls, and system messages.
+    """
+    texts = []
+    with open(jsonl_path, encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            # Only process user and assistant messages
+            if entry.get("type") not in ("user", "assistant"):
+                continue
+
+            message = entry.get("message", {})
+            content = message.get("content", [])
+
+            if isinstance(content, str):
+                texts.append(content)
+                continue
+
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "")
+                    if len(text) >= 20:  # skip tiny messages
+                        texts.append(text)
+
+    return texts
+
+
+def feed_from_transcript(jsonl_path: Path, repo_path: Path):
+    """Feed the mycelium from a single transcript JSONL file."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mycelium import Mycelium
+
+    m = Mycelium(repo_path)
+    m.start_session()
+
+    texts = parse_transcript(jsonl_path)
+    if not texts:
+        print(f"  No text messages found in {jsonl_path.name}")
+        return 0
+
+    for text in texts:
+        m.observe_text(text)
+
+    m.save()
+    return len(texts)
+
+
+def feed_from_hook(repo_path: Path):
+    """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
+    try:
+        hook_input = json.loads(sys.stdin.read())
+    except (json.JSONDecodeError, EOFError):
+        print("ERROR: no valid JSON on stdin (expected hook event data)")
+        sys.exit(1)
+
+    transcript_path = hook_input.get("transcript_path")
+    if not transcript_path:
+        print("ERROR: no transcript_path in hook event data")
+        sys.exit(1)
+
+    jsonl_path = Path(transcript_path)
+    if not jsonl_path.exists():
+        print(f"ERROR: transcript not found: {jsonl_path}")
+        sys.exit(1)
+
+    count = feed_from_transcript(jsonl_path, repo_path)
+    print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
+
+    # Refresh tree temperatures
+    tree = load_tree()
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
+
+def feed_history(repo_path: Path):
+    """Feed mycelium from all past transcript JSONL files for this project.
+
+    Scans ~/.claude/projects/<project>/ for .jsonl files and digests them.
+    Tracks which files have been digested in .muninn/fed_transcripts.json.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mycelium import Mycelium
+
+    # Find the project's transcript directory
+    claude_dir = Path.home() / ".claude" / "projects"
+    if not claude_dir.exists():
+        print(f"ERROR: {claude_dir} not found")
+        sys.exit(1)
+
+    # Find matching project dirs (repo name encoded in path)
+    repo_name = repo_path.name
+    project_dirs = []
+    for d in claude_dir.iterdir():
+        if d.is_dir() and repo_name in d.name:
+            project_dirs.append(d)
+
+    if not project_dirs:
+        print(f"  No project directories found matching '{repo_name}'")
+        return
+
+    # Load already-fed transcript list
+    muninn_dir = repo_path / ".muninn"
+    muninn_dir.mkdir(exist_ok=True)
+    fed_path = muninn_dir / "fed_transcripts.json"
+    fed = set()
+    if fed_path.exists():
+        with open(fed_path, encoding="utf-8") as f:
+            fed = set(json.load(f))
+
+    m = Mycelium(repo_path)
+    total_messages = 0
+    new_files = 0
+
+    for project_dir in project_dirs:
+        # Top-level .jsonl files (main sessions)
+        for jsonl_file in sorted(project_dir.glob("*.jsonl")):
+            file_key = str(jsonl_file)
+            if file_key in fed:
+                continue
+
+            texts = parse_transcript(jsonl_file)
+            if texts:
+                m.start_session()
+                for text in texts:
+                    m.observe_text(text)
+                total_messages += len(texts)
+                new_files += 1
+
+            fed.add(file_key)
+
+        # Subagent transcripts
+        subagents_dir = project_dir / "subagents" if (project_dir / "subagents").exists() else None
+        if subagents_dir:
+            # Also check inside session subdirectories
+            for sub_dir in project_dir.iterdir():
+                if sub_dir.is_dir():
+                    sa_dir = sub_dir / "subagents"
+                    if sa_dir.exists():
+                        for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
+                            file_key = str(jsonl_file)
+                            if file_key in fed:
+                                continue
+                            texts = parse_transcript(jsonl_file)
+                            if texts:
+                                for text in texts:
+                                    m.observe_text(text)
+                                total_messages += len(texts)
+                                new_files += 1
+                            fed.add(file_key)
+
+    if total_messages > 0:
+        m.save()
+
+    # Save fed list
+    with open(fed_path, "w", encoding="utf-8") as f:
+        json.dump(sorted(fed), f, indent=2)
+
+    print(f"=== MUNINN FEED HISTORY ===")
+    print(f"  New transcripts: {new_files}")
+    print(f"  Messages digested: {total_messages}")
+    print(f"  Total fed transcripts: {len(fed)}")
+    if total_messages > 0:
+        print(f"\n{m.status()}")
+
+    # Refresh tree
+    tree = load_tree()
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
     global _REPO_PATH
 
-    parser = argparse.ArgumentParser(description="Muninn v0.3 — Universal memory compression")
+    parser = argparse.ArgumentParser(description="Muninn v0.5 — Universal memory compression")
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
-        "boot", "decode", "prune", "scan", "bootstrap",
+        "boot", "decode", "prune", "scan", "bootstrap", "feed",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
+    parser.add_argument("--history", action="store_true", help="Feed from all past transcripts")
     args = parser.parse_args()
 
     # Set repo path for local codebook loading
@@ -940,6 +1124,19 @@ def main():
             print("ERROR: repo path required. Usage: muninn.py bootstrap <repo-path>")
             sys.exit(1)
         bootstrap_mycelium(Path(args.file))
+        return
+
+    if args.command == "feed":
+        repo = Path(args.repo or args.file or ".").resolve()
+        if args.history:
+            feed_history(repo)
+        elif args.file and Path(args.file).suffix == ".jsonl":
+            # Direct file mode: feed from a specific transcript
+            count = feed_from_transcript(Path(args.file), repo)
+            print(f"MUNINN FEED: {count} messages -> mycelium ({repo.name})")
+        else:
+            # Hook mode: read transcript_path from stdin
+            feed_from_hook(repo)
         return
 
     if args.command == "boot":

@@ -130,3 +130,60 @@ jobs:
 
           print("OK Mycelium tests pass")
           EOF
+
+      - name: Test Feed (transcript parsing)
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess, sys, tempfile, os
+
+          # Create a fake transcript JSONL to test feed parsing
+          transcript = []
+          transcript.append(json.dumps({
+              "type": "user",
+              "message": {"role": "user", "content": [
+                  {"type": "text", "text": "Fix the mycelium compression pipeline for the tree scanner"}
+              ]}
+          }))
+          transcript.append(json.dumps({
+              "type": "assistant",
+              "message": {"role": "assistant", "content": [
+                  {"type": "text", "text": "The mycelium tracks co-occurrences between concepts in the compression tree. Let me fix the scanner pipeline for better fusion detection."}
+              ]}
+          }))
+          transcript.append(json.dumps({
+              "type": "user",
+              "message": {"role": "user", "content": [
+                  {"type": "text", "text": "Also check the bootstrap cold start function and the codebook loading"}
+              ]}
+          }))
+
+          # Write fake transcript
+          with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
+              f.write("\n".join(transcript))
+              tmp_path = f.name
+
+          try:
+              # Test feed from specific file
+              r = subprocess.run(
+                  ["python3", "engine/core/muninn.py", "feed", tmp_path, "--repo", "."],
+                  capture_output=True, text=True
+              )
+              assert r.returncode == 0, f"feed failed: {r.stderr}"
+              assert "MUNINN FEED" in r.stdout, f"feed output missing header: {r.stdout}"
+              assert "3 messages" in r.stdout, f"Expected 3 messages: {r.stdout}"
+              print(f"feed from file: OK — {r.stdout.strip()}")
+
+              # Verify mycelium was actually fed
+              mycelium_path = os.path.join(".muninn", "mycelium.json")
+              assert os.path.exists(mycelium_path), "mycelium.json not created"
+              with open(mycelium_path, encoding="utf-8") as mf:
+                  data = json.load(mf)
+              assert len(data["connections"]) > 0, "No connections created"
+              assert len(data["fusions"]) >= 0, "Fusions field missing"
+              print(f"  mycelium: {len(data['connections'])} connections, {len(data['fusions'])} fusions")
+
+          finally:
+              os.unlink(tmp_path)
+
+          print("OK Feed tests pass")
+          EOF
