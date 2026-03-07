@@ -2,81 +2,120 @@
 
 > *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression memoire pour LLM. 9 couches de compression, zero dependance obligatoire.
+Moteur de compression memoire pour LLM. 27 features, 9 couches de compression, zero dependance obligatoire.
 
 ## Le probleme
 
 Les LLM n'ont pas de memoire persistante. Chaque session repart de zero.
-Le hack actuel = fichier MEMORY.md (200 lignes, ~3K tokens). C'est du texte brut
-injecte dans le contexte. Gaspillage massif.
+Le seul hack actuel : un fichier MEMORY.md (200 lignes, ~3K tokens) injecte dans le contexte.
+Quand le contexte se remplit, tout deborde et disparait.
 
 ## Ce que fait Muninn
 
-Muninn compresse la memoire et les transcripts de session pour que le LLM
-garde x1.6 a x4.1 plus d'information dans le meme budget de tokens (mesure tiktoken).
+Muninn compresse les transcripts de session en fichiers `.mn` ultra-denses
+et les recharge intelligemment au boot suivant.
 
-### 9 couches de compression
+**Resultat mesure** : x4.5 sur un vrai transcript (1.1M tokens), 92% des faits preserves (tiktoken).
+
+## Architecture
 
 ```
-L1: markdown strip          L5: universal rules (FR->EN compact)
-L2: filler word removal     L6: mycelium (abbreviations apprises)
-L3: phrase compression      L7: fact extraction
-L4: number shortening       L8: LLMLingua-2 (BERT scorer, optionnel)
-                            L9: LLM self-compress (Claude API, optionnel)
+                  BOOT (query)
+                     |
+              [session_index]──── P22: cherche dans les 50 dernieres sessions
+                     |
+              [recall "query"]─── P29: recherche mid-session
+                     |
+         ┌──────────┼──────────┐
+      [root.mn]  [branches]  [last .mn]
+         |           |           |
+      toujours    TF-IDF     auto-continue
+      charge      scoring       P23
+                     |
+              ┌──────┴──────┐
+           [mycelium]    [tree.json]
+           co-occurrences   L-system
+           fusions/decay    temperature
 ```
 
-- **L1-L7** : regex pur, zero dependance, instantane
-- **L8** : `pip install llmlingua` — modele BERT ~1GB, CPU (ratio additionnel variable)
-- **L9** : `pip install anthropic` — Claude Haiku resume via API, x5 additionnel
+## Pipeline de compression (15 filtres)
 
-### Le mycelium (codebook vivant)
+```
+L0: tool output strip (x3.9)     <- le plus gros gain, 74% du transcript est du bruit
+L1: markdown strip                L2: filler words
+L3: phrase compression            L4: number shortening
+L5: universal rules               L6: mycelium (abbreviations apprises)
+L7: fact extraction               L8: LLMLingua-2 (BERT, optionnel)
+L9: LLM self-compress (Haiku API, optionnel)
++P24: causal preservation         +P25: priority survival
++P26: line dedup                  +P27: read dedup
++P28: Claude tics filter
+```
+
+- **L0-L7** : regex pur, zero dependance, instantane
+- **L8** : `pip install llmlingua` — BERT ~1GB, CPU
+- **L9** : `pip install anthropic` — Claude Haiku via API (x5-x7 additionnel)
+
+## Le mycelium (codebook vivant)
 
 Reseau de co-occurrences qui pousse a chaque session :
-- Concepts frequents ensemble → connexion forte → fusion
-- Connexions mortes → decay → disparition
-- Plus tu l'utilises, mieux il compresse
+- Concepts frequents ensemble -> connexion forte -> fusion (abbreviation apprise)
+- Connexions mortes -> decay -> disparition
+- Plus on l'utilise, mieux il compresse
+- Fichier : `.muninn/mycelium.json`
 
-### L'arbre (memoire structuree)
+## L'arbre (memoire structuree)
 
 Arbre fractal L-system :
-- Racine (100 lignes, toujours chargee) → pointeurs vers branches
-- Branches (150 lignes, chargees si pertinentes)
-- Temperature par noeud : chaud = lu souvent, froid = oublie
+- Racine (toujours chargee) -> pointeurs vers branches
+- Branches (chargees si pertinentes via TF-IDF + Park et al. 2023)
+- Temperature par noeud : chaud = lu souvent, froid = oublie et elague
 - Budget : 30K tokens max = 15% du contexte
+
+## Memoire intelligente
+
+- **Tags** : B> bug/fix, E> error, F> fact, D> decision, A> architecture
+- **Priority survival** : quand le budget deborde, les decisions et bugs survivent en dernier
+- **Causal preservation** : "because X" est protege de la compression
+- **Error/fix memory** : erreurs + solutions auto-surfacees au boot si la query matche
+- **Session index** : catalogue des 50 dernieres sessions, cherchable au boot et mid-session
+- **Auto-continue** : boot sans query = reprend les topics de la session precedente
 
 ## Commandes
 
 ```bash
 muninn.py status              # Etat de l'arbre + temperatures
-muninn.py boot [query]        # Charge root + branches pertinentes + derniere session
+muninn.py boot [query]        # Charge root + branches pertinentes + sessions
+muninn.py recall "query"      # Recherche mid-session dans toute la memoire
 muninn.py compress <fichier>  # Compresse un fichier markdown
 muninn.py feed <transcript>   # Nourrit le mycelium + compresse en .mn
 muninn.py feed --history      # Rattrape tous les transcripts passes
 muninn.py bootstrap <repo>    # Cold start sur un nouveau repo
 muninn.py prune [--force]     # Elagage (froid -> supprime)
 muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
-muninn.py scan <repo>         # Genere codebook local
+muninn.py ingest <dossier>    # Compresse des docs de reference en branches
 ```
 
-## Resultats mesures
+## Resultats mesures (tiktoken)
 
-Tous les ratios mesures avec tiktoken (vrais tokens, pas estimations).
-
-| Input | Ratio | Facts | Score |
-|-------|-------|-------|-------|
-| verbose_memory.md (texte verbeux) | x4.1 | 100% (36/36) | EXCELLENT |
-| WINTER_TREE.md (roadmap) | x2.6 | 96% (26/27) | EXCELLENT |
-| README.md (deja compact) | x1.6 | 93% (13/14) | GOOD |
-| sample_session.md (transcript) | x1.7 | 80% (12/15) | PASS |
-
-Benchmark global: **37/40 questions factuelles retrouvees (92%)**
+| Contexte | Ratio | Facts |
+|----------|-------|-------|
+| Transcript reel (1.1M tokens) | **x4.5** | 92% |
+| Texte verbeux | x4.1 | 100% |
+| Roadmap technique | x2.6 | 96% |
+| Texte deja compact | x1.6 | 93% |
+| Avec L9 (Haiku API) | **x7.7** | a mesurer |
 
 ## Installation
 
 ```bash
-# Minimum (L1-L7, zero dependance)
+# Minimum (L0-L7, zero dependance externe)
 git clone https://github.com/sky1241/MUNINN-.git
-python engine/core/muninn.py status
+cd MUNINN-
+python engine/core/muninn.py bootstrap .
+
+# Token counting reel (recommande)
+pip install tiktoken
 
 # Optionnel: L8 (BERT compression)
 pip install llmlingua
@@ -88,21 +127,47 @@ export ANTHROPIC_API_KEY=sk-...
 
 ## Hooks Claude Code
 
-Ajouter dans `.claude/settings.local.json` :
+Le bootstrap configure automatiquement les hooks.
+Sinon, ajouter dans `.claude/settings.local.json` :
 ```json
 {
   "hooks": {
-    "PreCompact": [{ "type": "command", "command": "python path/to/muninn.py feed --repo ." }],
-    "SessionEnd": [{ "type": "command", "command": "python path/to/muninn.py feed --repo ." }]
+    "PreCompact": [{ "type": "command", "command": "python engine/core/muninn.py feed --repo ." }],
+    "SessionEnd": [{ "type": "command", "command": "python engine/core/muninn.py feed --repo ." }]
   }
 }
+```
+
+## Structure du repo
+
+```
+engine/core/
+  muninn.py        # Moteur principal (2965 lignes, 48 fonctions)
+  mycelium.py      # Tracker co-occurrences (485 lignes)
+  tokenizer.py     # Wrapper tiktoken
+memory/
+  tree.json        # Arbre L-system
+  root.mn          # Memoire racine
+  b*.mn            # Branches
+tests/
+  test_l8_ordering.py
+  benchmark/
+docs/
+  LITERATURE.md    # Revue de litterature (15+ papiers)
+  BENCHMARK_*.md   # Resultats de benchmarks
+.muninn/           # Donnees locales (gitignored)
+  mycelium.json    # Reseau co-occurrences
+  sessions/*.mn    # Transcripts compresses
+  session_index.json
+  errors.json
 ```
 
 ## Origine
 
 Cree par Sky (electricien, autodidacte, 11 mois de code).
 Ne de l'observation que la memoire LLM n'est pas un probleme de stockage
-mais un probleme de compression.
+mais un probleme de compression. Le nom vient du corbeau d'Odin — celui qui
+se souvient de tout.
 
 ## Licence
 

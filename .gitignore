@@ -1,2 +1,7 @@
 .muninn/
 __pycache__/
+*.pyc
+setup_key.py
+*.tmp
+.env
+.claude/settings.json
