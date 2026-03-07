@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 9 briques vivantes, 3 supprimees (nettoyage P3), 9 bugs corriges (P10)
+Etat: 16 briques vivantes (P0-P19), 3 supprimees (P3), 14 bugs corriges (P10)
 
 ## Anatomie
 
@@ -212,43 +212,40 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Ingest infernal-wheel: x11.6 avec L9, 8 branches auto-creees
 - [x] Rapport: docs/BENCHMARK_FULL_2026-03-07.md
 
-### P13 — L0 filtre tool outputs [TODO — PRIORITE 1]
-- [ ] Filtre dans parse_transcript: virer les resultats Read/Bash/git (70% du bruit)
-- [ ] Garder seulement: path lu, commande lancee, exit code, 1ere ligne output
-- [ ] Gain attendu: ratio transcripts x1.7 -> x5-x8
-- Note: plus gros levier restant — pas de la compression, du filtrage
+### P13 — L0 filtre tool outputs [FAIT]
+- [x] Filtre dans parse_transcript: tool_use -> 1-line summary, tool_result -> first line
+- [x] Teste: 10K-line transcript, 3.4M -> 987K chars (x3.5, 71% stripped)
+- [x] Summaries: [read path], [bash: cmd], [edit path], [grep pattern], [glob pattern]
 
-### P14 — Tags de type memoire [TODO — PRIORITE 2]
-- [ ] Tagger les .mn: decision, bug, fait, architecture
-- [ ] Detection auto par keywords (fix/bug/error -> bug, decided/chose -> decision)
-- [ ] Boot filtre par type si query contient le type
-- Ref: Mem0 (memory taxonomy), Claude-Mem (categorization)
+### P14 — Tags de type memoire [FAIT]
+- [x] 5 tags: B> bug/fix, E> error, F> fact/metric, D> decision, A> architecture
+- [x] Regex classifiers ordered by specificity (F> before A> to avoid "layer" conflict)
+- [x] Applied in compress_transcript on each compressed line
 
-### P15 — Query expansion mycelium [TODO — PRIORITE 3]
-- [ ] Au boot, elargir la query avec concepts co-occurrents du mycelium
-- [ ] Ex: query "glyphs" -> expand "glyphs spectral math symbols"
-- [ ] ~20 lignes de code, gain retrieval sans effort
-- Note: le mycelium sait deja quoi va avec quoi
+### P15 — Query expansion mycelium [FAIT]
+- [x] Mycelium.get_related(concept, top_n) method added
+- [x] boot() expands query with top-3 related concepts (strength >= 3)
+- [x] Ex: "compression layers" -> "compression layers tree memory tokens"
 
-### P16 — Session log dans root.mn [TODO — PRIORITE 4]
-- [ ] A chaque feed, ajouter 1 ligne au root: "03-07: fixed 14 bugs, added ingest"
-- [ ] Garder les 10 dernieres sessions (auto-prune)
-- [ ] Au boot le cousin voit instantanement l'historique recent
+### P16 — Session log dans root.mn [FAIT]
+- [x] _append_session_log(): appends "YYYY-MM-DD xRATIO summary" to root.mn R: section
+- [x] Keeps last 5 entries, auto-creates R: section if missing
+- [x] Cousins see recent session history at boot
 
-### P17 — Compression code blocks [TODO]
-- [ ] Dans transcripts, garder signatures de fonctions, virer le corps
-- [ ] Garder paths + taille, virer le contenu brut
-- [ ] Gain gros sur sessions avec beaucoup de lecture de code
+### P17 — Compression code blocks [FAIT]
+- [x] _compress_code_blocks(): strips code blocks >4 lines to signatures + ...
+- [x] Keeps def/class/function/import signatures + short comments
+- [x] Short blocks (<=4 lines) kept as-is (config, output)
 
-### P18 — Memoire erreurs/fixes [TODO]
-- [ ] Tagger les patterns erreur + solution trouvee
-- [ ] Au boot, si meme erreur pattern detecte, surfacer le fix
-- [ ] Stack Overflow personnel
+### P18 — Memoire erreurs/fixes [FAIT]
+- [x] _extract_error_fixes(): E> followed by B>/D> -> stored in .muninn/errors.json
+- [x] _surface_known_errors(): query word overlap -> surfaces matching fix at boot
+- [x] Keeps last 50 error/fix pairs, dedup by error text
 
-### P19 — Dedup branches au boot [TODO]
-- [ ] Si 2 branches ont >50% overlap de contenu, charger que la plus recente
-- [ ] Utiliser TF-IDF cosine entre branches pour detecter
-- [ ] Evite les doublons dans le contexte
+### P19 — Dedup branches au boot [FAIT]
+- [x] Word-set overlap check at boot: >50% overlap = skip branch
+- [x] Prevents loading redundant content that wastes token budget
+- [x] Applied before session loading
 
 ### P20 — Mycelium cross-repo [TODO]
 - [ ] Meta-mycelium: merge les fusions de tous les repos bootstrappes
