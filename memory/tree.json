@@ -8,7 +8,7 @@
     "leaf_lines": 200,
     "tokens_per_line": 16,
     "max_loaded_tokens": 30000,
-    "compression_ratio": 4.6
+    "compression_ratio": 2.5
   },
   "codebook_version": "v0.1",
   "nodes": {
@@ -28,7 +28,7 @@
         "b07"
       ],
       "last_access": "2026-03-06",
-      "access_count": 22,
+      "access_count": 23,
       "tags": [
         "yggdrasil",
         "architecture",
@@ -48,7 +48,7 @@
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-06",
-      "access_count": 21,
+      "access_count": 22,
       "tags": [
         "glyph",
         "archaeology",
@@ -65,7 +65,7 @@
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-06",
-      "access_count": 20,
+      "access_count": 21,
       "tags": [
         "pipeline",
         "scan",
@@ -82,7 +82,7 @@
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-06",
-      "access_count": 21,
+      "access_count": 22,
       "tags": [
         "glyph",
         "pipeline",
@@ -109,7 +109,7 @@
         "prediction"
       ],
       "hash": "5d97ebc5",
-      "temperature": 0.3
+      "temperature": 0.44
     },
     "b04": {
       "type": "branch",
@@ -125,7 +125,7 @@
         "concept_id"
       ],
       "hash": "24b64ba4",
-      "temperature": 0.3
+      "temperature": 0.44
     },
     "b05": {
       "type": "branch",
@@ -139,7 +139,7 @@
         "bug"
       ],
       "hash": "298d2c9a",
-      "temperature": 0.3
+      "temperature": 0.44
     },
     "b06": {
       "type": "branch",
@@ -156,7 +156,7 @@
         "aws"
       ],
       "hash": "38985fb4",
-      "temperature": 0.3
+      "temperature": 0.45
     },
     "b07": {
       "type": "branch",
@@ -173,7 +173,7 @@
         "scan"
       ],
       "hash": "20f2481d",
-      "temperature": 0.3
+      "temperature": 0.45
     }
   }
 }

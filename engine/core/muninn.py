@@ -794,7 +794,50 @@ def compress_file(filepath: Path) -> str:
         compressed = compress_section(header, slines)
         output.append(compressed)
 
-    return "\n".join(output)
+    result = "\n".join(output)
+
+    # Layer 9: LLM self-compress (optional, for large outputs)
+    if len(result) > 4000:
+        try:
+            import os, subprocess as _sp
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                try:
+                    _r = _sp.run(['powershell', '-Command',
+                        "[System.Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')"],
+                        capture_output=True, text=True, timeout=5)
+                    api_key = _r.stdout.strip() or None
+                except Exception:
+                    pass
+            if api_key:
+                import anthropic
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=token_count(result) // 4,
+                    messages=[{"role": "user", "content": (
+                        "Compress this into ultra-dense notes. Rules:\n"
+                        "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
+                        "- Strip all filler, transitions, greetings, confirmations\n"
+                        "- Use shorthand: -> for leads to, = for equals, | for separators\n"
+                        "- One fact per line, no full sentences\n"
+                        "- Target: 20% of original length, 100% of facts\n"
+                        "- Output raw compressed text, no preamble\n\n"
+                        f"TEXT ({len(result)} chars):\n{result}"
+                    )}],
+                )
+                llm_compressed = response.content[0].text
+                if len(llm_compressed) < len(result) * 0.8:
+                    print(f"  Layer 9 (LLM): {len(result)} -> {len(llm_compressed)} chars "
+                          f"(API: {response.usage.input_tokens}in+{response.usage.output_tokens}out)",
+                          file=sys.stderr)
+                    result = llm_compressed
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"  Layer 9 warning: {e}", file=sys.stderr)
+
+    return result
 
 
 # ── TREE BUILD ────────────────────────────────────────────────────
@@ -1408,8 +1451,16 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     # Only for large texts where the cost (~2K tokens) is worth the savings (>10K tokens)
     if len(result) > 4000:
         try:
-            import os
+            import os, subprocess as _sp
             api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                try:
+                    _r = _sp.run(['powershell', '-Command',
+                        "[System.Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')"],
+                        capture_output=True, text=True, timeout=5)
+                    api_key = _r.stdout.strip() or None
+                except Exception:
+                    pass
             if api_key:
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
