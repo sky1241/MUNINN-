@@ -83,9 +83,11 @@ def main():
         # Add a fake ## header so compress_file can parse it
         f.write(f"## L8 pre-compressed\n{b_l8_first}")
         tmp_path = f.name
-    b_result = compress_file(Path(tmp_path))
     import os
-    os.unlink(tmp_path)
+    try:
+        b_result = compress_file(Path(tmp_path))
+    finally:
+        os.unlink(tmp_path)
     b_stats = measure(original, b_result, "B: L8 -> L1-L7")
 
     # Pipeline C: L8 alone

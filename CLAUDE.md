@@ -74,7 +74,7 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 
 ## Etat du projet (mars 2026)
 - P0-P7: FAIT (mycelium, plomberie, compresseur 9 couches, arbre, sessions)
-- Layer 9 (LLM): code mais pas encore teste (pip install anthropic requis)
+- Layer 9 (LLM): teste — x5.2 (50 papers), x4.0 (306 papers), x7.7 (SOL.md), pip install anthropic requis
 - Benchmark: FAIT — 37/40 questions factuelles (92%), mesure tiktoken
 - Voir WINTER_TREE.md pour le detail complet
 

@@ -358,8 +358,12 @@ def init_tree():
 def load_tree():
     if not TREE_META.exists():
         return init_tree()
-    with open(TREE_META, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(TREE_META, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        print("WARNING: tree.json corrupted, re-initializing", file=sys.stderr)
+        return init_tree()
 
 
 def save_tree(tree):
@@ -898,7 +902,7 @@ def compress_file(filepath: Path) -> str:
                 client = anthropic.Anthropic(api_key=api_key)
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=token_count(result) // 4,
+                    max_tokens=max(1, token_count(result) // 4),
                     messages=[{"role": "user", "content": (
                         "Compress this into ultra-dense notes. Rules:\n"
                         "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
@@ -1714,7 +1718,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
                 )
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=token_count(result) // 4,  # target ~25% of input
+                    max_tokens=max(1, token_count(result) // 4),  # target ~25% of input
                     messages=[{"role": "user", "content": llm_prompt}],
                 )
                 llm_compressed = response.content[0].text
@@ -1816,8 +1820,11 @@ def feed_history(repo_path: Path):
     fed_path = muninn_dir / "fed_transcripts.json"
     fed = set()
     if fed_path.exists():
-        with open(fed_path, encoding="utf-8") as f:
-            fed = set(json.load(f))
+        try:
+            with open(fed_path, encoding="utf-8") as f:
+                fed = set(json.load(f))
+        except (json.JSONDecodeError, ValueError):
+            print("WARNING: fed_transcripts.json corrupted, resetting", file=sys.stderr)
 
     m = Mycelium(repo_path)
     total_messages = 0

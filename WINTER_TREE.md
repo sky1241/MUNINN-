@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 9 briques vivantes, 3 supprimees (nettoyage P3)
+Etat: 9 briques vivantes, 3 supprimees (nettoyage P3), 9 bugs corriges (P10)
 
 ## Anatomie
 
@@ -169,6 +169,25 @@ Ce que Muninn a que les autres n'ont pas:
   - Fallback chunking si pas de headers
   - L'arbre grossit automatiquement a chaque session
 - [x] Teste: "binance trading" -> branches HSBC, "scan glyph" -> branches Yggdrasil
+
+### P9 — Commande ingest + isolation per-repo [FAIT]
+- [x] Arbre per-repo: tree.json + branches vivent dans .muninn/tree/ du repo cible
+- [x] _get_tree_dir() dynamique: zero contamination cross-repo
+- [x] Commande `ingest <fichier|dossier>`: compresse docs de reference -> branches permanentes
+- [x] feed --history: compresse transcripts passes ET cree branches (pas juste mycelium)
+- [x] Teste: WINTER_TREE.md -> 5 branches x2.9, tags auto-extraits
+
+### P10 — Bug scan + hardening [FAIT]
+- [x] Scan 1: _prune_weakest IndexError (sorted_keys epuise si tout fusionne)
+- [x] Scan 1: save_tree mkdir manquant avant mkstemp
+- [x] Scan 1: get_codebook cache pas invalide quand _REPO_PATH change
+- [x] Scan 1: CI assert len>=0 toujours vrai
+- [x] Scan 2: load_tree crash sur JSON corrompu -> fallback init_tree()
+- [x] Scan 2: max_tokens=0 possible pour API L9 -> max(1, ...)
+- [x] Scan 2: fed_transcripts.json crash sur JSON corrompu -> reset gracieux
+- [x] Scan 2: test_l8_ordering temp file leak -> try/finally
+- [x] Scan 2: CLAUDE.md disait L9 pas teste (faux depuis 2026-03-07)
+- Total: 9 bugs corriges, 0 restant
 
 ## Pivots de la session 2026-03-06
 
