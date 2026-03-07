@@ -194,6 +194,31 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Scan 6: CLEAN — 0 nouveau bug
 - Total: 14 bugs corriges, 0 restant (6 scans complets)
 
+### P11 — Bootstrap auto-complet [FAIT]
+- [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn
+- [x] generate_root_mn(): scan repo -> root.mn dense auto-genere
+- [x] generate_winter_tree(): roadmap humaine auto-generee
+- [x] install_hooks(): PreCompact + SessionEnd configures automatiquement
+- [x] Un seul `bootstrap` = mycelium + root.mn + WINTER_TREE + hooks
+- [x] Teste sur infernal-wheel: 29 lignes, 465 tokens, 8 branches
+- Note: format SOL.mn aide le parsing Claude mais ne sauve pas de tokens vs prose
+  (BPE optimise pour l'anglais, les | et : coutent autant que des mots)
+
+### P12 — Benchmark complet [FAIT]
+- [x] 9 fichiers reels, 3 repos (Yggdrasil, InfernalWheel, Muninn)
+- [x] Compression L1-L7: x4.5 moyen (28378->6269 tokens, 78% economises)
+- [x] Fact retention: 85% (17/20 questions factuelles)
+- [x] Range: x1.3 (compact) a x14.8 (verbeux)
+- [x] Ingest infernal-wheel: x11.6 avec L9, 8 branches auto-creees
+- [x] Rapport: docs/BENCHMARK_FULL_2026-03-07.md
+
+### P13 — pip install muninn [TODO]
+- [ ] pyproject.toml + setup
+- [ ] Entry point CLI: `muninn bootstrap .`
+- [ ] README install instructions
+- [ ] Publier sur PyPI
+- Note: pas complique, ~1h de travail, surtout du packaging
+
 ## Pivots de la session 2026-03-06
 
 ### Pivot 1 — Sinogrammes = mauvais chemin
