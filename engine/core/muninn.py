@@ -997,12 +997,13 @@ def build_tree(filepath: Path):
         # Enforce R1
         if len(root_lines) > BUDGET["root_lines"]:
             print(f"  WARNING: root {len(root_lines)} > {BUDGET['root_lines']}, force-splitting")
-            while len(root_lines) > BUDGET["root_lines"]:
+            overflow_refs = []
+            while len(root_lines) > BUDGET["root_lines"] - len(overflow_refs):
                 overflow = root_lines.pop()
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
                 (TREE_DIR / branch_file).write_text(overflow, encoding="utf-8")
-                root_lines.append(f"\u2192{branch_name}:{overflow[:50]}")
+                overflow_refs.append(f"\u2192{branch_name}:{overflow[:50]}")
                 tree["nodes"][branch_name] = {
                     "type": "branch", "file": branch_file,
                     "lines": 1, "max_lines": BUDGET["branch_lines"],
@@ -1010,6 +1011,7 @@ def build_tree(filepath: Path):
                     "access_count": 0, "tags": [],
                 }
                 branch_id += 1
+            root_lines.extend(overflow_refs)
 
         root_path = TREE_DIR / "root.mn"
         root_path.write_text("\n".join(root_lines), encoding="utf-8")
