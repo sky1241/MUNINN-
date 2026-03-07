@@ -769,6 +769,9 @@ _TAG_PATTERNS = [
 
 def tag_memory_type(line: str) -> str:
     """Classify a compressed line by memory type. Returns tagged line or original."""
+    # Don't double-tag
+    if line and len(line) >= 2 and line[:2] in ("B>", "E>", "F>", "D>", "A>"):
+        return line
     for tag, pattern in _TAG_PATTERNS:
         if pattern.search(line):
             return f"{tag}{line}"
@@ -2031,19 +2034,12 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
             header_text = re.sub(r"[#\n]", "", header_text)
             sections.append((f"## {header_text}", chunk))
 
-    # Compress each section and tag memory types
+    # Compress each section (tags applied AFTER L8/L9, not here)
     output = ["# MUNINN|session_compressed"]
     for header, lines in sections:
         compressed = compress_section(header, lines)
         if compressed and len(compressed) > 5:
-            # Tag each line within the compressed section
-            tagged_lines = []
-            for cline in compressed.split("\n"):
-                if cline.strip() and not cline.startswith("#"):
-                    tagged_lines.append(tag_memory_type(cline))
-                else:
-                    tagged_lines.append(cline)
-            output.append("\n".join(tagged_lines))
+            output.append(compressed)
 
     # Add facts summary at the end
     all_text = "\n".join(texts)
@@ -2118,6 +2114,15 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
             pass  # anthropic not installed — skip Layer 9
         except Exception as e:
             print(f"  Layer 9 warning: {e}")
+
+    # P14: Tag memory types AFTER L8/L9 (so tags survive rewriting)
+    tagged_lines = []
+    for rline in result.split("\n"):
+        if rline.strip() and not rline.startswith("#") and not rline.startswith("?FACTS"):
+            tagged_lines.append(tag_memory_type(rline))
+        else:
+            tagged_lines.append(rline)
+    result = "\n".join(tagged_lines)
 
     # Write to .muninn/sessions/
     sessions_dir = repo_path / ".muninn" / "sessions"
@@ -2200,6 +2205,8 @@ def _extract_error_fixes(repo_path: Path, compressed: str):
     errors_path = repo_path / ".muninn" / "errors.json"
     try:
         errors = json.loads(errors_path.read_text(encoding="utf-8")) if errors_path.exists() else []
+        if not isinstance(errors, list):
+            errors = []
     except (json.JSONDecodeError, OSError):
         errors = []
 
