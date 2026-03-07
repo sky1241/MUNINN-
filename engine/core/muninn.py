@@ -429,6 +429,70 @@ def read_node(name: str) -> str:
     return filepath.read_text(encoding="utf-8")
 
 
+# ── TF-IDF RETRIEVAL ─────────────────────────────────────────────
+
+def _tokenize_words(text: str) -> list:
+    """Split text into lowercase word tokens for TF-IDF."""
+    return re.findall(r'[a-z0-9_]+', text.lower())
+
+
+def _tfidf_relevance(query: str, documents: dict) -> dict:
+    """Compute TF-IDF cosine similarity between query and documents.
+
+    Args:
+        query: search string
+        documents: {name: text_content} dict
+
+    Returns:
+        {name: relevance_score} dict, scores in [0, 1]
+    """
+    import math
+
+    if not documents or not query.strip():
+        return {}
+
+    query_tokens = _tokenize_words(query)
+    if not query_tokens:
+        return {}
+
+    # Tokenize all documents
+    doc_tokens = {name: _tokenize_words(text) for name, text in documents.items()}
+
+    # Build vocabulary from query terms only (faster, focused)
+    vocab = set(query_tokens)
+
+    # Document frequency: how many docs contain each term
+    n_docs = len(doc_tokens)
+    df = Counter()
+    for tokens in doc_tokens.values():
+        seen = set(tokens) & vocab
+        for term in seen:
+            df[term] += 1
+
+    # IDF: log(N / df), with smoothing
+    idf = {term: math.log((n_docs + 1) / (df.get(term, 0) + 1)) + 1
+           for term in vocab}
+
+    # TF-IDF vector for query
+    q_tf = Counter(query_tokens)
+    q_vec = {term: q_tf[term] * idf.get(term, 0) for term in vocab}
+    q_norm = math.sqrt(sum(v * v for v in q_vec.values())) or 1.0
+
+    # TF-IDF + cosine similarity for each document
+    scores = {}
+    for name, tokens in doc_tokens.items():
+        if not tokens:
+            scores[name] = 0.0
+            continue
+        d_tf = Counter(tokens)
+        d_vec = {term: d_tf.get(term, 0) * idf.get(term, 0) for term in vocab}
+        d_norm = math.sqrt(sum(v * v for v in d_vec.values())) or 1.0
+        dot = sum(q_vec[t] * d_vec[t] for t in vocab)
+        scores[name] = dot / (q_norm * d_norm)
+
+    return scores
+
+
 # ── COMPRESS ──────────────────────────────────────────────────────
 
 def compress_line(line: str) -> str:
@@ -931,6 +995,126 @@ def build_tree(filepath: Path):
         print(f"\n  Root: {len(root_lines)} lines, {branch_id} branches")
 
 
+# ── AUTO-SEGMENTATION (Brique 3) ─────────────────────────────────
+
+def grow_branches_from_session(mn_path: Path):
+    """Auto-segment a compressed .mn file into tree branches.
+
+    Splits the session by ## headers (already created by compress_transcript).
+    Each section becomes a branch with auto-extracted tags.
+    Merges into existing branch if >50% tag overlap (avoids duplication).
+    """
+    if not mn_path.exists():
+        return 0
+
+    content = mn_path.read_text(encoding="utf-8")
+    if not content.strip():
+        return 0
+
+    # Split by ## headers (compress_transcript already creates these)
+    sections = re.split(r'^(## .+)$', content, flags=re.MULTILINE)
+
+    # Pair headers with their content
+    segments = []
+    i = 0
+    # Skip any content before first header
+    if sections and not sections[0].startswith("## "):
+        i = 1
+    while i < len(sections):
+        header = sections[i].strip() if i < len(sections) else ""
+        body = sections[i + 1].strip() if i + 1 < len(sections) else ""
+        if header.startswith("## ") and body and len(body) > 20:
+            segments.append((header, body))
+        i += 2
+
+    # Fallback: no headers found, chunk by lines
+    if not segments:
+        lines = [l for l in content.split("\n") if l.strip()]
+        if len(lines) < 3:
+            return 0
+        chunk_size = max(5, len(lines) // 4)  # ~4 chunks
+        for j in range(0, len(lines), chunk_size):
+            chunk = lines[j:j + chunk_size]
+            header = f"## {chunk[0][:60].strip()}"
+            body = "\n".join(chunk)
+            if len(body) > 20:
+                segments.append((header, body))
+
+    if not segments:
+        return 0
+
+    tree = load_tree()
+    nodes = tree["nodes"]
+    created = 0
+
+    # Find next branch ID
+    existing_ids = [int(n[1:]) for n in nodes if n.startswith("b") and n[1:].isdigit()]
+    next_id = max(existing_ids, default=-1) + 1
+
+    for header, body in segments:
+        tags = extract_tags(body)
+        tag_set = set(tags)
+
+        # Check for overlap with existing branches (merge if >50% overlap)
+        merged = False
+        for name, node in nodes.items():
+            if name == "root":
+                continue
+            existing_tags = set(node.get("tags", []))
+            if existing_tags and tag_set:
+                overlap = len(tag_set & existing_tags) / max(len(tag_set | existing_tags), 1)
+                if overlap > 0.5:
+                    # Merge: append content to existing branch
+                    filepath = TREE_DIR / node["file"]
+                    if filepath.exists():
+                        old = filepath.read_text(encoding="utf-8")
+                        # Respect max_lines budget
+                        new_lines = old.split("\n") + ["", header] + body.split("\n")
+                        max_l = node.get("max_lines", 150)
+                        if len(new_lines) <= max_l:
+                            filepath.write_text("\n".join(new_lines), encoding="utf-8")
+                            node["lines"] = len(new_lines)
+                            # Add new tags
+                            node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
+                            merged = True
+                            break
+
+        if not merged:
+            # Create new branch
+            branch_name = f"b{next_id:02d}"
+            branch_file = f"{branch_name}.mn"
+            branch_path = TREE_DIR / branch_file
+            lines = body.split("\n")
+            branch_path.write_text(body, encoding="utf-8")
+
+            nodes[branch_name] = {
+                "type": "branch",
+                "file": branch_file,
+                "lines": len(lines),
+                "max_lines": 150,
+                "children": [],
+                "last_access": time.strftime("%Y-%m-%d"),
+                "access_count": 0,
+                "tags": tags[:10],
+                "hash": "00000000",
+                "temperature": 0.1,
+            }
+            # Add to root's children
+            if branch_name not in nodes.get("root", {}).get("children", []):
+                nodes.setdefault("root", {}).setdefault("children", []).append(branch_name)
+
+            next_id += 1
+            created += 1
+
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
+    if created > 0:
+        print(f"  Auto-segmentation: {len(segments)} sections -> {created} new branches", file=sys.stderr)
+
+    return created
+
+
 # ── BOOT INTELLIGENCE (R7) ──────────────────────────────────────
 
 def extract_tags(text: str) -> list[str]:
@@ -964,7 +1148,12 @@ def extract_tags(text: str) -> list[str]:
 
 
 def boot(query: str = "") -> str:
-    """R7: load root + relevant branches based on query."""
+    """R7: load root + relevant branches based on query.
+
+    Scoring (Generative Agents, Park et al. 2023):
+      score = α×recency + β×importance + γ×relevance(query)
+    where relevance uses TF-IDF cosine similarity on branch content.
+    """
     tree = load_tree()
     nodes = tree["nodes"]
 
@@ -972,18 +1161,46 @@ def boot(query: str = "") -> str:
     loaded = [("root", root_text)]
 
     if query:
-        query_lower = query.lower()
+        # Load branch contents for TF-IDF scoring
+        branch_contents = {}
+        for name, node in nodes.items():
+            if name == "root":
+                continue
+            filepath = TREE_DIR / node["file"]
+            if filepath.exists():
+                branch_contents[name] = filepath.read_text(encoding="utf-8")
+            else:
+                # Fallback: use tags as content
+                branch_contents[name] = " ".join(node.get("tags", []))
+
+        # TF-IDF relevance scores (0-1)
+        relevance_scores = _tfidf_relevance(query, branch_contents)
+
+        # Generative Agents scoring: recency + importance + relevance
         scored = []
         for name, node in nodes.items():
             if name == "root":
                 continue
-            tags = node.get("tags", [])
-            tag_score = sum(1 for t in tags if any(
-                q in t.lower() for q in query_lower.split()
-            ))
-            temp_score = node.get("temperature", 0) * 0.5
-            total = tag_score + temp_score
-            if total > 0:
+
+            # Recency: exponential decay (0.995^hours_since_access)
+            last = node.get("last_access", "2026-01-01")
+            try:
+                days_cold = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
+            except ValueError:
+                days_cold = 90
+            recency = max(0.0, 1.0 - days_cold / 90)
+
+            # Importance: log-scaled access count
+            import math
+            access = node.get("access_count", 0)
+            importance = min(1.0, math.log1p(access) / math.log1p(10))
+
+            # Relevance: TF-IDF cosine similarity
+            relevance = relevance_scores.get(name, 0.0)
+
+            # Weighted combination (α=0.2, β=0.2, γ=0.6 — relevance dominates)
+            total = 0.2 * recency + 0.2 * importance + 0.6 * relevance
+            if total > 0.01:
                 scored.append((name, total))
 
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -1535,9 +1752,13 @@ def feed_from_hook(repo_path: Path):
     print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
     # 2. Compress transcript into a .mn session file
-    compress_transcript(jsonl_path, repo_path)
+    mn_path = compress_transcript(jsonl_path, repo_path)
 
-    # 3. Refresh tree temperatures
+    # 3. Auto-segment into tree branches (Brique 3)
+    if mn_path:
+        grow_branches_from_session(mn_path)
+
+    # 4. Refresh tree temperatures
     tree = load_tree()
     refresh_tree_metadata(tree)
     save_tree(tree)

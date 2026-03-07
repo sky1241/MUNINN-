@@ -1,7 +1,7 @@
 {
   "version": 2,
   "created": "2026-03-03 23:44:23",
-  "updated": "2026-03-06",
+  "updated": "2026-03-07",
   "budget": {
     "root_lines": 100,
     "branch_lines": 150,
@@ -27,8 +27,8 @@
         "b06",
         "b07"
       ],
-      "last_access": "2026-03-06",
-      "access_count": 23,
+      "last_access": "2026-03-07",
+      "access_count": 24,
       "tags": [
         "yggdrasil",
         "architecture",
@@ -47,8 +47,8 @@
       "lines": 6,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 22,
+      "last_access": "2026-03-07",
+      "access_count": 23,
       "tags": [
         "glyph",
         "archaeology",
@@ -64,8 +64,8 @@
       "lines": 6,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 21,
+      "last_access": "2026-03-07",
+      "access_count": 22,
       "tags": [
         "pipeline",
         "scan",
@@ -81,8 +81,8 @@
       "lines": 15,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 22,
+      "last_access": "2026-03-07",
+      "access_count": 23,
       "tags": [
         "glyph",
         "pipeline",
@@ -100,8 +100,8 @@
       "lines": 4,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 1,
+      "last_access": "2026-03-07",
+      "access_count": 2,
       "tags": [
         "film",
         "frames",
@@ -109,7 +109,7 @@
         "prediction"
       ],
       "hash": "5d97ebc5",
-      "temperature": 0.44
+      "temperature": 0.53
     },
     "b04": {
       "type": "branch",
@@ -117,15 +117,15 @@
       "lines": 4,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 1,
+      "last_access": "2026-03-07",
+      "access_count": 2,
       "tags": [
         "bug",
         "fix",
         "concept_id"
       ],
       "hash": "24b64ba4",
-      "temperature": 0.44
+      "temperature": 0.53
     },
     "b05": {
       "type": "branch",
@@ -133,13 +133,13 @@
       "lines": 7,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 1,
+      "last_access": "2026-03-07",
+      "access_count": 2,
       "tags": [
         "bug"
       ],
       "hash": "298d2c9a",
-      "temperature": 0.44
+      "temperature": 0.53
     },
     "b06": {
       "type": "branch",
@@ -147,8 +147,8 @@
       "lines": 8,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 1,
+      "last_access": "2026-03-07",
+      "access_count": 2,
       "tags": [
         "convention",
         "python",
@@ -156,7 +156,7 @@
         "aws"
       ],
       "hash": "38985fb4",
-      "temperature": 0.45
+      "temperature": 0.53
     },
     "b07": {
       "type": "branch",
@@ -164,8 +164,8 @@
       "lines": 12,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-06",
-      "access_count": 1,
+      "last_access": "2026-03-07",
+      "access_count": 2,
       "tags": [
         "openalex",
         "snapshot",
@@ -173,7 +173,7 @@
         "scan"
       ],
       "hash": "20f2481d",
-      "temperature": 0.45
+      "temperature": 0.53
     }
   }
 }
