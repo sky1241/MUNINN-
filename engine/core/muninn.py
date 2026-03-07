@@ -2069,7 +2069,56 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     ratio = orig_tokens / max(comp_tokens, 1)
     print(f"MUNINN SESSION ({tok_method}): {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}) -> {mn_path.name}")
 
+    # P16: Append 1-line session summary to root.mn
+    _append_session_log(repo_path, result, ratio)
+
     return mn_path
+
+
+def _append_session_log(repo_path: Path, compressed: str, ratio: float):
+    """Append a 1-line session summary to root.mn's R: section."""
+    root_path = repo_path / ".muninn" / "tree" / "root.mn"
+    if not root_path.exists():
+        return
+
+    # Extract a summary: first non-header, non-empty line from compressed
+    summary = ""
+    for line in compressed.split("\n"):
+        line = line.strip()
+        if line and not line.startswith("#") and not line.startswith("?FACTS"):
+            # Strip memory tags for the log
+            for tag in ("D>", "B>", "E>", "F>", "A>"):
+                if line.startswith(tag):
+                    line = line[2:]
+                    break
+            summary = line[:80]
+            break
+
+    if not summary:
+        summary = "session compressed"
+
+    date = time.strftime("%Y-%m-%d")
+    log_line = f"  {date} x{ratio:.1f} {summary}"
+
+    root_text = root_path.read_text(encoding="utf-8")
+
+    # Find R: section and append
+    if "\nR:\n" in root_text:
+        # Insert after R: header, keep only last 5 entries
+        parts = root_text.split("\nR:\n", 1)
+        r_section = parts[1].split("\n\n", 1)  # R: entries end at blank line or EOF
+        existing_lines = [l for l in r_section[0].split("\n") if l.strip()]
+        existing_lines.append(log_line)
+        existing_lines = existing_lines[-5:]  # keep last 5
+        rest = r_section[1] if len(r_section) > 1 else ""
+        new_text = parts[0] + "\nR:\n" + "\n".join(existing_lines) + "\n"
+        if rest:
+            new_text += "\n" + rest
+        root_path.write_text(new_text, encoding="utf-8")
+    else:
+        # No R: section yet — append one
+        root_text = root_text.rstrip() + f"\n\nR:\n{log_line}\n"
+        root_path.write_text(root_text, encoding="utf-8")
 
 
 def feed_from_hook(repo_path: Path):
