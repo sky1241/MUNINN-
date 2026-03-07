@@ -1876,10 +1876,97 @@ def feed_history(repo_path: Path):
     if total_messages > 0:
         print(f"\n{m.status()}")
 
+    # Compress transcripts into .mn and auto-segment into branches
+    sessions_dir = repo_path / ".muninn" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    for project_dir in project_dirs:
+        for jsonl_file in sorted(project_dir.glob("*.jsonl")):
+            mn_marker = sessions_dir / f"{jsonl_file.stem}.mn"
+            if mn_marker.exists():
+                continue
+            mn_path = compress_transcript(jsonl_file, repo_path)
+            if mn_path:
+                created = grow_branches_from_session(mn_path)
+                if created > 0:
+                    print(f"  {jsonl_file.name}: {created} branches created")
+
     # Refresh tree
     tree = load_tree()
     refresh_tree_metadata(tree)
     save_tree(tree)
+
+
+def ingest(filepath: Path, repo_path: Path):
+    """Ingest a reference document (or all .md in a folder) into the tree as permanent branches.
+
+    Compresses with full pipeline (L1-L7+L9), then auto-segments into branches.
+    Use case: bibles UX, docs de reference, specs — anything you want available via boot.
+    """
+    files_to_ingest = []
+    if filepath.is_dir():
+        files_to_ingest = sorted(filepath.glob("**/*.md"))
+        if not files_to_ingest:
+            files_to_ingest = sorted(filepath.glob("**/*.txt"))
+        print(f"=== MUNINN INGEST: {filepath.name} ({len(files_to_ingest)} files) ===")
+    elif filepath.is_file():
+        files_to_ingest = [filepath]
+        print(f"=== MUNINN INGEST: {filepath.name} ===")
+    else:
+        print(f"ERROR: {filepath} not found")
+        return
+
+    total_branches = 0
+    total_original = 0
+    total_compressed = 0
+
+    for f in files_to_ingest:
+        content = f.read_text(encoding="utf-8", errors="replace")
+        if len(content.strip()) < 50:
+            continue
+
+        total_original += len(content)
+
+        # Compress with full pipeline
+        compressed = compress_file(f)
+        total_compressed += len(compressed)
+
+        # Write as .mn in repo's .muninn/tree/ for auto-segmentation
+        mn_dir = repo_path / ".muninn" / "tree"
+        mn_dir.mkdir(parents=True, exist_ok=True)
+        mn_temp = mn_dir / f"_ingest_{f.stem}.mn"
+        mn_temp.write_text(compressed, encoding="utf-8")
+
+        # Auto-segment into branches
+        created = grow_branches_from_session(mn_temp)
+        total_branches += created
+
+        # Clean up temp file (branches are already stored)
+        if mn_temp.exists():
+            mn_temp.unlink()
+
+        ratio = len(content) / max(len(compressed), 1)
+        print(f"  {f.name}: {len(content)} -> {len(compressed)} chars (x{ratio:.1f}), {created} branches")
+
+    # Nourrit aussi le mycelium avec le contenu
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mycelium import Mycelium
+    m = Mycelium(repo_path)
+    m.start_session()
+    for f in files_to_ingest:
+        content = f.read_text(encoding="utf-8", errors="replace")
+        if content.strip():
+            m.observe_text(content)
+    m.save()
+
+    # Refresh tree
+    tree = load_tree()
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
+    ratio = total_original / max(total_compressed, 1)
+    print(f"\n  Total: {total_original} -> {total_compressed} chars (x{ratio:.1f})")
+    print(f"  Branches created: {total_branches}")
+    print(f"  Mycelium updated")
 
 
 # ── MAIN ──────────────────────────────────────────────────────────
@@ -1891,6 +1978,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
+        "ingest",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -1940,6 +2028,16 @@ def main():
         else:
             # Hook mode: read transcript_path from stdin
             feed_from_hook(repo)
+        return
+
+    if args.command == "ingest":
+        if not args.file:
+            print("ERROR: file or folder required. Usage: muninn.py ingest <file-or-folder> --repo <repo-path>")
+            sys.exit(1)
+        repo = Path(args.repo or ".").resolve()
+        _REPO_PATH = repo
+        _refresh_tree_paths()
+        ingest(Path(args.file), repo)
         return
 
     if args.command == "boot":
