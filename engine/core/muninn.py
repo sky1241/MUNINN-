@@ -1769,8 +1769,8 @@ def verify_compression(filepath: Path):
 def parse_transcript(jsonl_path: Path) -> list[str]:
     """Parse a Claude Code transcript JSONL and extract text messages.
 
-    Returns a list of text strings (user + assistant messages).
-    Skips thinking blocks, tool calls, and system messages.
+    L0 FILTER: strips tool results (77% of transcript) down to 1-line summaries.
+    Keeps: user messages, assistant text, tool call names + args (not results).
     """
     texts = []
     with open(jsonl_path, encoding="utf-8", errors="ignore") as f:
@@ -1783,7 +1783,6 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
             except json.JSONDecodeError:
                 continue
 
-            # Only process user and assistant messages
             if entry.get("type") not in ("user", "assistant"):
                 continue
 
@@ -1798,10 +1797,45 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                 continue
 
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type", "")
+
+                if btype == "text":
                     text = block.get("text", "")
-                    if len(text) >= 20:  # skip tiny messages
+                    if len(text) >= 20:
                         texts.append(text)
+
+                elif btype == "tool_use":
+                    # L0: keep tool name + key args as 1-line summary
+                    name = block.get("name", "?")
+                    inp = block.get("input", {})
+                    if name in ("Read", "read"):
+                        summary = f"[read {inp.get('file_path', '?')}]"
+                    elif name in ("Edit", "edit"):
+                        summary = f"[edit {inp.get('file_path', '?')}]"
+                    elif name in ("Write", "write"):
+                        summary = f"[write {inp.get('file_path', '?')}]"
+                    elif name in ("Bash", "bash"):
+                        cmd = inp.get("command", "?")[:80]
+                        summary = f"[bash: {cmd}]"
+                    elif name in ("Grep", "grep"):
+                        summary = f"[grep '{inp.get('pattern', '?')}' in {inp.get('path', '.')}]"
+                    elif name in ("Glob", "glob"):
+                        summary = f"[glob {inp.get('pattern', '?')}]"
+                    elif name == "Agent":
+                        summary = f"[agent: {inp.get('description', '?')}]"
+                    else:
+                        summary = f"[{name}]"
+                    texts.append(summary)
+
+                elif btype == "tool_result":
+                    # L0: strip tool results to first line only
+                    rc = block.get("content", "")
+                    if isinstance(rc, str) and rc.strip():
+                        first_line = rc.split("\n")[0][:100]
+                        if first_line.strip():
+                            texts.append(f"-> {first_line}")
 
     return texts
 
