@@ -1826,7 +1826,7 @@ def feed_history(repo_path: Path):
         try:
             with open(fed_path, encoding="utf-8") as f:
                 fed = set(json.load(f))
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError, TypeError):
             print("WARNING: fed_transcripts.json corrupted, resetting", file=sys.stderr)
 
     m = Mycelium(repo_path)
@@ -2082,7 +2082,11 @@ def main():
         if not args.file:
             print("ERROR: file required. Usage: muninn.py verify <file>")
             sys.exit(1)
-        verify_compression(Path(args.file))
+        fp = Path(args.file)
+        if not fp.exists():
+            print(f"ERROR: {fp} not found")
+            sys.exit(1)
+        verify_compression(fp)
         return
 
     if not args.file:
