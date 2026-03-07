@@ -189,7 +189,10 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Scan 2: CLAUDE.md disait L9 pas teste (faux depuis 2026-03-07)
 - [x] Scan 3: parse_transcript TypeError si content ni str ni list
 - [x] Scan 3: mycelium.json crash sur JSON corrompu -> re-init gracieux
-- Total: 11 bugs corriges, 0 restant (3 scans complets)
+- [x] Scan 4: verify file existence check + fed_transcripts TypeError guard
+- [x] Scan 5: build_tree boucle infinie (pop+append ne retrecit jamais)
+- [x] Scan 6: CLEAN — 0 nouveau bug
+- Total: 14 bugs corriges, 0 restant (6 scans complets)
 
 ## Pivots de la session 2026-03-06
 
