@@ -549,9 +549,14 @@ def compress_line(line: str) -> str:
         r'(?:log|sum|product|ratio|percentage)\s+of\b',
         result, flags=re.IGNORECASE
     )
+    # P24: Protect causal connectors — "because X" carries the WHY
+    _CAUSAL_PROTECTED = re.findall(
+        r'(?:because|since|therefore|so that|due to|parce que?|car |donc |puisque)\s+\S+',
+        result, flags=re.IGNORECASE
+    )
     # Replace protected spans with placeholders
     _placeholders = {}
-    for i, span in enumerate(_PROTECTED + _MATH_PROTECTED):
+    for i, span in enumerate(_PROTECTED + _MATH_PROTECTED + _CAUSAL_PROTECTED):
         placeholder = f"__PROT{i}__"
         _placeholders[placeholder] = span
         result = result.replace(span, placeholder, 1)
@@ -569,7 +574,7 @@ def compress_line(line: str) -> str:
         r"\band\b", r"\bbut\b", r"\bor\b",
         # Verbose phrases (longest first)
         r"\bapproximately\b", r"\bcurrently\b", r"\bproperly\b",
-        r"\bcorresponds to\b", r"\binstead of\b", r"\bbecause of\b",
+        r"\bcorresponds to\b", r"\binstead of\b",
         r"\bbased on\b", r"\bin order to\b",
         r"\bnow\b", r"\balso\b", r"\bjust\b", r"\bstill\b",
         # French fillers
@@ -1226,6 +1231,20 @@ def boot(query: str = "") -> str:
     root_text = read_node("root")
     loaded = [("root", root_text)]
 
+    # P23: Auto-continue — if no query, use last session's concepts
+    if not query and _REPO_PATH:
+        index_path = _REPO_PATH / ".muninn" / "session_index.json"
+        if index_path.exists():
+            try:
+                idx = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(idx, list) and idx:
+                    last = idx[-1]
+                    concepts = last.get("concepts", [])[:5]
+                    if concepts:
+                        query = " ".join(concepts)
+            except (json.JSONDecodeError, OSError):
+                pass
+
     if query:
         # P15: Query expansion via mycelium co-occurrences
         try:
@@ -1353,8 +1372,8 @@ def boot(query: str = "") -> str:
             if session_tokens <= remaining_budget:
                 output.append(f"=== last_session ({latest.stem}) ===")
                 output.append(session_text)
+                loaded_tokens += session_tokens
             elif remaining_budget > 200:
-                # Take tail (most recent context) that fits budget
                 max_chars = remaining_budget * 4
                 session_lines = session_text.split("\n")
                 tail_lines = []
@@ -1367,6 +1386,15 @@ def boot(query: str = "") -> str:
                 if tail_lines:
                     output.append(f"=== last_session ({latest.stem}) [tail] ===")
                     output.append("\n".join(tail_lines))
+                    loaded_tokens += token_count("\n".join(tail_lines))
+
+            # P22: Search session index for relevant past sessions
+            if query and _REPO_PATH:
+                remaining_budget = BUDGET["max_loaded_tokens"] - loaded_tokens
+                if remaining_budget > 500:
+                    _load_relevant_sessions(
+                        query, sessions_dir, latest.name, remaining_budget, output
+                    )
 
     # P18: Surface known error fixes if query matches
     if query and _REPO_PATH:
@@ -2186,6 +2214,40 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
             tagged_lines.append(rline)
     result = "\n".join(tagged_lines)
 
+    # P25: Priority survival — if too many lines, drop low-priority first
+    _TAG_PRIORITY = {"D>": 5, "B>": 4, "E>": 3, "F>": 3, "A>": 2}
+    result_tokens = token_count(result)
+    max_session_tokens = 3000  # session .mn should fit in ~3K tokens
+    if result_tokens > max_session_tokens:
+        lines_with_priority = []
+        for pline in result.split("\n"):
+            stripped = pline.strip()
+            if stripped.startswith("#") or stripped.startswith("?FACTS"):
+                lines_with_priority.append((99, pline))  # always keep
+            else:
+                priority = 1  # default: untagged
+                for tag, prio in _TAG_PRIORITY.items():
+                    if stripped.startswith(tag):
+                        priority = prio
+                        break
+                lines_with_priority.append((priority, pline))
+        # Sort by priority (descending), keep highest priority lines until budget
+        # But preserve original order within same priority
+        by_priority = sorted(enumerate(lines_with_priority),
+                             key=lambda x: (-x[1][0], x[0]))
+        kept_indices = set()
+        running_tokens = 0
+        for orig_idx, (prio, pline) in by_priority:
+            line_tokens = max(1, len(pline) // 4)
+            if running_tokens + line_tokens <= max_session_tokens:
+                kept_indices.add(orig_idx)
+                running_tokens += line_tokens
+        # Rebuild in original order
+        result = "\n".join(
+            pline for i, (_, pline) in enumerate(lines_with_priority)
+            if i in kept_indices
+        )
+
     # Write to .muninn/sessions/
     sessions_dir = repo_path / ".muninn" / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
@@ -2209,7 +2271,110 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     # P18: Extract error/fix pairs for auto-surfacing
     _extract_error_fixes(repo_path, result)
 
+    # P22: Update session index for future retrieval
+    _update_session_index(repo_path, mn_path, result, ratio)
+
     return mn_path
+
+
+def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio: float):
+    """P22: Add session entry to .muninn/session_index.json for boot search."""
+    index_path = repo_path / ".muninn" / "session_index.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else []
+        if not isinstance(index, list):
+            index = []
+    except (json.JSONDecodeError, OSError):
+        index = []
+
+    # Extract tagged lines (D>, B>, F> are high-value)
+    tagged = []
+    for line in compressed.split("\n"):
+        stripped = line.strip()
+        for tag in ("D>", "B>", "F>", "E>", "A>"):
+            if stripped.startswith(tag):
+                tagged.append(stripped[:120])
+                break
+
+    # Extract key concepts (top words by frequency, excluding short/common)
+    words = re.findall(r'[A-Za-z]{4,}', compressed.lower())
+    stop = {"this", "that", "with", "from", "have", "been", "will", "into",
+            "also", "just", "more", "some", "then", "than", "when", "what",
+            "each", "line", "file", "text", "here", "there", "about"}
+    word_freq = {}
+    for w in words:
+        if w not in stop:
+            word_freq[w] = word_freq.get(w, 0) + 1
+    top_concepts = sorted(word_freq, key=word_freq.get, reverse=True)[:10]
+
+    entry = {
+        "file": mn_path.name,
+        "date": time.strftime("%Y-%m-%d"),
+        "ratio": round(ratio, 1),
+        "concepts": top_concepts,
+        "tagged": tagged[:15],  # max 15 tagged lines per session
+    }
+
+    # Dedup by filename
+    index = [e for e in index if e.get("file") != mn_path.name]
+    index.append(entry)
+
+    # Keep last 50 sessions in index (even if .mn files are pruned to 10)
+    index = index[-50:]
+    index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _load_relevant_sessions(query: str, sessions_dir: Path, latest_name: str,
+                            budget: int, output: list):
+    """P22: Search session index and load relevant past sessions at boot."""
+    repo_path = sessions_dir.parent.parent  # .muninn/sessions -> repo
+    index_path = repo_path / ".muninn" / "session_index.json"
+    if not index_path.exists():
+        return
+
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        if not isinstance(index, list):
+            return
+    except (json.JSONDecodeError, OSError):
+        return
+
+    # Score each session by concept overlap with query
+    query_words = set(re.findall(r'[A-Za-z]{4,}', query.lower()))
+    if not query_words:
+        return
+
+    scored = []
+    for entry in index:
+        if entry.get("file") == latest_name:
+            continue  # skip the one already loaded
+        concepts = set(entry.get("concepts", []))
+        overlap = len(query_words & concepts)
+        # Also check tagged lines for query words
+        for tagged_line in entry.get("tagged", []):
+            tagged_words = set(re.findall(r'[A-Za-z]{4,}', tagged_line.lower()))
+            overlap += len(query_words & tagged_words) * 0.5
+        if overlap > 0:
+            scored.append((overlap, entry))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Load top 2 relevant sessions (if .mn file still exists)
+    loaded = 0
+    for score, entry in scored[:2]:
+        mn_file = sessions_dir / entry["file"]
+        if not mn_file.exists():
+            continue
+        text = mn_file.read_text(encoding="utf-8")
+        tokens = token_count(text)
+        if tokens > budget:
+            continue
+        output.append(f"=== relevant_session ({entry['file']}, {entry.get('date', '?')}) ===")
+        output.append(text)
+        budget -= tokens
+        loaded += 1
+
+    return loaded
 
 
 def _append_session_log(repo_path: Path, compressed: str, ratio: float):
