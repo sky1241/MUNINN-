@@ -1892,7 +1892,27 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
     L0 FILTER: strips tool results (77% of transcript) down to 1-line summaries.
     Keeps: user messages, assistant text, tool call names + args (not results).
     """
+    # P28: Claude verbal tics — full sentences that carry zero information
+    _CLAUDE_TICS = re.compile(
+        r"^("
+        r"Let me (?:read|check|look|examine|search|find|see|verify|review|update|analyze|explore|open)"
+        r"|I'll (?:now |start |begin |go ahead and )?"
+          r"(?:read|check|look|examine|search|find|see|verify|review|update|analyze|fix|implement|create|add|make|write)"
+        r"|(?:Here's|Here is) what (?:I found|I see|the .+ looks like|we have)"
+        r"|(?:Now |OK(?:ay)?,? )?(?:let me|I'll) (?:take a look|have a look|investigate|dig into)"
+        r"|(?:Great|Perfect|Good|Excellent|Sure|Alright|Got it|Understood)[.!,]?\s*(?:Let me|I'll|Now)?"
+        r"|Looking (?:at|into|through) (?:the |this |that )?"
+        r"|I (?:can see|notice|observe) (?:that )?"
+        r"|(?:Based on|From) (?:the |my |this |what )?(?:analysis|review|reading|examination|investigation)"
+        r"|This (?:looks|seems|appears) (?:like |to be )?"
+        r"|I've (?:made|completed|finished|updated|fixed|implemented|added|created) the"
+        r")",
+        re.IGNORECASE
+    )
     texts = []
+    # P27: Track file reads — only keep last read per file
+    file_reads = {}  # file_path -> (index_in_texts, summary, result)
+
     with open(jsonl_path, encoding="utf-8", errors="ignore") as f:
         for line in f:
             line = line.strip()
@@ -1927,14 +1947,35 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                         # P17: compress code blocks in text
                         if "```" in text:
                             text = _compress_code_blocks(text)
-                        texts.append(text)
+                        # P28: Strip Claude verbal tics prefix (keep content after tic)
+                        filtered_lines = []
+                        for tline in text.split("\n"):
+                            stripped = tline.strip()
+                            m = _CLAUDE_TICS.match(stripped)
+                            if m:
+                                # Keep the rest of the line after the tic
+                                remainder = stripped[m.end():].strip().lstrip(".,;:!").strip()
+                                if len(remainder) >= 25:
+                                    filtered_lines.append(remainder)
+                                # else: pure tic sentence, drop entirely
+                            else:
+                                filtered_lines.append(tline)
+                        text = "\n".join(filtered_lines).strip()
+                        if len(text) >= 10:
+                            texts.append(text)
 
                 elif btype == "tool_use":
                     # L0: keep tool name + key args as 1-line summary
                     name = block.get("name", "?")
                     inp = block.get("input", {})
                     if name in ("Read", "read"):
-                        summary = f"[read {inp.get('file_path', '?')}]"
+                        fpath = inp.get('file_path', '?')
+                        summary = f"[read {fpath}]"
+                        # P27: mark previous reads of same file for removal
+                        if fpath in file_reads:
+                            old_idx = file_reads[fpath]
+                            texts[old_idx] = None  # mark for removal
+                        file_reads[fpath] = len(texts)
                     elif name in ("Edit", "edit"):
                         summary = f"[edit {inp.get('file_path', '?')}]"
                     elif name in ("Write", "write"):
@@ -1959,6 +2000,9 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                         first_line = rc.split("\n")[0][:100]
                         if first_line.strip():
                             texts.append(f"-> {first_line}")
+
+    # P27: Remove None-marked duplicate reads
+    texts = [t for t in texts if t is not None]
 
     return texts
 
@@ -2048,6 +2092,24 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         output.append(f"?FACTS:{' | '.join(facts[:30])}")
 
     result = "\n".join(output)
+
+    # P26: Dedup compressed lines (exact + normalized)
+    seen_hashes = set()
+    deduped_lines = []
+    for dline in result.split("\n"):
+        if dline.startswith("#") or dline.startswith("?FACTS"):
+            deduped_lines.append(dline)
+            continue
+        # Normalize: lowercase, strip extra spaces, remove punctuation for fuzzy match
+        norm = re.sub(r'[^\w\s]', '', dline.lower()).strip()
+        norm = re.sub(r'\s+', ' ', norm)
+        if not norm:
+            continue
+        if norm in seen_hashes:
+            continue
+        seen_hashes.add(norm)
+        deduped_lines.append(dline)
+    result = "\n".join(deduped_lines)
 
     # Layer 8: LLMLingua-2 (BERT-based token scoring, optional)
     # Skip if text already small (not worth 9s model load for <500 tokens)

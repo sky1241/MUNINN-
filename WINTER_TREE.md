@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 16 briques vivantes (P0-P19), 3 supprimees (P3), 14 bugs corriges (P10)
+Etat: 19 briques vivantes (P0-P19), 7 en roadmap (P20-P28), 3 supprimees (P3), 14 bugs corriges (P10)
 
 ## Anatomie
 
@@ -247,12 +247,48 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Prevents loading redundant content that wastes token budget
 - [x] Applied before session loading
 
-### P20 — Mycelium cross-repo [TODO]
+### P22 — Session index (memoire longue) [TODO]
+- [ ] Build .muninn/session_index.json au feed: date, tags (D>,B>,F>), concepts-cles
+- [ ] boot() cherche dans l'index les sessions pertinentes a la query (pas juste la derniere)
+- [ ] Charge les 2-3 sessions les plus pertinentes en plus de la derniere
+
+### P23 — Auto-continue (boot intelligent) [TODO]
+- [ ] Si query vide au boot, charge les topics de la derniere session
+- [ ] Topics extraits des tags et headers du dernier .mn
+- [ ] "continue" ou "on reprend" = reload complet du contexte precedent
+
+### P24 — Preservation causale (le POURQUOI) [TODO]
+- [ ] Detecter les lignes "because/parce que/car/donc" dans compress_line
+- [ ] Garder le lien cause->effet dans la compression (pas juste le fait)
+- [ ] Ex: "x4.5 parce que len//4 surestime de 40%" survit, pas juste "x4.5"
+
+### P25 — Survie par priorite [TODO]
+- [ ] Quand budget depasse, trier par tag: D> et B> survivent en dernier
+- [ ] Lignes non-taguees virees en premier
+- [ ] Score: D>=5, B>=4, E>=3, F>=3, A>=2, none=1
+
+### P26 — Dedup lignes compressees [TODO]
+- [ ] Hash chaque ligne compressee dans compress_transcript
+- [ ] Skip si hash deja vu (dedup exacte)
+- [ ] Fuzzy dedup: normaliser avant hash (lowercase, strip spaces)
+- [ ] Gain estime: x1.3 additionnel
+
+### P27 — Dedup lectures fichiers [TODO]
+- [ ] Dans parse_transcript: tracker les fichiers lus (set)
+- [ ] Meme fichier lu N fois -> garder que la derniere lecture
+- [ ] Reduit bruit des sessions de debug (meme fichier relu 10 fois)
+
+### P28 — Filtre tics Claude [TODO]
+- [ ] Liste de patterns: "Let me", "I'll now", "Here's what I found", "Let me check"
+- [ ] Supprimer les phrases entieres qui sont du meta-commentaire Claude
+- [ ] Distinct de L2 (filler words) — ici c'est des phrases entieres
+
+### P20 — Mycelium cross-repo [TODO — GROS]
 - [ ] Meta-mycelium: merge les fusions de tous les repos bootstrappes
 - [ ] Quand on bosse sur repo A, concepts de repo B disponibles
 - [ ] Les "lianes" entre projets (cf CROSS_PROJECTS_ROADMAP Yggdrasil)
 
-### P21 — pip install muninn [TODO]
+### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
 - [ ] Entry point CLI: `muninn bootstrap .`
 - [ ] README install instructions
