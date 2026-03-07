@@ -1819,6 +1819,39 @@ def verify_compression(filepath: Path):
 
 # ── FEED (P1 — hooks pipeline) ────────────────────────────────────
 
+def _compress_code_blocks(text: str) -> str:
+    """P17: Compress code blocks in text — keep signatures, drop bodies.
+
+    Replaces ```...``` blocks with function/class signatures + '...' placeholder.
+    Non-code blocks (e.g., ```json, ```yaml) are kept as-is if short (<5 lines).
+    """
+    def _compress_block(match):
+        lang = (match.group(1) or "").strip().lower()
+        code = match.group(2)
+
+        # Keep short blocks as-is (config, output, etc.)
+        lines = code.strip().split("\n")
+        if len(lines) <= 4:
+            return match.group(0)
+
+        # For code: extract signatures (def, class, function, const, etc.)
+        sigs = []
+        for line in lines:
+            stripped = line.strip()
+            if re.match(r"^(def |class |async def |function |const |let |var |export |import |from )", stripped):
+                sigs.append(stripped)
+            elif re.match(r"^(#|//|/\*)", stripped) and len(stripped) < 80:
+                sigs.append(stripped)  # keep short comments
+
+        if sigs:
+            return f"```{lang}\n" + "\n".join(sigs) + "\n  ...\n```"
+        else:
+            # No signatures found — keep first 2 lines + ellipsis
+            return f"```{lang}\n" + "\n".join(lines[:2]) + "\n  ...\n```"
+
+    return re.sub(r"```(\w*)\n(.*?)```", _compress_block, text, flags=re.DOTALL)
+
+
 def parse_transcript(jsonl_path: Path) -> list[str]:
     """Parse a Claude Code transcript JSONL and extract text messages.
 
@@ -1857,6 +1890,9 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                 if btype == "text":
                     text = block.get("text", "")
                     if len(text) >= 20:
+                        # P17: compress code blocks in text
+                        if "```" in text:
+                            text = _compress_code_blocks(text)
                         texts.append(text)
 
                 elif btype == "tool_use":
