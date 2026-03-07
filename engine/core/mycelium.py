@@ -258,6 +258,24 @@ class Mycelium:
 
         return rules
 
+    def get_related(self, concept: str, top_n: int = 5) -> list[tuple[str, int]]:
+        """Get concepts most strongly connected to a given concept.
+
+        Returns list of (related_concept, strength) sorted by strength.
+        """
+        concept = concept.lower().strip()
+        conns = self.data["connections"]
+        related = []
+        for key, val in conns.items():
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            if concept in parts:
+                other = parts[1] if parts[0] == concept else parts[0]
+                related.append((other, val["count"]))
+        related.sort(key=lambda x: x[1], reverse=True)
+        return related[:top_n]
+
     def get_learned_fillers(self) -> list[str]:
         """Identify filler words from the mycelium.
 

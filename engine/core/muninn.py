@@ -1224,6 +1224,22 @@ def boot(query: str = "") -> str:
     loaded = [("root", root_text)]
 
     if query:
+        # P15: Query expansion via mycelium co-occurrences
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from mycelium import Mycelium
+            m = Mycelium(_REPO_PATH or Path("."))
+            query_words = re.findall(r'[A-Za-zÀ-ÿ]{3,}', query.lower())
+            expanded = set(query_words)
+            for word in query_words:
+                for related, strength in m.get_related(word, top_n=3):
+                    if strength >= 3:  # only strong connections
+                        expanded.add(related)
+            if expanded - set(query_words):
+                query = query + " " + " ".join(expanded - set(query_words))
+        except Exception:
+            pass  # mycelium not available — use original query
+
         # Load branch contents for TF-IDF scoring
         branch_contents = {}
         for name, node in nodes.items():
