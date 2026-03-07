@@ -738,6 +738,43 @@ def extract_facts(text: str) -> list[str]:
     return list(dict.fromkeys(facts))  # deduplicate preserving order
 
 
+# ── MEMORY TYPE TAGGER ─────────────────────────────────────────
+# Tags compressed lines with their memory type for prioritized retrieval.
+# D> = decision, B> = bug/fix, F> = fact/metric, A> = architecture, E> = error
+
+_TAG_PATTERNS = [
+    ("B>", re.compile(
+        r"(?i)(bug|fix|patch|crash|broke|broken|repair|hotfix|regression|"
+        r"workaround|corrig[eé]|r[eé]par[eé])"
+    )),
+    ("E>", re.compile(
+        r"(?i)(error|exception|traceback|failed|failure|TypeError|ValueError|"
+        r"KeyError|IndexError|ImportError|AttributeError|SyntaxError|"
+        r"FileNotFoundError|RuntimeError|erreur|echou[eé])"
+    )),
+    ("F>", re.compile(
+        r"(?i)(x\d+\.?\d*|ratio|benchmark|token|percent|%|\d+\.\d+[sx]|"
+        r"mesur[eé]|metric|gain|score|accuracy|retention|cost\s*[:=])"
+    )),
+    ("D>", re.compile(
+        r"(?i)(decid|decision|chose|pivot|switch|adopt|drop|keep|use instead|"
+        r"go with|won't|will use|prefer|opted|choix|on garde|on vire|on prend)"
+    )),
+    ("A>", re.compile(
+        r"(?i)(architect|structure|design|pattern|pipeline|module|"
+        r"refactor|abstract|interface|class\s+\w|inherit|compos)"
+    )),
+]
+
+
+def tag_memory_type(line: str) -> str:
+    """Classify a compressed line by memory type. Returns tagged line or original."""
+    for tag, pattern in _TAG_PATTERNS:
+        if pattern.search(line):
+            return f"{tag}{line}"
+    return line
+
+
 def compress_section(header: str, lines: list[str]) -> str:
     cb = get_codebook()
     text_rules = cb["text_rules"]
@@ -1911,12 +1948,19 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
             header_text = re.sub(r"[#\n]", "", header_text)
             sections.append((f"## {header_text}", chunk))
 
-    # Compress each section
+    # Compress each section and tag memory types
     output = ["# MUNINN|session_compressed"]
     for header, lines in sections:
         compressed = compress_section(header, lines)
         if compressed and len(compressed) > 5:
-            output.append(compressed)
+            # Tag each line within the compressed section
+            tagged_lines = []
+            for cline in compressed.split("\n"):
+                if cline.strip() and not cline.startswith("#"):
+                    tagged_lines.append(tag_memory_type(cline))
+                else:
+                    tagged_lines.append(cline)
+            output.append("\n".join(tagged_lines))
 
     # Add facts summary at the end
     all_text = "\n".join(texts)
