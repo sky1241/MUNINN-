@@ -1341,6 +1341,13 @@ def boot(query: str = "") -> str:
                     output.append(f"=== last_session ({latest.stem}) [tail] ===")
                     output.append("\n".join(tail_lines))
 
+    # P18: Surface known error fixes if query matches
+    if query and _REPO_PATH:
+        error_hints = _surface_known_errors(_REPO_PATH, query)
+        if error_hints:
+            output.append("\n=== known_fixes ===")
+            output.append(error_hints)
+
     return "\n".join(output)
 
 
@@ -2108,6 +2115,9 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     # P16: Append 1-line session summary to root.mn
     _append_session_log(repo_path, result, ratio)
 
+    # P18: Extract error/fix pairs for auto-surfacing
+    _extract_error_fixes(repo_path, result)
+
     return mn_path
 
 
@@ -2155,6 +2165,71 @@ def _append_session_log(repo_path: Path, compressed: str, ratio: float):
         # No R: section yet — append one
         root_text = root_text.rstrip() + f"\n\nR:\n{log_line}\n"
         root_path.write_text(root_text, encoding="utf-8")
+
+
+def _extract_error_fixes(repo_path: Path, compressed: str):
+    """P18: Extract error->fix pairs from tagged compressed text.
+
+    Scans for E> lines followed by B> or D> lines = error+solution pairs.
+    Stores in .muninn/errors.json for auto-surfacing at boot.
+    """
+    errors_path = repo_path / ".muninn" / "errors.json"
+    try:
+        errors = json.loads(errors_path.read_text(encoding="utf-8")) if errors_path.exists() else []
+    except (json.JSONDecodeError, OSError):
+        errors = []
+
+    lines = compressed.split("\n")
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("E>"):
+            continue
+        error_text = stripped[2:].strip()
+        # Look ahead for a fix (B> or D>) within next 3 lines
+        fix_text = ""
+        for j in range(i + 1, min(i + 4, len(lines))):
+            next_line = lines[j].strip()
+            if next_line.startswith("B>"):
+                fix_text = next_line[2:].strip()
+                break
+            elif next_line.startswith("D>"):
+                fix_text = next_line[2:].strip()
+                break
+        if error_text and fix_text:
+            entry = {
+                "error": error_text[:200],
+                "fix": fix_text[:200],
+                "date": time.strftime("%Y-%m-%d"),
+            }
+            # Avoid duplicates
+            if not any(e["error"] == entry["error"] for e in errors):
+                errors.append(entry)
+
+    # Keep last 50 entries
+    errors = errors[-50:]
+    errors_path.write_text(json.dumps(errors, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _surface_known_errors(repo_path: Path, query: str) -> str:
+    """P18: Check if query matches a known error pattern. Returns fix hint or empty."""
+    errors_path = repo_path / ".muninn" / "errors.json"
+    if not errors_path.exists():
+        return ""
+    try:
+        errors = json.loads(errors_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+    query_lower = query.lower()
+    hints = []
+    for entry in errors:
+        # Check if query words overlap with error text
+        error_words = set(entry["error"].lower().split())
+        query_words = set(query_lower.split())
+        overlap = error_words & query_words
+        if len(overlap) >= 2:  # at least 2 words match
+            hints.append(f"KNOWN: {entry['error']} -> FIX: {entry['fix']}")
+    return "\n".join(hints[:3])  # max 3 hints
 
 
 def feed_from_hook(repo_path: Path):
