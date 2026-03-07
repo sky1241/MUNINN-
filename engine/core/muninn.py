@@ -1308,8 +1308,32 @@ def boot(query: str = "") -> str:
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
 
-    output = []
+    # P19: Dedup branches — skip if >50% word overlap with already-loaded
+    def _word_set(text):
+        return set(re.findall(r'[a-zA-Z]{4,}', text.lower()))
+
+    deduped = []
+    loaded_words = []
     for name, text in loaded:
+        if name == "root":
+            deduped.append((name, text))
+            loaded_words.append(_word_set(text))
+            continue
+        words = _word_set(text)
+        is_dup = False
+        for prev_words in loaded_words:
+            if not words or not prev_words:
+                continue
+            overlap = len(words & prev_words) / min(len(words), len(prev_words))
+            if overlap > 0.5:
+                is_dup = True
+                break
+        if not is_dup:
+            deduped.append((name, text))
+            loaded_words.append(words)
+
+    output = []
+    for name, text in deduped:
         output.append(f"=== {name} ===")
         output.append(text)
 
