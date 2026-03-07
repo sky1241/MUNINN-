@@ -89,13 +89,15 @@ def load_codebook(repo_path: Path = None) -> dict:
 
 # Lazy-loaded global
 _CB = None
+_CB_REPO = None
 _REPO_PATH = None
 
 
 def get_codebook():
-    global _CB
-    if _CB is None:
+    global _CB, _CB_REPO
+    if _CB is None or _CB_REPO != _REPO_PATH:
         _CB = load_codebook(_REPO_PATH)
+        _CB_REPO = _REPO_PATH
     return _CB
 
 
@@ -364,6 +366,7 @@ def save_tree(tree):
     """Save tree metadata (atomic write via tempfile + rename)."""
     import tempfile, os
     tree["updated"] = time.strftime("%Y-%m-%d")
+    TREE_DIR.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(
         dir=str(TREE_DIR), suffix=".tmp", prefix="tree_"
     )

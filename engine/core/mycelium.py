@@ -174,7 +174,7 @@ class Mycelium:
         """Remove weakest connections to stay under MAX_CONNECTIONS."""
         conns = self.data["connections"]
         sorted_keys = sorted(conns.keys(), key=lambda k: conns[k]["count"])
-        while len(conns) > self.MAX_CONNECTIONS:
+        while len(conns) > self.MAX_CONNECTIONS and sorted_keys:
             weakest = sorted_keys.pop(0)
             # Don't prune fused connections
             if weakest not in self.data["fusions"]:

@@ -180,7 +180,7 @@ jobs:
               with open(mycelium_path, encoding="utf-8") as mf:
                   data = json.load(mf)
               assert len(data["connections"]) > 0, "No connections created"
-              assert len(data["fusions"]) >= 0, "Fusions field missing"
+              assert "fusions" in data, "Fusions field missing"
               print(f"  mycelium: {len(data['connections'])} connections, {len(data['fusions'])} fusions")
 
               # Verify session .mn was created
