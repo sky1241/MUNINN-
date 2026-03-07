@@ -1406,6 +1406,101 @@ def boot(query: str = "") -> str:
     return "\n".join(output)
 
 
+def recall(query: str) -> str:
+    """P29: Mid-session memory search. Searches session index + .mn files + tree branches.
+
+    Returns the most relevant lines from past sessions matching the query.
+    Designed to be called via `muninn.py recall "search terms"` mid-conversation.
+    """
+    repo = _REPO_PATH or Path(".")
+    query_words = set(re.findall(r'[A-Za-z]{4,}', query.lower()))
+    if not query_words:
+        return "RECALL: empty query"
+
+    results = []
+
+    # 1. Search session index for relevant sessions
+    index_path = repo / ".muninn" / "session_index.json"
+    if index_path.exists():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            if isinstance(index, list):
+                for entry in index:
+                    concepts = set(entry.get("concepts", []))
+                    overlap = len(query_words & concepts)
+                    if overlap > 0:
+                        # Search tagged lines for matches
+                        for tagged in entry.get("tagged", []):
+                            tagged_words = set(re.findall(r'[A-Za-z]{4,}', tagged.lower()))
+                            if query_words & tagged_words:
+                                results.append((overlap + 1, entry.get("date", "?"), tagged))
+                        # If no tagged match, still note the session
+                        if not any(r[2].startswith(t[:20]) for r in results for t in entry.get("tagged", [])):
+                            results.append((overlap, entry.get("date", "?"),
+                                          f"[session {entry.get('file', '?')}] concepts: {', '.join(concepts & query_words)}"))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # 2. Grep .mn files for matching lines
+    sessions_dir = repo / ".muninn" / "sessions"
+    if sessions_dir.exists():
+        for mn_file in sorted(sessions_dir.glob("*.mn"), reverse=True)[:10]:
+            try:
+                text = mn_file.read_text(encoding="utf-8")
+                for line in text.split("\n"):
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    line_words = set(re.findall(r'[A-Za-z]{4,}', stripped.lower()))
+                    overlap = len(query_words & line_words)
+                    if overlap >= 2:
+                        date = mn_file.stem[:8]  # YYYYMMDD from filename
+                        results.append((overlap, date, stripped[:150]))
+            except OSError:
+                continue
+
+    # 3. Search tree branches
+    if TREE_DIR.exists():
+        for mn_file in TREE_DIR.glob("*.mn"):
+            if mn_file.name == "root.mn":
+                continue
+            try:
+                text = mn_file.read_text(encoding="utf-8")
+                for line in text.split("\n"):
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    line_words = set(re.findall(r'[A-Za-z]{4,}', stripped.lower()))
+                    overlap = len(query_words & line_words)
+                    if overlap >= 2:
+                        results.append((overlap, mn_file.stem, stripped[:150]))
+            except OSError:
+                continue
+
+    # 4. Check error/fix memory
+    error_hints = _surface_known_errors(repo, query)
+    if error_hints:
+        for hint in error_hints.split("\n"):
+            results.append((5, "errors", hint))
+
+    if not results:
+        return f"RECALL: nothing found for '{query}'"
+
+    # Sort by relevance (overlap score), dedup, take top 10
+    results.sort(key=lambda x: x[0], reverse=True)
+    seen = set()
+    output = [f"RECALL: '{query}' — {len(results)} matches"]
+    for score, source, text in results:
+        if text in seen:
+            continue
+        seen.add(text)
+        output.append(f"  [{source}] {text}")
+        if len(output) >= 12:  # max 10 results + header
+            break
+
+    return "\n".join(output)
+
+
 # ── DECODE ────────────────────────────────────────────────────────
 
 def decode_line(line: str) -> str:
@@ -2725,7 +2820,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest",
+        "ingest", "recall",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -2785,6 +2880,19 @@ def main():
         _REPO_PATH = repo
         _refresh_tree_paths()
         ingest(Path(args.file), repo)
+        return
+
+    if args.command == "recall":
+        if not args.file:
+            print("ERROR: query required. Usage: muninn.py recall \"search terms\"")
+            sys.exit(1)
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        result = recall(args.file)
+        print(result)
         return
 
     if args.command == "boot":

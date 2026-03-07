@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 26 briques vivantes (P0-P28), 2 en roadmap (P20-P21), 3 supprimees (P3), 14 bugs corriges (P10)
+Etat: 27 briques vivantes (P0-P29), 2 en roadmap (P20-P21), 3 supprimees (P3), 14 bugs corriges (P10)
 
 ## Anatomie
 
@@ -281,6 +281,11 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Regex _CLAUDE_TICS: "Let me read/check", "I'll now", "Great!", "Looking at"...
 - [x] Strip le prefix tic, garde le contenu si remainder >= 25 chars
 - [x] Phrases purement tic (< 25 chars apres strip) supprimees entierement
+
+### P29 — Recall mid-session [FAIT]
+- [x] `muninn.py recall "query"` — cherche dans sessions + arbre + errors
+- [x] Grep les .mn par overlap de mots, top 10 resultats tries par pertinence
+- [x] Permet au cousin de chercher dans sa memoire en plein milieu de session
 
 ### P20 — Mycelium cross-repo [TODO — GROS]
 - [ ] Meta-mycelium: merge les fusions de tous les repos bootstrappes
