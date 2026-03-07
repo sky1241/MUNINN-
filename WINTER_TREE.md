@@ -212,12 +212,72 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Ingest infernal-wheel: x11.6 avec L9, 8 branches auto-creees
 - [x] Rapport: docs/BENCHMARK_FULL_2026-03-07.md
 
-### P13 — pip install muninn [TODO]
+### P13 — L0 filtre tool outputs [TODO — PRIORITE 1]
+- [ ] Filtre dans parse_transcript: virer les resultats Read/Bash/git (70% du bruit)
+- [ ] Garder seulement: path lu, commande lancee, exit code, 1ere ligne output
+- [ ] Gain attendu: ratio transcripts x1.7 -> x5-x8
+- Note: plus gros levier restant — pas de la compression, du filtrage
+
+### P14 — Tags de type memoire [TODO — PRIORITE 2]
+- [ ] Tagger les .mn: decision, bug, fait, architecture
+- [ ] Detection auto par keywords (fix/bug/error -> bug, decided/chose -> decision)
+- [ ] Boot filtre par type si query contient le type
+- Ref: Mem0 (memory taxonomy), Claude-Mem (categorization)
+
+### P15 — Query expansion mycelium [TODO — PRIORITE 3]
+- [ ] Au boot, elargir la query avec concepts co-occurrents du mycelium
+- [ ] Ex: query "glyphs" -> expand "glyphs spectral math symbols"
+- [ ] ~20 lignes de code, gain retrieval sans effort
+- Note: le mycelium sait deja quoi va avec quoi
+
+### P16 — Session log dans root.mn [TODO — PRIORITE 4]
+- [ ] A chaque feed, ajouter 1 ligne au root: "03-07: fixed 14 bugs, added ingest"
+- [ ] Garder les 10 dernieres sessions (auto-prune)
+- [ ] Au boot le cousin voit instantanement l'historique recent
+
+### P17 — Compression code blocks [TODO]
+- [ ] Dans transcripts, garder signatures de fonctions, virer le corps
+- [ ] Garder paths + taille, virer le contenu brut
+- [ ] Gain gros sur sessions avec beaucoup de lecture de code
+
+### P18 — Memoire erreurs/fixes [TODO]
+- [ ] Tagger les patterns erreur + solution trouvee
+- [ ] Au boot, si meme erreur pattern detecte, surfacer le fix
+- [ ] Stack Overflow personnel
+
+### P19 — Dedup branches au boot [TODO]
+- [ ] Si 2 branches ont >50% overlap de contenu, charger que la plus recente
+- [ ] Utiliser TF-IDF cosine entre branches pour detecter
+- [ ] Evite les doublons dans le contexte
+
+### P20 — Mycelium cross-repo [TODO]
+- [ ] Meta-mycelium: merge les fusions de tous les repos bootstrappes
+- [ ] Quand on bosse sur repo A, concepts de repo B disponibles
+- [ ] Les "lianes" entre projets (cf CROSS_PROJECTS_ROADMAP Yggdrasil)
+
+### P21 — pip install muninn [TODO]
 - [ ] pyproject.toml + setup
 - [ ] Entry point CLI: `muninn bootstrap .`
 - [ ] README install instructions
 - [ ] Publier sur PyPI
-- Note: pas complique, ~1h de travail, surtout du packaging
+
+### Concurrence mise a jour (mars 2026)
+- Mem0 (90K stars, $24M YC): graph+vector+KV, memory taxonomy, hosted service
+- MemOS v2.0 "Stardust": Memory OS, MemCube abstraction, 159% vs OpenAI memory
+- Claude-Mem (21.5K stars): SQLite + Claude API, ~x10, hooks lifecycle
+- SimpleMem (jan 2026): semantic lossless, +26.4% F1, 30x fewer tokens
+- Always On Memory Agent (Google, mars 2026): SQLite + Gemini, no vector DB
+- LongCodeZip (ASE 2025): coarse-then-fine pour code, x5.6
+- EHPC (NeurIPS 2025 Spotlight): evaluator heads, +40% QA, training-free
+- PCToolkit (IJCAI 2025): benchmark standard prompt compression
+
+Ce que Muninn a que les autres n'ont pas:
+- 9 couches empilees (regex + BERT + LLM), pas juste 1 technique
+- Mycelium vivant (codebook qui apprend par co-occurrence)
+- L-system fractal (memes regles a chaque niveau)
+- Secret filtering
+- Zero dependance obligatoire (L1-L7 regex only), GPU et API optionnels
+- Bootstrap one-command (mycelium + root.mn + WINTER_TREE + hooks)
 
 ## Pivots de la session 2026-03-06
 
