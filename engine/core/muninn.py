@@ -1572,6 +1572,9 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                 texts.append(content)
                 continue
 
+            if not isinstance(content, list):
+                continue
+
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
                     text = block.get("text", "")

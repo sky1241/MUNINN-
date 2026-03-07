@@ -187,7 +187,9 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Scan 2: fed_transcripts.json crash sur JSON corrompu -> reset gracieux
 - [x] Scan 2: test_l8_ordering temp file leak -> try/finally
 - [x] Scan 2: CLAUDE.md disait L9 pas teste (faux depuis 2026-03-07)
-- Total: 9 bugs corriges, 0 restant
+- [x] Scan 3: parse_transcript TypeError si content ni str ni list
+- [x] Scan 3: mycelium.json crash sur JSON corrompu -> re-init gracieux
+- Total: 11 bugs corriges, 0 restant (3 scans complets)
 
 ## Pivots de la session 2026-03-06
 

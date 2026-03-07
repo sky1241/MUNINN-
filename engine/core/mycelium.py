@@ -47,8 +47,12 @@ class Mycelium:
     def _load(self) -> dict:
         """Load mycelium from disk or create fresh."""
         if self.mycelium_path.exists():
-            with open(self.mycelium_path, encoding="utf-8") as f:
-                return json.load(f)
+            try:
+                with open(self.mycelium_path, encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                import sys
+                print("WARNING: mycelium.json corrupted, re-initializing", file=sys.stderr)
         return {
             "version": 1,
             "repo": self.repo_path.name,
