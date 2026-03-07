@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 8 briques vivantes, 3 supprimees (nettoyage P3)
+Etat: 9 briques vivantes, 3 supprimees (nettoyage P3)
 
 ## Anatomie
 
@@ -24,7 +24,7 @@ Etat: 8 briques vivantes, 3 supprimees (nettoyage P3)
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B2 | muninn.py v0.8 | OK | Moteur: 9 couches compression, bootstrap, tree, boot, feed, verify |
+| B2 | muninn.py v0.9 | OK | Moteur: 9 couches compression + retrieval intelligent (TF-IDF + scoring) |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Memoire vivante |
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
@@ -125,11 +125,15 @@ La partie dure (comprendre QUOI construire) est faite.
 - ATTENTION: sur texte pre-compresse, L8 perd 72% des faits (rate=0.5)
 - TODO: ajuster le rate ou changer l'ordre (L8 avant L1-L7)
 
-#### Brique 3 : Resume LLM comme Layer 9 [CODE — PAS TESTE]
+#### Brique 3 : Resume LLM comme Layer 9 [FAIT — TESTE]
 - [x] Claude Haiku resume via API Anthropic (pip install anthropic)
 - [x] Fallback gracieux si pas de cle API ou pas de SDK
 - [x] Seuil: seulement si >4K chars
-- PAS ENCORE EXECUTE — zero mesure de ratio ou fact retention
+- [x] L9 ajoute a compress_file (pas seulement compress_transcript)
+- [x] Fallback registre Windows pour API key (setx != process env)
+- [x] Teste sur OpenAlex: 50 papers x5.2 ($0.024), 306 papers x4.0 ($0.13)
+- [x] SOL.md full pipeline L1-L7+L9: x7.7 (20K->2.6K chars)
+- [x] Bootstrap HSBC: x5.4 moyen (LOGIQUE x9.6, METHODOLOGIE x13.8, ARBRE x11.4)
 
 Pipeline complet (9 couches):
   L1: markdown strip | L2: filler words | L3: phrase compression
@@ -148,6 +152,23 @@ Ce que Muninn a que les autres n'ont pas:
 - L-system fractal (memes regles a chaque niveau)
 - Secret filtering
 - Fonctionne sans dependances (L1-L7 regex only), GPU et API optionnels
+
+### P8 — Retrieval intelligent (v0.9) [FAIT]
+- [x] TF-IDF cosine similarity dans boot() — remplace le tag matching basique
+  - Python pur (math + Counter), zero dependance
+  - Calcule la similarite entre query et contenu reel des branches .mn
+- [x] Scoring Generative Agents (Park et al. 2023):
+  score = 0.2*recency + 0.2*importance + 0.6*relevance(query)
+  - Recency: decay lineaire 90j depuis last_access
+  - Importance: log(access_count)
+  - Relevance: TF-IDF cosine similarity
+- [x] Auto-segmentation dans feed_from_hook():
+  - grow_branches_from_session() decoupe les .mn par ## headers
+  - Chaque section = une branche avec tags auto-extraits
+  - Merge si >50% overlap de tags avec branche existante
+  - Fallback chunking si pas de headers
+  - L'arbre grossit automatiquement a chaque session
+- [x] Teste: "binance trading" -> branches HSBC, "scan glyph" -> branches Yggdrasil
 
 ## Pivots de la session 2026-03-06
 
@@ -172,7 +193,10 @@ Muninn = premier outil construit depuis le cote boucher.
 ## Refs
 - Lindenmayer (1968) — L-Systems
 - Prusinkiewicz (1990) — Algorithmic Beauty of Plants
+- Park et al. (2023) — Generative Agents: memory scoring (recency + importance + relevance)
+- Packer et al. (2023) — MemGPT: virtual context management (OS metaphor)
 - LLM-Codebook (2025) — codebooks appris > codebooks manuels
 - Huff-LLM (2025) — Huffman sur poids LLM
 - GQ-VAE (2025) — tokenization variable-length
 - LLMLingua (2024) — compression de prompts par self-information
+- KVzip (2025) — KV-cache compression x3-4 (modele-side, complementaire Muninn)
