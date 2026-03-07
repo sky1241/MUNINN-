@@ -299,8 +299,25 @@ def effective_budget(node: dict) -> int:
 
 # ── TREE STRUCTURE ────────────────────────────────────────────────
 
+def _get_tree_dir():
+    """Tree lives in target repo's .muninn/tree/, not in Muninn's own memory/."""
+    if _REPO_PATH:
+        return _REPO_PATH / ".muninn" / "tree"
+    return MUNINN_ROOT / "memory"
+
+def _get_tree_meta():
+    return _get_tree_dir() / "tree.json"
+
+# Legacy globals — used everywhere, recomputed via properties
 TREE_DIR = MUNINN_ROOT / "memory"
 TREE_META = TREE_DIR / "tree.json"
+
+
+def _refresh_tree_paths():
+    """Update TREE_DIR/TREE_META globals after _REPO_PATH is set."""
+    global TREE_DIR, TREE_META
+    TREE_DIR = _get_tree_dir()
+    TREE_META = _get_tree_meta()
 
 
 def init_tree():
@@ -1883,6 +1900,7 @@ def main():
     # Set repo path for local codebook loading
     if args.repo:
         _REPO_PATH = Path(args.repo).resolve()
+        _refresh_tree_paths()
 
     if args.command == "init":
         init_tree()
@@ -1903,11 +1921,15 @@ def main():
         if not args.file:
             print("ERROR: repo path required. Usage: muninn.py bootstrap <repo-path>")
             sys.exit(1)
+        _REPO_PATH = Path(args.file).resolve()
+        _refresh_tree_paths()
         bootstrap_mycelium(Path(args.file))
         return
 
     if args.command == "feed":
         repo = Path(args.repo or args.file or ".").resolve()
+        _REPO_PATH = repo
+        _refresh_tree_paths()
         if args.history:
             feed_history(repo)
         elif args.file and Path(args.file).suffix == ".jsonl":
@@ -1921,6 +1943,12 @@ def main():
         return
 
     if args.command == "boot":
+        # If no --repo, try to use current dir if it has .muninn/
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
         result = boot(args.file or "")
         print(result)
         return
