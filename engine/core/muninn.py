@@ -1476,6 +1476,226 @@ def bootstrap_mycelium(repo_path: Path):
         for key, rule in list(rules.items())[:15]:
             print(f"    {rule['concepts']} -> '{rule['form']}' (strength={rule['strength']})")
 
+    # Generate root.mn (SOL.mn format) + WINTER_TREE.md + hooks
+    generate_root_mn(repo_path, file_count, m)
+    generate_winter_tree(repo_path, file_count, m)
+    install_hooks(repo_path)
+
+
+def generate_root_mn(repo_path: Path, file_count: int, mycelium):
+    """Generate root.mn in dense machine-optimal format (SOL.mn template)."""
+    repo_path = repo_path.resolve()
+
+    # Detect project info
+    name = repo_path.name
+    total_lines = 0
+    file_map = []
+    langs = Counter()
+    ext_map = {
+        ".py": "python", ".rs": "rust", ".ts": "typescript", ".js": "javascript",
+        ".java": "java", ".c": "c", ".h": "c", ".go": "go", ".rb": "ruby",
+        ".md": "markdown", ".toml": "toml", ".yaml": "yaml", ".yml": "yaml",
+    }
+    skip_dirs = {".git", "node_modules", "__pycache__", "venv", ".venv",
+                 "dist", "build", ".muninn", "data", "output", "cache"}
+
+    for f in sorted(repo_path.rglob("*")):
+        if not f.is_file():
+            continue
+        parts = f.relative_to(repo_path).parts
+        if any(p.startswith(".") or p in skip_dirs for p in parts):
+            continue
+        ext = f.suffix.lower()
+        if ext in ext_map:
+            langs[ext_map[ext]] += 1
+        try:
+            lines = len(f.read_text(encoding="utf-8", errors="ignore").split("\n"))
+            total_lines += lines
+            rel = str(f.relative_to(repo_path)).replace("\\", "/")
+            if lines > 50 and ext in ext_map:
+                file_map.append((rel, lines))
+        except (PermissionError, OSError):
+            continue
+
+    # Sort by size, keep top 15
+    file_map.sort(key=lambda x: x[1], reverse=True)
+    file_map = file_map[:15]
+
+    # Main language
+    main_lang = langs.most_common(1)[0][0] if langs else "unknown"
+
+    # Detect deps from common files
+    deps = []
+    for dep_file in ["requirements.txt", "pyproject.toml", "package.json", "Cargo.toml"]:
+        if (repo_path / dep_file).exists():
+            deps.append(dep_file)
+
+    # Entry point guess (largest code file)
+    code_exts = {".py", ".rs", ".ts", ".js", ".java", ".c", ".go"}
+    entry = next((f for f, l in file_map if Path(f).suffix in code_exts), file_map[0][0] if file_map else name)
+
+    # Top mycelium concepts
+    top_concepts = []
+    conns = mycelium.data.get("connections", {})
+    concept_count = Counter()
+    for key, conn in conns.items():
+        parts = key.split("|")
+        if len(parts) == 2:
+            for p in parts:
+                concept_count[p] += conn["count"]
+    top_concepts = [c for c, _ in concept_count.most_common(10)]
+
+    # Recent commits
+    recent = []
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "log", "--oneline", "-5", "--format=%as %s"],
+            cwd=str(repo_path), capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                if line.strip():
+                    recent.append(line.strip())
+    except Exception:
+        pass
+
+    # Build root.mn
+    fusions = len(mycelium.data.get("fusions", {}))
+    lines = [
+        f"P:{name}|{main_lang}|{total_lines}L|{file_count}files",
+        f"E:{entry}",
+        f"S:bootstrap|{time.strftime('%Y-%m-%d')}|mycelium:{len(conns)}conn,{fusions}fusions",
+        "",
+        "F:",
+    ]
+    for fpath, flines in file_map:
+        lines.append(f"  {fpath} {flines}L")
+
+    if top_concepts:
+        lines.append("")
+        lines.append(f"K:{','.join(top_concepts)}")
+
+    if recent:
+        lines.append("")
+        lines.append("R:")
+        for r in recent:
+            lines.append(f"  {r}")
+
+    content = "\n".join(lines)
+
+    # Write to tree (load_tree FIRST to avoid init_tree overwriting root.mn)
+    _refresh_tree_paths()
+    TREE_DIR.mkdir(parents=True, exist_ok=True)
+    tree = load_tree()
+    root_path = TREE_DIR / "root.mn"
+    root_path.write_text(content, encoding="utf-8")
+    tree["nodes"]["root"]["lines"] = len(lines)
+    tree["nodes"]["root"]["last_access"] = time.strftime("%Y-%m-%d")
+    tree["nodes"]["root"]["tags"] = top_concepts[:7]
+    save_tree(tree)
+
+    from tokenizer import token_count
+    tok = token_count(content)
+    print(f"\n  root.mn generated: {len(lines)} lines, {tok} tokens")
+    print(f"  Format: SOL.mn (machine-optimal)")
+
+
+def generate_winter_tree(repo_path: Path, file_count: int, mycelium):
+    """Generate WINTER_TREE.md (human-readable project overview)."""
+    repo_path = repo_path.resolve()
+    name = repo_path.name
+
+    # Detect structure
+    dirs = set()
+    code_files = 0
+    doc_files = 0
+    for f in repo_path.rglob("*"):
+        if not f.is_file():
+            continue
+        parts = f.relative_to(repo_path).parts
+        skip = {".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build", ".muninn"}
+        if any(p in skip for p in parts):
+            continue
+        if len(parts) > 1:
+            dirs.add(parts[0])
+        ext = f.suffix.lower()
+        if ext in {".py", ".rs", ".ts", ".js", ".java", ".c", ".go"}:
+            code_files += 1
+        elif ext in {".md", ".txt"}:
+            doc_files += 1
+
+    conns = len(mycelium.data.get("connections", {}))
+    fusions = len(mycelium.data.get("fusions", {}))
+
+    content = f"""# {name} — Winter Tree
+
+Type: Auto-genere par Muninn bootstrap
+Date: {time.strftime('%Y-%m-%d')}
+
+## Structure
+
+- Fichiers scannes: {file_count}
+- Dossiers principaux: {', '.join(sorted(dirs)[:10])}
+- Code: {code_files} fichiers
+- Docs: {doc_files} fichiers
+
+## Mycelium
+
+- Connexions: {conns}
+- Fusions: {fusions}
+
+## TODO
+
+- [ ] Verifier que le bootstrap a capture les bons concepts
+- [ ] Lancer `muninn.py ingest <docs>` pour les documents de reference
+- [ ] Utiliser le projet normalement — l'arbre grandit tout seul
+
+## Notes
+
+Ce fichier a ete genere automatiquement par `muninn.py bootstrap`.
+Modifie-le librement — c'est ta carte de route.
+"""
+
+    wt_path = repo_path / "WINTER_TREE.md"
+    if not wt_path.exists():
+        wt_path.write_text(content, encoding="utf-8")
+        print(f"  WINTER_TREE.md generated for human")
+    else:
+        print(f"  WINTER_TREE.md exists, skipped (not overwriting)")
+
+
+def install_hooks(repo_path: Path):
+    """Install Claude Code hooks for automatic feed on PreCompact/SessionEnd."""
+    repo_path = repo_path.resolve()
+    muninn_engine = Path(__file__).resolve()
+    claude_dir = repo_path / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    settings_path = claude_dir / "settings.local.json"
+
+    feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
+    hooks_config = {
+        "hooks": {
+            "PreCompact": [{"type": "command", "command": feed_cmd}],
+            "SessionEnd": [{"type": "command", "command": feed_cmd}],
+        }
+    }
+
+    if settings_path.exists():
+        try:
+            existing = json.load(open(settings_path, encoding="utf-8"))
+            if "hooks" in existing:
+                print(f"  Hooks already configured, skipped")
+                return
+            existing["hooks"] = hooks_config["hooks"]
+            hooks_config = existing
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    with open(settings_path, "w", encoding="utf-8") as f:
+        json.dump(hooks_config, f, indent=2, ensure_ascii=False)
+    print(f"  Hooks installed: PreCompact + SessionEnd")
+
 
 # ── VERIFY (compression quality check) ────────────────────────────
 
