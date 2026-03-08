@@ -2,7 +2,7 @@
 
 > *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression memoire pour LLM. 27 features, 9 couches de compression, zero dependance obligatoire.
+Moteur de compression memoire pour LLM. 31 features, 8 couches de compression (15 filtres), zero dependance obligatoire.
 
 ## Le probleme
 
@@ -41,20 +41,18 @@ et les recharge intelligemment au boot suivant.
 ## Pipeline de compression (15 filtres)
 
 ```
-L0: tool output strip (x3.9)     <- le plus gros gain, 74% du transcript est du bruit
+L0: tool output strip (x3.5)     <- le plus gros gain, 74% du transcript est du bruit
 L1: markdown strip                L2: filler words
 L3: phrase compression            L4: number shortening
 L5: universal rules               L6: mycelium (abbreviations apprises)
-L7: fact extraction               L8: LLMLingua-2 (BERT, optionnel)
-L9: LLM self-compress (Haiku API, optionnel)
+L7: fact extraction               L9: LLM self-compress (Haiku API, optionnel)
 +P24: causal preservation         +P25: priority survival
 +P26: line dedup                  +P27: read dedup
 +P28: Claude tics filter
 ```
 
 - **L0-L7** : regex pur, zero dependance, instantane
-- **L8** : `pip install llmlingua` — BERT ~1GB, CPU
-- **L9** : `pip install anthropic` — Claude Haiku via API (x5-x7 additionnel)
+- **L9** : `pip install anthropic` — Claude Haiku via API (x2-x5 additionnel)
 
 ## Le mycelium (codebook vivant)
 
@@ -117,9 +115,6 @@ python engine/core/muninn.py bootstrap .
 # Token counting reel (recommande)
 pip install tiktoken
 
-# Optionnel: L8 (BERT compression)
-pip install llmlingua
-
 # Optionnel: L9 (LLM self-compress)
 pip install anthropic
 export ANTHROPIC_API_KEY=sk-...
@@ -142,8 +137,8 @@ Sinon, ajouter dans `.claude/settings.local.json` :
 
 ```
 engine/core/
-  muninn.py        # Moteur principal (2965 lignes, 48 fonctions)
-  mycelium.py      # Tracker co-occurrences (485 lignes)
+  muninn.py        # Moteur principal (2958 lignes, 48 fonctions)
+  mycelium.py      # Tracker co-occurrences (1034 lignes, federe + meta)
   tokenizer.py     # Wrapper tiktoken
 memory/
   tree.json        # Arbre L-system

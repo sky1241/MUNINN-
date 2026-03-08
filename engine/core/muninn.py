@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Muninn v0.8 — Moteur de compression memoire LLM.
+Muninn v0.9 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
-8 couches de compression:
-  L1-L7: Regex (markdown, filler, phrases, nombres, rules, mycelium, facts)
-  L9: LLM self-compress (Claude API, optional, pip install anthropic)
+Pipeline: L0 (tool strip) + L1-L7 (regex) + L9 (LLM, optional).
+15 filtres au total avec P13-P28 (dedup, tags, causal, priority, tics).
 
 Usage:
     python muninn.py bootstrap <repo-path>      # Cold start: nourrit le mycelium
@@ -2809,7 +2808,7 @@ def ingest(filepath: Path, repo_path: Path):
 def main():
     global _REPO_PATH
 
-    parser = argparse.ArgumentParser(description="Muninn v0.8 — Universal memory compression")
+    parser = argparse.ArgumentParser(description="Muninn v0.9 — Universal memory compression")
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",

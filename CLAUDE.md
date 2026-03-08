@@ -28,8 +28,9 @@ Un hook se declenche automatiquement:
 ### La session d'apres
 Le cousin qui prend la suite a le .mn compresse. Le cycle continue.
 
-## Les 9 couches de compression
+## Les 8 couches de compression
 ```
+L0: tool output strip (x3.5 — vire 74% du bruit d'un transcript)
 L1: markdown strip (headers, formatting)
 L2: filler words (supprime le bruit: "basically", "actually"...)
 L3: phrase compression (raccourcit les formulations)
@@ -37,11 +38,11 @@ L4: number shortening (garde les chiffres, vire le texte autour)
 L5: universal rules (COMPLET->done, EN COURS->wip)
 L6: mycelium (abbreviations apprises par co-occurrence)
 L7: fact extraction (nombres, dates, commits, metriques)
-L8: LLMLingua-2 [optionnel] — BERT scorer, pip install llmlingua
 L9: LLM self-compress [optionnel] — Claude Haiku resume via API
 ```
-L1-L7 = regex pur, zero dependance, instantane.
-L8-L9 = optionnels, gain additionnel pas encore mesure proprement.
+L0-L7 = regex pur, zero dependance, instantane.
+L9 = optionnel, pip install anthropic, x2-x5 additionnel.
++7 filtres additionnels: P17 code blocks, P24 causal, P25 priority, P26-P27 dedup, P28 tics.
 
 ## Le mycelium (le champignon)
 Fichier `.muninn/mycelium.json` — reseau vivant de co-occurrences.
@@ -73,9 +74,11 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 ```
 
 ## Etat du projet (mars 2026)
-- P0-P7: FAIT (mycelium, plomberie, compresseur 9 couches, arbre, sessions)
-- Layer 9 (LLM): teste — x5.2 (50 papers), x4.0 (306 papers), x7.7 (SOL.md), pip install anthropic requis
-- Benchmark: FAIT — 37/40 questions factuelles (92%), mesure tiktoken
+- 31 features (P0-P31), 8 couches compression, mycelium federe, meta-mycelium cross-repo
+- muninn.py: v0.9, 2958 lignes, 48 fonctions
+- mycelium.py: 1034 lignes (co-occurrence + P20 federe + P20b meta)
+- L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
+- Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
 - Voir WINTER_TREE.md pour le detail complet
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
@@ -101,13 +104,12 @@ Ce qui est PROUVE (mesure tiktoken, benchmark 40 questions):
 - Benchmark: 37/40 questions factuelles retrouvees (92%)
 - Les anciens chiffres (x7.4, x2.5) etaient FAUX — bases sur len(text)//4, ecart de ~40%
 
-Ce qui est CODE mais PAS MESURE PROPREMENT:
-- L8 (LLMLingua BERT): ratio additionnel variable, perd des faits sur texte pre-compresse (28%)
-- L9 (Haiku via API): pas tourne une seule fois
-- L8+L9 combinés: aucune mesure fiable
+Ce qui est PROUVE avec L9 (Haiku API, 230 fichiers, 4 repos):
+- Pipeline complet L1-L7+L9: x4.4 moyen (855K->196K tok), cout $0.21
+- Range: x2.3 (deja compact) a x14.0 (verbeux)
+- L8 (LLMLingua BERT): SUPPRIME — perdait 72% des faits sur texte pre-compresse
 
-Sois honnete avec Sky si il te demande. Les vrais chiffres sont ci-dessus.
-Les anciens x7.4 et x12 etaient bases sur des estimations fausses.
+Les anciens x7.4 et x12 etaient bases sur des estimations fausses (len//4 au lieu de tiktoken).
 
 ### Notre "langue" — ce que ca veut dire vraiment
 
