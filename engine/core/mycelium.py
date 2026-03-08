@@ -663,6 +663,157 @@ class Mycelium:
         bridges.sort(key=lambda x: x[3], reverse=True)
         return bridges
 
+    # ── P20b: Meta-mycelium sync ──────────────────────────────────
+
+    @staticmethod
+    def meta_path() -> Path:
+        """Path to the shared meta-mycelium (~/.muninn/meta_mycelium.json)."""
+        return Path.home() / ".muninn" / "meta_mycelium.json"
+
+    def sync_to_meta(self):
+        """Push local connections to the shared meta-mycelium.
+
+        Merge strategy:
+        - counts: take max (not sum, to avoid inflation on repeated syncs)
+        - zones: union
+        - first_seen: earliest
+        - last_seen: latest
+        - fusions: merge if exists in meta, add if new
+        """
+        meta_p = self.meta_path()
+        meta_p.parent.mkdir(exist_ok=True)
+
+        # Load or create meta
+        if meta_p.exists():
+            try:
+                with open(meta_p, encoding="utf-8") as f:
+                    meta = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                meta = None
+        else:
+            meta = None
+
+        if meta is None:
+            meta = {
+                "version": 1,
+                "type": "meta",
+                "created": time.strftime("%Y-%m-%d"),
+                "updated": time.strftime("%Y-%m-%d"),
+                "repos": [],
+                "connections": {},
+                "fusions": {},
+            }
+
+        # Track which repos have synced
+        if self.repo_path.name not in meta.get("repos", []):
+            meta.setdefault("repos", []).append(self.repo_path.name)
+
+        meta["updated"] = time.strftime("%Y-%m-%d")
+
+        # Merge connections
+        local_conns = self.data["connections"]
+        meta_conns = meta["connections"]
+        zone = self.zone
+
+        for key, conn in local_conns.items():
+            if key not in meta_conns:
+                meta_conns[key] = {
+                    "count": conn["count"],
+                    "first_seen": conn.get("first_seen", time.strftime("%Y-%m-%d")),
+                    "last_seen": conn.get("last_seen", time.strftime("%Y-%m-%d")),
+                    "zones": [zone],
+                }
+            else:
+                mc = meta_conns[key]
+                mc["count"] = max(mc["count"], conn["count"])
+                # Merge dates
+                if conn.get("first_seen", "9") < mc.get("first_seen", "9"):
+                    mc["first_seen"] = conn["first_seen"]
+                if conn.get("last_seen", "0") > mc.get("last_seen", "0"):
+                    mc["last_seen"] = conn["last_seen"]
+                # Merge zones
+                if "zones" not in mc:
+                    mc["zones"] = []
+                if zone not in mc["zones"]:
+                    mc["zones"].append(zone)
+
+        # Merge fusions
+        local_fusions = self.data.get("fusions", {})
+        meta_fusions = meta.setdefault("fusions", {})
+        for key, fusion in local_fusions.items():
+            if key not in meta_fusions:
+                meta_fusions[key] = dict(fusion)
+            else:
+                meta_fusions[key]["strength"] = max(
+                    meta_fusions[key]["strength"], fusion["strength"]
+                )
+
+        # Atomic write
+        import tempfile, os
+        fd, tmp = tempfile.mkstemp(dir=str(meta_p.parent), suffix=".tmp")
+        try:
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, str(meta_p))
+        except Exception:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+
+        return len(local_conns)
+
+    def pull_from_meta(self, query_concepts: list[str] = None, max_pull: int = 500):
+        """Pull relevant connections from meta-mycelium into local.
+
+        If query_concepts given, only pulls connections involving those concepts.
+        Otherwise pulls top connections by count.
+        Does NOT overwrite local data — only adds what's missing.
+        """
+        meta_p = self.meta_path()
+        if not meta_p.exists():
+            return 0
+
+        try:
+            with open(meta_p, encoding="utf-8") as f:
+                meta = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            return 0
+
+        meta_conns = meta.get("connections", {})
+        local_conns = self.data["connections"]
+        pulled = 0
+
+        if query_concepts:
+            # Pull connections involving query concepts
+            query_set = {c.lower().strip() for c in query_concepts}
+            candidates = []
+            for key, conn in meta_conns.items():
+                a, b = key.split("|")
+                if a in query_set or b in query_set:
+                    candidates.append((key, conn))
+            # Sort by count descending
+            candidates.sort(key=lambda x: x[1]["count"], reverse=True)
+            candidates = candidates[:max_pull]
+        else:
+            # Pull top connections
+            candidates = sorted(
+                meta_conns.items(), key=lambda x: x[1]["count"], reverse=True
+            )[:max_pull]
+
+        for key, conn in candidates:
+            if key not in local_conns:
+                local_conns[key] = dict(conn)
+                pulled += 1
+
+        # Also pull fusions for pulled connections
+        meta_fusions = meta.get("fusions", {})
+        local_fusions = self.data.setdefault("fusions", {})
+        for key in list(local_conns.keys()):
+            if key in meta_fusions and key not in local_fusions:
+                local_fusions[key] = dict(meta_fusions[key])
+
+        return pulled
+
     def status(self) -> str:
         """Print mycelium status."""
         conns = self.data["connections"]
@@ -755,7 +906,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Muninn Mycelium — living compression network")
-    parser.add_argument("command", choices=["status", "observe", "decay", "simulate", "zones", "detect"])
+    parser.add_argument("command", choices=["status", "observe", "decay", "simulate", "zones", "detect", "sync"])
     parser.add_argument("repo", help="Path to the repo")
     parser.add_argument("--text", help="Text to observe (for observe command)")
     parser.add_argument("--file", help="File to observe (for observe command)")
@@ -864,6 +1015,19 @@ def main():
                 print(f"    Top: {', '.join(members[:15])}")
         else:
             print("Not enough connections to detect zones (need 10+)")
+
+    elif args.command == "sync":
+        pushed = m.sync_to_meta()
+        meta_p = Mycelium.meta_path()
+        print(f"Synced {pushed} connections from {m.data['repo']} -> {meta_p}")
+        # Show meta status
+        if meta_p.exists():
+            import json as _json
+            with open(meta_p, encoding="utf-8") as f:
+                meta = _json.load(f)
+            repos = meta.get("repos", [])
+            total = len(meta.get("connections", {}))
+            print(f"Meta: {total} connections from {len(repos)} repos ({', '.join(repos)})")
 
 
 if __name__ == "__main__":

@@ -1279,7 +1279,13 @@ def boot(query: str = "") -> str:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             from mycelium import Mycelium
             m = Mycelium(_REPO_PATH or Path("."))
+
+            # P20b: Pull relevant cross-repo knowledge from meta-mycelium
             query_words = re.findall(r'[A-Za-zÀ-ÿ]{3,}', query.lower())
+            pulled = m.pull_from_meta(query_concepts=query_words, max_pull=200)
+            if pulled > 0:
+                m.save()
+
             expanded = set(query_words)
             for word in query_words:
                 for related, strength in m.get_related(word, top_n=3):
@@ -2622,6 +2628,16 @@ def feed_from_hook(repo_path: Path):
     tree = load_tree()
     refresh_tree_metadata(tree)
     save_tree(tree)
+
+    # 5. P20b: Sync to meta-mycelium (cross-repo memory)
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from mycelium import Mycelium
+        m = Mycelium(repo_path)
+        pushed = m.sync_to_meta()
+        print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+    except Exception as e:
+        print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
 
 
 def feed_history(repo_path: Path):
