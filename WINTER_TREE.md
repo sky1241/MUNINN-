@@ -2,7 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 29 briques vivantes (P0-P31), 2 en roadmap (P20, P21), 3 supprimees (P3), 14 bugs corriges (P10)
+Etat: 39 briques vivantes (P0-P31 + 8 shopping list), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 3348 lignes, 56 fonctions
 
 ## Anatomie
 
@@ -381,6 +382,27 @@ Recherche complete: 20 techniques evaluees, 8 implementees, 1 impasse, 11 skip.
 Skip: SemHash (NCD does it), token-reducer (redundant L3+L5+L6), Selective-Context (too heavy),
 Zstd (wrong level), A-MEM (=mycelium), ACON (needs eval infra), Word Graph (pre-compressed text).
 
+Benchmark cross-repo (infernal-wheel UX Bibles, pipeline L1-L7+L9):
+  | Fichier | Original | Compresse | Ratio | Lignes |
+  |---------|----------|-----------|-------|--------|
+  | WEARABLE.md | 134K tok | 6.9K tok | x19.4 | 12K->214 |
+  | DESIGN_TREE.md | 14K tok | 1.1K tok | x12.7 | 1.2K->147 |
+  | MOBILE.md | 130K tok | 15.5K tok | x8.4 | 13.6K->846 |
+  | WEB.md | 126K tok | 16.4K tok | x7.7 | 12.3K->1.8K |
+  Contradiction resolution: 40 stale lines found across 4 files.
+  Range: x7.7 (narratif) a x19.4 (specs structurees).
+
+### L10 — Cue Distillation (le move Carmack) [TODO — RECHERCHE]
+Insight: le LLM connait deja ~80% de ce qu'on stocke (syntaxe, APIs, patterns).
+On ne stocke que les CUES (indices de rappel) + les faits NOVELS (nombres, decisions, commits).
+Theorie: Method of Loci (500 BC) + Schema Theory (Bartlett 1932) + Predictive Coding (Rao & Ballard 1999).
+Personne n'a applique ca a la compression memoire LLM.
+Gain potentiel: x2-x5 en plus de L1-L7+L9 (x50+ total sur verbeux).
+- [ ] Classifier NOVEL vs KNOWN (heuristique novelty score)
+- [ ] Cue generator (KNOWN -> minimal retrieval cue)
+- [ ] Benchmark: facts preserved apres cue distillation
+- [ ] Option Haiku pour cas ambigus (hybride)
+
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
 - [ ] Entry point CLI: `muninn bootstrap .`
@@ -435,3 +457,8 @@ Muninn = premier outil construit depuis le cote boucher.
 - GQ-VAE (2025) — tokenization variable-length
 - LLMLingua (2024) — compression de prompts par self-information
 - KVzip (2025) — KV-cache compression x3-4 (modele-side, complementaire Muninn)
+- Bartlett (1932) — Schema Theory: memory stores schemas + deviations, not verbatim
+- Rao & Ballard (1999) — Predictive Coding: brain stores only prediction errors
+- LAMA Probes (Facebook 2019) — cloze tests for parametric knowledge assessment
+- Selective-Context (EMNLP 2023) — self-information pruning (token-level, syntactic)
+- Prompt Compression Survey (NAACL 2025) — taxonomy: hard/soft prompt methods

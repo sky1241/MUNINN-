@@ -1093,6 +1093,266 @@ def _resolve_contradictions(text: str) -> str:
     return "\n".join(result_lines)
 
 
+# ── L10: CUE DISTILLATION ─────────────────────────────────────────
+# Theory: Method of Loci (500 BC) + Schema Theory (Bartlett 1932)
+# + Predictive Coding (Rao & Ballard 1999).
+# The LLM already knows ~80% of what we store (APIs, syntax, patterns).
+# Only store NOVEL facts (numbers, decisions, commits) + minimal CUES
+# for generic knowledge that the LLM can reconstruct from memory.
+
+# Regex patterns for detecting novel (project-specific) content
+_NOVEL_PATTERNS = [
+    re.compile(r'\d{4}[-/]\d{2}[-/]\d{2}'),                    # dates
+    re.compile(r'[a-f0-9]{7,40}'),                               # commit hashes
+    re.compile(r'x\d+\.?\d*'),                                   # ratios (x4.1, x19.4)
+    re.compile(r'\$\d+'),                                        # costs ($0.024)
+    re.compile(r'\d+\.?\d*[KMBkm](?:\b|$)'),                    # quantities (348M, 65K)
+    re.compile(r'\d+%'),                                         # percentages
+    re.compile(r'v\d+\.\d+'),                                    # versions (v0.9)
+    re.compile(r'P\d{1,2}\b'),                                   # project phases (P13)
+    re.compile(r'[A-Z][a-z]+(?:[A-Z][a-z]+)+'),                 # CamelCase identifiers
+    re.compile(r'(?<!\b[ei])[\w/\\]{2,}\.\w{1,4}\b'),             # file paths (skip e.g/i.e)
+    re.compile(r'Sharpe|BLEU|F1|accuracy|precision|recall', re.I),  # metrics names
+]
+
+# Patterns indicating generic/known knowledge (LLM can reconstruct)
+_KNOWN_PATTERNS = [
+    re.compile(r'^(?:according to|as per|following|based on)\b', re.I),
+    re.compile(r'^(?:the|a|an)\s+(?:standard|default|typical|common|recommended)\b', re.I),
+    re.compile(r'\bMaterial Design\b|\bWCAG\b|\bApple HIG\b', re.I),
+    re.compile(r'\bguidelines?\s+(?:state|recommend|suggest)\b', re.I),
+    re.compile(r'\bbest practices?\b', re.I),
+]
+
+
+def _novelty_score(line: str) -> float:
+    """Score how NOVEL a line is (0.0=generic knowledge, 1.0=unique fact).
+
+    High novelty: project-specific numbers, dates, commits, decisions.
+    Low novelty: framework docs, standard patterns, API descriptions.
+    """
+    s = line.strip()
+    if not s:
+        return 0.0
+
+    # Headers and tagged lines are structural/novel — always keep
+    if s.startswith("#") or s.startswith("===") or s.startswith("?"):
+        return 1.0
+    for tag in ("D>", "B>", "E>", "F>", "A>"):
+        if s.startswith(tag):
+            return 0.9
+
+    # Code comments and code lines — keep as-is (context-dependent)
+    if s.startswith("//") or s.startswith("/*") or s.startswith("*"):
+        return 0.8
+    # Code patterns (braces, imports, XML)
+    if re.match(r'^[\.\{\}</@]', s) or s.startswith("import ") or s.startswith("val "):
+        return 0.8
+
+    score = 0.0
+
+    # Novel indicators: project-specific content
+    for pat in _NOVEL_PATTERNS:
+        matches = pat.findall(s)
+        if matches:
+            score += 0.15 * len(matches)
+
+    # Known indicators: generic framework knowledge
+    for pat in _KNOWN_PATTERNS:
+        if pat.search(s):
+            score -= 0.3
+
+    # Ratio of numbers to words — high ratio = data-dense = novel
+    words = s.split()
+    if words:
+        num_tokens = sum(1 for w in words if re.search(r'\d', w))
+        num_ratio = num_tokens / len(words)
+        score += num_ratio * 0.3
+
+    # Key=value density — structured data is novel
+    kv_count = len(re.findall(r'\w+=\S+', s))
+    score += min(0.3, kv_count * 0.1)
+
+    # Pipe-separated values — dense fact lines
+    if s.count('|') >= 2:
+        score += 0.2
+
+    # Long text without any numbers or identifiers = likely generic
+    if len(s) > 100 and not re.search(r'\d', s):
+        score = min(score, 0.15)
+
+    return max(0.0, min(1.0, score))
+
+
+def _generate_cue(line: str) -> str:
+    """Compress a KNOWN line into a minimal retrieval cue (2-10 tokens).
+
+    Extracts the key concept identifier that will trigger the LLM's
+    parametric memory to reconstruct the full knowledge.
+    """
+    s = line.strip()
+
+    # If line has a key: value format, keep just key + any numbers
+    kv_match = re.match(r'^(\w[\w_]*)\s*[:=]\s*(.+)', s)
+    if kv_match:
+        key = kv_match.group(1)
+        value = kv_match.group(2)
+        # Keep numbers WITH surrounding context (word before + after number)
+        nums_with_ctx = re.findall(r'(?:\w+\s+)?\d+[\.\d]*\s*(?:[a-zA-Z%]+)?', value)
+        # Keep CamelCase identifiers (API names, class names)
+        identifiers = re.findall(r'[A-Z][a-z]+(?:[A-Z][a-z]+)+', value)
+        # Keep proper nouns (capitalized words that aren't sentence starters)
+        proper_nouns = re.findall(r'(?:^|[\s,])((?:[A-Z][\w]*\s*){1,3})', value)
+        proper_nouns = [p.strip() for p in proper_nouns if len(p.strip()) > 2]
+        kept = [n.strip() for n in nums_with_ctx[:4]] + identifiers[:2] + proper_nouns[:2]
+        if kept:
+            # Deduplicate while preserving order
+            seen = set()
+            unique = []
+            for k in kept:
+                if k.lower() not in seen:
+                    seen.add(k.lower())
+                    unique.append(k)
+            return f"{key}: {', '.join(unique)}"
+        # No numbers or identifiers — just the key as cue
+        return key
+
+    # If line has pipe-separated entries, keep first identifier + count
+    if '|' in s:
+        parts = [p.strip() for p in s.split('|')]
+        # Extract just the key names
+        keys = []
+        for p in parts:
+            km = re.match(r'^(\w[\w_]*)', p)
+            if km:
+                keys.append(km.group(1))
+        if keys:
+            return ' | '.join(keys[:5])
+
+    # Fallback: extract the most specific noun phrases (capitalized words + adjacent)
+    important = re.findall(r'[A-Z][\w]*(?:\s+[A-Z][\w]*)*', s)
+    # Also grab any numbers with context
+    nums = re.findall(r'(?:\w+\s+)?\d+[\.\d]*\s*(?:[a-zA-Z%]+)?', s)
+    all_parts = important[:3] + [n.strip() for n in nums[:3]]
+    if all_parts:
+        return ' | '.join(all_parts)
+
+    # Last resort: first N words (enough for the LLM to reconstruct)
+    words = s.split()
+    return ' '.join(words[:min(8, len(words))])
+
+
+def _cue_distill(text: str, threshold: float = 0.35) -> str:
+    """L10: Cue Distillation — replace generic knowledge with minimal cues.
+
+    Lines with novelty_score < threshold are compressed to retrieval cues.
+    Lines with novelty_score >= threshold are kept verbatim (novel facts).
+
+    Theory: Predictive Coding (Rao & Ballard 1999) — only store prediction errors.
+    The LLM's parametric memory already contains generic knowledge.
+    """
+    lines = text.split("\n")
+    result = []
+    cued = 0
+    kept = 0
+
+    for line in lines:
+        s = line.strip()
+        if not s:
+            result.append(line)
+            continue
+
+        score = _novelty_score(s)
+
+        if score >= threshold:
+            result.append(line)
+            kept += 1
+        else:
+            cue = _generate_cue(s)
+            if cue and len(cue) < len(s) * 0.7:  # Only cue if actually shorter
+                result.append(cue)
+                cued += 1
+            else:
+                result.append(line)  # Keep if cue not shorter
+                kept += 1
+
+    if cued > 0:
+        print(f"  L10 Cue Distillation: {cued} lines cued, {kept} kept "
+              f"(threshold={threshold})", file=sys.stderr)
+
+    return "\n".join(result)
+
+
+# ── L11: RULE EXTRACTION ──────────────────────────────────────────
+# Theory: Kolmogorov complexity (1965) — store the shortest PROGRAM
+# that generates the data, not the data itself.
+# Detect repeated key=value structures and factorize into rules.
+
+def _extract_rules(text: str) -> str:
+    """L11: Rule Extraction — factorize repeated key=value patterns.
+
+    Detects lines with multiple key=value or key: value pairs sharing
+    the same unit/structure and condenses them into a single rule line.
+
+    Example:
+      battery_drain: 9min screen | 1% GPS | 5% BT | 15% WiFi
+      -> battery_drain: screen=9min GPS=1% BT=5% WiFi=15%
+    """
+    lines = text.split("\n")
+    result = []
+    factorized = 0
+
+    for line in lines:
+        s = line.strip()
+        if not s:
+            result.append(line)
+            continue
+
+        # Detect pipe-separated key-value entries with shared units
+        if '|' in s and s.count('|') >= 2:
+            parts = [p.strip() for p in s.split('|')]
+
+            # Try to extract key: entries from each part
+            kvs = []
+            for p in parts:
+                m = re.match(r'^(\w[\w_\s]*?)\s*[:=]\s*(.+)', p)
+                if m:
+                    kvs.append((m.group(1).strip(), m.group(2).strip()))
+
+            # If most parts are key=value and values share a unit pattern
+            if len(kvs) >= 3 and len(kvs) >= len(parts) * 0.6:
+                # Extract common unit suffix
+                values = [v for _, v in kvs]
+                units = set()
+                for v in values:
+                    u = re.findall(r'[a-zA-Z%]+$', v)
+                    if u:
+                        units.add(u[0])
+
+                if len(units) == 1:
+                    # All same unit — factorize
+                    unit = units.pop()
+                    compact_parts = []
+                    for k, v in kvs:
+                        num = re.match(r'[\d\.]+', v)
+                        if num:
+                            compact_parts.append(f"{k}={num.group()}")
+                        else:
+                            compact_parts.append(f"{k}={v}")
+                    rule_line = f"({unit}) " + ", ".join(compact_parts)
+                    result.append(rule_line)
+                    factorized += 1
+                    continue
+
+        result.append(line)
+
+    if factorized > 0:
+        print(f"  L11 Rule Extraction: {factorized} lines factorized",
+              file=sys.stderr)
+
+    return "\n".join(result)
+
+
 def _llm_compress_chunk(text: str, client, context: str = "") -> tuple:
     """Compress a single chunk via Claude Haiku API. Returns text unchanged on failure."""
     try:
@@ -1228,6 +1488,12 @@ def compress_file(filepath: Path) -> str:
 
     # Contradiction resolution (last-writer-wins on numeric facts)
     result = _resolve_contradictions(result)
+
+    # L10: Cue Distillation — BEFORE L9 (filter generic knowledge early)
+    result = _cue_distill(result)
+
+    # L11: Rule Extraction — factorize repeated key=value patterns
+    result = _extract_rules(result)
 
     # Layer 9: LLM self-compress (optional, for large outputs)
     result = _llm_compress(result, context=str(filepath.name))
@@ -2666,6 +2932,12 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
 
     # Contradiction resolution (last-writer-wins on numeric facts)
     result = _resolve_contradictions(result)
+
+    # L10: Cue Distillation — BEFORE L9 (filter generic knowledge early)
+    result = _cue_distill(result)
+
+    # L11: Rule Extraction — factorize repeated key=value patterns
+    result = _extract_rules(result)
 
     # Layer 9: LLM self-compress (optional)
     result = _llm_compress(result, context="transcript")
