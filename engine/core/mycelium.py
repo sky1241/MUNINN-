@@ -37,11 +37,14 @@ class Mycelium:
     DECAY_HALF_LIFE = 30      # days before connection strength halves
     MAX_CONNECTIONS = 0        # 0 = no limit (adapts to available RAM)
     MIN_CONCEPT_LEN = 3       # ignore tiny words
+    IMMORTAL_ZONE_THRESHOLD = 3  # connection in N+ zones = skip decay
 
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, federated: bool = False, zone: str = None):
         self.repo_path = Path(repo_path).resolve()
         self.mycelium_dir = self.repo_path / ".muninn"
         self.mycelium_path = self.mycelium_dir / "mycelium.json"
+        self.federated = federated  # P20.1: if False, zero change to behavior
+        self.zone = zone or self.repo_path.name  # P20.2: default zone = repo name
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -115,11 +118,21 @@ class Mycelium:
                         "first_seen": time.strftime("%Y-%m-%d"),
                         "last_seen": time.strftime("%Y-%m-%d"),
                     }
+                    if self.federated:
+                        conns[key]["zones"] = []
                 conns[key]["count"] += 1
                 conns[key]["last_seen"] = time.strftime("%Y-%m-%d")
+                # P20.2: track which zones this connection appears in
+                if self.federated:
+                    if "zones" not in conns[key]:
+                        conns[key]["zones"] = []
+                    if self.zone not in conns[key]["zones"]:
+                        conns[key]["zones"].append(self.zone)
 
         # Check for new fusions
         self._check_fusions()
+        if self.federated:
+            self._invalidate_zone_cache()
 
         # Prune only if limit is set, or if memory pressure
         if self.MAX_CONNECTIONS > 0 and len(conns) > self.MAX_CONNECTIONS:
@@ -309,6 +322,11 @@ class Mycelium:
         dead = []
 
         for key, conn in conns.items():
+            # P20.4: immortal connections (in 3+ zones) skip decay
+            if self.federated and "zones" in conn:
+                if len(conn["zones"]) >= self.IMMORTAL_ZONE_THRESHOLD:
+                    continue
+
             try:
                 from datetime import datetime
                 last = datetime.strptime(conn["last_seen"], "%Y-%m-%d")
@@ -333,6 +351,38 @@ class Mycelium:
                 del self.data["fusions"][key]
 
         return len(dead)
+
+    def effective_weight(self, key: str) -> float:
+        """P20.3: TF-IDF inverse — rare across zones = important, ubiquitous = small.
+
+        weight = count * log(1 + total_zones / zones_present)
+        If not federated, returns raw count.
+        """
+        conn = self.data["connections"].get(key)
+        if not conn:
+            return 0
+        count = conn["count"]
+        if not self.federated or "zones" not in conn:
+            return float(count)
+        import math
+        total_zones = self._count_total_zones()
+        zones_present = max(1, len(conn["zones"]))
+        return count * math.log(1 + total_zones / zones_present)
+
+    def _count_total_zones(self) -> int:
+        """Count distinct zones across all connections."""
+        if not hasattr(self, '_zone_cache_count'):
+            all_zones = set()
+            for conn in self.data["connections"].values():
+                if "zones" in conn:
+                    all_zones.update(conn["zones"])
+            self._zone_cache_count = max(1, len(all_zones))
+        return self._zone_cache_count
+
+    def _invalidate_zone_cache(self):
+        """Clear zone count cache (call after observe/merge)."""
+        if hasattr(self, '_zone_cache_count'):
+            del self._zone_cache_count
 
     def get_fusions(self) -> dict:
         """Get all fused concept blocks.
@@ -369,10 +419,11 @@ class Mycelium:
 
         return rules
 
-    def get_related(self, concept: str, top_n: int = 5) -> list[tuple[str, int]]:
+    def get_related(self, concept: str, top_n: int = 5) -> list[tuple[str, float]]:
         """Get concepts most strongly connected to a given concept.
 
-        Returns list of (related_concept, strength) sorted by strength.
+        Returns list of (related_concept, weight) sorted by effective weight.
+        In federated mode, prioritizes connections from the current zone.
         """
         concept = concept.lower().strip()
         conns = self.data["connections"]
@@ -383,7 +434,14 @@ class Mycelium:
                 continue
             if concept in parts:
                 other = parts[1] if parts[0] == concept else parts[0]
-                related.append((other, val["count"]))
+                if self.federated:
+                    weight = self.effective_weight(key)
+                    # P20.7: boost connections from current zone
+                    if "zones" in val and self.zone in val["zones"]:
+                        weight *= 2.0
+                else:
+                    weight = float(val["count"])
+                related.append((other, weight))
         related.sort(key=lambda x: x[1], reverse=True)
         return related[:top_n]
 
@@ -449,6 +507,29 @@ class Mycelium:
         """Mark the beginning of a new session."""
         self.data["session_count"] = self.data.get("session_count", 0) + 1
 
+    def get_zones(self) -> dict[str, int]:
+        """P20.8: Get all zones and their connection counts."""
+        zone_counts = {}
+        for conn in self.data["connections"].values():
+            if "zones" in conn:
+                for z in conn["zones"]:
+                    zone_counts[z] = zone_counts.get(z, 0) + 1
+        return dict(sorted(zone_counts.items(), key=lambda x: x[1], reverse=True))
+
+    def get_bridges(self) -> list[tuple[str, str, str, float]]:
+        """P20.8: Get inter-zone bridges (connections that span 2+ zones).
+
+        Returns list of (concept_a, concept_b, zones, effective_weight).
+        """
+        bridges = []
+        for key, conn in self.data["connections"].items():
+            if "zones" in conn and len(conn["zones"]) >= 2:
+                a, b = key.split("|")
+                weight = self.effective_weight(key)
+                bridges.append((a, b, conn["zones"], weight))
+        bridges.sort(key=lambda x: x[3], reverse=True)
+        return bridges
+
     def status(self) -> str:
         """Print mycelium status."""
         conns = self.data["connections"]
@@ -457,19 +538,45 @@ class Mycelium:
 
         lines = [
             f"=== MUNINN MYCELIUM: {self.data['repo']} ===",
+            f"  Mode: {'FEDERATED' if self.federated else 'local'}",
+            f"  Zone: {self.zone}",
             f"  Sessions: {sessions}",
             f"  Connections: {len(conns)}",
             f"  Fusions: {len(fusions)}",
             f"  Updated: {self.data.get('updated', '?')}",
         ]
 
+        if self.federated:
+            zones = self.get_zones()
+            if zones:
+                lines.append(f"\n  Zones ({len(zones)}):")
+                for z, count in zones.items():
+                    marker = " <-- current" if z == self.zone else ""
+                    lines.append(f"    {z}: {count} connections{marker}")
+            bridges = self.get_bridges()
+            if bridges:
+                lines.append(f"\n  Bridges ({len(bridges)}):")
+                for a, b, z, w in bridges[:10]:
+                    lines.append(f"    {a}|{b}: zones={z} weight={w:.1f}")
+
         if conns:
-            # Top 10 strongest connections
-            top = sorted(conns.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
+            # Top 10 strongest connections (use effective weight in federated mode)
+            if self.federated:
+                top = sorted(conns.items(),
+                           key=lambda x: self.effective_weight(x[0]),
+                           reverse=True)[:10]
+            else:
+                top = sorted(conns.items(),
+                           key=lambda x: x[1]["count"], reverse=True)[:10]
             lines.append(f"\n  Top connections:")
             for key, conn in top:
                 fused = " [FUSED]" if key in fusions else ""
-                lines.append(f"    {key}: {conn['count']}x{fused}")
+                if self.federated:
+                    w = self.effective_weight(key)
+                    zones_str = f" zones={conn.get('zones', [])}"
+                    lines.append(f"    {key}: {conn['count']}x (eff={w:.1f}){zones_str}{fused}")
+                else:
+                    lines.append(f"    {key}: {conn['count']}x{fused}")
 
         if fusions:
             lines.append(f"\n  Fusions ({len(fusions)}):")
@@ -515,13 +622,15 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Muninn Mycelium — living compression network")
-    parser.add_argument("command", choices=["status", "observe", "decay", "simulate"])
+    parser.add_argument("command", choices=["status", "observe", "decay", "simulate", "zones"])
     parser.add_argument("repo", help="Path to the repo")
     parser.add_argument("--text", help="Text to observe (for observe command)")
     parser.add_argument("--file", help="File to observe (for observe command)")
+    parser.add_argument("--federated", action="store_true", help="Enable federated mode (P20)")
+    parser.add_argument("--zone", help="Zone name for federated mode")
     args = parser.parse_args()
 
-    m = Mycelium(Path(args.repo))
+    m = Mycelium(Path(args.repo), federated=args.federated, zone=args.zone)
 
     if args.command == "status":
         print(m.status())
@@ -591,6 +700,26 @@ def main():
             print(f"\n  Compression rules generated:")
             for key, rule in rules.items():
                 print(f"    {rule['concepts']} -> '{rule['form']}' (strength={rule['strength']})")
+
+    elif args.command == "zones":
+        if not m.federated:
+            print("Federated mode is OFF. Use --federated to enable.")
+            print(f"Current mycelium: {len(m.data['connections'])} connections (local mode)")
+        else:
+            zones = m.get_zones()
+            bridges = m.get_bridges()
+            print(f"=== ZONE MAP: {m.data['repo']} ===")
+            print(f"  Total zones: {len(zones)}")
+            print(f"  Total bridges: {len(bridges)}")
+            if zones:
+                print(f"\n  Continents:")
+                for z, count in zones.items():
+                    marker = " <-- current" if z == m.zone else ""
+                    print(f"    {z}: {count} connections{marker}")
+            if bridges:
+                print(f"\n  Ponts inter-zones (top 20):")
+                for a, b, z, w in bridges[:20]:
+                    print(f"    {a}|{b}: {' <-> '.join(z)} (weight={w:.1f})")
 
 
 if __name__ == "__main__":
