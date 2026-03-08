@@ -3,7 +3,7 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
 Etat: 43 briques vivantes (P0-P31 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 3776 lignes, 63 fonctions
+Engine: muninn.py 3776 lignes, 60 fonctions
 
 ## Anatomie
 

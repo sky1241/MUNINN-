@@ -58,7 +58,7 @@ E:engine/core/muninn.py 3776L|engine/core/mycelium.py 1105L
 S:v0.9+|2026-03-08
 
 F:
-  muninn.py 3776L compress/boot/feed/ingest/bootstrap/prune(63 funcs)
+  muninn.py 3776L compress/boot/feed/ingest/bootstrap/prune(60 funcs)
   mycelium.py 1105L co-occurrence+fusion+decay+spreading-activation
   tokenizer.py 40L tiktoken wrapper+fallback
   tree.json L-system tree metadata+temperature
