@@ -507,6 +507,139 @@ class Mycelium:
         """Mark the beginning of a new session."""
         self.data["session_count"] = self.data.get("session_count", 0) + 1
 
+    def detect_zones(self, k: int = None) -> dict[str, list[str]]:
+        """P20.5+6: Laplacien spectral clustering — detect semantic zones.
+
+        Builds co-occurrence matrix from connections, computes normalized
+        Laplacian, extracts K eigenvectors, clusters with KMeans.
+        Auto-names each zone by its dominant concepts (P20.6).
+
+        Returns {zone_name: [concept1, concept2, ...]}.
+        Requires numpy + scipy + sklearn. Graceful fallback if not installed.
+        """
+        conns = self.data["connections"]
+        if len(conns) < 10:
+            return {}
+
+        try:
+            import numpy as np
+            from scipy import sparse
+            from scipy.sparse.linalg import eigsh
+            from sklearn.cluster import KMeans
+        except ImportError:
+            print("detect_zones requires: pip install numpy scipy scikit-learn",
+                  file=sys.stderr)
+            return {}
+
+        # 1. Build concept index and sparse matrix
+        concepts = set()
+        for key in conns:
+            a, b = key.split("|")
+            concepts.add(a)
+            concepts.add(b)
+        concepts = sorted(concepts)
+        idx = {c: i for i, c in enumerate(concepts)}
+        N = len(concepts)
+
+        if N < 6:
+            return {}
+
+        # Build sparse adjacency
+        rows, cols, vals = [], [], []
+        for key, conn in conns.items():
+            a, b = key.split("|")
+            i, j = idx[a], idx[b]
+            w = conn["count"]
+            rows.extend([i, j])
+            cols.extend([j, i])
+            vals.extend([w, w])
+
+        W = sparse.csr_matrix((vals, (rows, cols)), shape=(N, N))
+
+        # 2. Normalized Laplacian: L_sym = D^{-1/2} W D^{-1/2}
+        degrees = np.array(W.sum(axis=1)).flatten()
+        d_inv_sqrt = np.zeros(N, dtype=np.float64)
+        mask = degrees > 0
+        d_inv_sqrt[mask] = 1.0 / np.sqrt(degrees[mask])
+        D_inv_sqrt = sparse.diags(d_inv_sqrt)
+        L_sym = D_inv_sqrt @ W.astype(np.float64) @ D_inv_sqrt
+
+        # 3. Auto-detect K (or use provided)
+        if k is None:
+            # Heuristic: sqrt(N/10), clamped [2, 12]
+            import math
+            k = max(2, min(12, int(math.sqrt(N / 10))))
+
+        k = min(k, N - 1)  # eigsh needs k < N
+
+        # 4. Eigenvectors
+        try:
+            eigenvalues, eigenvectors = eigsh(L_sym, k=k, which='LM')
+        except Exception as e:
+            print(f"detect_zones eigsh failed: {e}", file=sys.stderr)
+            return {}
+
+        # 5. KMeans on L2-normalized eigenvectors
+        norms = np.linalg.norm(eigenvectors, axis=1, keepdims=True)
+        norms[norms == 0] = 1
+        eigvec_normed = eigenvectors / norms
+
+        kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
+        labels = kmeans.fit_predict(eigvec_normed)
+
+        # 6. P20.6: Auto-name zones by top-3 concepts (highest degree in cluster)
+        zones = {}
+        for cluster_id in range(k):
+            cluster_mask = labels == cluster_id
+            cluster_indices = np.where(cluster_mask)[0]
+            if len(cluster_indices) == 0:
+                continue
+
+            # Sort by degree within cluster
+            cluster_concepts = [(concepts[i], degrees[i]) for i in cluster_indices]
+            cluster_concepts.sort(key=lambda x: -x[1])
+
+            # Zone name = top 3 concepts joined
+            top_names = [c[0] for c in cluster_concepts[:3]]
+            zone_name = "/".join(top_names)
+            zone_members = [concepts[i] for i in cluster_indices]
+            zones[zone_name] = zone_members
+
+        return zones
+
+    def auto_label_zones(self, k: int = None):
+        """P20.5+6: Run detect_zones and tag all connections with their zone.
+
+        Updates connections in-place with detected zone labels.
+        """
+        zones = self.detect_zones(k=k)
+        if not zones:
+            return {}
+
+        # Build reverse map: concept -> zone_name
+        concept_to_zone = {}
+        for zone_name, members in zones.items():
+            for concept in members:
+                concept_to_zone[concept] = zone_name
+
+        # Tag connections: zone = zone of concept_a (or shared if both same zone)
+        conns = self.data["connections"]
+        tagged = 0
+        for key, conn in conns.items():
+            a, b = key.split("|")
+            zone_a = concept_to_zone.get(a)
+            zone_b = concept_to_zone.get(b)
+            if "zones" not in conn:
+                conn["zones"] = []
+            if zone_a and zone_a not in conn["zones"]:
+                conn["zones"].append(zone_a)
+                tagged += 1
+            if zone_b and zone_b != zone_a and zone_b not in conn["zones"]:
+                conn["zones"].append(zone_b)
+
+        self._invalidate_zone_cache()
+        return zones
+
     def get_zones(self) -> dict[str, int]:
         """P20.8: Get all zones and their connection counts."""
         zone_counts = {}
@@ -622,7 +755,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Muninn Mycelium — living compression network")
-    parser.add_argument("command", choices=["status", "observe", "decay", "simulate", "zones"])
+    parser.add_argument("command", choices=["status", "observe", "decay", "simulate", "zones", "detect"])
     parser.add_argument("repo", help="Path to the repo")
     parser.add_argument("--text", help="Text to observe (for observe command)")
     parser.add_argument("--file", help="File to observe (for observe command)")
@@ -720,6 +853,17 @@ def main():
                 print(f"\n  Ponts inter-zones (top 20):")
                 for a, b, z, w in bridges[:20]:
                     print(f"    {a}|{b}: {' <-> '.join(z)} (weight={w:.1f})")
+
+    elif args.command == "detect":
+        print(f"Detecting zones in {m.data['repo']} ({len(m.data['connections'])} connections)...")
+        zones = m.detect_zones()
+        if zones:
+            print(f"\n=== {len(zones)} ZONES DETECTED ===")
+            for name, members in zones.items():
+                print(f"\n  [{name}] ({len(members)} concepts)")
+                print(f"    Top: {', '.join(members[:15])}")
+        else:
+            print("Not enough connections to detect zones (need 10+)")
 
 
 if __name__ == "__main__":
