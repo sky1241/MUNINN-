@@ -2312,7 +2312,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         kept_indices = set()
         running_tokens = 0
         for orig_idx, (prio, pline) in by_priority:
-            line_tokens = max(1, len(pline) // 4)
+            line_tokens = max(1, token_count(pline))
             if running_tokens + line_tokens <= max_session_tokens:
                 kept_indices.add(orig_idx)
                 running_tokens += line_tokens
