@@ -52,30 +52,31 @@ C:
 ## Exemple reel — Muninn
 
 ```
-P:muninn|memory-compression-engine|python|2600L
-D:zero-required|anthropic,llmlingua
-E:engine/core/muninn.py 2100L|engine/core/mycelium.py 465L
-S:v0.9|2026-03-07
+P:muninn|memory-compression-engine|python|4921L
+D:zero-required|anthropic,tiktoken
+E:engine/core/muninn.py 3776L|engine/core/mycelium.py 1105L
+S:v0.9+|2026-03-08
 
 F:
-  muninn.py 2100L compress/boot/feed/ingest/bootstrap
-  mycelium.py 465L co-occurrence+fusion+decay
-  tokenizer.py 45L tiktoken wrapper+fallback
-  tree.json L-system tree metadata
-  .muninn/ per-repo data(mycelium,sessions,tree)
+  muninn.py 3776L compress/boot/feed/ingest/bootstrap/prune(63 funcs)
+  mycelium.py 1105L co-occurrence+fusion+decay+spreading-activation
+  tokenizer.py 40L tiktoken wrapper+fallback
+  tree.json L-system tree metadata+temperature
+  .muninn/ per-repo data(mycelium,sessions,tree,errors)
 
 R:
+  03-08 spreading activation(Collins&Loftus1975)+sleep consolidation(Wilson&McNaughton1994)
+  03-08 full pipeline 4repos 230files x4.4 $0.21
   03-07 TF-IDF retrieval+auto-segmentation+ingest
-  03-07 14 bugs fixed(6 scans)
   03-07 L9 tested: x5.2(50papers) x4.0(306papers)
   03-06 pivot: sinograms dead->BPE native
-  03-06 mycelium=living codebook
 
 T:
   ! sinograms cost 2-3tok vs 1 english—dead path
   ! L8 on pre-compressed loses 72% facts
   ! len//4 != real tokens—use tiktoken
   ! setx != os.environ—need registry fallback
+  ! NCD threshold 0.6 not 0.4 for short texts
 
 C:
   user=french,informal,fast

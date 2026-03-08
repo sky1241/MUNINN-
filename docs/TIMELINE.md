@@ -491,6 +491,12 @@ du mycelium, 7 couches de compression, 6 bugfixes.
 | 10:41-11:40 | `5cf927a`-`ab7e93d` | **P20** : mycelium federe complet (10 briques) |
 | 12:43 | `ab569c0` | Test L9 full pipeline : 230 fichiers, 4 repos, $0.21 |
 | 12:52 | `7d0464d` | **P20b** : meta-mycelium cross-repo |
+| — | `45bcead` | Benchmark cross-repo UX Bibles infernal-wheel (x7.7-x19.4) |
+| — | `5a8b080` | **L10 Cue Distillation** + **L11 Rule Extraction** — les Carmack moves |
+| — | `ba22d94` | Docs sync L10+L11 (41 features, x23.1 peak) |
+| — | `174c9d1` | **Spreading Activation** (Collins & Loftus 1975) — Carmack move #4 |
+| — | `655051f` | **Sleep Consolidation** (Wilson & McNaughton 1994) — Carmack move #3 |
+| — | `d497a80` | Benchmark final : 12 fichiers, 4 repos, x4.5 moyen, zero crash |
 
 ---
 
@@ -591,14 +597,16 @@ Les vrais chiffres sont ceux ci-dessus. Tous mesures avec tiktoken `cl100k_base`
 
 ## 11. Ce que Muninn a que personne d'autre n'a
 
-1. **8 couches empilees** — regex + LLM, pas juste 1 technique
+1. **11 couches empilees (25 filtres)** — regex + LLM + 4 Carmack moves, pas juste 1 technique
 2. **Mycelium vivant** — codebook qui pousse par co-occurrence et meurt par decay
-3. **L-system fractal** — memes regles a chaque niveau de l'arbre
-4. **Secret filtering** — tokens GitHub, cles API, mots de passe redactes automatiquement
-5. **Zero dependance obligatoire** — L1-L7 regex only, tourne partout
-6. **Bootstrap one-command** — `muninn.py bootstrap .` = mycelium + root.mn + arbre + hooks
-7. **Meta-mycelium federe** — les repos communiquent via `~/.muninn/meta_mycelium.json`
-8. **Approche boucher** — construit depuis le cote utilisateur, pas depuis le cote chercheur
+3. **Spreading Activation** — retrieval semantique via propagation dans le reseau (Collins & Loftus 1975)
+4. **Sleep Consolidation** — branches froides fusionnees automatiquement (Wilson & McNaughton 1994)
+5. **L-system fractal** — memes regles a chaque niveau de l'arbre
+6. **Secret filtering** — tokens GitHub, cles API, mots de passe redactes automatiquement
+7. **Zero dependance obligatoire** — L1-L7 regex only, tourne partout
+8. **Bootstrap one-command** — `muninn.py bootstrap .` = mycelium + root.mn + arbre + hooks
+9. **Meta-mycelium federe** — les repos communiquent via `~/.muninn/meta_mycelium.json`
+10. **43 features, 3776 lignes** — construit depuis le cote utilisateur, pas depuis le cote chercheur
 
 ---
 

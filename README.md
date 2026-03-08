@@ -15,7 +15,7 @@ Quand le contexte se remplit, tout deborde et disparait.
 Muninn compresse les transcripts de session en fichiers `.mn` ultra-denses
 et les recharge intelligemment au boot suivant.
 
-**Resultat mesure** : x23.1 sur WEARABLE.md (134K tokens), x4.5 sur transcript (1.1M tokens), 92% des faits preserves (tiktoken).
+**Resultat mesure** : x4.4 moyen sur 230 fichiers / 4 repos / 855K tokens (full pipeline, tiktoken). 92% des faits preserves (benchmark 40 questions).
 
 ## Architecture
 
@@ -102,17 +102,44 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 muninn.py ingest <dossier>    # Compresse des docs de reference en branches
 ```
 
-## Resultats mesures (tiktoken)
+## Resultats mesures (tiktoken, mars 2026)
 
-| Contexte | Pipeline | Ratio |
-|----------|----------|-------|
-| Deployment hardware (7K tok) | L1-L7+L10+L11+L9 | **x9.6** |
-| Biomecanique gestes (7K tok) | L1-L7+L10+L11+L9 | **x7.8** |
-| Wearable UX research (8K tok) | L1-L7+L10+L11+L9 | **x7.4** |
-| HSBC historique (6K tok) | L1-L7+L10+L11+L9 | **x6.3** |
-| Winter Tree roadmap (9K tok) | L1-L7+L10+L11+L9 | **x6.2** |
-| Cross-repo 12 fichiers (62K tok) | full pipeline | **x4.5 moy** |
-| Benchmark 40 questions | L1-L7 | 92% facts |
+### Par fichier (full pipeline L1-L7+L10+L11+L9)
+
+| Contexte | Ratio |
+|----------|-------|
+| HSBC METHODOLOGIE (6K tok) | **x13.8** |
+| HSBC ARBRE (5K tok) | **x11.4** |
+| Deployment hardware (7K tok) | **x9.6** |
+| Biomecanique gestes (7K tok) | **x7.8** |
+| SOL.md full pipeline (20K chars) | **x7.7** |
+| Wearable UX research (8K tok) | **x7.4** |
+
+### Cross-repo (230 fichiers, 4 repos, 8 mars 2026)
+
+| Repo | Fichiers | Input | Output | Ratio |
+|------|----------|-------|--------|-------|
+| infernal-wheel | 58 | 535K tok | 87K tok | **x6.2** |
+| HSBC-algo-genetic | 115 | 194K tok | 64K tok | **x3.0** |
+| shazam-piano | 45 | 107K tok | 37K tok | **x2.9** |
+| MUNINN- | 12 | 19K tok | 8K tok | **x2.3** |
+| **TOTAL** | **230** | **855K tok** | **196K tok** | **x4.4** |
+
+Cout API (Haiku) : **$0.21** pour 230 fichiers.
+
+### Benchmark factuel
+
+- 40 questions sur texte compresse -> **37/40 correct (92%)**
+- Methode : text search pur, zero API, reproductible par quiconque
+
+## 4 Carmack moves (fondations theoriques)
+
+| Move | Technique | Reference | Gain |
+|------|-----------|-----------|------|
+| #1 | Cue Distillation (L10) | Bartlett 1932 + Predictive Coding 1999 | Vire ce que le LLM sait deja |
+| #2 | Rule Extraction (L11) | Kolmogorov 1965 | Factorise les patterns en regles |
+| #3 | Sleep Consolidation | Wilson & McNaughton 1994 | Fusionne les branches froides |
+| #4 | Spreading Activation | Collins & Loftus 1975 | Retrieval semantique via reseau |
 
 ## Installation
 
@@ -173,6 +200,15 @@ Cree par Sky (electricien, autodidacte, 11 mois de code).
 Ne de l'observation que la memoire LLM n'est pas un probleme de stockage
 mais un probleme de compression. Le nom vient du corbeau d'Odin — celui qui
 se souvient de tout.
+
+## References
+
+- Bartlett, F.C. (1932). *Remembering*. Cambridge University Press.
+- Collins, A.M. & Loftus, E.F. (1975). A spreading-activation theory of semantic processing. *Psychological Review*, 82(6).
+- Kolmogorov, A.N. (1965). Three approaches to the quantitative definition of information. *Problems of Information Transmission*, 1(1).
+- Wilson, M.A. & McNaughton, B.L. (1994). Reactivation of hippocampal ensemble memories during sleep. *Science*, 265(5172).
+- Park, J.S. et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*.
+- Jiang, H. et al. (2023). LLMLingua: Compressing Prompts for Accelerated Inference. *EMNLP 2023*.
 
 ## Licence
 
