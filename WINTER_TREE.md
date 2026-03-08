@@ -354,6 +354,15 @@ Test L9 full pipeline (2026-03-08) — 4 repos:
   | TOTAL | 230 | 855K tok | 196K tok | x4.4 |
   Cout API: ~$0.21 (Haiku), 5 truncations sur 230 fichiers
 
+### P20b — Meta-mycelium (cross-repo sync) [FAIT]
+- [x] `sync_to_meta()`: pousse connexions locales vers `~/.muninn/meta_mycelium.json`
+- [x] `pull_from_meta(query_concepts)`: tire connexions pertinentes du meta au boot
+- [x] Merge: max(count), union(zones), earliest first_seen, latest last_seen
+- [x] Auto dans feed_from_hook(): sync apres chaque feed (zero config)
+- [x] Auto dans boot(): pull du meta avant query expansion (zero config)
+- [x] CLI: `mycelium.py sync <repo>` — sync manuel
+- [x] Teste: MUNINN+infernal -> 723K meta, shazam pull 200 connexions pertinentes
+
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
 - [ ] Entry point CLI: `muninn bootstrap .`
