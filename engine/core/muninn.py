@@ -1403,15 +1403,31 @@ def grow_branches_from_session(mn_path: Path):
                     overlap = len(tag_set & existing_tags) / max(len(tag_set | existing_tags), 1)
                     should_merge = overlap > 0.5
             if should_merge:
-                    # Merge: append content to existing branch
+                    # Context-Aware Merge: append + resolve contradictions + dedup
                     filepath = TREE_DIR / node["file"]
                     if filepath.exists():
                         old = filepath.read_text(encoding="utf-8")
-                        # Respect max_lines budget
-                        new_lines = old.split("\n") + ["", header] + body.split("\n")
+                        # Combine old + new content
+                        merged_text = old + "\n" + header + "\n" + body
+                        # Resolve contradictions (last-writer-wins)
+                        merged_text = _resolve_contradictions(merged_text)
+                        # Dedup lines (exact + normalized)
+                        seen = set()
+                        deduped = []
+                        for dline in merged_text.split("\n"):
+                            norm = re.sub(r'[^\w\s]', '', dline.lower()).strip()
+                            norm = re.sub(r'\s+', ' ', norm)
+                            if not norm:
+                                continue
+                            if norm in seen:
+                                continue
+                            seen.add(norm)
+                            deduped.append(dline)
+                        merged_text = "\n".join(deduped)
+                        new_lines = merged_text.split("\n")
                         max_l = node.get("max_lines", 150)
                         if len(new_lines) <= max_l:
-                            filepath.write_text("\n".join(new_lines), encoding="utf-8")
+                            filepath.write_text(merged_text, encoding="utf-8")
                             node["lines"] = len(new_lines)
                             # Add new tags
                             node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
