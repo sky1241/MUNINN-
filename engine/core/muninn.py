@@ -3093,8 +3093,9 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     # L11: Rule Extraction — factorize repeated key=value patterns
     result = _extract_rules(result)
 
-    # Layer 9: LLM self-compress (optional)
-    result = _llm_compress(result, context="transcript")
+    # Layer 9: SKIP on transcripts — regex already achieves x100+ on tool-heavy
+    # transcripts, L9 adds no value (tested: 3014 vs 3319 tokens, L9 is worse).
+    # L9 is only useful on raw prose (compress_file, ingest, bootstrap).
 
     # P14: Tag memory types AFTER L9 (so tags survive rewriting)
     tagged_lines = []
