@@ -928,6 +928,53 @@ def compress_section(header: str, lines: list[str]) -> str:
         return result
 
 
+def _llm_compress(text: str, context: str = "") -> str:
+    """Layer 9: LLM self-compress via Claude Haiku API. Returns text unchanged if unavailable."""
+    if len(text) <= 4000:
+        return text
+    try:
+        import os, subprocess as _sp
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            try:
+                _r = _sp.run(['powershell', '-Command',
+                    "[System.Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')"],
+                    capture_output=True, text=True, timeout=5)
+                api_key = _r.stdout.strip() or None
+            except Exception:
+                pass
+        if not api_key:
+            return text
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=max(1, token_count(text)),
+            temperature=0,
+            system=_L9_SYSTEM,
+            messages=[{"role": "user", "content":
+                _L9_PROMPT + f"INPUT ({len(text)} chars):\n{text}"
+            }],
+        )
+        llm_compressed = response.content[0].text
+        truncated = response.stop_reason == "max_tokens"
+        if truncated:
+            print(f"  Layer 9 WARNING: output truncated (max_tokens hit) [{context}]",
+                  file=sys.stderr)
+        if len(llm_compressed) < len(text) * 0.9:
+            print(f"  Layer 9 (LLM): {len(text)} -> {len(llm_compressed)} chars "
+                  f"(API: {response.usage.input_tokens}in+{response.usage.output_tokens}out)"
+                  f"{' TRUNCATED' if truncated else ''} [{context}]",
+                  file=sys.stderr)
+            return llm_compressed
+        return text
+    except ImportError:
+        return text  # anthropic not installed
+    except Exception as e:
+        print(f"  Layer 9 ERROR: {e} [{context}]", file=sys.stderr)
+        return text
+
+
 def compress_file(filepath: Path) -> str:
     text = filepath.read_text(encoding="utf-8")
     lines = text.split("\n")
@@ -958,45 +1005,7 @@ def compress_file(filepath: Path) -> str:
     result = "\n".join(output)
 
     # Layer 9: LLM self-compress (optional, for large outputs)
-    if len(result) > 4000:
-        try:
-            import os, subprocess as _sp
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
-            if not api_key:
-                try:
-                    _r = _sp.run(['powershell', '-Command',
-                        "[System.Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')"],
-                        capture_output=True, text=True, timeout=5)
-                    api_key = _r.stdout.strip() or None
-                except Exception:
-                    pass
-            if api_key:
-                import anthropic
-                client = anthropic.Anthropic(api_key=api_key)
-                response = client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=max(1, token_count(result)),
-                    temperature=0,
-                    system=_L9_SYSTEM,
-                    messages=[{"role": "user", "content":
-                        _L9_PROMPT + f"INPUT ({len(result)} chars):\n{result}"
-                    }],
-                )
-                llm_compressed = response.content[0].text
-                truncated = response.stop_reason == "max_tokens"
-                if truncated:
-                    print(f"  Layer 9 WARNING: output truncated (max_tokens hit)",
-                          file=sys.stderr)
-                if len(llm_compressed) < len(result) * 0.9:
-                    print(f"  Layer 9 (LLM): {len(result)} -> {len(llm_compressed)} chars "
-                          f"(API: {response.usage.input_tokens}in+{response.usage.output_tokens}out)"
-                          f"{' TRUNCATED' if truncated else ''}",
-                          file=sys.stderr)
-                    result = llm_compressed
-        except ImportError:
-            pass
-        except Exception as e:
-            print(f"  Layer 9 warning: {e}", file=sys.stderr)
+    result = _llm_compress(result, context=str(filepath.name))
 
     return result
 
@@ -2268,47 +2277,8 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         deduped_lines.append(dline)
     result = "\n".join(deduped_lines)
 
-    # Layer 9: LLM self-compress (Claude summarizes via API, optional)
-    # Only for large texts where the cost (~2K tokens) is worth the savings (>10K tokens)
-    if len(result) > 4000:
-        try:
-            import os, subprocess as _sp
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
-            if not api_key:
-                try:
-                    _r = _sp.run(['powershell', '-Command',
-                        "[System.Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')"],
-                        capture_output=True, text=True, timeout=5)
-                    api_key = _r.stdout.strip() or None
-                except Exception:
-                    pass
-            if api_key:
-                import anthropic
-                client = anthropic.Anthropic(api_key=api_key)
-                response = client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=max(1, token_count(result)),
-                    temperature=0,
-                    system=_L9_SYSTEM,
-                    messages=[{"role": "user", "content":
-                        _L9_PROMPT + f"INPUT ({len(result)} chars):\n{result}"
-                    }],
-                )
-                llm_compressed = response.content[0].text
-                truncated = response.stop_reason == "max_tokens"
-                if truncated:
-                    print(f"  Layer 9 WARNING: output truncated (max_tokens hit)")
-                if len(llm_compressed) < len(result) * 0.9:
-                    input_tokens = response.usage.input_tokens
-                    output_tokens = response.usage.output_tokens
-                    print(f"  Layer 9 (LLM): {len(result)//4} -> {len(llm_compressed)//4} tokens "
-                          f"(API: {input_tokens}in+{output_tokens}out)"
-                          f"{' TRUNCATED' if truncated else ''}")
-                    result = llm_compressed
-        except ImportError:
-            pass  # anthropic not installed — skip Layer 9
-        except Exception as e:
-            print(f"  Layer 9 warning: {e}")
+    # Layer 9: LLM self-compress (optional)
+    result = _llm_compress(result, context="transcript")
 
     # P14: Tag memory types AFTER L9 (so tags survive rewriting)
     tagged_lines = []
@@ -2597,6 +2567,9 @@ def _surface_known_errors(repo_path: Path, query: str) -> str:
 
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
+    if sys.stdin.isatty():
+        print("ERROR: hook mode expects JSON on stdin. Use 'feed --history' for manual mode.")
+        sys.exit(1)
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, EOFError):
