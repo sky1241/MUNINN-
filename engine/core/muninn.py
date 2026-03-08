@@ -927,6 +927,70 @@ def compress_section(header: str, lines: list[str]) -> str:
         return result
 
 
+def _resolve_contradictions(text: str) -> str:
+    """Resolve numeric contradictions — last-writer-wins.
+
+    When the same entity has different numeric values at different points,
+    keep only the LATEST value. Prevents stale facts from persisting.
+    Based on: Stanford NLP 2008 (Finding Contradictions in Text).
+
+    Example: "ratio x7.4" then later "ratio x4.1" → keeps only "ratio x4.1"
+    """
+    lines = text.split("\n")
+    # Strategy: two lines "contradict" if they are identical EXCEPT for the numbers.
+    # Replace all numbers with a placeholder, then group by this "skeleton".
+    # Within each group, keep only the LAST line (most recent = most correct).
+    num_val = re.compile(
+        r'[x×]?\d+(?:[.,]\d+)?(?:%|K|M|ms|s|px|x|GB|MB|KB|tokens?|lines?|tok)?'
+    )
+
+    skeleton_last = {}  # skeleton -> (line_text, line_index)
+    contradictions = {}  # skeleton -> set of line indices to remove
+    for i, line in enumerate(lines):
+        if line.startswith("#") or line.startswith("?FACTS") or not line.strip():
+            continue
+        # Build skeleton: replace all numbers with #N#
+        skel = num_val.sub("#N#", line).strip().lower()
+        skel = re.sub(r'\s+', ' ', skel)
+        # Only track lines that HAVE numbers (no numbers = no contradiction possible)
+        if "#n#" not in skel:
+            continue
+        if skel in skeleton_last:
+            old_text, old_idx = skeleton_last[skel]
+            if old_text != line:
+                # Same structure, different numbers = contradiction
+                if skel not in contradictions:
+                    contradictions[skel] = set()
+                contradictions[skel].add(old_idx)
+        skeleton_last[skel] = (line, i)
+
+    if not contradictions:
+        return text
+
+    # Collect all line indices to remove
+    remove_indices = set()
+    for indices in contradictions.values():
+        remove_indices.update(indices)
+
+    # Only remove lines where the ENTIRE line is about the contradicted fact
+    # (don't remove lines that contain other important info)
+    # Safety: only remove if line is short (< 100 chars) — long lines likely have other content
+    safe_removes = set()
+    for idx in remove_indices:
+        if len(lines[idx].strip()) < 100:
+            safe_removes.add(idx)
+
+    if not safe_removes:
+        return text
+
+    result_lines = [line for i, line in enumerate(lines) if i not in safe_removes]
+    removed = len(safe_removes)
+    print(f"  Contradiction resolution: {removed} stale lines removed "
+          f"({len(contradictions)} entities updated)", file=sys.stderr)
+
+    return "\n".join(result_lines)
+
+
 def _llm_compress(text: str, context: str = "") -> str:
     """Layer 9: LLM self-compress via Claude Haiku API. Returns text unchanged if unavailable."""
     if len(text) <= 4000:
@@ -1002,6 +1066,9 @@ def compress_file(filepath: Path) -> str:
         output.append(compressed)
 
     result = "\n".join(output)
+
+    # Contradiction resolution (last-writer-wins on numeric facts)
+    result = _resolve_contradictions(result)
 
     # Layer 9: LLM self-compress (optional, for large outputs)
     result = _llm_compress(result, context=str(filepath.name))
@@ -2275,6 +2342,9 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         seen_hashes.add(norm)
         deduped_lines.append(dline)
     result = "\n".join(deduped_lines)
+
+    # Contradiction resolution (last-writer-wins on numeric facts)
+    result = _resolve_contradictions(result)
 
     # Layer 9: LLM self-compress (optional)
     result = _llm_compress(result, context="transcript")
