@@ -76,8 +76,8 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 ```
 
 ## Etat du projet (mars 2026)
-- 42 features, 11 couches compression (25 filtres) + L10 Cue Distillation + L11 Rule Extraction + Spreading Activation
-- muninn.py: v0.9, 3643 lignes, 62 fonctions
+- 43 features, 11 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
+- muninn.py: v0.9, 3776 lignes, 63 fonctions
 - mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
 - mycelium.py: 1105 lignes (co-occurrence + P20 federe + P20b meta + spreading activation)
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API

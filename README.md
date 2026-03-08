@@ -2,7 +2,7 @@
 
 > *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression memoire pour LLM. 42 features, 11 couches de compression (25 filtres), zero dependance obligatoire.
+Moteur de compression memoire pour LLM. 43 features, 11 couches de compression (25 filtres), zero dependance obligatoire.
 
 ## Le probleme
 
@@ -54,6 +54,7 @@ L11: rule extraction (Kolmogorov)  L9:  LLM self-compress (Haiku API, optionnel)
 +Contradiction resolution          +NCD dedup (zlib similarity)
 +Context-Aware Merging             +Bloom concept tracking (boot)
 +R1-Compress chunking (L9)         +Optimal Forgetting (cold re-compress)
++Sleep Consolidation (cold merge)  +Spreading Activation (boot retrieval)
 ```
 
 - **L0-L7, L10-L11** : regex pur, zero dependance, instantane
@@ -145,7 +146,7 @@ Sinon, ajouter dans `.claude/settings.local.json` :
 
 ```
 engine/core/
-  muninn.py        # Moteur principal (3643 lignes, 62 fonctions)
+  muninn.py        # Moteur principal (3776 lignes, 63 fonctions)
   mycelium.py      # Tracker co-occurrences (1105 lignes, federe + meta + spreading activation)
   tokenizer.py     # Wrapper tiktoken
 memory/

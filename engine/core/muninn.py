@@ -2114,6 +2114,131 @@ def decode_line(line: str) -> str:
     return result
 
 
+# ── SLEEP CONSOLIDATION (Wilson & McNaughton 1994) ───────────────
+
+def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
+                       ncd_threshold: float = 0.6) -> list[tuple[str, str]]:
+    """Consolidate similar cold branches into single dense branches.
+
+    Like the brain during sleep: episodic memories (sessions) get merged
+    into semantic memory (general rules). Uses NCD to find similar branches,
+    then merges + re-compresses with the existing pipeline (dedup,
+    contradiction resolution, L10, L11). Zero API cost.
+
+    Args:
+        cold_branches: list of (name, node_dict) for cold branches
+        nodes: full tree nodes dict (for in-place mutation)
+        ncd_threshold: max NCD distance to consider branches similar (0-1)
+
+    Returns:
+        list of (merged_name, merged_content) for newly created branches
+    """
+    if len(cold_branches) < 2:
+        return []
+
+    # 1. Read all cold branch contents
+    contents = {}
+    for name, node in cold_branches:
+        filepath = TREE_DIR / node["file"]
+        if filepath.exists():
+            contents[name] = filepath.read_text(encoding="utf-8")
+
+    if len(contents) < 2:
+        return []
+
+    # 2. Compute NCD pairwise and group similar branches
+    names = list(contents.keys())
+    merged_into = {}  # name -> group_leader
+    groups = {}  # leader -> [members]
+
+    for i in range(len(names)):
+        if names[i] in merged_into:
+            continue
+        leader = names[i]
+        groups[leader] = [leader]
+        for j in range(i + 1, len(names)):
+            if names[j] in merged_into:
+                continue
+            dist = _ncd(contents[names[i]], contents[names[j]])
+            if dist < ncd_threshold:
+                groups[leader].append(names[j])
+                merged_into[names[j]] = leader
+
+    # 3. Consolidate each group with 2+ members
+    results = []
+    for leader, members in groups.items():
+        if len(members) < 2:
+            continue
+
+        # Concatenate all branch contents
+        combined = "\n".join(contents[m] for m in members)
+
+        # Line-level dedup (exact + near)
+        seen_lines = set()
+        deduped = []
+        for line in combined.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped in seen_lines:
+                continue
+            seen_lines.add(stripped)
+            deduped.append(line)
+        combined = "\n".join(deduped)
+
+        # Run through existing compression pipeline (free, no API)
+        combined = _resolve_contradictions(combined)
+        combined = _cue_distill(combined)
+        combined = _extract_rules(combined)
+
+        # Name the consolidated branch
+        merged_name = f"{leader}_consolidated"
+
+        # Write the consolidated file
+        merged_file = f"{merged_name}.mn"
+        merged_path = TREE_DIR / merged_file
+        merged_path.write_text(combined, encoding="utf-8")
+
+        # Collect tags from all merged branches
+        all_tags = set()
+        for m in members:
+            node = nodes.get(m, {})
+            all_tags.update(node.get("tags", []))
+
+        # Create consolidated node in tree
+        nodes[merged_name] = {
+            "type": "branch",
+            "file": merged_file,
+            "lines": len(combined.split("\n")),
+            "max_lines": 150,
+            "tags": sorted(all_tags)[:10],
+            "temperature": 0.1,  # warm enough to not get immediately pruned
+            "access_count": sum(nodes.get(m, {}).get("access_count", 0) for m in members),
+            "last_access": max(nodes.get(m, {}).get("last_access", "2026-01-01") for m in members),
+            "created": time.strftime("%Y-%m-%d"),
+        }
+
+        # Add as child of root
+        if "children" in nodes.get("root", {}):
+            nodes["root"]["children"].append(merged_name)
+
+        # Remove old branches
+        for m in members:
+            old_path = TREE_DIR / nodes[m]["file"]
+            if old_path.exists():
+                old_path.unlink()
+            if m in nodes.get("root", {}).get("children", []):
+                nodes["root"]["children"].remove(m)
+            del nodes[m]
+
+        orig_lines = sum(len(contents[m].split("\n")) for m in members)
+        results.append((merged_name, combined))
+        print(f"  CONSOLIDATED {len(members)} branches -> {merged_name}: "
+              f"{orig_lines} -> {len(combined.split(chr(10)))} lines")
+
+    return results
+
+
 # ── PRUNE (R4) ───────────────────────────────────────────────────
 
 def prune(dry_run: bool = True):
@@ -2174,7 +2299,14 @@ def prune(dry_run: bool = True):
                 recompressed += 1
                 print(f"  RE-COMPRESSED {name}: {original_lines} -> {new_lines} lines")
 
+        # Sleep Consolidation (Wilson & McNaughton 1994)
+        # Merge similar cold branches into single dense branches
+        cold_branch_data = [(name, nodes[name]) for name, _ in cold if name in nodes]
+        consolidated = _sleep_consolidate(cold_branch_data, nodes)
+
         for name, days in dead:
+            if name not in nodes:
+                continue  # may have been consolidated already
             node = nodes[name]
             filepath = TREE_DIR / node["file"]
             if filepath.exists():
@@ -2187,7 +2319,8 @@ def prune(dry_run: bool = True):
         save_tree(tree)
 
     print(f"\n  Summary: {len(hot)} hot, {len(cold)} cold "
-          f"({recompressed if not dry_run else '?'} recompressed), {len(dead)} dead")
+          f"({recompressed if not dry_run else '?'} recompressed, "
+          f"{len(consolidated) if not dry_run else '?'} consolidated), {len(dead)} dead")
 
 
 # ── STATUS ────────────────────────────────────────────────────────

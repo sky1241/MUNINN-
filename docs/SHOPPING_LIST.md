@@ -1,6 +1,6 @@
 # Muninn — Shopping List (techniques a implementer)
 
-> Trouvees le 8 mars 2026. 10 implementees (+ L10/L11), 1 impasse confirmee, 11 skip.
+> Trouvees le 8 mars 2026. 10 implementees (+ L10/L11 + Spreading Activation + Sleep Consolidation), 1 impasse confirmee, 11 skip.
 
 ## Tier 1 — Zero dependance, gain prouve
 

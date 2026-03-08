@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 42 briques vivantes (P0-P31 + 8 shopping list + L10/L11 + Spreading Activation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 3643 lignes, 62 fonctions
+Etat: 43 briques vivantes (P0-P31 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 3776 lignes, 63 fonctions
 
 ## Anatomie
 
@@ -418,6 +418,15 @@ Theorie: Collins & Loftus 1975 — propagation semantique a travers reseaux pond
 - [x] boot() scoring: 0.15 recency + 0.15 importance + 0.5 tfidf + 0.2 activation
 - [x] Teste: "compression"->tree/tokens/memory, "scan"->yggdrasil/arxiv/papers
 - [x] Zero dependance, ~60 lignes, pas de compression mais RETRIEVAL semantique
+
+### Sleep Consolidation (Carmack move #3) [FAIT]
+Theorie: Wilson & McNaughton 1994 — consolidation episodique->semantique pendant le sommeil.
+- [x] _sleep_consolidate() dans muninn.py (~100 lignes)
+- [x] NCD pairwise grouping (threshold=0.6) pour trouver branches similaires
+- [x] Concatene + dedup + contradiction resolution + L10 + L11 (zero API)
+- [x] Integre dans prune(): cold branches fusionnees avant deletion des dead
+- [x] Teste: 2 branches codec (NCD=0.57) fusionnees, 1 architecture preservee
+- [x] Tags, access_count, children mis a jour dans l'arbre
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
