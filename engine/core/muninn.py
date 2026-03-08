@@ -1666,6 +1666,25 @@ def prune(dry_run: bool = True):
             print(f"  OK   {name}: t={temp:.2f} acc={acc}")
 
     if not dry_run:
+        # Optimal Forgetting: re-compress cold branches with L9
+        # Cold branches get deeper compression before potential deletion
+        recompressed = 0
+        for name, days in cold:
+            node = nodes[name]
+            filepath = TREE_DIR / node["file"]
+            if not filepath.exists():
+                continue
+            content = filepath.read_text(encoding="utf-8")
+            original_lines = len(content.split("\n"))
+            # Apply L9 (LLM compression) if branch is large enough
+            compressed = _llm_compress(content, context=f"cold-branch:{name}")
+            if compressed != content:
+                filepath.write_text(compressed, encoding="utf-8")
+                new_lines = len(compressed.split("\n"))
+                node["lines"] = new_lines
+                recompressed += 1
+                print(f"  RE-COMPRESSED {name}: {original_lines} -> {new_lines} lines")
+
         for name, days in dead:
             node = nodes[name]
             filepath = TREE_DIR / node["file"]
@@ -1678,7 +1697,8 @@ def prune(dry_run: bool = True):
 
         save_tree(tree)
 
-    print(f"\n  Summary: {len(hot)} hot, {len(cold)} cold, {len(dead)} dead")
+    print(f"\n  Summary: {len(hot)} hot, {len(cold)} cold "
+          f"({recompressed if not dry_run else '?'} recompressed), {len(dead)} dead")
 
 
 # ── STATUS ────────────────────────────────────────────────────────
