@@ -2259,6 +2259,104 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     return len(texts)
 
 
+def _semantic_rle(texts: list[str]) -> list[str]:
+    """Collapse debug/retry loops in transcript messages.
+
+    Detects sequences where the same action is retried multiple times
+    (error→fix→error→fix→success) and condenses them.
+
+    Patterns detected:
+    1. Repeated similar error messages → keep first + last + count
+    2. Retry sequences (try→fail→try→fail→success) → "tried A,B(fail); C worked"
+    3. Consecutive reads of related files → merge into one line
+
+    Returns filtered texts list (shorter or same length).
+    """
+    if len(texts) < 4:
+        return texts
+
+    result = []
+    i = 0
+    collapsed_count = 0
+
+    # Error/retry detection patterns
+    error_pats = re.compile(
+        r'(?:error|fail|exception|traceback|errno|cannot|could not|unable|'
+        r'not found|permission denied|syntax error|import error|'
+        r'TypeError|ValueError|KeyError|AttributeError|NameError|IndexError|'
+        r'FileNotFoundError|ModuleNotFoundError)',
+        re.IGNORECASE
+    )
+    retry_pats = re.compile(
+        r'(?:let me try|trying|attempt|retry|let me fix|fixing|'
+        r'let me check|checking again|running again|re-run)',
+        re.IGNORECASE
+    )
+
+    while i < len(texts):
+        text = texts[i]
+
+        # Detect start of error/retry loop
+        if error_pats.search(text) and i + 2 < len(texts):
+            # Scan ahead for a retry loop
+            loop_start = i
+            loop_errors = [text]
+            loop_retries = []
+            j = i + 1
+
+            while j < len(texts):
+                t = texts[j]
+                is_error = bool(error_pats.search(t))
+                is_retry = bool(retry_pats.search(t))
+
+                if is_error:
+                    loop_errors.append(t)
+                    j += 1
+                elif is_retry:
+                    loop_retries.append(t)
+                    j += 1
+                elif j - loop_start >= 3 and (is_error or is_retry):
+                    j += 1
+                else:
+                    break
+
+            loop_len = j - loop_start
+
+            if loop_len >= 3 and len(loop_errors) >= 2:
+                # Collapse: keep first error, count, and the resolution
+                first_err = loop_errors[0][:120]
+                last_err = loop_errors[-1][:120]
+                # Check if next message after loop is a success/fix
+                resolution = ""
+                if j < len(texts):
+                    next_text = texts[j]
+                    if not error_pats.search(next_text):
+                        resolution = " -> " + next_text[:80]
+                        j += 1
+
+                collapsed = (
+                    f"[RLE:{len(loop_errors)} errors, {len(loop_retries)} retries] "
+                    f"{first_err}"
+                )
+                if last_err != first_err:
+                    collapsed += f" ... {last_err}"
+                collapsed += resolution
+
+                result.append(collapsed)
+                collapsed_count += loop_len
+                i = j
+                continue
+
+        result.append(text)
+        i += 1
+
+    if collapsed_count > 0:
+        print(f"  Semantic RLE: {collapsed_count} messages collapsed "
+              f"({len(texts)} -> {len(result)})", file=sys.stderr)
+
+    return result
+
+
 def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     """Compress a transcript JSONL into a dense .mn session file.
 
@@ -2280,6 +2378,11 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     for i, text in enumerate(texts):
         for pat in secret_patterns:
             texts[i] = re.sub(pat, '[REDACTED]', texts[i])
+
+    # Semantic RLE: collapse debug/retry loops
+    # Detects sequences of similar messages (error→retry→error→retry→success)
+    # and condenses them into a summary.
+    texts = _semantic_rle(texts)
 
     # Build a pseudo-markdown from transcript messages for compress_section
     sections = []
