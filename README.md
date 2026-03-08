@@ -174,7 +174,7 @@ Sinon, ajouter dans `.claude/settings.local.json` :
 
 ```
 engine/core/
-  muninn.py        # Moteur principal (3776 lignes, 60 fonctions)
+  muninn.py        # Moteur principal (3775 lignes, 60 fonctions)
   mycelium.py      # Tracker co-occurrences (1105 lignes, federe + meta + spreading activation)
   tokenizer.py     # Wrapper tiktoken
 memory/

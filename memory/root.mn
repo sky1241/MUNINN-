@@ -3,7 +3,7 @@ E:engine/core/muninn.py
 S:bootstrap|2026-03-08|mycelium:126191conn,1624fusions
 
 F:
-  engine/core/muninn.py 3776L
+  engine/core/muninn.py 3775L
   engine/core/mycelium.py 1106L
   docs/TIMELINE.md 663L
   WINTER_TREE.md 498L

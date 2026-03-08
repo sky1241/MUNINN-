@@ -22,7 +22,7 @@ Tu travailles normalement. Rien a faire.
 ### Quand le contexte se remplit (PreCompact)
 Un hook se declenche automatiquement:
 1. Le **mycelium** apprend (quels concepts apparaissent ensemble)
-2. Le transcript est compresse en 9 couches -> fichier .mn
+2. Le transcript est compresse en 11 couches -> fichier .mn
 3. L'arbre met a jour ses temperatures (quoi est chaud/froid)
 
 ### La session d'apres
@@ -77,7 +77,7 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 
 ## Etat du projet (mars 2026)
 - 43 features, 11 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- muninn.py: v0.9, 3776 lignes, 60 fonctions
+- muninn.py: v0.9, 3775 lignes, 60 fonctions
 - mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
 - mycelium.py: 1105 lignes (co-occurrence + P20 federe + P20b meta + spreading activation)
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API

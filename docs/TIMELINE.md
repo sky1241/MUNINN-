@@ -606,7 +606,7 @@ Les vrais chiffres sont ceux ci-dessus. Tous mesures avec tiktoken `cl100k_base`
 7. **Zero dependance obligatoire** — L1-L7 regex only, tourne partout
 8. **Bootstrap one-command** — `muninn.py bootstrap .` = mycelium + root.mn + arbre + hooks
 9. **Meta-mycelium federe** — les repos communiquent via `~/.muninn/meta_mycelium.json`
-10. **43 features, 3776 lignes** — construit depuis le cote utilisateur, pas depuis le cote chercheur
+10. **43 features, 3775 lignes** — construit depuis le cote utilisateur, pas depuis le cote chercheur
 
 ---
 
