@@ -1,41 +1,41 @@
 # Muninn — Shopping List (techniques a implementer)
 
-> Trouvees le 8 mars 2026. A implementer apres 2-3 semaines de test en prod.
+> Trouvees le 8 mars 2026. 8 implementees, 1 impasse confirmee, 11 skip.
 
 ## Tier 1 — Zero dependance, gain prouve
 
-| # | Technique | Source | Gain | Lignes | Status |
-|---|-----------|--------|------|--------|--------|
-| 1 | Meta-Tokens (LZ77 pour prompts) | ACL 2025 | 15-27% lossless | ~100 | TODO |
-| 2 | Merge semantique de lignes | SimpleMem 2026 | 10-20% | ~60 | TODO |
-| 3 | Contradiction resolution (numeric mismatch) | Stanford NLP 2008 + Mem0 | Correctesse long-terme | ~60 | TODO |
-| 4 | Semantic RLE (collapse boucles debug/retry) | Concept classique | 10-30% sur sessions chaotiques | ~100 | TODO |
-| 5 | Optimal Forgetting (temperature -> compression depth) | Neurosciences 2020 | Densite long-terme | ~50 | TODO |
-| 6 | NCD dedup (zlib similarity) | Cilibrasi 2005 | Catch doublons semantiques en 20 lignes | ~20 | TODO |
+| # | Technique | Source | Gain | Status |
+|---|-----------|--------|------|--------|
+| 1 | Meta-Tokens (LZ77 pour prompts) | ACL 2025 | 15-27% lossless | **IMPASSE** — 0% sur texte deja compresse, BPE overhead |
+| 2 | Merge semantique de lignes | SimpleMem 2026 | 10-20% | MAYBE — NCD couvre deja |
+| 3 | Contradiction resolution (numeric mismatch) | Stanford NLP 2008 | Correctesse | **FAIT** — skeleton last-writer-wins |
+| 4 | Semantic RLE (collapse boucles debug/retry) | Concept classique | 10-30% sessions | **FAIT** — 13msg->5 sur boucles debug |
+| 5 | Optimal Forgetting (temperature -> compression) | Neurosciences 2020 | Densite long-terme | **FAIT** — re-compress cold via L9 in prune |
+| 6 | NCD dedup (zlib similarity) | Cilibrasi 2005 | 5-8% boot | **FAIT** — remplace word-overlap P19 |
 
 ## Tier 2 — pip install, gros gain
 
-| # | Technique | Source | Gain | Dep | Status |
-|---|-----------|--------|------|-----|--------|
-| 7 | Word Graph Sentence Fusion | Filippova 2010 | Merge N phrases -> 1 phrase optimale | pip takahe | TODO |
-| 8 | SemHash dedup semantique | MinishLab 2025 | 10-30% | pip semhash | TODO |
-| 9 | token-reducer (entity abstraction) | PyPI 2025 | 5-15% | pip token-reducer | TODO |
-| 10 | Selective-Context (self-info pruning) | EMNLP 2023 | 30-50% | pip selective-context + GPT-2 | TODO |
-| 11 | Sequitur (grammar-based compression) | Nevill-Manning 1997 | Decouvre patterns repetes en O(n) | ~150 ou pip | TODO |
-| 12 | Zstd dictionnaire entraine | Facebook 2016 | Compression binaire x10 sur .mn | pip zstandard | TODO |
+| # | Technique | Source | Gain | Status |
+|---|-----------|--------|------|--------|
+| 7 | Word Graph Sentence Fusion | Filippova 2010 | Merge N phrases | SKIP — texte pre-compresse |
+| 8 | SemHash dedup semantique | MinishLab 2025 | 10-30% | SKIP — NCD fait le job sans dep |
+| 9 | token-reducer (entity abstraction) | PyPI 2025 | 5-15% | SKIP — redondant L3+L5+L6 |
+| 10 | Selective-Context (self-info pruning) | EMNLP 2023 | 30-50% | SKIP — GPT-2 500MB, L2+L9 couvrent |
+| 11 | Sequitur (grammar-based compression) | Nevill-Manning 1997 | patterns O(n) | MAYBE — overlap Meta-Tokens |
+| 12 | Zstd dictionnaire entraine | Facebook 2016 | x10 binaire | SKIP — mauvais niveau (bytes pas texte) |
 
 ## Tier 3 — Plus lourd, gain qualitatif
 
 | # | Technique | Source | Gain | Status |
 |---|-----------|--------|------|--------|
-| 13 | KIComp density scoring au boot | Expert Systems 2025 | 20-40% au boot | TODO |
-| 14 | EAT reasoning truncation | NeurIPS 2025 | 10-15% | TODO |
-| 15 | R1-Compress chunking pour L9 | NeurIPS 2025 Workshop | Meilleure qualite L9 | TODO |
-| 16 | A-MEM Zettelkasten linking | NeurIPS 2025 | Meilleur retrieval | TODO |
-| 17 | ACON self-improving L9 prompt | 2025 | +8% fact retention | TODO |
-| 18 | Context-Aware Hierarchical Merging | ACL 2025 | Anti-hallucination au merge | TODO |
-| 19 | TextRank importance scoring | Mihalcea 2004 | Compression depth par importance | TODO |
-| 20 | Bloom Filter concept tracking | Classique | Skip faits deja charges au boot | TODO |
+| 13 | KIComp density scoring au boot | Expert Systems 2025 | 20-30% boot overflow | **FAIT** — drop low-density on overflow |
+| 14 | EAT reasoning truncation | NeurIPS 2025 | 10-15% | MAYBE — overlap Semantic RLE |
+| 15 | R1-Compress chunking pour L9 | NeurIPS 2025 Workshop | Qualite L9 | **FAIT** — section-aware API calls >8K |
+| 16 | A-MEM Zettelkasten linking | NeurIPS 2025 | Meilleur retrieval | SKIP — =mycelium+tree |
+| 17 | ACON self-improving L9 prompt | 2025 | +8% fact retention | LATER — needs eval infra |
+| 18 | Context-Aware Hierarchical Merging | ACL 2025 | Anti-hallucination | **FAIT** — contradiction+dedup on merge |
+| 19 | TextRank importance scoring | Mihalcea 2004 | Importance scoring | MAYBE — P25 tags suffisent |
+| 20 | Bloom Filter concept tracking | Classique | 10-15% boot | **FAIT** — skip <10% novelty branches |
 
 ## Impasses confirmees (ne PAS implementer)
 
@@ -45,6 +45,7 @@
 | Synonymes plus courts | BPE gere deja les mots longs en 1 token |
 | Sinogrammes/symboles | 2-3 tokens par sinogramme vs 1 pour l'anglais |
 | Format TOON/CSV pour .mn | Pipes, virgules, tabs = meme cout que espaces |
+| Meta-Tokens (LZ77) | 0% gain — texte deja compresse par L1-L7, n-grams trop courts pour BPE |
 
 ## Insight cle: pourquoi l'optimisation mot-a-mot est morte
 

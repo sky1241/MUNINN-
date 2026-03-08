@@ -2,7 +2,7 @@
 
 > *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression memoire pour LLM. 31 features, 8 couches de compression (15 filtres), zero dependance obligatoire.
+Moteur de compression memoire pour LLM. 39 features, 8 couches de compression (23 filtres), zero dependance obligatoire.
 
 ## Le probleme
 
@@ -38,7 +38,7 @@ et les recharge intelligemment au boot suivant.
            fusions/decay    temperature
 ```
 
-## Pipeline de compression (15 filtres)
+## Pipeline de compression (23 filtres)
 
 ```
 L0: tool output strip (x3.5)     <- le plus gros gain, 74% du transcript est du bruit
@@ -46,9 +46,12 @@ L1: markdown strip                L2: filler words
 L3: phrase compression            L4: number shortening
 L5: universal rules               L6: mycelium (abbreviations apprises)
 L7: fact extraction               L9: LLM self-compress (Haiku API, optionnel)
-+P24: causal preservation         +P25: priority survival
++P24: causal preservation         +P25: priority survival (KIComp density)
 +P26: line dedup                  +P27: read dedup
-+P28: Claude tics filter
++P28: Claude tics filter          +Semantic RLE (debug loop collapse)
++Contradiction resolution         +NCD dedup (zlib similarity)
++Context-Aware Merging            +Bloom concept tracking (boot)
++R1-Compress chunking (L9)        +Optimal Forgetting (cold re-compress)
 ```
 
 - **L0-L7** : regex pur, zero dependance, instantane
@@ -137,7 +140,7 @@ Sinon, ajouter dans `.claude/settings.local.json` :
 
 ```
 engine/core/
-  muninn.py        # Moteur principal (2958 lignes, 48 fonctions)
+  muninn.py        # Moteur principal (3348 lignes, 56 fonctions)
   mycelium.py      # Tracker co-occurrences (1034 lignes, federe + meta)
   tokenizer.py     # Wrapper tiktoken
 memory/

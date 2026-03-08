@@ -74,8 +74,8 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 ```
 
 ## Etat du projet (mars 2026)
-- 31 features (P0-P31), 8 couches compression, mycelium federe, meta-mycelium cross-repo
-- muninn.py: v0.9, 2958 lignes, 48 fonctions
+- 39 features, 8 couches compression + 8 briques (shopping list), mycelium federe, meta-mycelium cross-repo
+- muninn.py: v0.9, 3348 lignes, 56 fonctions
 - mycelium.py: 1034 lignes (co-occurrence + P20 federe + P20b meta)
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken

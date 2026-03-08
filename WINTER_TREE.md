@@ -363,6 +363,24 @@ Test L9 full pipeline (2026-03-08) — 4 repos:
 - [x] CLI: `mycelium.py sync <repo>` — sync manuel
 - [x] Teste: MUNINN+infernal -> 723K meta, shazam pull 200 connexions pertinentes
 
+### Shopping List — 8 briques implementees (session 2026-03-08)
+Recherche complete: 20 techniques evaluees, 8 implementees, 1 impasse, 11 skip.
+
+| Brique | Technique | Status | Gain |
+|--------|-----------|--------|------|
+| 1 | Meta-Tokens (LZ77 n-grams) | IMPASSE — 0% on compressed text, BPE overhead | - |
+| 3 | Contradiction resolution | FAIT — skeleton last-writer-wins | Correctesse |
+| 4 | Semantic RLE | FAIT — collapse debug/retry loops (13msg->5) | 10-30% sessions |
+| 5 | Optimal Forgetting | FAIT — re-compress cold branches via L9 in prune | Densite long-terme |
+| 6 | NCD dedup (zlib) | FAIT — replaces word-overlap in P19 + grow_branches | 5-8% boot |
+| 13 | KIComp density scoring | FAIT — drop low-info lines on boot overflow | 20-30% boot overflow |
+| 15 | R1-Compress chunking | FAIT — section-aware L9 API calls (>8K) | Qualite L9 |
+| 18 | Context-Aware Merging | FAIT — contradiction+dedup on branch merge | Anti-hallucination |
+| 20 | Bloom concept tracking | FAIT — skip <10% novelty branches at boot | 10-15% boot |
+
+Skip: SemHash (NCD does it), token-reducer (redundant L3+L5+L6), Selective-Context (too heavy),
+Zstd (wrong level), A-MEM (=mycelium), ACON (needs eval infra), Word Graph (pre-compressed text).
+
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
 - [ ] Entry point CLI: `muninn bootstrap .`
