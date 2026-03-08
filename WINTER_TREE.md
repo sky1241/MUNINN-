@@ -315,7 +315,7 @@ Ce que Muninn a que les autres n'ont pas:
 - Pre-requis pour full run: apres WT3 (Bible Yggdrasil)
 - Note: tars arXiv = .gz imbriques dans .tar, chaque .gz = un paper (.tex ou .tar.gz interne)
 
-### P20 — Mycelium federe (continents + ponts) [TODO — GROS]
+### P20 — Mycelium federe (continents + ponts) [FAIT]
 
 Architecture decidee 2026-03-08 (Sky):
 - Chaque mycelium reste local a son repo (rien ne change pour l'existant)
@@ -324,27 +324,35 @@ Architecture decidee 2026-03-08 (Sky):
 - Zones auto-nommees par metier (sante, finance, recherche...) via concepts dominants
 - Ponts inter-zones par concepts partages (auto-detection, zero config)
 - 1 repo peut avoir 2+ zones, 2 repos peuvent partager 1 zone
-- DEBRAYABLE: feature flag, si off = comportement actuel inchange
+- DEBRAYABLE: feature flag `federated=False`, si off = comportement actuel inchange
 
-Problemes resolus par l'architecture:
-- Decay dilution → TF-IDF inverse (rare = important = survit)
-- Generiques dominent → TF-IDF inverse (beaucoup cite = poids faible)
-- Fusion pollution → fusions par zone, pas global
-- get_related() contamine → cherche zone courante d'abord
-- Rollback → supprime une zone, les autres bougent pas
-- Cold start (P21) → packs par metier telechargeables
+Briques (10/10 done):
+- [x] P20.1: flag `federated=False` dans mycelium.py — si off, zero changement
+- [x] P20.2: champ `zones` sur chaque connexion (tagged during observe)
+- [x] P20.3: inversion TF-IDF — effective_weight = count × log(1 + total_zones / zones_present)
+- [x] P20.4: immortalite — connexion dans 3+ zones = skip decay
+- [x] P20.5: Laplacien spectral (scipy eigsh + sklearn KMeans) → detection clusters
+- [x] P20.6: auto-naming des zones par top-3 concepts (plus haut degre)
+- [x] P20.7: get_related() zone-aware (zone courante x2.0 boost)
+- [x] P20.8: CLI `muninn.py zones` + `muninn.py detect` + --federated/--zone flags
+- [x] P20.9: persistence zones dans mycelium.json (champ "zones" par connexion)
+- [x] P20.10: test complet 4 repos (HSBC+shazam+infernal+muninn)
 
-Briques:
-- [ ] P20.1: flag `federated=False` dans mycelium.py — si off, zero changement
-- [ ] P20.2: champ `zone` sur chaque connexion (default: "local")
-- [ ] P20.3: inversion TF-IDF — poids_effectif = local × log(1 + N_zones / zones_present)
-- [ ] P20.4: immortalite — connexion dans 3+ zones = skip decay
-- [ ] P20.5: Laplacien sur graphe de co-occurrences → detection clusters
-- [ ] P20.6: auto-naming des zones par concepts dominants du cluster
-- [ ] P20.7: get_related() zone-aware (zone courante d'abord, puis ponts)
-- [ ] P20.8: CLI `muninn.py zones` — affiche la carte des continents
-- [ ] P20.9: persistence zones dans mycelium.json (nouveau champ "zones")
-- [ ] P20.10: tests — multi-repo, zone detection, TF-IDF, ponts, decay, rollback
+Test integration (2026-03-08):
+  114 fichiers, 649K connexions, 4 zones tagged, 11254 ponts inter-zones
+  833 connexions immortelles (3+ zones) survivent decay
+  Laplacien detecte 5 clusters semantiques auto-nommes
+  get_related() zone-aware: trading->HSBC (gestion, optimisation, symbol)
+
+Test L9 full pipeline (2026-03-08) — 4 repos:
+  | Repo | Fichiers | Input | Output | Ratio |
+  |------|----------|-------|--------|-------|
+  | HSBC | 115 | 194K tok | 64K tok | x3.0 |
+  | shazam | 45 | 107K tok | 37K tok | x2.9 |
+  | infernal | 58 | 535K tok | 87K tok | x6.2 |
+  | muninn | 12 | 19K tok | 8K tok | x2.3 |
+  | TOTAL | 230 | 855K tok | 196K tok | x4.4 |
+  Cout API: ~$0.21 (Haiku), 5 truncations sur 230 fichiers
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
