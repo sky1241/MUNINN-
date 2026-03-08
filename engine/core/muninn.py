@@ -1838,7 +1838,27 @@ def boot(query: str = "") -> str:
         # TF-IDF relevance scores (0-1)
         relevance_scores = _tfidf_relevance(query, branch_contents)
 
-        # Generative Agents scoring: recency + importance + relevance
+        # Spreading Activation (Collins & Loftus 1975) — semantic boost
+        # Propagates activation through mycelium to find branches that
+        # share NO keywords but are semantically connected via co-occurrence
+        activation_scores = {}  # branch_name -> activation bonus
+        try:
+            activated = m.spread_activation(query_words, hops=2, decay=0.5, top_n=50)
+            if activated:
+                # Map activated concepts to branches that contain them
+                activated_set = {c: a for c, a in activated}
+                for bname, bcontent in branch_contents.items():
+                    bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
+                    overlap = bwords & set(activated_set.keys())
+                    if overlap:
+                        # Activation score = sum of activations for matching concepts
+                        act_score = sum(activated_set[w] for w in overlap)
+                        # Normalize to [0, 1] range (cap at 1.0)
+                        activation_scores[bname] = min(1.0, act_score / max(len(overlap), 1))
+        except Exception:
+            pass  # mycelium not available or no connections
+
+        # Generative Agents scoring: recency + importance + relevance + activation
         scored = []
         for name, node in nodes.items():
             if name == "root":
@@ -1860,8 +1880,11 @@ def boot(query: str = "") -> str:
             # Relevance: TF-IDF cosine similarity
             relevance = relevance_scores.get(name, 0.0)
 
-            # Weighted combination (α=0.2, β=0.2, γ=0.6 — relevance dominates)
-            total = 0.2 * recency + 0.2 * importance + 0.6 * relevance
+            # Activation: spreading activation bonus (Collins & Loftus 1975)
+            activation = activation_scores.get(name, 0.0)
+
+            # Weighted: α=0.15 recency + β=0.15 importance + γ=0.5 relevance + δ=0.2 activation
+            total = 0.15 * recency + 0.15 * importance + 0.5 * relevance + 0.2 * activation
             if total > 0.01:
                 scored.append((name, total))
 

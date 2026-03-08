@@ -445,6 +445,77 @@ class Mycelium:
         related.sort(key=lambda x: x[1], reverse=True)
         return related[:top_n]
 
+    def spread_activation(self, seeds: list[str], hops: int = 2,
+                          decay: float = 0.5, top_n: int = 20) -> list[tuple[str, float]]:
+        """Spreading activation through the semantic network (Collins & Loftus 1975).
+
+        Instead of keyword matching, propagates activation from seed concepts
+        through weighted connections. Finds semantically related concepts that
+        share NO words with the query.
+
+        Args:
+            seeds: starting concepts (e.g. query words)
+            hops: how many steps to propagate (2 = neighbors of neighbors)
+            decay: activation multiplier per hop (0.5 = halves each step)
+            top_n: max concepts to return
+
+        Returns:
+            list of (concept, activation) sorted by activation descending.
+            Seeds themselves are excluded from results.
+        """
+        conns = self.data["connections"]
+        if not conns:
+            return []
+
+        # Build adjacency index for fast lookup
+        adj = {}  # concept -> [(neighbor, weight)]
+        for key, val in conns.items():
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            w = float(val["count"])
+            adj.setdefault(a, []).append((b, w))
+            adj.setdefault(b, []).append((a, w))
+
+        # Normalize weights per node (so high-degree nodes don't dominate)
+        for concept in adj:
+            total = sum(w for _, w in adj[concept])
+            if total > 0:
+                adj[concept] = [(n, w / total) for n, w in adj[concept]]
+
+        # Initialize activation
+        activation = {}
+        seed_set = set()
+        for s in seeds:
+            s = s.lower().strip()
+            if s in adj:
+                activation[s] = 1.0
+                seed_set.add(s)
+
+        if not activation:
+            return []
+
+        # Propagate
+        for hop in range(hops):
+            new_activation = {}
+            factor = decay ** (hop + 1)
+            for concept, act in activation.items():
+                for neighbor, weight in adj.get(concept, []):
+                    spread = act * weight * factor
+                    new_activation[neighbor] = new_activation.get(neighbor, 0) + spread
+            # Merge into main activation (keep max, not sum, to avoid runaway)
+            for concept, act in new_activation.items():
+                if concept not in activation:
+                    activation[concept] = act
+                else:
+                    activation[concept] = max(activation[concept], act)
+
+        # Remove seeds, sort by activation
+        results = [(c, a) for c, a in activation.items() if c not in seed_set]
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:top_n]
+
     def get_learned_fillers(self) -> list[str]:
         """Identify filler words from the mycelium.
 
