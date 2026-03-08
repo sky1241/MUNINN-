@@ -5,43 +5,57 @@ L8 (LLMLingua BERT) supprime — perdait 72% des faits sur texte pre-compresse.
 Pipeline final: L1-L7 (regex) + L9 (Claude Haiku API).
 Teste sur infernal-wheel (dashboard sante, UX bibles).
 
-## Resultats
+## Resultats — v2 (prompt ameliore)
+
+Ameliorations prompt L9:
+- Target 40% (au lieu de 20%)
+- max_tokens //2 (au lieu de //4)
+- "NEVER drop: numbers with units, product names, API names, thresholds"
 
 ### Par fichier (top 5 plus gros)
 | Fichier | Original | Compresse | Ratio | Facts |
 |---------|----------|-----------|-------|-------|
-| MOBILE.md | 129,835 tok | 4,256 tok | **x30.5** | 47% (33/69) |
-| WEARABLE.md | 133,941 tok | 3,722 tok | **x36.0** | 39% (28/71) |
-| WEB.md | 125,769 tok | 4,398 tok | **x28.6** | 42% (77/181) |
-| PROMPT_DEEP_RESEARCH.md | 14,515 tok | 1,437 tok | x10.1 | 26% (5/19) |
-| DESIGN_TREE.md | 14,040 tok | 1,104 tok | x12.7 | 36% (15/41) |
+| MOBILE.md | 129,835 tok | 5,920 tok | **x21.9** | 55% |
+| WEARABLE.md | 133,941 tok | 7,269 tok | **x18.4** | 60% |
+| WEB.md | 125,769 tok | 7,956 tok | **x15.8** | 48% |
+| PROMPT_DEEP_RESEARCH.md | 14,515 tok | 2,868 tok | x5.1 | 26% |
+| DESIGN_TREE.md | 14,040 tok | 1,104 tok | x12.7 | 36% |
 
 ### Totaux
 ```
-Tokens: 418,100 -> 14,917 (x28.0, 96% saved)
-Facts:  158/381 (41%)
-Cost:   ~$0.15 (5 fichiers, ~74K input + 16K output tokens Haiku)
+Tokens: 418,100 -> 25,117 (x16.6, 94% saved)
+Facts:  49% (vs 41% avant amelioration)
+Cost:   ~$0.20 (5 fichiers, Haiku)
 ```
 
+### Avant / Apres amelioration prompt
+| Metrique | v1 (target 20%) | v2 (target 40%) |
+|----------|-----------------|-----------------|
+| Ratio moyen | x28.0 | x16.6 |
+| Fact retention | 41% | 49% |
+| Tokens output | 14,917 | 25,117 |
+
 ### Ce qui est perdu
-- Dimensions CSS specifiques: px, rem, vw, vh
-- Timings precis: ms, s (0.25s, 800ms, 40s)
-- Noms de produits: Garmin, HealthKit (parfois)
-- Seuils techniques: 1MB, 256KB, 1GB
+- Dimensions CSS specifiques: px, rem, vw, vh (partiellement recupere en v2)
+- Timings precis: ms, s (ameliore en v2)
+- Noms de produits: Garmin, HealthKit (mieux en v2)
+- Seuils techniques: 1MB, 256KB, 1GB (mieux en v2)
 
 ### Ce qui survit
 - Concepts generaux: dashboard, chart, gradient, WCAG
 - Architecture: PowerShell, SQLite, API, REST
 - Pourcentages et ratios principaux
+- Nombres avec unites (ameliore v2)
 
 ## Conclusion
-L9 (Haiku) = compression extreme (x28-x36) mais perte de faits importante (41%).
-Adapte pour: index de recherche, overview rapide, sessions de conversation.
-PAS adapte pour: docs de reference ou les details CSS/timing comptent.
+L9 v2 = meilleur equilibre compression/retention (x16.6, 49% facts).
+Encore trop de perte pour docs de reference, mais bien pour sessions et index.
+L'amelioration prompt (+8% facts) montre que le levier est dans le prompt engineering.
 
 ### Comparaison pipeline
 | Pipeline | Ratio moyen | Fact retention | Cout |
 |----------|------------|----------------|------|
 | L1-L7 seules | x2.6-x4.5 | 92% | $0 |
-| L1-L7 + L9 | x10-x36 | 41% | ~$0.03/fichier |
+| L1-L7 + L9 v1 | x28 | 41% | ~$0.03/fichier |
+| L1-L7 + L9 v2 | x16.6 | 49% | ~$0.04/fichier |
 | L9 ideal: sessions | x5-x8 | ~80% (tags protegent) | ~$0.01 |

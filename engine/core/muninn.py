@@ -944,14 +944,16 @@ def compress_file(filepath: Path) -> str:
                 client = anthropic.Anthropic(api_key=api_key)
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=max(1, token_count(result) // 4),
+                    max_tokens=max(1, token_count(result) // 2),
                     messages=[{"role": "user", "content": (
-                        "Compress this into ultra-dense notes. Rules:\n"
+                        "Compress this into dense notes. Rules:\n"
+                        "- NEVER drop: numbers with units (px, rem, ms, %, KB), product names, "
+                        "API names, specific values, thresholds, dimensions\n"
                         "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
-                        "- Strip all filler, transitions, greetings, confirmations\n"
+                        "- Strip filler, transitions, greetings, verbose explanations\n"
                         "- Use shorthand: -> for leads to, = for equals, | for separators\n"
                         "- One fact per line, no full sentences\n"
-                        "- Target: 20% of original length, 100% of facts\n"
+                        "- Target: 40% of original length, 100% of facts\n"
                         "- Output raw compressed text, no preamble\n\n"
                         f"TEXT ({len(result)} chars):\n{result}"
                     )}],
@@ -2249,19 +2251,21 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
                 llm_prompt = (
-                    "Compress this session transcript into ultra-dense notes. Rules:\n"
+                    "Compress this session transcript into dense notes. Rules:\n"
+                    "- NEVER drop: numbers with units (px, rem, ms, %, KB), product names, "
+                    "API names, specific values, thresholds, dimensions\n"
                     "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
-                    "- Strip all filler, transitions, greetings, confirmations\n"
+                    "- Strip filler, transitions, greetings, confirmations\n"
                     "- Use shorthand: -> for leads to, = for equals, | for separators\n"
                     "- One fact per line, no full sentences\n"
                     "- Preserve code snippets and error messages verbatim but minimal\n"
-                    "- Target: 20% of original length, 100% of facts\n"
+                    "- Target: 40% of original length, 100% of facts\n"
                     "- Output raw compressed text, no preamble\n\n"
                     f"TRANSCRIPT ({len(result)} chars):\n{result}"
                 )
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=max(1, token_count(result) // 4),  # target ~25% of input
+                    max_tokens=max(1, token_count(result) // 2),  # target ~50% of input
                     messages=[{"role": "user", "content": llm_prompt}],
                 )
                 llm_compressed = response.content[0].text
