@@ -480,6 +480,24 @@ def read_node(name: str) -> str:
     return filepath.read_text(encoding="utf-8")
 
 
+# ── NCD SIMILARITY ───────────────────────────────────────────────
+
+def _ncd(a: str, b: str) -> float:
+    """Normalized Compression Distance — semantic similarity via zlib.
+
+    NCD(a,b) = (C(a+b) - min(C(a), C(b))) / max(C(a), C(b))
+    Returns 0.0 (identical) to 1.0 (completely different).
+    Based on: Cilibrasi & Vitanyi 2005.
+    """
+    import zlib
+    ab = a.encode("utf-8")
+    bb = b.encode("utf-8")
+    ca = len(zlib.compress(ab))
+    cb = len(zlib.compress(bb))
+    cab = len(zlib.compress(ab + bb))
+    return (cab - min(ca, cb)) / max(ca, cb) if max(ca, cb) > 0 else 0.0
+
+
 # ── TF-IDF RETRIEVAL ─────────────────────────────────────────────
 
 def _tokenize_words(text: str) -> list:
@@ -1229,15 +1247,25 @@ def grow_branches_from_session(mn_path: Path):
         tags = extract_tags(body)
         tag_set = set(tags)
 
-        # Check for overlap with existing branches (merge if >50% overlap)
+        # Check for overlap with existing branches (merge if NCD < 0.4 or tag overlap > 50%)
         merged = False
         for name, node in nodes.items():
             if name == "root":
                 continue
-            existing_tags = set(node.get("tags", []))
-            if existing_tags and tag_set:
-                overlap = len(tag_set & existing_tags) / max(len(tag_set | existing_tags), 1)
-                if overlap > 0.5:
+            # Try NCD first (content-based), fallback to tag overlap
+            existing_file = TREE_DIR / node["file"]
+            should_merge = False
+            if existing_file.exists():
+                existing_text = existing_file.read_text(encoding="utf-8")
+                if existing_text and body:
+                    ncd = _ncd(body, existing_text)
+                    should_merge = ncd < 0.4
+            if not should_merge:
+                existing_tags = set(node.get("tags", []))
+                if existing_tags and tag_set:
+                    overlap = len(tag_set & existing_tags) / max(len(tag_set | existing_tags), 1)
+                    should_merge = overlap > 0.5
+            if should_merge:
                     # Merge: append content to existing branch
                     filepath = TREE_DIR / node["file"]
                     if filepath.exists():
@@ -1439,29 +1467,25 @@ def boot(query: str = "") -> str:
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
 
-    # P19: Dedup branches — skip if >50% word overlap with already-loaded
-    def _word_set(text):
-        return set(re.findall(r'[a-zA-Z]{4,}', text.lower()))
-
+    # P19: Dedup branches — skip if NCD similarity > 0.6 (too similar)
     deduped = []
-    loaded_words = []
+    loaded_texts = []
     for name, text in loaded:
         if name == "root":
             deduped.append((name, text))
-            loaded_words.append(_word_set(text))
+            loaded_texts.append(text)
             continue
-        words = _word_set(text)
         is_dup = False
-        for prev_words in loaded_words:
-            if not words or not prev_words:
+        for prev_text in loaded_texts:
+            if not text or not prev_text:
                 continue
-            overlap = len(words & prev_words) / min(len(words), len(prev_words))
-            if overlap > 0.5:
+            ncd = _ncd(text, prev_text)
+            if ncd < 0.4:  # NCD < 0.4 = very similar content
                 is_dup = True
                 break
         if not is_dup:
             deduped.append((name, text))
-            loaded_words.append(words)
+            loaded_texts.append(text)
 
     output = []
     for name, text in deduped:
