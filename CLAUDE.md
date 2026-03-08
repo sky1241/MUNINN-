@@ -107,13 +107,11 @@ Ce qui est PROUVE (mesure tiktoken, benchmark 40 questions):
 - Benchmark: 37/40 questions factuelles retrouvees (92%)
 - Les anciens chiffres (x7.4, x2.5) etaient FAUX — bases sur len(text)//4, ecart de ~40%
 
-Ce qui est PROUVE avec pipeline complet (L1-L7+L10+L11+L9):
-- WEARABLE.md (134K tok): **x23.1** — 12K lignes -> 218 lignes
-- DESIGN_TREE.md (14K tok): **x12.7**
-- MOBILE.md (130K tok): **x8.4**
-- 4 repos (230 fichiers): x4.4 moyen, cout $0.21
-- L10 (Cue Distillation): reduit l'input L9 de 38%, zero cout
-- L8 (LLMLingua BERT): SUPPRIME — perdait 72% des faits
+Ce qui est PROUVE avec pipeline complet (L1-L7+L10+L11+L9, mars 2026):
+- 12 fichiers, 4 repos (Muninn, infernal-wheel, Yggdrasil, HSBC): **x4.5 moyen**
+- Top: DEPLOYMENT x9.6, BIOMECA x7.8, WEARABLE x7.4, HSBC_HIST x6.3, WINTER_TREE x6.2
+- Carmack moves: L10 Cue Distillation, L11 Rule Extraction, Spreading Activation, Sleep Consolidation
+- Zero crash, zero erreur sur le benchmark complet
 
 Les anciens x7.4 et x12 etaient bases sur des estimations fausses (len//4 au lieu de tiktoken).
 

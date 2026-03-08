@@ -382,15 +382,23 @@ Recherche complete: 20 techniques evaluees, 8 implementees, 1 impasse, 11 skip.
 Skip: SemHash (NCD does it), token-reducer (redundant L3+L5+L6), Selective-Context (too heavy),
 Zstd (wrong level), A-MEM (=mycelium), ACON (needs eval infra), Word Graph (pre-compressed text).
 
-Benchmark cross-repo (infernal-wheel UX Bibles, pipeline complet L1-L7+L10+L11+L9):
-  | Fichier | Original | Compresse | Ratio | Lignes |
-  |---------|----------|-----------|-------|--------|
-  | WEARABLE.md | 134K tok | 5.8K tok | **x23.1** | 12K->218 |
-  | DESIGN_TREE.md | 14K tok | 1.1K tok | x12.7 | 1.2K->147 |
-  | MOBILE.md | 130K tok | 15.5K tok | x8.4 | 13.6K->846 |
-  | WEB.md | 126K tok | 16.4K tok | x7.7 | 12.3K->1.8K |
-  L10 cued 402/969 lines on WEARABLE, reduced L9 input 38%.
-  Range: x7.7 (narratif) a x23.1 (specs structurees).
+Benchmark final cross-repo (12 fichiers, 4 repos, pipeline L1-L7+L10+L11+L9):
+  | Fichier | Repo | Original | Compresse | Ratio |
+  |---------|------|----------|-----------|-------|
+  | DEPLOYMENT | infernal | 7K tok | 734 tok | **x9.6** |
+  | BIOMECANIQUE | infernal | 7K tok | 925 tok | **x7.8** |
+  | WEARABLE | infernal | 8K tok | 1080 tok | **x7.4** |
+  | HISTORIQUE | HSBC | 6K tok | 910 tok | **x6.3** |
+  | WINTER_TREE | muninn | 9K tok | 1380 tok | **x6.2** |
+  | YGG BRIEFING | yggdrasil | 2K tok | 514 tok | x4.3 |
+  | ARBRE | infernal | 11K tok | 3127 tok | x3.5 |
+  | CLAUDE.md | muninn | 2K tok | 774 tok | x3.1 |
+  | YGG MYCELIUM | yggdrasil | 2K tok | 746 tok | x2.9 |
+  | HSBC ARBRE | HSBC | 3K tok | 1251 tok | x2.7 |
+  | README | muninn | 2K tok | 1035 tok | x1.9 |
+  | HSBC INDEX | HSBC | 2K tok | 1261 tok | x1.9 |
+  Total: 62K -> 14K tokens (**x4.5 moyen**). Zero erreur, zero crash.
+  Range: x1.9 (deja compact) a x9.6 (doc structuree).
 
 ### L10 — Cue Distillation (le move Carmack) [FAIT]
 Insight: le LLM connait deja ~80% de ce qu'on stocke (syntaxe, APIs, patterns).

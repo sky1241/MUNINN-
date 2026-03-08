@@ -104,3 +104,9 @@ Les gains restants sont STRUCTURELS:
 - Mycelium IS already a weighted semantic network — just needed the propagation algo
 - boot() scoring: 0.15 recency + 0.15 importance + 0.5 tfidf + 0.2 activation
 - Gain: retrieval quality (finds branches with zero keyword overlap)
+
+### Sleep Consolidation — Carmack move #3 (session 2026-03-08)
+- Wilson & McNaughton 1994: episodic->semantic consolidation during sleep
+- _sleep_consolidate() in prune(): NCD groups similar cold branches, merges via pipeline
+- Zero API cost (dedup + contradiction + L10 + L11 only)
+- Tested: 2 codec branches (NCD=0.57) merged, architecture branch preserved

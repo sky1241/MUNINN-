@@ -104,14 +104,15 @@ muninn.py ingest <dossier>    # Compresse des docs de reference en branches
 
 ## Resultats mesures (tiktoken)
 
-| Contexte | Pipeline | Ratio | Facts |
-|----------|----------|-------|-------|
-| UX Bible WEARABLE (134K tok) | L1-L7+L10+L11+L9 | **x23.1** | - |
-| UX Bible DESIGN_TREE (14K tok) | L1-L7+L10+L11+L9 | **x12.7** | - |
-| UX Bible MOBILE (130K tok) | L1-L7+L10+L11+L9 | **x8.4** | - |
-| Transcript reel (1.1M tok) | L1-L7+L9 | **x4.5** | 92% |
-| Texte verbeux | L1-L7 | x4.1 | 100% |
-| Roadmap technique | L1-L7 | x2.6 | 96% |
+| Contexte | Pipeline | Ratio |
+|----------|----------|-------|
+| Deployment hardware (7K tok) | L1-L7+L10+L11+L9 | **x9.6** |
+| Biomecanique gestes (7K tok) | L1-L7+L10+L11+L9 | **x7.8** |
+| Wearable UX research (8K tok) | L1-L7+L10+L11+L9 | **x7.4** |
+| HSBC historique (6K tok) | L1-L7+L10+L11+L9 | **x6.3** |
+| Winter Tree roadmap (9K tok) | L1-L7+L10+L11+L9 | **x6.2** |
+| Cross-repo 12 fichiers (62K tok) | full pipeline | **x4.5 moy** |
+| Benchmark 40 questions | L1-L7 | 92% facts |
 
 ## Installation
 
