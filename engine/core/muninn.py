@@ -1597,11 +1597,26 @@ def boot(query: str = "") -> str:
         scored.sort(key=lambda x: x[1], reverse=True)
         loaded_tokens = nodes["root"]["lines"] * BUDGET["tokens_per_line"]
 
+        # Bloom-style concept tracking: skip branches that add <10% new concepts
+        loaded_concepts = set()
+        # Seed with root concepts
+        root_words = set(re.findall(r'[a-zA-Z]{4,}', root_text.lower()))
+        loaded_concepts.update(root_words)
+
         for name, score in scored:
             node = nodes[name]
             node_tokens = node["lines"] * BUDGET["tokens_per_line"]
             if loaded_tokens + node_tokens > BUDGET["max_loaded_tokens"]:
                 break
+            # Check concept novelty before loading
+            branch_file = TREE_DIR / node["file"]
+            if branch_file.exists():
+                branch_preview = branch_file.read_text(encoding="utf-8")
+                branch_concepts = set(re.findall(r'[a-zA-Z]{4,}', branch_preview.lower()))
+                new_concepts = branch_concepts - loaded_concepts
+                if branch_concepts and len(new_concepts) / max(len(branch_concepts), 1) < 0.1:
+                    continue  # <10% new concepts, skip this branch
+                loaded_concepts.update(branch_concepts)
             branch_text = read_node(name)
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
