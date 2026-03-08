@@ -97,3 +97,10 @@ Les gains restants sont STRUCTURELS:
 - SuRe: Surprise-Driven Replay: arxiv.org/abs/2511.22367 (ICLR 2025)
 - KoLMogorov Test: openreview.net/forum?id=C45YqeBDUM (ICLR 2025)
 - Gain: WEARABLE.md x19.4 -> x23.1 (+19%), L9 input reduced 38%
+
+### Spreading Activation — Carmack move #4 (session 2026-03-08)
+- Collins & Loftus 1975: Spreading activation through semantic networks
+- Replaces pure TF-IDF keyword matching with semantic propagation in boot()
+- Mycelium IS already a weighted semantic network — just needed the propagation algo
+- boot() scoring: 0.15 recency + 0.15 importance + 0.5 tfidf + 0.2 activation
+- Gain: retrieval quality (finds branches with zero keyword overlap)

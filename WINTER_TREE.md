@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 41 briques vivantes (P0-P31 + 8 shopping list + L10/L11), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 3620 lignes, 59 fonctions
+Etat: 42 briques vivantes (P0-P31 + 8 shopping list + L10/L11 + Spreading Activation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 3643 lignes, 62 fonctions
 
 ## Anatomie
 
@@ -25,7 +25,7 @@ Engine: muninn.py 3620 lignes, 59 fonctions
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B2 | muninn.py v0.9 | OK | Moteur: 9 couches compression + retrieval intelligent (TF-IDF + scoring) |
+| B2 | muninn.py v0.9 | OK | Moteur: 11 couches compression + retrieval intelligent (TF-IDF + Spreading Activation + scoring) |
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Memoire vivante |
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
@@ -153,7 +153,7 @@ Concurrence connue:
 - ACON: gradient-free compression guidelines, -26-54% tokens
 
 Ce que Muninn a que les autres n'ont pas:
-- 8 couches empilees (regex + LLM), pas juste 1 technique
+- 11 couches empilees (regex + LLM), pas juste 1 technique
 - Mycelium vivant (codebook qui apprend par co-occurrence)
 - L-system fractal (memes regles a chaque niveau)
 - Secret filtering
@@ -411,6 +411,14 @@ Theorie: Kolmogorov 1965 — stocker le programme le plus court, pas les donnees
 - [x] Integre dans pipeline apres L10, avant L9
 - [x] Teste: 3 lignes factorisees sur WEARABLE.md (gain modeste, applicable sur data-heavy)
 
+### Spreading Activation (Carmack move #4) [FAIT]
+Theorie: Collins & Loftus 1975 — propagation semantique a travers reseaux ponderes.
+- [x] spread_activation(seeds, hops=2, decay=0.5) dans mycelium.py (~60 lignes)
+- [x] Construit index d'adjacence, normalise les poids, propage N hops
+- [x] boot() scoring: 0.15 recency + 0.15 importance + 0.5 tfidf + 0.2 activation
+- [x] Teste: "compression"->tree/tokens/memory, "scan"->yggdrasil/arxiv/papers
+- [x] Zero dependance, ~60 lignes, pas de compression mais RETRIEVAL semantique
+
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
 - [ ] Entry point CLI: `muninn bootstrap .`
@@ -428,7 +436,7 @@ Theorie: Kolmogorov 1965 — stocker le programme le plus court, pas les donnees
 - PCToolkit (IJCAI 2025): benchmark standard prompt compression
 
 Ce que Muninn a que les autres n'ont pas:
-- 8 couches empilees (regex + LLM), pas juste 1 technique
+- 11 couches empilees (regex + LLM), pas juste 1 technique
 - Mycelium vivant (codebook qui apprend par co-occurrence)
 - L-system fractal (memes regles a chaque niveau)
 - Secret filtering

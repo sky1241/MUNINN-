@@ -2,7 +2,7 @@
 
 > *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression memoire pour LLM. 41 features, 11 couches de compression (25 filtres), zero dependance obligatoire.
+Moteur de compression memoire pour LLM. 42 features, 11 couches de compression (25 filtres), zero dependance obligatoire.
 
 ## Le probleme
 
@@ -29,8 +29,9 @@ et les recharge intelligemment au boot suivant.
          ┌──────────┼──────────┐
       [root.mn]  [branches]  [last .mn]
          |           |           |
-      toujours    TF-IDF     auto-continue
-      charge      scoring       P23
+      toujours    TF-IDF +   auto-continue
+      charge      spreading     P23
+                  activation
                      |
               ┌──────┴──────┐
            [mycelium]    [tree.json]
@@ -72,7 +73,7 @@ Reseau de co-occurrences qui pousse a chaque session :
 
 Arbre fractal L-system :
 - Racine (toujours chargee) -> pointeurs vers branches
-- Branches (chargees si pertinentes via TF-IDF + Park et al. 2023)
+- Branches (chargees si pertinentes via TF-IDF + Spreading Activation + Park et al. 2023)
 - Temperature par noeud : chaud = lu souvent, froid = oublie et elague
 - Budget : 30K tokens max = 15% du contexte
 
@@ -144,8 +145,8 @@ Sinon, ajouter dans `.claude/settings.local.json` :
 
 ```
 engine/core/
-  muninn.py        # Moteur principal (3620 lignes, 59 fonctions)
-  mycelium.py      # Tracker co-occurrences (1034 lignes, federe + meta)
+  muninn.py        # Moteur principal (3643 lignes, 62 fonctions)
+  mycelium.py      # Tracker co-occurrences (1105 lignes, federe + meta + spreading activation)
   tokenizer.py     # Wrapper tiktoken
 memory/
   tree.json        # Arbre L-system
