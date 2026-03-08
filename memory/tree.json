@@ -1,179 +1,36 @@
 {
   "version": 2,
-  "created": "2026-03-03 23:44:23",
-  "updated": "2026-03-08",
+  "created": "2026-03-07 22:56:22",
   "budget": {
     "root_lines": 100,
     "branch_lines": 150,
     "leaf_lines": 200,
     "tokens_per_line": 16,
     "max_loaded_tokens": 30000,
-    "compression_ratio": 2.5
+    "compression_ratio": 4.6
   },
   "codebook_version": "v0.1",
   "nodes": {
     "root": {
       "type": "root",
       "file": "root.mn",
-      "lines": 66,
+      "lines": 29,
       "max_lines": 100,
-      "children": [
-        "b00",
-        "b01",
-        "b02",
-        "b03",
-        "b04",
-        "b05",
-        "b06",
-        "b07"
-      ],
-      "last_access": "2026-03-08",
-      "access_count": 33,
-      "tags": [
-        "yggdrasil",
-        "architecture",
-        "strates",
-        "scan",
-        "prediction",
-        "glyph",
-        "spectral"
-      ],
-      "hash": "f94c0000",
-      "temperature": 0.89
-    },
-    "b00": {
-      "type": "branch",
-      "file": "b00.mn",
-      "lines": 6,
-      "max_lines": 150,
       "children": [],
       "last_access": "2026-03-08",
-      "access_count": 32,
+      "access_count": 20,
       "tags": [
-        "glyph",
-        "archaeology",
-        "S2_GLYPHS",
-        "history"
-      ],
-      "hash": "db585362",
-      "temperature": 0.8
-    },
-    "b01": {
-      "type": "branch",
-      "file": "b01.mn",
-      "lines": 6,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 31,
-      "tags": [
-        "pipeline",
-        "scan",
-        "arxiv",
-        "mapper"
-      ],
-      "hash": "3f11ab5f",
-      "temperature": 0.8
-    },
-    "b02": {
-      "type": "branch",
-      "file": "b02.mn",
-      "lines": 15,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 32,
-      "tags": [
-        "glyph",
-        "pipeline",
-        "spectral",
-        "S2_GLYPHS",
-        "latex",
-        "mathml"
-      ],
-      "hash": "cfed09ab",
-      "temperature": 0.8
-    },
-    "b03": {
-      "type": "branch",
-      "file": "b03.mn",
-      "lines": 4,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 10,
-      "tags": [
-        "film",
-        "frames",
-        "meteorites",
-        "prediction"
-      ],
-      "hash": "5d97ebc5",
-      "temperature": 0.8
-    },
-    "b04": {
-      "type": "branch",
-      "file": "b04.mn",
-      "lines": 4,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 10,
-      "tags": [
-        "bug",
-        "fix",
-        "concept_id"
-      ],
-      "hash": "24b64ba4",
-      "temperature": 0.8
-    },
-    "b05": {
-      "type": "branch",
-      "file": "b05.mn",
-      "lines": 7,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 10,
-      "tags": [
-        "bug"
-      ],
-      "hash": "298d2c9a",
-      "temperature": 0.8
-    },
-    "b06": {
-      "type": "branch",
-      "file": "b06.mn",
-      "lines": 8,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 10,
-      "tags": [
-        "convention",
-        "python",
-        "encoding",
-        "aws"
-      ],
-      "hash": "38985fb4",
-      "temperature": 0.8
-    },
-    "b07": {
-      "type": "branch",
-      "file": "b07.mn",
-      "lines": 12,
-      "max_lines": 150,
-      "children": [],
-      "last_access": "2026-03-08",
-      "access_count": 10,
-      "tags": [
-        "openalex",
-        "snapshot",
-        "data",
+        "muninn",
+        "compression",
+        "mycelium",
+        "codebook",
+        "json",
+        "tree",
         "scan"
       ],
-      "hash": "20f2481d",
-      "temperature": 0.8
+      "hash": "d8c8e733",
+      "temperature": 0.82
     }
-  }
+  },
+  "updated": "2026-03-08"
 }

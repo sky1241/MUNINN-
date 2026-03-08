@@ -1,6 +1,0 @@
-✓AR Glyphes S-2@s14:
-  Script: engine/analysis/inject_glyph_origins.py (~1900 lignes)
-  194 glyphes mathématiques tracés (57 C1 + 137 C2)
-  Source principale: Cajori F. (1928-29) "A History of Mathematical Notations"
-  Output: data/core/glyph_origins.json
-  0 INCONNU — chaque symbole a au minimum C2 avec source historique

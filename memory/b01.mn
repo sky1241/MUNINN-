@@ -1,6 +1,0 @@
-✓AX Pipeline — SCANS ✓S@s15:
-  AX tars: 2.4K tars, 1.0K GB, E:/arxiv/src/ — ✓
-  AX↔OA mapper: 309/309 ch, 479M #p, 4.3M AX trouvés — ✓
-  PM glyph scanner: 39/39 ch, 72.5K #p — ✓
-  MP script: engine/mining/arxiv_openalex_mapper.py
-  MP output: data/scan/arxiv_map_ch/chunk_NNN/ (309 ch)

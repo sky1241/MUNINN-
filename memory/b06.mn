@@ -1,8 +1,0 @@
-?Conventions techniques:
-  Windows 11, bash shell, PYTHONIOENCODING=utf-8 pour tout script Python
-  Encoding UTF-8 obligatoire pour open() sur les JSON (accents français)
-  AWS CLI installé: C:\Program Files\Amazon\AWSCLIV2
-  JAMAIS afficher le token git — filtrer avec grep -v "ghp_\|x-access"
-  Python: C:/Users/ludov/AppData/Local/Programs/Python/Python313/python.exe
-  Le python du bash pointe vers Windows Store (VIDE, pas de numpy)
-  Toujours utiliser le chemin complet

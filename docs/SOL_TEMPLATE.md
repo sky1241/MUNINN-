@@ -82,7 +82,7 @@ C:
   user=french,informal,fast
   never show API keys/git tokens
   everything universal,zero hardcode
-  python C:/Users/ludov/AppData/Local/Programs/Python/Python313/python.exe
+  python=${PYTHON_EXE}
 ```
 
 ## Gain mesure

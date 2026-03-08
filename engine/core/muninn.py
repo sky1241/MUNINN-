@@ -2510,7 +2510,7 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
         import subprocess
         result = subprocess.run(
             ["git", "log", "--oneline", "-5", "--format=%as %s"],
-            cwd=str(repo_path), capture_output=True, text=True, timeout=5
+            cwd=str(repo_path), capture_output=True, text=True, encoding="utf-8", timeout=5
         )
         if result.returncode == 0:
             for line in result.stdout.strip().split("\n"):

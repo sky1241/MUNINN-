@@ -1,67 +1,29 @@
-# MUNINN|codebook=v0.1
-?Projet:
-  Repo: c:\Users\ludov\Desktop\ygg\yggdrasil-engine (github: sky1241/yggdrasil-engine)
-  Famille: Baobab (remplir le tronc avant d'etendre les branches)
-  User: Sky — parle francais, notation informelle, veut aller vite
-  Focus: uniquement Yggdrasil (PAS les cross-projets)
-?Architecture:
-  9 strates S-2->S6 basees sur la Hierarchie Arithmetique de Post
-  S-2=Glyphes, S-1=Metiers, S0=Formules (le SOL), S1->S6=Arbre
-  Mycelium = co-occurrences, vit dans S-2 a S0 (PAS au-dessus)
-  C1 = prouve/valide, C2 = conjectures/hypotheses, C3 = fusion C1+C2
-  Viz V3: viz/yggdrasil_rain_v3.html — Canvas 2D, 9 continents
-  Viz V4: viz/yggdrasil_rain_v4.html — Film cube 3D, 1534 frames
-  Donnees v1: data/core/strates_export.json (794 symboles, 53 domaines)
-  Donnees v2: data/core/strates_export_v2.json (21.5K symboles, 95 domaines)
-  Core: engine/core/symbols.py + engine/core/holes.py + engine/core/scisci.py
-  Formules: docs/formulas.tex (LaTeX, toutes les formules + sources DOI)
-  SOL.md = source de verite inter-sessions
-✓Etat V1:
-  100 tests pipeline: 87/100 (87%)
-  32 tests historiques: 97%
-  Blind test semi-aveugle 2015->2025: R@100=50%, p=0.000011, d=1.53
-  Co-occurrence reelle: matrice 85x85 domaines (296M #p)
-  Escaliers: 200 geo + 69 passe-partout
-  Cross-analyse: 806 isolated hubs, 1220 hidden bridges, 1567 P4 voids
-✓Etat V2@s10:
-  WT scan V2: 581/581 ch ✓, 692 GB, 348.0M #p
-  65.0K #c x annee/mois, 108.3M paires non-zero, 1.6K periodes
-  Scanner: engine/topology/winter_tree_scanner.py
-  Filtres: erratum/retraction/is_retracted + poids 1/C(n,2)
-  MONTH_FROM_YEAR=1980 (avant=par annee, apres=par mois)
-  Output: data/scan/ch/chunk_NNN/ (cooc.json.gz, activity.json.gz, meta.json)
-  E:\ = 4.6 TB libre (disque 5 TB, migre @s 10)
-✓Etat S-2 Graines@s10:
-  17 graines S-2 a l'an 1100: 10 chiffres (0-9) + 7 symboles alchimiques
-  9 especes = 9 spores independantes, fusionnent en grandissant
-  Aristote (~350 av. J-C) = mega-hub, 1 spore -> 4 especes
-  Donnees: data/scan/early_#c.json, data/scan/species_65k.json
-  Types mycologiques: endo (Physiq 73%, BioCli 71%), ecto (TerGeo), sapro (HumEco 42%)
-?V4 — Film Mycelium@s10:
-  viz/yggdrasil_rain_v4.html: film integre dans le cube 3D
-  engine/topology/frame_builder.py: 1534 frames, 4h20 de scan
-  data/scan/frames.json (2.5 MB) + data/scan/concept_births.json (1.6 MB)
-  Serveur: lancer depuis RACINE du repo (pas viz/)
-✓BT V2@s11:
-  65.0K #c, cutoff 2015, 82.7M paires scorees
-  Mann-Whitney p=3.4e-12, d=0.44, K=9 sur donnees 2015 ONLY
-✓P4 2025@s11:
-  Scan: 581 ch, 348.0M #p, 108.3M paires non-zero
-  P4 = activity_A x activity_B x (1 - cooc_norm) x |z_uzzi|
-  Top 10K INTER-especes + INTRA classes par P4 score
-  Collision 9x9: CSxPhysics (82), HumanitiesxPhysics (72), CSxHumanities (56)
-  Analyse top 100: 18 BANAL, 30 INTERESSANT, 41 WTF, 11 BRUIT
-  20/20 verifications web positives, 0 faux positif
-✓GL@s12:
-  64 glyphes = eigenvecteurs Laplacien normalise
-  R@100=70%, R@1K=85%, R@10K=100%, d=8.78, p=2.76e-12, mrank=8
-  7 percees rang 1 (AlphaGo, GPT, CAR-T, Microbiome, GAN, Liquid biopsy, Grav waves)
-  Score: Sum_k lambda_k x v_k(i) x v_k(j), 3.3K pred inter-especes, zero-cooc
-→b00:✓AR Glyphes S-2@s14
-→b01:✓AX Pipeline — SCANS@s15
-→b02:◉S-2 Glyph Pipeline — 8 briques codees
-→b03:◉Etat V3 — code pret, frames dispo@s7
-→b04:✓BUG BLOQUANT (22 fev 2026)
-→b05:?Autres bugs (non bloquants)
-→b06:?Conventions techniques + Python
-→b07:?OA Snapshot Local — E:\openalex\data\
+P:MUNINN-|markdown|7976L|28files
+E:engine/core/muninn.py
+S:bootstrap|2026-03-08|mycelium:126191conn,1624fusions
+
+F:
+  engine/core/muninn.py 3776L
+  engine/core/mycelium.py 1106L
+  docs/TIMELINE.md 663L
+  WINTER_TREE.md 498L
+  README.md 216L
+  CLAUDE.md 165L
+  tests/test_l9_full.py 148L
+  tests/benchmark/run_benchmark.py 124L
+  tests/test_l8_ordering.py 117L
+  docs/LITERATURE.md 113L
+  docs/SHOPPING_LIST.md 113L
+  docs/BENCHMARK_FULL_2026-03-07.md 95L
+  docs/SOL_TEMPLATE.md 93L
+  docs/BENCHMARK_L9_2026-03-08.md 86L
+  tests/benchmark/verbose_memory.md 82L
+
+K:muninn,compression,mycelium,codebook,json,tree,scan,tokens,yggdrasil,pipeline
+
+R:
+  2026-03-08 Skip L9 on transcripts — regex x143 already optimal, L9 wastes API money
+  2026-03-08 Fix L9 chunking: fallback to line-split when no ## headers, deduplicate single-chunk path
+  2026-03-08 Audit cleanup: fix function count (60 not 63), add __version__, relative hook paths
+  2026-03-08 Cleanup: remove hardcoded paths, fix stale version numbers, reorganize test fixtures
+  2026-03-08 Polish GitHub presentation — README benchmarks, Carmack table, references, SOL+TIMELINE sync

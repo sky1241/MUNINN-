@@ -133,6 +133,11 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Teste sur OpenAlex: 50 papers x5.2 ($0.024), 306 papers x4.0 ($0.13)
 - [x] SOL.md full pipeline L1-L7+L9: x7.7 (20K->2.6K chars)
 - [x] Bootstrap HSBC: x5.4 moyen (LOGIQUE x9.6, METHODOLOGIE x13.8, ARBRE x11.4)
+- [x] L9 AUTO-SKIP sur transcripts (commit db258f3, 2026-03-08):
+  - Teste: 55MB transcript, regex=3014tok ($0, 10s) vs L9=3319tok ($0.35, 17min)
+  - L0 vire 74% du bruit (tool outputs), regex finit le job — L9 n'a plus de gras
+  - L9 reste actif sur compress_file, ingest, bootstrap (prose brute: x2-x3 gain)
+  - Regle: transcripts=regex suffit, docs bruts=L9 vaut le coup
 
 Pipeline complet (11 couches, 25 filtres):
   L1: markdown strip | L2: filler words | L3: phrase compression
@@ -435,6 +440,17 @@ Theorie: Wilson & McNaughton 1994 — consolidation episodique->semantique penda
 - [x] Integre dans prune(): cold branches fusionnees avant deletion des dead
 - [x] Teste: 2 branches codec (NCD=0.57) fusionnees, 1 architecture preservee
 - [x] Tags, access_count, children mis a jour dans l'arbre
+
+### Cleanup memory/ (2026-03-08)
+- [x] memory/root.mn et b00-b07.mn contenaient des donnees YGGDRASIL depuis le commit v0 (bc647da)
+  - Premier test du moteur: avait utilise MEMORY.md de Ygg comme cobaye
+  - Jamais nettoyé par aucun cousin depuis
+- [x] Re-bootstrap propre: `muninn.py bootstrap .` genere root.mn Muninn (29 lignes, 393 tokens)
+- [x] Copie .muninn/tree/ -> memory/, suppression des 8 branches Ygg
+- [x] Arbre maintenant: 1 noeud root, tags=[muninn,compression,mycelium], 0.3% budget
+- [x] Benchmark questions corrigees: layers 9->11, version 0.8->0.9.1
+- [x] .claude/settings.json: paths hardcodes -> wildcard universel
+- [x] SOL_TEMPLATE.md: path Python hardcode -> ${PYTHON_EXE}
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
