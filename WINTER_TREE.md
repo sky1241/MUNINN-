@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 28 briques vivantes (P0-P30), 3 en roadmap (P20-P21, P31), 3 supprimees (P3), 14 bugs corriges (P10)
+Etat: 29 briques vivantes (P0-P31), 2 en roadmap (P20, P21), 3 supprimees (P3), 14 bugs corriges (P10)
 
 ## Anatomie
 
@@ -315,10 +315,36 @@ Ce que Muninn a que les autres n'ont pas:
 - Pre-requis pour full run: apres WT3 (Bible Yggdrasil)
 - Note: tars arXiv = .gz imbriques dans .tar, chaque .gz = un paper (.tex ou .tar.gz interne)
 
-### P20 — Mycelium cross-repo [TODO — GROS]
-- [ ] Meta-mycelium: merge les fusions de tous les repos bootstrappes
-- [ ] Quand on bosse sur repo A, concepts de repo B disponibles
-- [ ] Les "lianes" entre projets (cf CROSS_PROJECTS_ROADMAP Yggdrasil)
+### P20 — Mycelium federe (continents + ponts) [TODO — GROS]
+
+Architecture decidee 2026-03-08 (Sky):
+- Chaque mycelium reste local a son repo (rien ne change pour l'existant)
+- Le Laplacien detecte les clusters semantiques = zones/metiers (pas par repo, par SENS)
+- Inversion TF-IDF: cite partout = poids faible mais immortel, rare = poids fort
+- Zones auto-nommees par metier (sante, finance, recherche...) via concepts dominants
+- Ponts inter-zones par concepts partages (auto-detection, zero config)
+- 1 repo peut avoir 2+ zones, 2 repos peuvent partager 1 zone
+- DEBRAYABLE: feature flag, si off = comportement actuel inchange
+
+Problemes resolus par l'architecture:
+- Decay dilution → TF-IDF inverse (rare = important = survit)
+- Generiques dominent → TF-IDF inverse (beaucoup cite = poids faible)
+- Fusion pollution → fusions par zone, pas global
+- get_related() contamine → cherche zone courante d'abord
+- Rollback → supprime une zone, les autres bougent pas
+- Cold start (P21) → packs par metier telechargeables
+
+Briques:
+- [ ] P20.1: flag `federated=False` dans mycelium.py — si off, zero changement
+- [ ] P20.2: champ `zone` sur chaque connexion (default: "local")
+- [ ] P20.3: inversion TF-IDF — poids_effectif = local × log(1 + N_zones / zones_present)
+- [ ] P20.4: immortalite — connexion dans 3+ zones = skip decay
+- [ ] P20.5: Laplacien sur graphe de co-occurrences → detection clusters
+- [ ] P20.6: auto-naming des zones par concepts dominants du cluster
+- [ ] P20.7: get_related() zone-aware (zone courante d'abord, puis ponts)
+- [ ] P20.8: CLI `muninn.py zones` — affiche la carte des continents
+- [ ] P20.9: persistence zones dans mycelium.json (nouveau champ "zones")
+- [ ] P20.10: tests — multi-repo, zone detection, TF-IDF, ponts, decay, rollback
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
