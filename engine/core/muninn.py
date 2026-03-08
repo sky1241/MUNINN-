@@ -553,9 +553,13 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
         current = "\n".join(line for i, line in enumerate(lines) if i not in dropped)
         drop_idx += 1
 
+    final_tokens = token_count(current)
     if dropped:
         print(f"  KIComp: dropped {len(dropped)} low-density lines "
-              f"(budget: {max_tokens} tokens)", file=sys.stderr)
+              f"(budget: {max_tokens} tokens, final: {final_tokens} tokens)", file=sys.stderr)
+    if final_tokens > max_tokens:
+        print(f"  KIComp WARNING: still over budget ({final_tokens}/{max_tokens} tokens) "
+              f"- all droppable lines exhausted", file=sys.stderr)
 
     return current
 
@@ -1047,11 +1051,11 @@ def _resolve_contradictions(text: str) -> str:
     for i, line in enumerate(lines):
         if line.startswith("#") or line.startswith("?FACTS") or not line.strip():
             continue
-        # Build skeleton: replace all numbers with #N#
-        skel = num_val.sub("#N#", line).strip().lower()
+        # Build skeleton: replace all numbers with placeholder, then lowercase
+        skel = num_val.sub("_NUM_", line).strip().lower()
         skel = re.sub(r'\s+', ' ', skel)
         # Only track lines that HAVE numbers (no numbers = no contradiction possible)
-        if "#n#" not in skel:
+        if "_num_" not in skel:
             continue
         if skel in skeleton_last:
             old_text, old_idx = skeleton_last[skel]
@@ -1089,7 +1093,7 @@ def _resolve_contradictions(text: str) -> str:
     return "\n".join(result_lines)
 
 
-def _llm_compress_chunk(text: str, client, context: str = "") -> str:
+def _llm_compress_chunk(text: str, client, context: str = "") -> tuple:
     """Compress a single chunk via Claude Haiku API. Returns text unchanged on failure."""
     try:
         response = client.messages.create(
@@ -1403,36 +1407,37 @@ def grow_branches_from_session(mn_path: Path):
                     overlap = len(tag_set & existing_tags) / max(len(tag_set | existing_tags), 1)
                     should_merge = overlap > 0.5
             if should_merge:
-                    # Context-Aware Merge: append + resolve contradictions + dedup
-                    filepath = TREE_DIR / node["file"]
-                    if filepath.exists():
-                        old = filepath.read_text(encoding="utf-8")
-                        # Combine old + new content
-                        merged_text = old + "\n" + header + "\n" + body
-                        # Resolve contradictions (last-writer-wins)
-                        merged_text = _resolve_contradictions(merged_text)
-                        # Dedup lines (exact + normalized)
-                        seen = set()
-                        deduped = []
-                        for dline in merged_text.split("\n"):
-                            norm = re.sub(r'[^\w\s]', '', dline.lower()).strip()
-                            norm = re.sub(r'\s+', ' ', norm)
-                            if not norm:
-                                continue
-                            if norm in seen:
-                                continue
-                            seen.add(norm)
-                            deduped.append(dline)
-                        merged_text = "\n".join(deduped)
-                        new_lines = merged_text.split("\n")
-                        max_l = node.get("max_lines", 150)
-                        if len(new_lines) <= max_l:
-                            filepath.write_text(merged_text, encoding="utf-8")
-                            node["lines"] = len(new_lines)
-                            # Add new tags
-                            node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
-                            merged = True
-                            break
+                # Context-Aware Merge: append + resolve contradictions + dedup
+                filepath = TREE_DIR / node["file"]
+                if not filepath.exists():
+                    print(f"  WARNING: branch file missing: {filepath}", file=sys.stderr)
+                    break  # Don't create duplicate, just skip this segment
+                old = filepath.read_text(encoding="utf-8")
+                # Combine old + new content
+                merged_text = old + "\n" + header + "\n" + body
+                # Resolve contradictions (last-writer-wins)
+                merged_text = _resolve_contradictions(merged_text)
+                # Dedup lines (exact + normalized)
+                seen = set()
+                deduped = []
+                for dline in merged_text.split("\n"):
+                    norm = re.sub(r'[^\w\s]', '', dline.lower()).strip()
+                    norm = re.sub(r'\s+', ' ', norm)
+                    if not norm:
+                        continue
+                    if norm in seen:
+                        continue
+                    seen.add(norm)
+                    deduped.append(dline)
+                merged_text = "\n".join(deduped)
+                new_lines = merged_text.split("\n")
+                max_l = node.get("max_lines", 150)
+                if len(new_lines) <= max_l:
+                    filepath.write_text(merged_text, encoding="utf-8")
+                    node["lines"] = len(new_lines)
+                    node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
+                    merged = True
+                    break
 
         if not merged:
             # Create new branch
@@ -1608,16 +1613,13 @@ def boot(query: str = "") -> str:
             node_tokens = node["lines"] * BUDGET["tokens_per_line"]
             if loaded_tokens + node_tokens > BUDGET["max_loaded_tokens"]:
                 break
-            # Check concept novelty before loading
-            branch_file = TREE_DIR / node["file"]
-            if branch_file.exists():
-                branch_preview = branch_file.read_text(encoding="utf-8")
-                branch_concepts = set(re.findall(r'[a-zA-Z]{4,}', branch_preview.lower()))
-                new_concepts = branch_concepts - loaded_concepts
-                if branch_concepts and len(new_concepts) / max(len(branch_concepts), 1) < 0.1:
-                    continue  # <10% new concepts, skip this branch
-                loaded_concepts.update(branch_concepts)
+            # Check concept novelty before committing to load
             branch_text = read_node(name)
+            branch_concepts = set(re.findall(r'[a-zA-Z]{4,}', branch_text.lower()))
+            new_concepts = branch_concepts - loaded_concepts
+            if branch_concepts and len(new_concepts) / max(len(branch_concepts), 1) < 0.1:
+                continue  # <10% new concepts, skip this branch
+            loaded_concepts.update(branch_concepts)
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
     else:
@@ -1863,10 +1865,10 @@ def prune(dry_run: bool = True):
         else:
             print(f"  OK   {name}: t={temp:.2f} acc={acc}")
 
+    recompressed = 0
     if not dry_run:
         # Optimal Forgetting: re-compress cold branches with L9
         # Cold branches get deeper compression before potential deletion
-        recompressed = 0
         for name, days in cold:
             node = nodes[name]
             filepath = TREE_DIR / node["file"]
@@ -2532,8 +2534,6 @@ def _semantic_rle(texts: list[str]) -> list[str]:
                     j += 1
                 elif is_retry:
                     loop_retries.append(t)
-                    j += 1
-                elif j - loop_start >= 3 and (is_error or is_retry):
                     j += 1
                 else:
                     break
