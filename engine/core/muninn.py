@@ -56,6 +56,37 @@ UNIVERSAL_RULES = {
     "## ": "", "**": "", "- ": "",
 }
 
+# ── L9 PROMPT (single source of truth) ──────────────────────────
+# Research-backed design (Chain of Density, anti-summarization framing):
+# - "EXTRACT+RESTATE" not "compress" (avoids summarization prior)
+# - temperature=0 (factual precision over creative paraphrase)
+# - Few-shot example (teaches by showing, not telling)
+# - "identify all facts first" (CoD-inspired enumeration before output)
+# - stop_reason check (detects silent truncation)
+# - max_tokens * 3/4 (pre-compressed text needs more room than raw)
+_L9_SYSTEM = (
+    "You extract and restate facts for LLM memory. "
+    "A future LLM loads your output as its ONLY context. "
+    "NEVER add information not in the input. "
+    "When unsure whether to keep or drop: KEEP."
+)
+_L9_PROMPT = (
+    "EXTRACT every fact from the input. RESTATE each in minimal tokens.\n"
+    "Drop ONLY: filler adverbs, transitions, repetition, greetings, boilerplate.\n\n"
+    "KEEP (non-negotiable): numbers+units, names, identifiers, "
+    "decisions+WHY, errors+fixes, code signatures.\n"
+    "Tables/lists: preserve structure, compress cell text.\n"
+    "Prose: 1 fact/line, use -> = | ~ as connectors, ## headers to group.\n\n"
+    "EXAMPLE:\n"
+    "IN: The dashboard uses a 12px base font with 1.5rem line height. "
+    "Charts render at 60fps on devices with more than 256KB cache. "
+    "The Garmin API v3.2 provides heart rate data with 95% accuracy at rest.\n"
+    "OUT: dashboard: 12px base, 1.5rem line-height | charts 60fps if cache>256KB "
+    "| Garmin API v3.2: HR 95% accuracy@rest\n\n"
+    "PROCESS: first mentally identify ALL facts/entities, then write output "
+    "covering every one. No preamble.\n\n"
+)
+
 
 def load_codebook(repo_path: Path = None) -> dict:
     """Load compression rules: universal + mycelium (if available)."""
@@ -944,24 +975,22 @@ def compress_file(filepath: Path) -> str:
                 client = anthropic.Anthropic(api_key=api_key)
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=max(1, token_count(result) // 2),
-                    messages=[{"role": "user", "content": (
-                        "Compress this into dense notes. Rules:\n"
-                        "- NEVER drop: numbers with units (px, rem, ms, %, KB), product names, "
-                        "API names, specific values, thresholds, dimensions\n"
-                        "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
-                        "- Strip filler, transitions, greetings, verbose explanations\n"
-                        "- Use shorthand: -> for leads to, = for equals, | for separators\n"
-                        "- One fact per line, no full sentences\n"
-                        "- Target: 40% of original length, 100% of facts\n"
-                        "- Output raw compressed text, no preamble\n\n"
-                        f"TEXT ({len(result)} chars):\n{result}"
-                    )}],
+                    max_tokens=max(1, token_count(result)),
+                    temperature=0,
+                    system=_L9_SYSTEM,
+                    messages=[{"role": "user", "content":
+                        _L9_PROMPT + f"INPUT ({len(result)} chars):\n{result}"
+                    }],
                 )
                 llm_compressed = response.content[0].text
-                if len(llm_compressed) < len(result) * 0.8:
+                truncated = response.stop_reason == "max_tokens"
+                if truncated:
+                    print(f"  Layer 9 WARNING: output truncated (max_tokens hit)",
+                          file=sys.stderr)
+                if len(llm_compressed) < len(result) * 0.9:
                     print(f"  Layer 9 (LLM): {len(result)} -> {len(llm_compressed)} chars "
-                          f"(API: {response.usage.input_tokens}in+{response.usage.output_tokens}out)",
+                          f"(API: {response.usage.input_tokens}in+{response.usage.output_tokens}out)"
+                          f"{' TRUNCATED' if truncated else ''}",
                           file=sys.stderr)
                     result = llm_compressed
         except ImportError:
@@ -2250,30 +2279,25 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
             if api_key:
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
-                llm_prompt = (
-                    "Compress this session transcript into dense notes. Rules:\n"
-                    "- NEVER drop: numbers with units (px, rem, ms, %, KB), product names, "
-                    "API names, specific values, thresholds, dimensions\n"
-                    "- Keep ALL facts: numbers, dates, names, file paths, commits, decisions\n"
-                    "- Strip filler, transitions, greetings, confirmations\n"
-                    "- Use shorthand: -> for leads to, = for equals, | for separators\n"
-                    "- One fact per line, no full sentences\n"
-                    "- Preserve code snippets and error messages verbatim but minimal\n"
-                    "- Target: 40% of original length, 100% of facts\n"
-                    "- Output raw compressed text, no preamble\n\n"
-                    f"TRANSCRIPT ({len(result)} chars):\n{result}"
-                )
                 response = client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=max(1, token_count(result) // 2),  # target ~50% of input
-                    messages=[{"role": "user", "content": llm_prompt}],
+                    max_tokens=max(1, token_count(result)),
+                    temperature=0,
+                    system=_L9_SYSTEM,
+                    messages=[{"role": "user", "content":
+                        _L9_PROMPT + f"INPUT ({len(result)} chars):\n{result}"
+                    }],
                 )
                 llm_compressed = response.content[0].text
-                if len(llm_compressed) < len(result) * 0.8:  # only use if >20% savings
+                truncated = response.stop_reason == "max_tokens"
+                if truncated:
+                    print(f"  Layer 9 WARNING: output truncated (max_tokens hit)")
+                if len(llm_compressed) < len(result) * 0.9:
                     input_tokens = response.usage.input_tokens
                     output_tokens = response.usage.output_tokens
                     print(f"  Layer 9 (LLM): {len(result)//4} -> {len(llm_compressed)//4} tokens "
-                          f"(API cost: {input_tokens}in+{output_tokens}out)")
+                          f"(API: {input_tokens}in+{output_tokens}out)"
+                          f"{' TRUNCATED' if truncated else ''}")
                     result = llm_compressed
         except ImportError:
             pass  # anthropic not installed — skip Layer 9
