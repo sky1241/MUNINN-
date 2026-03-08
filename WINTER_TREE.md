@@ -137,7 +137,12 @@ Pipeline complet (8 couches):
   L1: markdown strip | L2: filler words | L3: phrase compression
   L4: number shortening | L5: universal rules | L6: mycelium
   L7: fact extraction | L9: LLM self-compress (Haiku API)
-L9 benchmark: x28 moyen, 41% fact retention (trop agressif pour docs reference)
+L9 v3 (research-backed prompt):
+  - "EXTRACT+RESTATE" not "Compress" (anti-summarization framing)
+  - temperature=0, max_tokens=100% input, few-shot example, CoD enumeration
+  - stop_reason check (detecte truncation silencieuse)
+  - Single _L9_SYSTEM + _L9_PROMPT constants (zero duplication)
+L9 benchmark: v1=x28/41% facts, v2=x16.6/49%, v3=x10.4/zero truncation
 L9 ideal: sessions (tags D>/B>/F> protegent les faits importants)
 
 Concurrence connue:
