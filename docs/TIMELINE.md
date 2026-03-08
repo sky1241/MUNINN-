@@ -157,7 +157,7 @@ Fichier : `.muninn/mycelium.json`. Apres 141 sessions : 500+ connexions, 392 fus
 
 ---
 
-## 4. Les 8 couches de compression
+## 4. Les 11 couches de compression (25 filtres)
 
 Le pipeline s'est construit incrementalement, couche par couche, du 6 au 8 mars 2026.
 
@@ -648,7 +648,7 @@ compressees, et repoussent au boot suivant.
 
 ## 14. Et maintenant ?
 
-**31 features implementees. 68 commits. 5 jours.**
+**43 features implementees. 4 Carmack moves. 5 jours.**
 
 Le moteur est la. L'arbre pousse. Le mycelium apprend. Les cousins se souviennent.
 Les repos communiquent.

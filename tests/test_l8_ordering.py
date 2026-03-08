@@ -58,7 +58,7 @@ def main():
         print("SKIP: llmlingua not installed (pip install llmlingua)")
         return 0
 
-    sample = ROOT / "tests" / "verbose_memory.md"
+    sample = ROOT / "tests" / "benchmark" / "verbose_memory.md"
     if not sample.exists():
         print(f"SKIP: {sample} not found")
         return 0

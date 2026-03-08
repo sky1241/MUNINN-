@@ -74,7 +74,7 @@ def main():
     tests_dir = benchmark_dir.parent
 
     samples = [
-        (tests_dir / "verbose_memory.md", benchmark_dir / "questions_verbose.json"),
+        (benchmark_dir / "verbose_memory.md", benchmark_dir / "questions_verbose.json"),
         (benchmark_dir / "sample_session.md", benchmark_dir / "questions_session.json"),
         (benchmark_dir / "sample_compact.md", benchmark_dir / "questions_compact.json"),
     ]

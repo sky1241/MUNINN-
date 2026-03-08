@@ -134,7 +134,7 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] SOL.md full pipeline L1-L7+L9: x7.7 (20K->2.6K chars)
 - [x] Bootstrap HSBC: x5.4 moyen (LOGIQUE x9.6, METHODOLOGIE x13.8, ARBRE x11.4)
 
-Pipeline complet (8 couches):
+Pipeline complet (11 couches, 25 filtres):
   L1: markdown strip | L2: filler words | L3: phrase compression
   L4: number shortening | L5: universal rules | L6: mycelium
   L7: fact extraction | L9: LLM self-compress (Haiku API)

@@ -1,6 +1,11 @@
 """
-Full L9 compression test across 4 repos.
+Full L9 compression test across multiple repos.
 Measures compression ratio, API cost, truncation.
+
+Usage:
+    python test_l9_full.py                          # auto-detect repos
+    python test_l9_full.py /path/to/repo1 /path/to/repo2  # explicit repos
+    MUNINN_TEST_REPOS=repo1:/path,repo2:/path python test_l9_full.py  # env var
 """
 import sys, os, time
 from pathlib import Path
@@ -9,12 +14,35 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "engine" / "core"))
 from muninn import compress_file, token_count
 
-REPOS = {
-    "HSBC": Path("C:/Users/ludov/HSBC-algo-genetic"),
-    "shazam": Path("C:/Users/ludov/shazam-piano"),
-    "infernal": Path("C:/Users/ludov/.infernal_wheel"),
-    "muninn": Path("C:/Users/ludov/MUNINN-"),
+# Default repo locations — override with CLI args or MUNINN_TEST_REPOS env var
+_DEFAULT_REPOS = {
+    "HSBC": Path.home() / "HSBC-algo-genetic",
+    "shazam": Path.home() / "shazam-piano",
+    "infernal": Path.home() / ".infernal_wheel",
+    "muninn": Path(__file__).resolve().parent.parent,
 }
+
+def _resolve_repos() -> dict[str, Path]:
+    """Resolve repo paths from CLI args, env var, or defaults."""
+    # CLI args: paths passed directly
+    if len(sys.argv) > 1:
+        repos = {}
+        for arg in sys.argv[1:]:
+            p = Path(arg).resolve()
+            repos[p.name] = p
+        return repos
+    # Env var: MUNINN_TEST_REPOS=name1:/path1,name2:/path2
+    env = os.environ.get("MUNINN_TEST_REPOS", "")
+    if env:
+        repos = {}
+        for entry in env.split(","):
+            if ":" in entry:
+                name, path = entry.split(":", 1)
+                repos[name.strip()] = Path(path.strip())
+        return repos
+    return _DEFAULT_REPOS
+
+REPOS = _resolve_repos()
 
 # Skip auto-generated data, archives, secrets
 SKIP_PATTERNS = [

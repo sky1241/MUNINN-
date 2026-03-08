@@ -1,7 +1,7 @@
 # Muninn Bootstrap — HSBC-algo-genetic
 
 Date: 2026-03-07
-Engine: muninn.py v0.8, L1-L7 + L9 (Haiku API)
+Engine: muninn.py v0.9+, L1-L7 + L9 (Haiku API)
 
 ## Scan
 - Files scanned: 1955
