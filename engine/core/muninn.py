@@ -1089,8 +1089,36 @@ def _resolve_contradictions(text: str) -> str:
     return "\n".join(result_lines)
 
 
+def _llm_compress_chunk(text: str, client, context: str = "") -> str:
+    """Compress a single chunk via Claude Haiku API. Returns text unchanged on failure."""
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=max(1, token_count(text)),
+            temperature=0,
+            system=_L9_SYSTEM,
+            messages=[{"role": "user", "content":
+                _L9_PROMPT + f"INPUT ({len(text)} chars):\n{text}"
+            }],
+        )
+        compressed = response.content[0].text
+        truncated = response.stop_reason == "max_tokens"
+        if truncated:
+            print(f"  L9 WARNING: truncated [{context}]", file=sys.stderr)
+        if len(compressed) < len(text) * 0.9:
+            return compressed, response.usage
+        return text, response.usage
+    except Exception as e:
+        print(f"  L9 ERROR: {e} [{context}]", file=sys.stderr)
+        return text, None
+
+
 def _llm_compress(text: str, context: str = "") -> str:
-    """Layer 9: LLM self-compress via Claude Haiku API. Returns text unchanged if unavailable."""
+    """Layer 9: LLM self-compress via Claude Haiku API.
+
+    R1-Compress: chunks text by ## sections for better coherence.
+    Returns text unchanged if unavailable.
+    """
     if len(text) <= 4000:
         return text
     try:
@@ -1108,6 +1136,35 @@ def _llm_compress(text: str, context: str = "") -> str:
             return text
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
+
+        # R1-Compress: chunk by sections for better fact retention
+        if len(text) > 8000:
+            chunks = re.split(r'(?=^## )', text, flags=re.MULTILINE)
+            chunks = [c for c in chunks if c.strip()]
+
+            if len(chunks) >= 2:
+                compressed_chunks = []
+                total_in, total_out = 0, 0
+                for i, chunk in enumerate(chunks):
+                    if len(chunk) < 200:  # too small to compress
+                        compressed_chunks.append(chunk)
+                        continue
+                    result, usage = _llm_compress_chunk(
+                        chunk, client, context=f"{context}:chunk{i}")
+                    compressed_chunks.append(result)
+                    if usage:
+                        total_in += usage.input_tokens
+                        total_out += usage.output_tokens
+
+                llm_compressed = "\n".join(compressed_chunks)
+                if len(llm_compressed) < len(text) * 0.9:
+                    print(f"  Layer 9 (LLM): {len(text)} -> {len(llm_compressed)} chars "
+                          f"(API: {total_in}in+{total_out}out) "
+                          f"[{len(chunks)} chunks] [{context}]", file=sys.stderr)
+                    return llm_compressed
+                return text
+
+        # Single-chunk compression for smaller texts
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=max(1, token_count(text)),
