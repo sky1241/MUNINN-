@@ -175,6 +175,65 @@ class Mycelium:
             if len(concepts) >= 2:
                 self.observe(concepts)
 
+    def observe_latex(self, text: str):
+        """Observe co-occurrences in LaTeX source, chunked by sections.
+
+        Splits on \\section, \\subsection, \\begin{...} instead of \\n\\n.
+        Designed for arXiv .tex files.
+        """
+        # Split on LaTeX structural commands
+        chunks = re.split(
+            r'\\(?:section|subsection|subsubsection|paragraph|chapter)'
+            r'\*?\{[^}]*\}'
+            r'|\\begin\{(?:abstract|theorem|lemma|proof|definition|equation'
+            r'|figure|table|algorithm|enumerate|itemize)\}',
+            text
+        )
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if len(chunk) < 20:
+                continue
+            # Strip LaTeX commands but keep words
+            clean = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', chunk)
+            clean = re.sub(r'\\[a-zA-Z]+', '', clean)
+            clean = re.sub(r'[{}$^_~\\]', ' ', clean)
+            words = re.findall(r'[A-Za-zÀ-ÿ]{4,}', clean)
+            word_counts = Counter(w.lower() for w in words)
+            concepts = [w for w in word_counts if w not in _STOPWORDS]
+            concepts = list(set(concepts))
+            if len(concepts) >= 2:
+                self.observe(concepts)
+
+    def observe_with_concepts(self, text: str, known_concepts: list[str]):
+        """Observe co-occurrences using a provided concept list (e.g. OpenAlex 65K).
+
+        Instead of extracting concepts from text, matches known concepts
+        in each chunk. Only concepts actually present in the chunk co-occur.
+        """
+        # Normalize known concepts for matching
+        concept_set = {c.lower().strip() for c in known_concepts if len(c) >= 3}
+
+        # Detect LaTeX vs plain text
+        if '\\section' in text or '\\begin{' in text:
+            chunks = re.split(
+                r'\\(?:section|subsection|subsubsection|paragraph|chapter)'
+                r'\*?\{[^}]*\}'
+                r'|\\begin\{(?:abstract|theorem|lemma|proof|definition|equation'
+                r'|figure|table|algorithm|enumerate|itemize)\}',
+                text
+            )
+        else:
+            chunks = re.split(r'\n\s*\n', text)
+
+        for chunk in chunks:
+            chunk_lower = chunk.lower()
+            if len(chunk_lower) < 20:
+                continue
+            # Find which known concepts appear in this chunk
+            found = [c for c in concept_set if c in chunk_lower]
+            if len(found) >= 2:
+                self.observe(found)
+
     def _check_fusions(self):
         """Check if any connections crossed the fusion threshold."""
         conns = self.data["connections"]

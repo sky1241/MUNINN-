@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 27 briques vivantes (P0-P29), 2 en roadmap (P20-P21), 3 supprimees (P3), 14 bugs corriges (P10)
+Etat: 28 briques vivantes (P0-P30), 3 en roadmap (P20-P21, P31), 3 supprimees (P3), 14 bugs corriges (P10)
 
 ## Anatomie
 
@@ -286,6 +286,29 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] `muninn.py recall "query"` — cherche dans sessions + arbre + errors
 - [x] Grep les .mn par overlap de mots, top 10 resultats tries par pertinence
 - [x] Permet au cousin de chercher dans sa memoire en plein milieu de session
+
+### P30 — Mycelium scaling infini [FAIT]
+- [x] Chunking par paragraphe: observe_text split sur \n\n, observe chaque chunk separement
+- [x] Semantiquement correct: concepts proches co-occurent, concepts distants non
+- [x] Fix MemoryError O(n²) sur gros fichiers (WEB.md 487K crashait)
+- [x] MAX_CONNECTIONS=0 (illimite) — le reseau grandit librement
+- [x] Safety RAM: _prune_if_memory_pressure() prune 50% si dict > 200MB
+- [x] _prune_weakest() optimise (un seul slice au lieu de pop(0) en boucle)
+- [x] Teste: infernal-wheel 130 fichiers -> 722K connexions, 6225 fusions, 0 crash
+- [x] Benchmark pousse: docs/BENCHMARK_MYCELIUM.md
+
+### P31 — Liane Muninn-Yggdrasil [FAIT — pret a brancher]
+- [x] observe_latex(): chunker split sur \section, \subsection, \begin{...}
+- [x] observe_with_concepts(): accepte une liste de concepts externes (ex: OpenAlex 65K)
+- [x] Auto-detect LaTeX vs plain text dans observe_with_concepts
+- [x] Strip commandes LaTeX (\cmd{...} -> contenu, \cmd -> vide, {$^_~\} -> espace)
+- [x] Teste sur 3 vrais papers arXiv (.tex depuis E:/arxiv/src/):
+  - observe_latex: 459K connexions, top = density|velocity (astro, correct)
+  - observe_with_concepts(20 astro concepts): 109 connexions, top = observation|velocity
+  - LaTeX chunking > plain chunking (meilleur decoupage que \n\n sur du .tex)
+- [ ] Integration Yggdrasil: lancer sur les 2449 tars avec concept_index 65K
+- Pre-requis pour full run: apres WT3 (Bible Yggdrasil)
+- Note: tars arXiv = .gz imbriques dans .tar, chaque .gz = un paper (.tex ou .tar.gz interne)
 
 ### P20 — Mycelium cross-repo [TODO — GROS]
 - [ ] Meta-mycelium: merge les fusions de tous les repos bootstrappes
