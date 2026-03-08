@@ -3647,6 +3647,11 @@ def main():
         return
 
     if args.command == "status":
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
         show_status()
         return
 
