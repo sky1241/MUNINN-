@@ -1408,6 +1408,16 @@ def _llm_compress(text: str, context: str = "") -> str:
             chunks = re.split(r'(?=^## )', text, flags=re.MULTILINE)
             chunks = [c for c in chunks if c.strip()]
 
+            # Fallback: if no ## headers found, split by line count
+            if len(chunks) < 2:
+                lines = text.split("\n")
+                chunk_size = max(1, len(lines) // max(1, len(text) // 6000))
+                chunks = []
+                for i in range(0, len(lines), chunk_size):
+                    chunk = "\n".join(lines[i:i + chunk_size])
+                    if chunk.strip():
+                        chunks.append(chunk)
+
             if len(chunks) >= 2:
                 compressed_chunks = []
                 total_in, total_out = 0, 0
@@ -1431,26 +1441,12 @@ def _llm_compress(text: str, context: str = "") -> str:
                 return text
 
         # Single-chunk compression for smaller texts
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=max(1, token_count(text)),
-            temperature=0,
-            system=_L9_SYSTEM,
-            messages=[{"role": "user", "content":
-                _L9_PROMPT + f"INPUT ({len(text)} chars):\n{text}"
-            }],
-        )
-        llm_compressed = response.content[0].text
-        truncated = response.stop_reason == "max_tokens"
-        if truncated:
-            print(f"  Layer 9 WARNING: output truncated (max_tokens hit) [{context}]",
-                  file=sys.stderr)
-        if len(llm_compressed) < len(text) * 0.9:
-            print(f"  Layer 9 (LLM): {len(text)} -> {len(llm_compressed)} chars "
-                  f"(API: {response.usage.input_tokens}in+{response.usage.output_tokens}out)"
-                  f"{' TRUNCATED' if truncated else ''} [{context}]",
-                  file=sys.stderr)
-            return llm_compressed
+        result, usage = _llm_compress_chunk(text, client, context=context)
+        if len(result) < len(text) * 0.9:
+            api_str = f"(API: {usage.input_tokens}in+{usage.output_tokens}out)" if usage else ""
+            print(f"  Layer 9 (LLM): {len(text)} -> {len(result)} chars "
+                  f"{api_str} [{context}]", file=sys.stderr)
+            return result
         return text
     except ImportError:
         return text  # anthropic not installed
