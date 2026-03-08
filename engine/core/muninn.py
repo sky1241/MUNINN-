@@ -480,6 +480,86 @@ def read_node(name: str) -> str:
     return filepath.read_text(encoding="utf-8")
 
 
+# ── KICOMP DENSITY FILTER ────────────────────────────────────────
+
+def _line_density(line: str) -> float:
+    """Score a line's information density (0.0 = noise, 1.0 = dense fact).
+
+    Heuristic inspired by KIComp (Expert Systems 2025).
+    High density: numbers, key=value, identifiers, short lines with data.
+    Low density: filler, repetition, generic statements.
+    """
+    if not line.strip():
+        return 0.0
+
+    score = 0.0
+    s = line.strip()
+
+    # Headers always kept (structural)
+    if s.startswith("===") or s.startswith("#"):
+        return 1.0
+
+    # Tagged lines get base score from tag
+    tag_scores = {"D>": 0.9, "B>": 0.8, "E>": 0.7, "F>": 0.8, "A>": 0.7}
+    for tag, tscore in tag_scores.items():
+        if s.startswith(tag):
+            score = max(score, tscore)
+            break
+
+    # Numbers boost density (facts, metrics, dates)
+    num_count = len(re.findall(r'\d+', s))
+    score += min(0.3, num_count * 0.1)
+
+    # Key=value patterns are dense
+    kv_count = len(re.findall(r'[a-zA-Z]+=\S+', s))
+    score += min(0.2, kv_count * 0.1)
+
+    # Short lines with data are denser than long narrative
+    if len(s) < 80 and num_count > 0:
+        score += 0.1
+
+    # Identifiers (commit hashes, file paths, function names)
+    if re.search(r'[a-f0-9]{7,}|[\w/]+\.\w{1,4}|\w+\(\)', s):
+        score += 0.1
+
+    # Long lines without numbers = probably narrative filler
+    if len(s) > 120 and num_count == 0:
+        score = max(score, 0.1)
+
+    return min(1.0, score)
+
+
+def _kicomp_filter(text: str, max_tokens: int) -> str:
+    """Drop lowest-density lines until text fits in token budget.
+
+    Preserves structural lines (headers, separators) and high-density facts.
+    Based on: KIComp (Expert Systems 2025) — information density scoring.
+    """
+    lines = text.split("\n")
+    scored = [(i, line, _line_density(line)) for i, line in enumerate(lines)]
+
+    # Sort by density ascending (lowest first = first to drop)
+    droppable = [(i, line, d) for i, line, d in scored
+                 if d < 0.9 and not line.strip().startswith("===") and not line.startswith("#")]
+    droppable.sort(key=lambda x: x[2])
+
+    # Progressively drop lowest-density lines until under budget
+    dropped = set()
+    current = text
+    drop_idx = 0
+    while token_count(current) > max_tokens and drop_idx < len(droppable):
+        idx, _, _ = droppable[drop_idx]
+        dropped.add(idx)
+        current = "\n".join(line for i, line in enumerate(lines) if i not in dropped)
+        drop_idx += 1
+
+    if dropped:
+        print(f"  KIComp: dropped {len(dropped)} low-density lines "
+              f"(budget: {max_tokens} tokens)", file=sys.stderr)
+
+    return current
+
+
 # ── NCD SIMILARITY ───────────────────────────────────────────────
 
 def _ncd(a: str, b: str) -> float:
@@ -1536,7 +1616,13 @@ def boot(query: str = "") -> str:
             output.append("\n=== known_fixes ===")
             output.append(error_hints)
 
-    return "\n".join(output)
+    # KIComp: density scoring — drop low-information lines if over budget
+    full_text = "\n".join(output)
+    total_tokens = token_count(full_text)
+    if total_tokens > BUDGET["max_loaded_tokens"]:
+        full_text = _kicomp_filter(full_text, BUDGET["max_loaded_tokens"])
+
+    return full_text
 
 
 def recall(query: str) -> str:
