@@ -3,9 +3,8 @@
 Muninn v0.8 — Moteur de compression memoire LLM.
 UNIVERSEL — zero hardcode projet. Fonctionne sur n'importe quel repo.
 
-9 couches de compression:
+8 couches de compression:
   L1-L7: Regex (markdown, filler, phrases, nombres, rules, mycelium, facts)
-  L8: LLMLingua-2 (BERT scorer, optional, pip install llmlingua)
   L9: LLM self-compress (Claude API, optional, pip install anthropic)
 
 Usage:
@@ -38,8 +37,6 @@ MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
 from tokenizer import count_tokens, token_count
 
-# LLMLingua model singleton (avoid reloading on each call)
-_lingua_compressor = None
 
 # ── COMPRESSION RULES LOADER ────────────────────────────────────
 # Two sources of compression rules:
@@ -2201,7 +2198,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
             header_text = re.sub(r"[#\n]", "", header_text)
             sections.append((f"## {header_text}", chunk))
 
-    # Compress each section (tags applied AFTER L8/L9, not here)
+    # Compress each section (tags applied AFTER L9, not here)
     output = ["# MUNINN|session_compressed"]
     for header, lines in sections:
         compressed = compress_section(header, lines)
@@ -2233,27 +2230,6 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         seen_hashes.add(norm)
         deduped_lines.append(dline)
     result = "\n".join(deduped_lines)
-
-    # Layer 8: LLMLingua-2 (BERT-based token scoring, optional)
-    # Skip if text already small (not worth 9s model load for <500 tokens)
-    if len(result) > 2000:
-        try:
-            from llmlingua import PromptCompressor
-            global _lingua_compressor
-            if _lingua_compressor is None:
-                _lingua_compressor = PromptCompressor(
-                    model_name="microsoft/llmlingua-2-xlm-roberta-large-meetingbank",
-                    use_llmlingua2=True,
-                    device_map="cpu",
-                )
-            lingua_result = _lingua_compressor.compress_prompt([result], rate=0.5)
-            lingua_compressed = lingua_result["compressed_prompt"]
-            if len(lingua_compressed) < len(result):
-                result = lingua_compressed
-        except ImportError:
-            pass  # LLMLingua not installed — skip Layer 8
-        except Exception as e:
-            print(f"  LLMLingua warning: {e}")
 
     # Layer 9: LLM self-compress (Claude summarizes via API, optional)
     # Only for large texts where the cost (~2K tokens) is worth the savings (>10K tokens)
@@ -2300,7 +2276,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         except Exception as e:
             print(f"  Layer 9 warning: {e}")
 
-    # P14: Tag memory types AFTER L8/L9 (so tags survive rewriting)
+    # P14: Tag memory types AFTER L9 (so tags survive rewriting)
     tagged_lines = []
     for rline in result.split("\n"):
         if rline.strip() and not rline.startswith("#") and not rline.startswith("?FACTS"):

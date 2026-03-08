@@ -119,13 +119,11 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] Resultat: 37/40 (92%) PASS — pure text search, zero API
 - [x] Token counting reel: tiktoken (ancien len//4 etait faux de ~40%)
 
-#### Brique 2 : LLMLingua-2 comme Layer 8 [FAIT — a optimiser]
-- [x] pip install llmlingua (BERT ~1 GB, CPU, zero API)
-- [x] Integre comme couche 8, singleton cache, skip si <2K chars
-- ATTENTION: sur texte pre-compresse, L8 perd 72% des faits (rate=0.5)
-- TODO: ajuster le rate ou changer l'ordre (L8 avant L1-L7)
+#### ~~Brique 2 : LLMLingua-2 (Layer 8)~~ [SUPPRIME]
+- Perdait 72% des faits sur texte pre-compresse — inutile
+- Code supprime de muninn.py le 2026-03-08
 
-#### Brique 3 : Resume LLM comme Layer 9 [FAIT — TESTE]
+#### Brique 3 : Resume LLM comme Layer 9 [FAIT — BENCHMARKE]
 - [x] Claude Haiku resume via API Anthropic (pip install anthropic)
 - [x] Fallback gracieux si pas de cle API ou pas de SDK
 - [x] Seuil: seulement si >4K chars
@@ -135,10 +133,12 @@ La partie dure (comprendre QUOI construire) est faite.
 - [x] SOL.md full pipeline L1-L7+L9: x7.7 (20K->2.6K chars)
 - [x] Bootstrap HSBC: x5.4 moyen (LOGIQUE x9.6, METHODOLOGIE x13.8, ARBRE x11.4)
 
-Pipeline complet (9 couches):
+Pipeline complet (8 couches):
   L1: markdown strip | L2: filler words | L3: phrase compression
   L4: number shortening | L5: universal rules | L6: mycelium
-  L7: fact extraction | L8: LLMLingua-2 (BERT) | L9: LLM self-compress
+  L7: fact extraction | L9: LLM self-compress (Haiku API)
+L9 benchmark: x28 moyen, 41% fact retention (trop agressif pour docs reference)
+L9 ideal: sessions (tags D>/B>/F> protegent les faits importants)
 
 Concurrence connue:
 - Claude-Mem (21K stars): SQLite + Claude API, x10, pas d'arbre ni mycelium
@@ -147,7 +147,7 @@ Concurrence connue:
 - ACON: gradient-free compression guidelines, -26-54% tokens
 
 Ce que Muninn a que les autres n'ont pas:
-- 9 couches empilees (regex + BERT + LLM), pas juste 1 technique
+- 8 couches empilees (regex + LLM), pas juste 1 technique
 - Mycelium vivant (codebook qui apprend par co-occurrence)
 - L-system fractal (memes regles a chaque niveau)
 - Secret filtering
@@ -332,7 +332,7 @@ Ce que Muninn a que les autres n'ont pas:
 - PCToolkit (IJCAI 2025): benchmark standard prompt compression
 
 Ce que Muninn a que les autres n'ont pas:
-- 9 couches empilees (regex + BERT + LLM), pas juste 1 technique
+- 8 couches empilees (regex + LLM), pas juste 1 technique
 - Mycelium vivant (codebook qui apprend par co-occurrence)
 - L-system fractal (memes regles a chaque niveau)
 - Secret filtering
