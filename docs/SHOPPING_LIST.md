@@ -1,6 +1,6 @@
 # Muninn — Shopping List (techniques a implementer)
 
-> Trouvees le 8 mars 2026. 8 implementees, 1 impasse confirmee, 11 skip.
+> Trouvees le 8 mars 2026. 10 implementees (+ L10/L11), 1 impasse confirmee, 11 skip.
 
 ## Tier 1 — Zero dependance, gain prouve
 
@@ -59,6 +59,8 @@ Les gains restants sont STRUCTURELS:
 - Supprimer les CONTRADICTIONS (numeric mismatch, last writer wins)
 - Compresser les VIEUX SOUVENIRS plus fort (Optimal Forgetting)
 - Collapser les BOUCLES DEBUG (Semantic RLE)
+- Virer la CONNAISSANCE GENERIQUE que le LLM sait deja (L10 Cue Distillation)
+- Factoriser les PATTERNS REPETITIFS en regles (L11 Rule Extraction)
 
 ## Refs
 
@@ -85,3 +87,13 @@ Les gains restants sont STRUCTURELS:
 - Zstandard: facebook.github.io/zstd/
 - Bloom Filter: en.wikipedia.org/wiki/Bloom_filter
 - Information Bottleneck: arxiv.org/abs/physics/0004057 (Tishby 1999)
+
+### L10/L11 — Carmack moves (session 2026-03-08)
+- L10 Cue Distillation: Method of Loci (500 BC) + Schema Theory (Bartlett 1932) + Predictive Coding (Rao & Ballard 1999)
+- L11 Rule Extraction: Kolmogorov Complexity (1965) + KoLMogorov Test (ICLR 2025)
+- Selective-Context: aclanthology.org/2023.emnlp-main.391/ (self-information, syntactic — L10 is semantic)
+- LAMA Probes: github.com/facebookresearch/LAMA (Facebook 2019, parametric knowledge probing)
+- Prompt Compression Survey: arxiv.org/abs/2410.12388 (NAACL 2025)
+- SuRe: Surprise-Driven Replay: arxiv.org/abs/2511.22367 (ICLR 2025)
+- KoLMogorov Test: openreview.net/forum?id=C45YqeBDUM (ICLR 2025)
+- Gain: WEARABLE.md x19.4 -> x23.1 (+19%), L9 input reduced 38%

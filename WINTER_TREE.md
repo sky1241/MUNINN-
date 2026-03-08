@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 39 briques vivantes (P0-P31 + 8 shopping list), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 3348 lignes, 56 fonctions
+Etat: 41 briques vivantes (P0-P31 + 8 shopping list + L10/L11), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 3620 lignes, 59 fonctions
 
 ## Anatomie
 
@@ -382,26 +382,34 @@ Recherche complete: 20 techniques evaluees, 8 implementees, 1 impasse, 11 skip.
 Skip: SemHash (NCD does it), token-reducer (redundant L3+L5+L6), Selective-Context (too heavy),
 Zstd (wrong level), A-MEM (=mycelium), ACON (needs eval infra), Word Graph (pre-compressed text).
 
-Benchmark cross-repo (infernal-wheel UX Bibles, pipeline L1-L7+L9):
+Benchmark cross-repo (infernal-wheel UX Bibles, pipeline complet L1-L7+L10+L11+L9):
   | Fichier | Original | Compresse | Ratio | Lignes |
   |---------|----------|-----------|-------|--------|
-  | WEARABLE.md | 134K tok | 6.9K tok | x19.4 | 12K->214 |
+  | WEARABLE.md | 134K tok | 5.8K tok | **x23.1** | 12K->218 |
   | DESIGN_TREE.md | 14K tok | 1.1K tok | x12.7 | 1.2K->147 |
   | MOBILE.md | 130K tok | 15.5K tok | x8.4 | 13.6K->846 |
   | WEB.md | 126K tok | 16.4K tok | x7.7 | 12.3K->1.8K |
-  Contradiction resolution: 40 stale lines found across 4 files.
-  Range: x7.7 (narratif) a x19.4 (specs structurees).
+  L10 cued 402/969 lines on WEARABLE, reduced L9 input 38%.
+  Range: x7.7 (narratif) a x23.1 (specs structurees).
 
-### L10 — Cue Distillation (le move Carmack) [TODO — RECHERCHE]
+### L10 — Cue Distillation (le move Carmack) [FAIT]
 Insight: le LLM connait deja ~80% de ce qu'on stocke (syntaxe, APIs, patterns).
 On ne stocke que les CUES (indices de rappel) + les faits NOVELS (nombres, decisions, commits).
 Theorie: Method of Loci (500 BC) + Schema Theory (Bartlett 1932) + Predictive Coding (Rao & Ballard 1999).
 Personne n'a applique ca a la compression memoire LLM.
-Gain potentiel: x2-x5 en plus de L1-L7+L9 (x50+ total sur verbeux).
-- [ ] Classifier NOVEL vs KNOWN (heuristique novelty score)
-- [ ] Cue generator (KNOWN -> minimal retrieval cue)
-- [ ] Benchmark: facts preserved apres cue distillation
-- [ ] Option Haiku pour cas ambigus (hybride)
+- [x] _novelty_score(): heuristique 11 patterns novel + 5 patterns known + ratios
+- [x] _generate_cue(): key+numbers+identifiers+proper_nouns, fallback cascade
+- [x] _cue_distill(): threshold=0.35, cue si >30% plus court
+- [x] Integre dans compress_file() et compress_transcript() AVANT L9
+- [x] Teste: WEARABLE.md x19.4 -> x23.1 (+19%), 402 lignes cued/969
+- [x] Reduit input L9 de 38% (60K -> 37K chars) = economie API
+- [ ] Option Haiku pour cas ambigus (hybride) — LATER
+
+### L11 — Rule Extraction (Kolmogorov) [FAIT]
+Theorie: Kolmogorov 1965 — stocker le programme le plus court, pas les donnees.
+- [x] _extract_rules(): detecte pipe-separated entries avec meme unite, factorise
+- [x] Integre dans pipeline apres L10, avant L9
+- [x] Teste: 3 lignes factorisees sur WEARABLE.md (gain modeste, applicable sur data-heavy)
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup

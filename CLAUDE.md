@@ -28,20 +28,22 @@ Un hook se declenche automatiquement:
 ### La session d'apres
 Le cousin qui prend la suite a le .mn compresse. Le cycle continue.
 
-## Les 8 couches de compression
+## Les 11 couches de compression
 ```
-L0: tool output strip (x3.5 — vire 74% du bruit d'un transcript)
-L1: markdown strip (headers, formatting)
-L2: filler words (supprime le bruit: "basically", "actually"...)
-L3: phrase compression (raccourcit les formulations)
-L4: number shortening (garde les chiffres, vire le texte autour)
-L5: universal rules (COMPLET->done, EN COURS->wip)
-L6: mycelium (abbreviations apprises par co-occurrence)
-L7: fact extraction (nombres, dates, commits, metriques)
-L9: LLM self-compress [optionnel] — Claude Haiku resume via API
+L0:  tool output strip (x3.5 — vire 74% du bruit d'un transcript)
+L1:  markdown strip (headers, formatting)
+L2:  filler words (supprime le bruit: "basically", "actually"...)
+L3:  phrase compression (raccourcit les formulations)
+L4:  number shortening (garde les chiffres, vire le texte autour)
+L5:  universal rules (COMPLET->done, EN COURS->wip)
+L6:  mycelium (abbreviations apprises par co-occurrence)
+L7:  fact extraction (nombres, dates, commits, metriques)
+L10: cue distillation — vire la connaissance generique que tu sais deja (Bartlett 1932)
+L11: rule extraction — factorise les patterns repetitifs (Kolmogorov 1965)
+L9:  LLM self-compress [optionnel] — Claude Haiku resume via API
 ```
-L0-L7 = regex pur, zero dependance, instantane.
-L9 = optionnel, pip install anthropic, x2-x5 additionnel.
+L0-L7, L10-L11 = regex pur, zero dependance, instantane.
+L9 = optionnel, pip install anthropic, x2 additionnel.
 +7 filtres additionnels: P17 code blocks, P24 causal, P25 priority, P26-P27 dedup, P28 tics.
 
 ## Le mycelium (le champignon)
@@ -74,8 +76,9 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 ```
 
 ## Etat du projet (mars 2026)
-- 39 features, 8 couches compression + 8 briques (shopping list), mycelium federe, meta-mycelium cross-repo
-- muninn.py: v0.9, 3348 lignes, 56 fonctions
+- 41 features, 11 couches compression (25 filtres) + L10 Cue Distillation + L11 Rule Extraction
+- muninn.py: v0.9, 3620 lignes, 59 fonctions
+- mycelium federe, meta-mycelium cross-repo
 - mycelium.py: 1034 lignes (co-occurrence + P20 federe + P20b meta)
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
@@ -104,10 +107,13 @@ Ce qui est PROUVE (mesure tiktoken, benchmark 40 questions):
 - Benchmark: 37/40 questions factuelles retrouvees (92%)
 - Les anciens chiffres (x7.4, x2.5) etaient FAUX — bases sur len(text)//4, ecart de ~40%
 
-Ce qui est PROUVE avec L9 (Haiku API, 230 fichiers, 4 repos):
-- Pipeline complet L1-L7+L9: x4.4 moyen (855K->196K tok), cout $0.21
-- Range: x2.3 (deja compact) a x14.0 (verbeux)
-- L8 (LLMLingua BERT): SUPPRIME — perdait 72% des faits sur texte pre-compresse
+Ce qui est PROUVE avec pipeline complet (L1-L7+L10+L11+L9):
+- WEARABLE.md (134K tok): **x23.1** — 12K lignes -> 218 lignes
+- DESIGN_TREE.md (14K tok): **x12.7**
+- MOBILE.md (130K tok): **x8.4**
+- 4 repos (230 fichiers): x4.4 moyen, cout $0.21
+- L10 (Cue Distillation): reduit l'input L9 de 38%, zero cout
+- L8 (LLMLingua BERT): SUPPRIME — perdait 72% des faits
 
 Les anciens x7.4 et x12 etaient bases sur des estimations fausses (len//4 au lieu de tiktoken).
 

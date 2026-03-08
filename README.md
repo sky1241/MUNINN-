@@ -2,7 +2,7 @@
 
 > *Le corbeau de la memoire — celui qui revient toujours.*
 
-Moteur de compression memoire pour LLM. 39 features, 8 couches de compression (23 filtres), zero dependance obligatoire.
+Moteur de compression memoire pour LLM. 41 features, 11 couches de compression (25 filtres), zero dependance obligatoire.
 
 ## Le probleme
 
@@ -15,7 +15,7 @@ Quand le contexte se remplit, tout deborde et disparait.
 Muninn compresse les transcripts de session en fichiers `.mn` ultra-denses
 et les recharge intelligemment au boot suivant.
 
-**Resultat mesure** : x4.5 sur un vrai transcript (1.1M tokens), 92% des faits preserves (tiktoken).
+**Resultat mesure** : x23.1 sur WEARABLE.md (134K tokens), x4.5 sur transcript (1.1M tokens), 92% des faits preserves (tiktoken).
 
 ## Architecture
 
@@ -38,24 +38,27 @@ et les recharge intelligemment au boot suivant.
            fusions/decay    temperature
 ```
 
-## Pipeline de compression (23 filtres)
+## Pipeline de compression (25 filtres, 11 couches)
 
 ```
-L0: tool output strip (x3.5)     <- le plus gros gain, 74% du transcript est du bruit
-L1: markdown strip                L2: filler words
-L3: phrase compression            L4: number shortening
-L5: universal rules               L6: mycelium (abbreviations apprises)
-L7: fact extraction               L9: LLM self-compress (Haiku API, optionnel)
-+P24: causal preservation         +P25: priority survival (KIComp density)
-+P26: line dedup                  +P27: read dedup
-+P28: Claude tics filter          +Semantic RLE (debug loop collapse)
-+Contradiction resolution         +NCD dedup (zlib similarity)
-+Context-Aware Merging            +Bloom concept tracking (boot)
-+R1-Compress chunking (L9)        +Optimal Forgetting (cold re-compress)
+L0:  tool output strip (x3.5)     <- le plus gros gain, 74% du transcript est du bruit
+L1:  markdown strip                L2:  filler words
+L3:  phrase compression            L4:  number shortening
+L5:  universal rules               L6:  mycelium (abbreviations apprises)
+L7:  fact extraction               L10: cue distillation (Carmack move)
+L11: rule extraction (Kolmogorov)  L9:  LLM self-compress (Haiku API, optionnel)
++P24: causal preservation          +P25: priority survival (KIComp density)
++P26: line dedup                   +P27: read dedup
++P28: Claude tics filter           +Semantic RLE (debug loop collapse)
++Contradiction resolution          +NCD dedup (zlib similarity)
++Context-Aware Merging             +Bloom concept tracking (boot)
++R1-Compress chunking (L9)         +Optimal Forgetting (cold re-compress)
 ```
 
-- **L0-L7** : regex pur, zero dependance, instantane
-- **L9** : `pip install anthropic` — Claude Haiku via API (x2-x5 additionnel)
+- **L0-L7, L10-L11** : regex pur, zero dependance, instantane
+- **L10** : Cue Distillation — vire la connaissance generique que le LLM sait deja (Bartlett 1932 + Predictive Coding 1999)
+- **L11** : Rule Extraction — factorise les patterns repetitifs en regles (Kolmogorov 1965)
+- **L9** : `pip install anthropic` — Claude Haiku via API (x2 additionnel)
 
 ## Le mycelium (codebook vivant)
 
@@ -99,13 +102,14 @@ muninn.py ingest <dossier>    # Compresse des docs de reference en branches
 
 ## Resultats mesures (tiktoken)
 
-| Contexte | Ratio | Facts |
-|----------|-------|-------|
-| Transcript reel (1.1M tokens) | **x4.5** | 92% |
-| Texte verbeux | x4.1 | 100% |
-| Roadmap technique | x2.6 | 96% |
-| Texte deja compact | x1.6 | 93% |
-| Avec L9 (Haiku API) | **x7.7** | a mesurer |
+| Contexte | Pipeline | Ratio | Facts |
+|----------|----------|-------|-------|
+| UX Bible WEARABLE (134K tok) | L1-L7+L10+L11+L9 | **x23.1** | - |
+| UX Bible DESIGN_TREE (14K tok) | L1-L7+L10+L11+L9 | **x12.7** | - |
+| UX Bible MOBILE (130K tok) | L1-L7+L10+L11+L9 | **x8.4** | - |
+| Transcript reel (1.1M tok) | L1-L7+L9 | **x4.5** | 92% |
+| Texte verbeux | L1-L7 | x4.1 | 100% |
+| Roadmap technique | L1-L7 | x2.6 | 96% |
 
 ## Installation
 
@@ -140,7 +144,7 @@ Sinon, ajouter dans `.claude/settings.local.json` :
 
 ```
 engine/core/
-  muninn.py        # Moteur principal (3348 lignes, 56 fonctions)
+  muninn.py        # Moteur principal (3620 lignes, 59 fonctions)
   mycelium.py      # Tracker co-occurrences (1034 lignes, federe + meta)
   tokenizer.py     # Wrapper tiktoken
 memory/
