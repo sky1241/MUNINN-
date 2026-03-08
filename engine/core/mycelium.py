@@ -35,7 +35,7 @@ class Mycelium:
 
     FUSION_THRESHOLD = 5      # co-occur N times -> fuse into one block
     DECAY_HALF_LIFE = 30      # days before connection strength halves
-    MAX_CONNECTIONS = 500      # cap to prevent unbounded growth
+    MAX_CONNECTIONS = 0        # 0 = no limit (adapts to available RAM)
     MIN_CONCEPT_LEN = 3       # ignore tiny words
 
     def __init__(self, repo_path: Path):
@@ -121,38 +121,59 @@ class Mycelium:
         # Check for new fusions
         self._check_fusions()
 
-        # Enforce max connections (prune weakest)
-        if len(conns) > self.MAX_CONNECTIONS:
+        # Prune only if limit is set, or if memory pressure
+        if self.MAX_CONNECTIONS > 0 and len(conns) > self.MAX_CONNECTIONS:
             self._prune_weakest()
+        elif len(conns) > 10000:
+            # Safety: check RAM only when network gets very large
+            self._prune_if_memory_pressure()
 
     def observe_text(self, text: str):
         """Extract concepts from raw text and observe co-occurrences.
 
         Works on any text — user messages, code, documentation.
-        Extracts meaningful words (4+ chars, not stopwords).
+        Chunks text by paragraphs so only nearby concepts co-occur,
+        avoiding O(n²) explosion on large documents while keeping
+        all concepts (no cap).
         """
-        # Extract words
-        words = re.findall(r'[A-Za-zÀ-ÿ_]{4,}', text)
-        word_counts = Counter(w.lower() for w in words)
+        # Split into chunks (paragraphs / double-newline blocks)
+        chunks = re.split(r'\n\s*\n', text)
 
-        # Keep all meaningful words (4+ chars, not stopwords)
-        concepts = []
-        for word, count in word_counts.items():
-            if word in _STOPWORDS:
+        # For small texts (<50 concepts total), treat as single chunk
+        all_words = re.findall(r'[A-Za-zÀ-ÿ_]{4,}', text)
+        all_counts = Counter(w.lower() for w in all_words)
+        total_unique = sum(1 for w in all_counts if w not in _STOPWORDS)
+
+        if total_unique <= 80:
+            # Small text — single observation (original behavior)
+            concepts = [w for w in all_counts if w not in _STOPWORDS]
+            entities = re.findall(r'[A-Z][a-z]{3,}(?:\s+[A-Z][a-z]+)*', text)
+            for entity in entities:
+                e = entity.lower()
+                if e not in _STOPWORDS and len(e) >= 4:
+                    concepts.append(e)
+            concepts = list(set(concepts))
+            if len(concepts) >= 2:
+                self.observe(concepts)
+            return
+
+        # Large text — observe each chunk separately
+        # Concepts that are in the same paragraph co-occur
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if len(chunk) < 20:
                 continue
-            concepts.append(word)
-
-        # Also extract capitalized entities from original text
-        entities = re.findall(r'[A-Z][a-z]{3,}(?:\s+[A-Z][a-z]+)*', text)
-        for entity in entities:
-            e = entity.lower()
-            if e not in _STOPWORDS and len(e) >= 4:
-                concepts.append(e)
-
-        concepts = list(set(concepts))
-
-        if len(concepts) >= 2:
-            self.observe(concepts)
+            words = re.findall(r'[A-Za-zÀ-ÿ_]{4,}', chunk)
+            word_counts = Counter(w.lower() for w in words)
+            concepts = [w for w in word_counts if w not in _STOPWORDS]
+            entities = re.findall(r'[A-Z][a-z]{3,}(?:\s+[A-Z][a-z]+)*', chunk)
+            for entity in entities:
+                e = entity.lower()
+                if e not in _STOPWORDS and len(e) >= 4:
+                    concepts.append(e)
+            concepts = list(set(concepts))
+            if len(concepts) >= 2:
+                self.observe(concepts)
 
     def _check_fusions(self):
         """Check if any connections crossed the fusion threshold."""
@@ -177,12 +198,43 @@ class Mycelium:
     def _prune_weakest(self):
         """Remove weakest connections to stay under MAX_CONNECTIONS."""
         conns = self.data["connections"]
-        sorted_keys = sorted(conns.keys(), key=lambda k: conns[k]["count"])
-        while len(conns) > self.MAX_CONNECTIONS and sorted_keys:
-            weakest = sorted_keys.pop(0)
-            # Don't prune fused connections
-            if weakest not in self.data["fusions"]:
-                del conns[weakest]
+        fusions = self.data["fusions"]
+        # Sort all non-fused connections by strength ascending
+        prunable = sorted(
+            (k for k in conns if k not in fusions),
+            key=lambda k: conns[k]["count"]
+        )
+        to_remove = len(conns) - self.MAX_CONNECTIONS
+        for key in prunable[:to_remove]:
+            del conns[key]
+
+    def _prune_if_memory_pressure(self):
+        """Prune only if system RAM is running low (< 500MB free)."""
+        try:
+            import os
+            if hasattr(os, 'sysconf'):  # Unix
+                free = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_AVPHYS_PAGES')
+            else:  # Windows
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                mem_status = ctypes.c_ulonglong()
+                kernel32.GetPhysicallyInstalledMemory(ctypes.byref(mem_status))
+                # Fallback: just check process memory
+                import sys
+                proc_mb = sys.getsizeof(self.data) / 1024 / 1024
+                if proc_mb > 200:  # mycelium dict > 200MB = prune
+                    target = len(self.data["connections"]) // 2
+                    self.MAX_CONNECTIONS = target
+                    self._prune_weakest()
+                    self.MAX_CONNECTIONS = 0
+                return
+            if free < 500 * 1024 * 1024:  # < 500MB free
+                target = len(self.data["connections"]) // 2
+                self.MAX_CONNECTIONS = target
+                self._prune_weakest()
+                self.MAX_CONNECTIONS = 0
+        except Exception:
+            pass  # Can't check RAM = don't prune
 
     def decay(self, days: int = None):
         """Weaken connections that haven't been seen recently.
