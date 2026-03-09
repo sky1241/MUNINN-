@@ -3815,24 +3815,29 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
 
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
+    hook_event = "PreCompact/SessionEnd"
     if sys.stdin.isatty():
-        print("ERROR: hook mode expects JSON on stdin. Use 'feed --history' for manual mode.")
+        print(f"MUNINN {hook_event}: no stdin (tty mode). Use 'feed --history' for manual.", file=sys.stderr)
         sys.exit(1)
     try:
-        hook_input = json.loads(sys.stdin.read())
-    except (json.JSONDecodeError, EOFError):
-        print("ERROR: no valid JSON on stdin (expected hook event data)")
+        raw = sys.stdin.read()
+        hook_input = json.loads(raw)
+        hook_event = hook_input.get("hook_event_name", hook_event)
+    except (json.JSONDecodeError, EOFError) as e:
+        print(f"MUNINN {hook_event}: invalid JSON on stdin: {e}", file=sys.stderr)
         sys.exit(1)
 
     transcript_path = hook_input.get("transcript_path")
     if not transcript_path:
-        print("ERROR: no transcript_path in hook event data")
+        print(f"MUNINN {hook_event}: no transcript_path in hook data", file=sys.stderr)
         sys.exit(1)
 
     jsonl_path = Path(transcript_path)
     if not jsonl_path.exists():
-        print(f"ERROR: transcript not found: {jsonl_path}")
+        print(f"MUNINN {hook_event}: transcript not found: {jsonl_path}", file=sys.stderr)
         sys.exit(1)
+
+    print(f"MUNINN {hook_event}: processing {jsonl_path.name} for {repo_path.name}", file=sys.stderr)
 
     # 0. P36: Update usefulness scores before anything modifies the tree
     _update_usefulness(repo_path, jsonl_path)
@@ -3878,18 +3883,20 @@ def feed_from_stop_hook(repo_path: Path):
     except Exception:
         raw = ""
     if not raw.strip():
+        print("MUNINN STOP: no stdin data received", file=sys.stderr)
         return
     try:
         hook_input = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
+        print(f"MUNINN STOP: invalid JSON on stdin: {raw[:200]}", file=sys.stderr)
         return
 
-    # Anti-loop: if Stop fired because of a prior Stop hook, skip
-    if hook_input.get("stop_hook_active", False):
-        return
+    # Note: stop_hook_active is always True in Claude Code Stop events.
+    # Anti-loop protection is handled by the dedup mechanism below (line count check).
 
     transcript_path = hook_input.get("transcript_path")
     if not transcript_path:
+        print("MUNINN STOP: no transcript_path in hook data", file=sys.stderr)
         return
     jsonl_path = Path(transcript_path)
     if not jsonl_path.exists():
