@@ -170,7 +170,7 @@ Ce que Muninn a que les autres n'ont pas:
   - Calcule la similarite entre query et contenu reel des branches .mn
 - [x] Scoring Generative Agents (Park et al. 2023):
   score = 0.2*recency + 0.2*importance + 0.6*relevance(query)
-  - Recency: decay lineaire 90j depuis last_access
+  - Recency: decay exponentiel Ebbinghaus (0.995^hours — 1d=0.89, 7d=0.43, 30d=0.03)
   - Importance: log(access_count)
   - Relevance: TF-IDF cosine similarity
 - [x] Auto-segmentation dans feed_from_hook():
@@ -503,6 +503,13 @@ Les repos restent des silos — un Claude sur Yggdrasil ne voit pas les branches
 - [x] Teste: boot MUNINN → branches locales remplissent le budget, zero virtual (normal)
 - [x] Teste: ghost repo auto-nettoye du registry, stale path auto-corrige
 - [x] Les corbeaux se parlent enfin
+
+### P33 — Decay Exponentiel Ebbinghaus [FAIT]
+Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.
+- [x] Recency = `0.995 ** (days_cold * 24)` — courbe exponentielle fidele a Ebbinghaus 1885
+- [x] 1 jour=0.89, 7 jours=0.43, 30 jours=0.03, 60 jours=~0 (vs lineaire: 0.99/0.92/0.67/0.33)
+- [x] Les branches recentes comptent beaucoup plus, les vieilles disparaissent vite
+- [x] 3 lignes modifiees, zero regression sur boot
 
 ### Flag --no-l9 + Mass Ingest (session 2026-03-09) [FAIT]
 - [x] Flag `--no-l9`: skip L9 (LLM API), utilise seulement les couches gratuites (L1-L7+L10+L11)

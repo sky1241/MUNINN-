@@ -1980,13 +1980,14 @@ def boot(query: str = "") -> str:
             if name == "root":
                 continue
 
-            # Recency: exponential decay (0.995^hours_since_access)
+            # Recency: exponential decay (Ebbinghaus 1885)
+            # 0.995^hours: ~0.89 after 1 day, ~0.43 after 7 days, ~0.03 after 30 days
             last = node.get("last_access", "2026-01-01")
             try:
                 days_cold = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
             except ValueError:
                 days_cold = 90
-            recency = max(0.0, 1.0 - days_cold / 90)
+            recency = 0.995 ** (days_cold * 24)
 
             # Importance: log-scaled access count
             import math
