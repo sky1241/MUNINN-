@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 52 briques vivantes (P0-P38 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 4325 lignes, 69 fonctions
+Etat: 52 briques vivantes (P0-P38 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 28 bugs corriges (P10+SL+audit)
+Engine: muninn.py 4333 lignes, 69 fonctions
 
 ## Anatomie
 
@@ -547,6 +547,15 @@ parse_transcript() ne gerait que JSONL (Claude Code). Maintenant: auto-detect + 
 - [x] Fallback: format inconnu → traite comme JSONL (comportement original)
 - [x] Teste: JSONL 2 texts, JSON 2 texts, Markdown 3 texts — tous corrects
 - [x] Benchmark: 35/40 (88%) inchange — zero regression
+
+### Audit Hardening (session 2026-03-09) [FAIT]
+6 fixes de robustesse identifies par audit:
+- [x] Exception logging: boot() `except: pass` → log to stderr (line ~1948)
+- [x] Secrets: +AWS AKIA, private keys, OAuth Bearer tokens (3 patterns ajoutes)
+- [x] Prune safety: try/except autour de unlink(), skip node deletion si fichier persist
+- [x] tail_lines O(n²): `.insert(0,...)` → `.append()` + `.reverse()`
+- [x] NCD dedup: compare last 3 branches seulement (O(1) par branche au lieu de O(n))
+- [x] feed_history matching: `repo_name in d.name` → `-{repo_name} in d.name` (evite faux positifs)
 
 ### P33 — Decay Exponentiel Ebbinghaus [FAIT]
 Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.

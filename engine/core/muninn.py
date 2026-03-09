@@ -1945,8 +1945,8 @@ def boot(query: str = "") -> str:
                         expanded.add(related)
             if expanded - set(query_words):
                 query = query + " " + " ".join(expanded - set(query_words))
-        except Exception:
-            pass  # mycelium not available — use original query
+        except Exception as e:
+            print(f"  mycelium query expansion skipped: {e}", file=sys.stderr)
 
         # Load branch contents for TF-IDF scoring
         branch_contents = {}
@@ -2072,7 +2072,7 @@ def boot(query: str = "") -> str:
             loaded_texts.append(text)
             continue
         is_dup = False
-        for prev_text in loaded_texts:
+        for prev_text in loaded_texts[-3:]:  # compare last 3 only (O(1) per branch)
             if not text or not prev_text:
                 continue
             ncd = _ncd(text, prev_text)
@@ -2110,8 +2110,9 @@ def boot(query: str = "") -> str:
                 for line in reversed(session_lines):
                     if char_count + len(line) + 1 > max_chars:
                         break
-                    tail_lines.insert(0, line)
+                    tail_lines.append(line)
                     char_count += len(line) + 1
+                tail_lines.reverse()
                 if tail_lines:
                     output.append(f"=== last_session ({latest.stem}) [tail] ===")
                     output.append("\n".join(tail_lines))
@@ -2477,7 +2478,11 @@ def prune(dry_run: bool = True):
             node = nodes[name]
             filepath = TREE_DIR / node["file"]
             if filepath.exists():
-                filepath.unlink()
+                try:
+                    filepath.unlink()
+                except OSError as e:
+                    print(f"  WARNING: could not delete {filepath}: {e}", file=sys.stderr)
+                    continue  # don't remove node if file still exists
             del nodes[name]
             if name in nodes.get("root", {}).get("children", []):
                 nodes["root"]["children"].remove(name)
@@ -3356,6 +3361,9 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     secret_patterns = [
         r'ghp_[A-Za-z0-9]{36,}',       # GitHub tokens
         r'sk-[A-Za-z0-9]{20,}',         # API keys
+        r'AKIA[A-Z0-9]{16}',            # AWS access keys
+        r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # Private keys
+        r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
         r'token[=:]\s*\S{20,}',         # Generic tokens
         r'password[=:]\s*\S+',          # Passwords
     ]
@@ -3975,7 +3983,7 @@ def feed_history(repo_path: Path):
     repo_name = repo_path.name
     project_dirs = []
     for d in claude_dir.iterdir():
-        if d.is_dir() and repo_name in d.name:
+        if d.is_dir() and f"-{repo_name}" in d.name:
             project_dirs.append(d)
 
     if not project_dirs:
