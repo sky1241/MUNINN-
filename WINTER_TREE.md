@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 43 briques vivantes (P0-P31 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 3775 lignes, 60 fonctions
+Etat: 44 briques vivantes (P0-P32 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 3887 lignes, 61 fonctions
 
 ## Anatomie
 
@@ -31,7 +31,7 @@ Engine: muninn.py 3775 lignes, 60 fonctions
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
 | B9 | docs/ | OK | LITERATURE.md enrichi (15+ papiers) |
 | B10 | ci.yml | OK | Tests: tree, engine, mycelium, feed |
-| NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd -> feed + compress |
+| NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd + Stop -> feed + compress |
 | NEW | .muninn/sessions/*.mn | OK | Transcripts compresses (auto-prune 10 derniers) |
 | ~~B1~~ | ~~CODEBOOK.json~~ | SUPPRIME | Remplace par UNIVERSAL_RULES + mycelium |
 | ~~B3~~ | ~~muninn_codec.py~~ | SUPPRIME | Code sinogramme mort |
@@ -451,6 +451,35 @@ Theorie: Wilson & McNaughton 1994 — consolidation episodique->semantique penda
 - [x] Benchmark questions corrigees: layers 9->11, version 0.8->0.9.1
 - [x] .claude/settings.json: paths hardcodes -> wildcard universel
 - [x] SOL_TEMPLATE.md: path Python hardcode -> ${PYTHON_EXE}
+
+### P32 — Hook Stop (zero data perdue) [FAIT]
+Bug critique: conversations courtes (pas de PreCompact) + fermeture manuelle (pas de SessionEnd) = data perdue.
+Les senior devs font exactement ca: conversations courtes, haute valeur, fermeture rapide.
+- [x] Hook `Stop` fire a chaque reponse Claude — seul hook qui garantit la capture
+- [x] Anti-boucle: `stop_hook_active=true` → skip (empeche boucle infinie)
+- [x] Dedup: `.muninn/stop_dedup.json` stocke `{session_id: msg_count}`
+  - Meme conversation, meme nombre de messages → skip (zero recompression)
+  - Nouveau message detecte → feed complet (mycelium + compress + branches + meta-sync)
+- [x] Garde les 20 derniers session_id dans le dedup (auto-prune)
+- [x] `--trigger stop` flag CLI + `install_hooks()` installe Stop sur nouveaux repos
+- [x] Teste: 1er run feed (76 msgs, x2.3), 2eme run skip (dedup), anti-loop OK
+- [x] 3 hooks maintenant: PreCompact (contexte plein) + SessionEnd (VS Code ferme) + Stop (chaque reponse)
+
+### Flag --no-l9 + Mass Ingest (session 2026-03-09) [FAIT]
+- [x] Flag `--no-l9`: skip L9 (LLM API), utilise seulement les couches gratuites (L1-L7+L10+L11)
+- [x] Bootstrap + ingest de 7 repos en une session, $0.00:
+  | Repo | Fichiers | Input | Output | Ratio | Branches |
+  |------|----------|-------|--------|-------|----------|
+  | HSBC-algo-genetic | 1730 md | 4.2M | 173K | x24.5 | 304 |
+  | infernal-wheel | 59 md | 2.3M | 248K | x9.2 | 60 |
+  | shazam-piano | 53 md | 365K | 81K | x4.5 | 28 |
+  | 3d-printer | 36 md | 360K | 89K | x4.1 | 16 |
+  | fck-translation | 38 md | 315K | 81K | x3.9 | 85 |
+  | yggdrasil-engine | 20 md | 176K | 50K | x3.5 | 76 |
+  | p-egal-np | 32 md | 305K | 95K | x3.2 | 142 |
+  | TOTAL | 1968 | 8.0M | 817K | x9.8 | 711 |
+- [x] Cout L9 estime si actif: ~$238 (surtout Yggdrasil 8.7M lignes)
+- [x] L1-L7+L10+L11 gratuit = suffisant pour la majorite des cas
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
