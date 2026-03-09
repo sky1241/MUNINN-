@@ -519,6 +519,18 @@ Le benchmark 37/40 etait un test manuel. Maintenant en CI automatique.
 - [x] Zero API, zero dependance externe, reproductible
 - [x] 3 samples (verbose, session, compact) × 40 questions factuelles
 
+### P36 — Boot Feedback Loop [FAIT]
+Scoring statique → adaptatif. Le boot apprend quelles branches sont utiles par repo.
+- [x] `last_boot.json`: sauvegarde la liste des branches chargees a chaque boot
+- [x] `_update_usefulness()`: au feed, compare concepts session vs branches du boot
+  - Usefulness = fraction de concepts branch qui apparaissent dans la session
+  - Exponential moving average: `0.7 * old + 0.3 * new` (lissage, pas de sauts)
+  - Default 0.5 (neutre) pour les branches pas encore evaluees
+- [x] Scoring boot mis a jour: 0.1*recency + 0.1*importance + 0.45*relevance + 0.2*activation + 0.15*usefulness
+- [x] Appele dans feed_from_hook et feed_from_stop_hook (avant compression)
+- [x] Per-repo: chaque tree.json stocke ses propres scores d'utilite
+- [x] Teste: 13 branches scorees, scores refletent le overlap session/branch
+
 ### P33 — Decay Exponentiel Ebbinghaus [FAIT]
 Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.
 - [x] Recency = `0.995 ** (days_cold * 24)` — courbe exponentielle fidele a Ebbinghaus 1885

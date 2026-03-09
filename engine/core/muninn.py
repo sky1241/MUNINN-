@@ -2009,8 +2009,11 @@ def boot(query: str = "") -> str:
             # Activation: spreading activation bonus (Collins & Loftus 1975)
             activation = activation_scores.get(name, 0.0)
 
-            # Weighted: α=0.15 recency + β=0.15 importance + γ=0.5 relevance + δ=0.2 activation
-            total = 0.15 * recency + 0.15 * importance + 0.5 * relevance + 0.2 * activation
+            # P36: Usefulness — feedback from past sessions (0.5 = neutral default)
+            usefulness = node.get("usefulness", 0.5)
+
+            # Weighted: 0.1*recency + 0.1*importance + 0.45*relevance + 0.2*activation + 0.15*usefulness
+            total = 0.1 * recency + 0.1 * importance + 0.45 * relevance + 0.2 * activation + 0.15 * usefulness
             if total > 0.01:
                 scored.append((name, total))
 
@@ -2128,6 +2131,19 @@ def boot(query: str = "") -> str:
         if error_hints:
             output.append("\n=== known_fixes ===")
             output.append(error_hints)
+
+    # P36: Save boot manifest for feedback loop
+    if _REPO_PATH:
+        try:
+            boot_manifest = {
+                "branches": [name for name, _ in deduped if name != "root"],
+                "query": query or "",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            manifest_path = _REPO_PATH / ".muninn" / "last_boot.json"
+            manifest_path.write_text(json.dumps(boot_manifest), encoding="utf-8")
+        except OSError:
+            pass
 
     # KIComp: density scoring — drop low-information lines if over budget
     full_text = "\n".join(output)
@@ -3586,6 +3602,83 @@ def _surface_known_errors(repo_path: Path, query: str) -> str:
     return "\n".join(hints[:3])  # max 3 hints
 
 
+def _update_usefulness(repo_path: Path, jsonl_path: Path):
+    """P36: Boot Feedback Loop — score which boot branches were actually useful.
+
+    Compares concepts from the session transcript against concepts from branches
+    loaded at boot. Branches whose concepts appeared in the session get a higher
+    usefulness_score in tree.json. This adapts scoring per-repo over time.
+    """
+    manifest_path = repo_path / ".muninn" / "last_boot.json"
+    if not manifest_path.exists():
+        return
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+
+    boot_branches = manifest.get("branches", [])
+    if not boot_branches:
+        return
+
+    # Extract concepts from session transcript
+    session_concepts = set()
+    try:
+        for line in open(jsonl_path, encoding="utf-8", errors="replace"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+                content_parts = msg.get("message", {}).get("content", [])
+                for part in content_parts:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        words = re.findall(r'[a-zA-Z]{4,}', part["text"].lower())
+                        session_concepts.update(words)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                continue
+    except OSError:
+        return
+
+    if not session_concepts:
+        return
+
+    # Load tree and score branches
+    tree = load_tree()
+    nodes = tree["nodes"]
+    tree_dir = _get_tree_dir()
+    updated = False
+
+    for bname in boot_branches:
+        if bname not in nodes or "::" in bname:  # skip virtual branches
+            continue
+        node = nodes[bname]
+        bfile = tree_dir / node.get("file", "")
+        if not bfile.exists():
+            continue
+        try:
+            branch_text = bfile.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+        branch_concepts = set(re.findall(r'[a-zA-Z]{4,}', branch_text.lower()))
+        if not branch_concepts:
+            continue
+
+        # Usefulness = fraction of branch concepts that appeared in session
+        overlap = branch_concepts & session_concepts
+        usefulness = len(overlap) / len(branch_concepts)
+
+        # Exponential moving average: 0.7 * old + 0.3 * new
+        old_score = node.get("usefulness", 0.5)
+        node["usefulness"] = round(0.7 * old_score + 0.3 * usefulness, 3)
+        updated = True
+
+    if updated:
+        save_tree(tree)
+
+
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
     if sys.stdin.isatty():
@@ -3606,6 +3699,9 @@ def feed_from_hook(repo_path: Path):
     if not jsonl_path.exists():
         print(f"ERROR: transcript not found: {jsonl_path}")
         sys.exit(1)
+
+    # 0. P36: Update usefulness scores before anything modifies the tree
+    _update_usefulness(repo_path, jsonl_path)
 
     # 1. Feed mycelium (co-occurrences)
     count = feed_from_transcript(jsonl_path, repo_path)
@@ -3691,6 +3787,9 @@ def feed_from_stop_hook(repo_path: Path):
 
     # New messages detected — feed the full conversation
     print(f"MUNINN STOP: {msg_count - last_count} new messages (session {session_id[:8]})")
+
+    # 0. P36: Update usefulness scores
+    _update_usefulness(repo_path, jsonl_path)
 
     # 1. Feed mycelium
     count = feed_from_transcript(jsonl_path, repo_path)
