@@ -531,6 +531,14 @@ Scoring statique → adaptatif. Le boot apprend quelles branches sont utiles par
 - [x] Per-repo: chaque tree.json stocke ses propres scores d'utilite
 - [x] Teste: 13 branches scorees, scores refletent le overlap session/branch
 
+### P37 — Recall --load (mid-session warm-up) [FAIT]
+recall() trouvait du contenu mais ne rechauffait pas les branches matchees.
+- [x] recall() track les branches tree matchees pendant la recherche
+- [x] Met a jour access_count + last_access des branches matchees
+- [x] Affiche "(warmed N branches)" dans le header du recall
+- [x] Prepare le prochain boot: branches recherchees = plus chaudes = mieux classees
+- [x] Teste: recall → access_count 7→8, "warmed 1 branches" affiche
+
 ### P33 — Decay Exponentiel Ebbinghaus [FAIT]
 Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.
 - [x] Recency = `0.995 ** (days_cold * 24)` — courbe exponentielle fidele a Ebbinghaus 1885

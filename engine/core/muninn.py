@@ -2207,7 +2207,8 @@ def recall(query: str) -> str:
             except OSError:
                 continue
 
-    # 3. Search tree branches
+    # 3. Search tree branches (P37: also warm up matched branches)
+    matched_branches = set()
     if TREE_DIR.exists():
         for mn_file in TREE_DIR.glob("*.mn"):
             if mn_file.name == "root.mn":
@@ -2222,6 +2223,7 @@ def recall(query: str) -> str:
                     overlap = len(query_words & line_words)
                     if overlap >= 2:
                         results.append((overlap, mn_file.stem, stripped[:150]))
+                        matched_branches.add(mn_file.stem)
             except OSError:
                 continue
 
@@ -2234,10 +2236,25 @@ def recall(query: str) -> str:
     if not results:
         return f"RECALL: nothing found for '{query}'"
 
+    # P37: Warm up matched tree branches (update access_count + last_access)
+    if matched_branches:
+        try:
+            tree = load_tree()
+            for bname in matched_branches:
+                node = tree["nodes"].get(bname)
+                if node:
+                    node["access_count"] = node.get("access_count", 0) + 1
+                    node["last_access"] = time.strftime("%Y-%m-%d")
+            save_tree(tree)
+        except Exception:
+            pass
+
     # Sort by relevance (overlap score), dedup, take top 10
     results.sort(key=lambda x: x[0], reverse=True)
     seen = set()
     output = [f"RECALL: '{query}' — {len(results)} matches"]
+    warmed = f" (warmed {len(matched_branches)} branches)" if matched_branches else ""
+    output[0] += warmed
     for score, source, text in results:
         if text in seen:
             continue
