@@ -1779,9 +1779,10 @@ def _load_virtual_branches(query: str, budget_tokens: int) -> list:
 
     Returns list of (prefixed_name, text, token_count) tuples.
     Virtual branches are scored by TF-IDF at 0.5x weight vs local branches.
-    Max 3 virtual branches loaded. Read-only: never writes to other repos.
+    Max 3 virtual branches loaded, max 50 scanned per repo. Read-only.
     """
     MAX_VIRTUAL = 3
+    MAX_SCAN_PER_REPO = 50  # Cap: only scan most recent branches per repo
     WEIGHT_FACTOR = 0.5
 
     repos = _load_repos_registry()
@@ -1794,55 +1795,80 @@ def _load_virtual_branches(query: str, budget_tokens: int) -> list:
 
     # Collect candidate branches from other repos
     candidates = []  # (repo_name, branch_name, text, tokens, relevance)
+    dead_repos = []  # repos to clean from registry
 
     for repo_name, repo_str in repos.items():
-        repo_p = Path(repo_str)
-        # Skip current repo
-        if repo_p.resolve() == current_repo:
-            continue
-        tree_dir = repo_p / ".muninn" / "tree"
-        tree_meta = tree_dir / "tree.json"
-        if not tree_meta.exists():
-            continue
-
         try:
-            tree_data = json.loads(tree_meta.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-
-        other_nodes = tree_data.get("nodes", {})
-        branch_contents = {}
-        for bname, bnode in other_nodes.items():
-            if bname == "root":
+            repo_p = Path(repo_str)
+            # Skip current repo
+            if repo_p.resolve() == current_repo:
                 continue
-            bfile = tree_dir / bnode.get("file", "")
-            if bfile.exists():
-                try:
-                    text = bfile.read_text(encoding="utf-8")
-                    if text.strip():
-                        branch_contents[bname] = text
-                except (OSError, UnicodeDecodeError):
-                    continue
+            # Check repo still exists
+            if not repo_p.exists():
+                dead_repos.append(repo_name)
+                continue
+            tree_dir = repo_p / ".muninn" / "tree"
+            tree_meta = tree_dir / "tree.json"
+            if not tree_meta.exists():
+                continue
 
-        if not branch_contents:
-            continue
+            tree_data = json.loads(tree_meta.read_text(encoding="utf-8"))
+            other_nodes = tree_data.get("nodes", {})
 
-        # Score by TF-IDF if query, else by temperature
-        if query:
-            scores = _tfidf_relevance(query, branch_contents)
-            for bname, text in branch_contents.items():
-                score = scores.get(bname, 0.0) * WEIGHT_FACTOR
-                if score > 0.01:
-                    tok = token_count(text)
-                    candidates.append((repo_name, bname, text, tok, score))
-        else:
-            # No query: take hottest branches (by temperature)
-            for bname, text in branch_contents.items():
-                bnode = other_nodes.get(bname, {})
-                temp = bnode.get("temperature", 0.0) * WEIGHT_FACTOR
-                if temp > 0.01:
-                    tok = token_count(text)
-                    candidates.append((repo_name, bname, text, tok, temp))
+            # Cap: only scan N most recent branches (by last_access)
+            branch_items = [
+                (bname, bnode) for bname, bnode in other_nodes.items()
+                if bname != "root"
+            ]
+            branch_items.sort(
+                key=lambda x: x[1].get("last_access", "2000-01-01"), reverse=True
+            )
+            branch_items = branch_items[:MAX_SCAN_PER_REPO]
+
+            branch_contents = {}
+            for bname, bnode in branch_items:
+                bfile = tree_dir / bnode.get("file", "")
+                if bfile.exists():
+                    try:
+                        text = bfile.read_text(encoding="utf-8")
+                        if text.strip():
+                            branch_contents[bname] = text
+                    except (OSError, UnicodeDecodeError):
+                        continue
+
+            if not branch_contents:
+                continue
+
+            # Score by TF-IDF if query, else by temperature
+            if query:
+                scores = _tfidf_relevance(query, branch_contents)
+                for bname, text in branch_contents.items():
+                    score = scores.get(bname, 0.0) * WEIGHT_FACTOR
+                    if score > 0.01:
+                        tok = token_count(text)
+                        candidates.append((repo_name, bname, text, tok, score))
+            else:
+                # No query: take hottest branches (by temperature)
+                for bname, text in branch_contents.items():
+                    bnode_data = other_nodes.get(bname, {})
+                    temp = bnode_data.get("temperature", 0.0) * WEIGHT_FACTOR
+                    if temp > 0.01:
+                        tok = token_count(text)
+                        candidates.append((repo_name, bname, text, tok, temp))
+
+        except Exception:
+            continue  # Never crash boot because of a broken remote repo
+
+    # Clean dead repos from registry
+    if dead_repos:
+        try:
+            reg_path = _repos_registry_path()
+            registry = json.loads(reg_path.read_text(encoding="utf-8"))
+            for name in dead_repos:
+                registry.get("repos", {}).pop(name, None)
+            reg_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
+        except (OSError, json.JSONDecodeError):
+            pass
 
     if not candidates:
         return []
@@ -2799,11 +2825,18 @@ def install_hooks(repo_path: Path):
     existing_hooks = existing.get("hooks", {})
     installed = []
 
-    # Merge hook-by-hook: add missing hooks, don't touch existing ones
+    # Merge hook-by-hook: add missing hooks, update stale paths
     for hook_name, hook_entries in required_hooks.items():
         if hook_name not in existing_hooks:
             existing_hooks[hook_name] = hook_entries
             installed.append(hook_name)
+        else:
+            # Check if existing hook points to a stale muninn.py path
+            existing_cmds = [e.get("command", "") for e in existing_hooks[hook_name]]
+            new_cmd = hook_entries[0]["command"]
+            if any("muninn.py" in c for c in existing_cmds) and new_cmd not in existing_cmds:
+                existing_hooks[hook_name] = hook_entries
+                installed.append(f"{hook_name}(updated)")
 
     if not installed:
         print(f"  Hooks already up-to-date (PreCompact + SessionEnd + Stop)")

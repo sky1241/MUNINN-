@@ -3,7 +3,7 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
 Etat: 46 briques vivantes (P0-P32 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 4057 lignes, 65 fonctions
+Engine: muninn.py 4090 lignes, 65 fonctions
 
 ## Anatomie
 
@@ -477,7 +477,9 @@ Probleme: Stop hook devait etre ajoute MANUELLEMENT dans chaque repo. Pas scalab
   - Structure: `{"repos": {"MUNINN-": "C:\\...", "yggdrasil-engine": "C:\\..."}, "updated": "..."}`
   - Sert aussi de base pour P20c (decouverte cross-repo)
 - [x] `_register_repo()` appele dans: install_hooks, feed_from_hook, feed_from_stop_hook
+- [x] Stale path detection: si hook existe mais pointe vers un vieux muninn.py, met a jour
 - [x] Teste: repo avec PreCompact+SessionEnd → Stop ajoute, permissions preservees
+- [x] Teste: repo avec vieux path → PreCompact(updated) + SessionEnd + Stop
 - [x] Cross-platform: `Path(__file__).resolve()` pour le chemin muninn.py, zero hardcode
 
 ### P20c — Virtual Branches (cross-repo tree sync) [FAIT]
@@ -489,11 +491,17 @@ Les repos restent des silos — un Claude sur Yggdrasil ne voit pas les branches
   - Score par TF-IDF (avec query) ou temperature (sans query), poids 0.5x vs local
   - Max 3 branches virtuelles, dans le budget restant apres les locales
   - Prefixe: `repo_name::branch_id` (ex: `MUNINN-::b1593`)
+- [x] Cap 50 branches scannees par repo distant (les plus recentes par last_access)
+  - MUNINN a 2051 branches — scanner tout serait trop lent
+  - 50 = ~2 semaines d'activite, suffisant pour la pertinence
+- [x] Nettoyage fantomes: repos supprimes retires auto du registry au boot
+- [x] Try/except global par repo distant — jamais de crash boot a cause d'un repo casse
 - [x] Aucune ecriture dans les trees d'autres repos — read-only strict
 - [x] Dedup P19 (NCD) s'applique aussi aux branches virtuelles
 - [x] Teste: boot Yggdrasil query "compression mycelium" → charge 3 branches MUNINN
 - [x] Teste: boot Yggdrasil sans query → charge 3 branches MUNINN les plus chaudes
 - [x] Teste: boot MUNINN → branches locales remplissent le budget, zero virtual (normal)
+- [x] Teste: ghost repo auto-nettoye du registry, stale path auto-corrige
 - [x] Les corbeaux se parlent enfin
 
 ### Flag --no-l9 + Mass Ingest (session 2026-03-09) [FAIT]
