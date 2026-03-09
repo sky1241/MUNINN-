@@ -2636,10 +2636,12 @@ def install_hooks(repo_path: Path):
     settings_path = claude_dir / "settings.local.json"
 
     feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
+    stop_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}" --trigger stop'
     hooks_config = {
         "hooks": {
             "PreCompact": [{"type": "command", "command": feed_cmd}],
             "SessionEnd": [{"type": "command", "command": feed_cmd}],
+            "Stop": [{"type": "command", "command": stop_cmd}],
         }
     }
 
@@ -2656,7 +2658,7 @@ def install_hooks(repo_path: Path):
 
     with open(settings_path, "w", encoding="utf-8") as f:
         json.dump(hooks_config, f, indent=2, ensure_ascii=False)
-    print(f"  Hooks installed: PreCompact + SessionEnd")
+    print(f"  Hooks installed: PreCompact + SessionEnd + Stop")
 
 
 # ── VERIFY (compression quality check) ────────────────────────────
@@ -3433,6 +3435,97 @@ def feed_from_hook(repo_path: Path):
         print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
 
 
+def feed_from_stop_hook(repo_path: Path):
+    """Called by Stop hook. Debounced: only feeds when new messages exist.
+
+    P32: captures short conversations that never trigger PreCompact/SessionEnd.
+    Uses message count dedup to avoid reprocessing the same conversation 50x.
+    """
+    try:
+        raw = sys.stdin.read() if not sys.stdin.isatty() else ""
+    except Exception:
+        raw = ""
+    if not raw.strip():
+        return
+    try:
+        hook_input = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return
+
+    # Anti-loop: if Stop fired because of a prior Stop hook, skip
+    if hook_input.get("stop_hook_active", False):
+        return
+
+    transcript_path = hook_input.get("transcript_path")
+    if not transcript_path:
+        return
+    jsonl_path = Path(transcript_path)
+    if not jsonl_path.exists():
+        print(f"MUNINN STOP: transcript not found: {jsonl_path}", file=sys.stderr)
+        return
+
+    session_id = hook_input.get("session_id", jsonl_path.stem)
+
+    # Count messages in transcript for dedup
+    try:
+        msg_count = sum(1 for _ in open(jsonl_path, encoding="utf-8", errors="replace"))
+    except OSError:
+        return
+    if msg_count == 0:
+        return
+
+    # Dedup file: {session_id: last_fed_count}
+    dedup_path = repo_path / ".muninn" / "stop_dedup.json"
+    dedup = {}
+    if dedup_path.exists():
+        try:
+            dedup = json.loads(dedup_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            dedup = {}
+
+    last_count = dedup.get(session_id, 0)
+    if msg_count <= last_count:
+        return  # Nothing new, skip
+
+    # New messages detected — feed the full conversation
+    print(f"MUNINN STOP: {msg_count - last_count} new messages (session {session_id[:8]})")
+
+    # 1. Feed mycelium
+    count = feed_from_transcript(jsonl_path, repo_path)
+    print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
+
+    # 2. Compress transcript
+    mn_path = compress_transcript(jsonl_path, repo_path)
+
+    # 3. Auto-segment into branches
+    if mn_path:
+        grow_branches_from_session(mn_path)
+
+    # 4. Refresh tree
+    tree = load_tree()
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
+    # 5. Sync to meta-mycelium
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from mycelium import Mycelium
+        m = Mycelium(repo_path)
+        pushed = m.sync_to_meta()
+        print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+    except Exception as e:
+        print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+
+    # 6. Update dedup — keep only last 20 sessions
+    dedup[session_id] = msg_count
+    if len(dedup) > 20:
+        oldest = sorted(dedup, key=lambda k: dedup[k])[:len(dedup) - 20]
+        for k in oldest:
+            del dedup[k]
+    dedup_path.parent.mkdir(parents=True, exist_ok=True)
+    dedup_path.write_text(json.dumps(dedup, indent=2), encoding="utf-8")
+
+
 def feed_history(repo_path: Path):
     """Feed mycelium from all past transcript JSONL files for this project.
 
@@ -3639,6 +3732,9 @@ def main():
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
     parser.add_argument("--history", action="store_true", help="Feed from all past transcripts")
     parser.add_argument("--no-l9", action="store_true", help="Skip L9 (LLM API) — use only free layers")
+    parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
+                        help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
+
     args = parser.parse_args()
 
     # Global flag to skip L9
@@ -3690,6 +3786,9 @@ def main():
             count = feed_from_transcript(Path(args.file), repo)
             print(f"MUNINN FEED: {count} messages -> mycelium ({repo.name})")
             compress_transcript(Path(args.file), repo)
+        elif args.trigger == "stop":
+            # P32: Stop hook — debounced feed
+            feed_from_stop_hook(repo)
         else:
             # Hook mode: read transcript_path from stdin
             feed_from_hook(repo)

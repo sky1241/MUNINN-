@@ -11,6 +11,12 @@
         "type": "command",
         "command": "python engine/core/muninn.py feed --repo ."
       }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python engine/core/muninn.py feed --repo . --trigger stop"
+      }
     ]
   }
 }
