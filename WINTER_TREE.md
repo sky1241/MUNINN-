@@ -511,6 +511,14 @@ read_node() verifie le hash SHA-256 avant de charger une branche .mn.
 - [x] Hash "00000000" (branches pas encore hashees) → skip la verification
 - [x] Teste: fichier corrompu detecte, branche skippee, boot continue normalement
 
+### P35 — Benchmark Factuel en CI [FAIT]
+Le benchmark 37/40 etait un test manuel. Maintenant en CI automatique.
+- [x] Step "Benchmark Factual Retention" dans ci.yml
+- [x] Seuil monte a 85% (etait 70%) — fail si regression sous 34/40
+- [x] Score actuel: 35/40 (88%) — verbose 100%, session 80%, compact 80%
+- [x] Zero API, zero dependance externe, reproductible
+- [x] 3 samples (verbose, session, compact) × 40 questions factuelles
+
 ### P33 — Decay Exponentiel Ebbinghaus [FAIT]
 Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.
 - [x] Recency = `0.995 ** (days_cold * 24)` — courbe exponentielle fidele a Ebbinghaus 1885

@@ -131,6 +131,11 @@ jobs:
           print("OK Mycelium tests pass")
           EOF
 
+      - name: Benchmark Factual Retention (P35)
+        run: |
+          python3 tests/benchmark/run_benchmark.py
+          echo "Benchmark exit code: $?"
+
       - name: Test Feed (transcript parsing)
         run: |
           python3 - <<'EOF'

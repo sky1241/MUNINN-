@@ -116,7 +116,7 @@ def main():
     print(f"  OVERALL: {all_answered}/{all_total} questions ({overall_pct:.0f}%) [{overall_status}]")
     print("=" * 60)
 
-    return 0 if overall_pct >= 70 else 1
+    return 0 if overall_pct >= 85 else 1
 
 
 if __name__ == "__main__":
