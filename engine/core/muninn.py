@@ -120,6 +120,7 @@ def load_codebook(repo_path: Path = None) -> dict:
 _CB = None
 _CB_REPO = None
 _REPO_PATH = None
+_SKIP_L9 = False
 
 
 def get_codebook():
@@ -1386,6 +1387,8 @@ def _llm_compress(text: str, context: str = "") -> str:
     Returns text unchanged if unavailable.
     """
     if len(text) <= 4000:
+        return text
+    if globals().get('_SKIP_L9', False):
         return text
     try:
         import os, subprocess as _sp
@@ -3635,7 +3638,12 @@ def main():
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
     parser.add_argument("--history", action="store_true", help="Feed from all past transcripts")
+    parser.add_argument("--no-l9", action="store_true", help="Skip L9 (LLM API) — use only free layers")
     args = parser.parse_args()
+
+    # Global flag to skip L9
+    global _SKIP_L9
+    _SKIP_L9 = getattr(args, 'no_l9', False)
 
     # Set repo path for local codebook loading
     if args.repo:
