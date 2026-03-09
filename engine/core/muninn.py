@@ -3813,9 +3813,21 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
         save_tree(tree)
 
 
+def _hook_log(repo_path: Path, message: str):
+    """Append a timestamped line to .muninn/hook_log.txt for debugging."""
+    try:
+        log_path = repo_path / ".muninn" / "hook_log.txt"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+    except OSError:
+        pass
+
+
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
     hook_event = "PreCompact/SessionEnd"
+    _hook_log(repo_path, f"ENTER feed_from_hook (repo={repo_path.name})")
     if sys.stdin.isatty():
         print(f"MUNINN {hook_event}: no stdin (tty mode). Use 'feed --history' for manual.", file=sys.stderr)
         sys.exit(1)
@@ -3878,11 +3890,13 @@ def feed_from_stop_hook(repo_path: Path):
     P32: captures short conversations that never trigger PreCompact/SessionEnd.
     Uses message count dedup to avoid reprocessing the same conversation 50x.
     """
+    _hook_log(repo_path, "ENTER feed_from_stop_hook")
     try:
         raw = sys.stdin.read() if not sys.stdin.isatty() else ""
     except Exception:
         raw = ""
     if not raw.strip():
+        _hook_log(repo_path, "EXIT no stdin data")
         print("MUNINN STOP: no stdin data received", file=sys.stderr)
         return
     try:
@@ -4089,6 +4103,92 @@ def feed_history(repo_path: Path):
     save_tree(tree)
 
 
+def feed_watch(repo_path: Path):
+    """P41: Poll-based feed — scans active transcripts every N minutes.
+
+    Finds the Claude project dir for this repo, checks each .jsonl for size
+    changes since last poll, and feeds only those that grew. Uses
+    .muninn/watch_state.json to track {filename: last_size_bytes}.
+    Zero work if nothing changed.
+    """
+    _hook_log(repo_path, "ENTER feed_watch")
+
+    # Find project dir
+    claude_dir = Path.home() / ".claude" / "projects"
+    if not claude_dir.exists():
+        print(f"MUNINN WATCH: {claude_dir} not found", file=sys.stderr)
+        return
+
+    repo_name = repo_path.name
+    project_dirs = [d for d in claude_dir.iterdir()
+                    if d.is_dir() and f"-{repo_name}" in d.name]
+    if not project_dirs:
+        print(f"MUNINN WATCH: no project dir for '{repo_name}'", file=sys.stderr)
+        return
+
+    # Load watch state
+    state_path = repo_path / ".muninn" / "watch_state.json"
+    state = {}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            state = {}
+
+    # Find transcripts that grew
+    changed = []
+    for project_dir in project_dirs:
+        for jsonl_file in project_dir.glob("*.jsonl"):
+            key = jsonl_file.name
+            current_size = jsonl_file.stat().st_size
+            last_size = state.get(key, 0)
+            if current_size > last_size:
+                changed.append(jsonl_file)
+                state[key] = current_size
+
+    if not changed:
+        _hook_log(repo_path, "EXIT watch: nothing changed")
+        return
+
+    print(f"MUNINN WATCH: {len(changed)} transcript(s) changed")
+
+    for jsonl_path in changed:
+        _hook_log(repo_path, f"WATCH feeding {jsonl_path.name} ({jsonl_path.stat().st_size} bytes)")
+
+        # Feed mycelium
+        count = feed_from_transcript(jsonl_path, repo_path)
+        print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
+
+        # Compress transcript
+        mn_path = compress_transcript(jsonl_path, repo_path)
+
+        # Auto-segment into branches
+        if mn_path:
+            grow_branches_from_session(mn_path)
+
+    # Refresh tree
+    tree = load_tree()
+    refresh_tree_metadata(tree)
+    save_tree(tree)
+
+    # Sync to meta-mycelium
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from mycelium import Mycelium
+        m = Mycelium(repo_path)
+        pushed = m.sync_to_meta()
+        print(f"  SYNC: {pushed} connections -> meta-mycelium")
+    except Exception as e:
+        print(f"  SYNC warning: {e}", file=sys.stderr)
+
+    _register_repo(repo_path)
+
+    # Save watch state
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _hook_log(repo_path, f"WATCH done: {len(changed)} transcript(s) fed")
+
+
 def ingest(filepath: Path, repo_path: Path):
     """Ingest a reference document (or all .md in a folder) into the tree as permanent branches.
 
@@ -4176,6 +4276,7 @@ def main():
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
     parser.add_argument("--history", action="store_true", help="Feed from all past transcripts")
+    parser.add_argument("--watch", action="store_true", help="Poll-based feed: only process transcripts that grew since last check")
     parser.add_argument("--no-l9", action="store_true", help="Skip L9 (LLM API) — use only free layers")
     parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
                         help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
@@ -4232,7 +4333,9 @@ def main():
         repo = Path(args.repo or args.file or ".").resolve()
         _REPO_PATH = repo
         _refresh_tree_paths()
-        if args.history:
+        if args.watch:
+            feed_watch(repo)
+        elif args.history:
             feed_history(repo)
         elif args.file and Path(args.file).suffix == ".jsonl":
             # Direct file mode: feed from a specific transcript
