@@ -580,19 +580,19 @@ Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/
 - [x] Cout L9 estime si actif: ~$238 (surtout Yggdrasil 8.7M lignes)
 - [x] L1-L7+L10+L11 gratuit = suffisant pour la majorite des cas
 
-### P39 — Liane WT3 : ingestion de donnees structurees [TODO — POST-WT3]
-Idee: Muninn ingere des papers scientifiques (OpenAlex 348M, arXiv 2449 tars) via l'index WT3.db de Yggdrasil.
-Pre-requis dur: WT3 (Bible SQLite) doit exister. Sans index, pas de query sur 348M papers.
-Architecture:
-- Nouveau type de noeud `paper` dans tree.json (decay quasi-nul, scoring relevance pure)
-- Branches ephemeres `paper_cache` (TTL 7j), promues en `paper` permanent apres 3+ reloads
-- CLI: `muninn ingest --source wt3 --db <path> --query <q> --top 20`
-- Flow: query SQL -> extraire title+abstract+concepts+glyphes -> L1-L7 compress -> branche .mn
-- Boot lazy-load: si wt3.db configure, query avec seeds spreading activation, top 10-20 papers
-- Budget separe (~5K tokens) pour le contexte scientifique, ne mange pas les 30K branches normales
-- Mycelium nourri via observe_with_concepts() (deja supporte)
-- Pas une extension de P38 (parser transcripts) — module dedie pour donnees structurees
-Pas prioritaire. Apres WT3 + P21.
+### P39 — Liane WT3 : Muninn bibliothecaire [TODO — POST-WT3]
+Muninn ne stocke pas les papers. Il devient le bibliothecaire personnalise de Sky.
+Pre-requis dur: WT3 (Bible SQLite) doit exister avec paper_id -> [concepts].
+Principe: nourrir le mycelium avec les concepts de 832K papers scannes.
+Le spreading activation devient un moteur de recherche personnalise par les habitudes de Sky.
+Pieces existantes: observe_with_concepts(), mycelium (722K conn ok), spreading activation.
+A coder (~100 lignes):
+- Reverse index `concept -> [paper_ids]` (JSON sur disque, dans .muninn/)
+- Script one-shot: lire liste WT3 -> observe_with_concepts() par paper
+- Query dans boot: spreading activation -> concepts actives -> reverse index -> paper IDs -> WT3 lookup
+Difference avec Yggdrasil: Ygg cherche par metadonnees objectives. Muninn cherche par comment Sky pense.
+Yggdrasil construit la liste. Muninn l'avale. Le champignon pousse dessus.
+Pas prioritaire. Apres WT3.
 
 ### P21 — pip install muninn [TODO — GROS]
 - [ ] pyproject.toml + setup
