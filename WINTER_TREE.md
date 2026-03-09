@@ -375,6 +375,7 @@ Recherche complete: 20 techniques evaluees, 8 implementees, 1 impasse, 11 skip.
 | Brique | Technique | Status | Gain |
 |--------|-----------|--------|------|
 | 1 | Meta-Tokens (LZ77 n-grams) | IMPASSE — 0% on compressed text, BPE overhead | - |
+| 1b | Encodage binaire des papers | IMPASSE — BPE lit des tokens pas des bits, binaire = x20 plus cher, Shannon | - |
 | 3 | Contradiction resolution | FAIT — skeleton last-writer-wins | Correctesse |
 | 4 | Semantic RLE | FAIT — collapse debug/retry loops (13msg->5) | 10-30% sessions |
 | 5 | Optimal Forgetting | FAIT — re-compress cold branches via L9 in prune | Densite long-terme |
