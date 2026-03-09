@@ -504,6 +504,13 @@ Les repos restent des silos — un Claude sur Yggdrasil ne voit pas les branches
 - [x] Teste: ghost repo auto-nettoye du registry, stale path auto-corrige
 - [x] Les corbeaux se parlent enfin
 
+### P34 — Boot Integrity Check [FAIT]
+read_node() verifie le hash SHA-256 avant de charger une branche .mn.
+- [x] Compare `compute_hash(filepath)` vs `node["hash"]` stocke dans tree.json
+- [x] Mismatch → log warning + retourne vide (branche skippee, fallback sur la suivante)
+- [x] Hash "00000000" (branches pas encore hashees) → skip la verification
+- [x] Teste: fichier corrompu detecte, branche skippee, boot continue normalement
+
 ### P33 — Decay Exponentiel Ebbinghaus [FAIT]
 Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.
 - [x] Recency = `0.995 ** (days_cold * 24)` — courbe exponentielle fidele a Ebbinghaus 1885

@@ -467,6 +467,7 @@ def refresh_tree_metadata(tree: dict):
 
 
 def read_node(name: str) -> str:
+    """Read a branch .mn file. P34: verify hash integrity before loading."""
     tree = load_tree()
     node = tree["nodes"].get(name)
     if not node:
@@ -475,6 +476,14 @@ def read_node(name: str) -> str:
     filepath = TREE_DIR / node["file"]
     if not filepath.exists():
         return f"ERROR: file '{filepath}' not found"
+
+    # P34: integrity check — skip corrupted branches
+    stored_hash = node.get("hash", "")
+    if stored_hash and stored_hash != "00000000":
+        actual_hash = compute_hash(filepath)
+        if actual_hash != stored_hash:
+            print(f"WARNING: {name} hash mismatch (stored={stored_hash}, actual={actual_hash}), skipping", file=sys.stderr)
+            return ""  # Empty = will be skipped by boot (no content)
 
     node["access_count"] = node.get("access_count", 0) + 1
     node["last_access"] = time.strftime("%Y-%m-%d")
