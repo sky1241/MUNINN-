@@ -1774,6 +1774,95 @@ def extract_tags(text: str) -> list[str]:
     return sorted(tags)[:10]
 
 
+def _load_virtual_branches(query: str, budget_tokens: int) -> list:
+    """P20c: Load read-only branches from other repos registered in repos.json.
+
+    Returns list of (prefixed_name, text, token_count) tuples.
+    Virtual branches are scored by TF-IDF at 0.5x weight vs local branches.
+    Max 3 virtual branches loaded. Read-only: never writes to other repos.
+    """
+    MAX_VIRTUAL = 3
+    WEIGHT_FACTOR = 0.5
+
+    repos = _load_repos_registry()
+    if not repos:
+        return []
+
+    current_repo = _REPO_PATH.resolve() if _REPO_PATH else None
+    if not current_repo:
+        return []
+
+    # Collect candidate branches from other repos
+    candidates = []  # (repo_name, branch_name, text, tokens, relevance)
+
+    for repo_name, repo_str in repos.items():
+        repo_p = Path(repo_str)
+        # Skip current repo
+        if repo_p.resolve() == current_repo:
+            continue
+        tree_dir = repo_p / ".muninn" / "tree"
+        tree_meta = tree_dir / "tree.json"
+        if not tree_meta.exists():
+            continue
+
+        try:
+            tree_data = json.loads(tree_meta.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        other_nodes = tree_data.get("nodes", {})
+        branch_contents = {}
+        for bname, bnode in other_nodes.items():
+            if bname == "root":
+                continue
+            bfile = tree_dir / bnode.get("file", "")
+            if bfile.exists():
+                try:
+                    text = bfile.read_text(encoding="utf-8")
+                    if text.strip():
+                        branch_contents[bname] = text
+                except (OSError, UnicodeDecodeError):
+                    continue
+
+        if not branch_contents:
+            continue
+
+        # Score by TF-IDF if query, else by temperature
+        if query:
+            scores = _tfidf_relevance(query, branch_contents)
+            for bname, text in branch_contents.items():
+                score = scores.get(bname, 0.0) * WEIGHT_FACTOR
+                if score > 0.01:
+                    tok = token_count(text)
+                    candidates.append((repo_name, bname, text, tok, score))
+        else:
+            # No query: take hottest branches (by temperature)
+            for bname, text in branch_contents.items():
+                bnode = other_nodes.get(bname, {})
+                temp = bnode.get("temperature", 0.0) * WEIGHT_FACTOR
+                if temp > 0.01:
+                    tok = token_count(text)
+                    candidates.append((repo_name, bname, text, tok, temp))
+
+    if not candidates:
+        return []
+
+    # Sort by score descending, take top MAX_VIRTUAL within budget
+    candidates.sort(key=lambda x: x[4], reverse=True)
+    result = []
+    used_tokens = 0
+    for repo_name, bname, text, tok, score in candidates:
+        if len(result) >= MAX_VIRTUAL:
+            break
+        if used_tokens + tok > budget_tokens:
+            continue
+        prefixed = f"{repo_name}::{bname}"
+        result.append((prefixed, text, tok))
+        used_tokens += tok
+
+    return result
+
+
 def boot(query: str = "") -> str:
     """R7: load root + relevant branches based on query.
 
@@ -1926,6 +2015,14 @@ def boot(query: str = "") -> str:
             branch_text = read_node(name)
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
+
+    # P20c: Virtual branches — read-only branches from other repos
+    remaining_budget = BUDGET["max_loaded_tokens"] - loaded_tokens
+    if remaining_budget > 500 and _REPO_PATH:
+        virtual = _load_virtual_branches(query or "", remaining_budget)
+        for vname, vtext, vtokens in virtual:
+            loaded.append((vname, vtext))
+            loaded_tokens += vtokens
 
     # P19: Dedup branches — skip if NCD similarity > 0.6 (too similar)
     deduped = []
@@ -2627,8 +2724,56 @@ Modifie-le librement — c'est ta carte de route.
         print(f"  WINTER_TREE.md exists, skipped (not overwriting)")
 
 
+def _repos_registry_path() -> Path:
+    """Path to the shared repos registry (~/.muninn/repos.json)."""
+    return Path.home() / ".muninn" / "repos.json"
+
+
+def _load_repos_registry() -> dict:
+    """Load the repos registry. Returns {repo_name: absolute_path_str, ...}."""
+    reg_path = _repos_registry_path()
+    if not reg_path.exists():
+        return {}
+    try:
+        data = json.loads(reg_path.read_text(encoding="utf-8"))
+        return data.get("repos", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _register_repo(repo_path: Path):
+    """Register a repo in ~/.muninn/repos.json for P20c cross-repo discovery."""
+    repo_path = repo_path.resolve()
+    reg_path = _repos_registry_path()
+    reg_path.parent.mkdir(parents=True, exist_ok=True)
+
+    registry = {}
+    if reg_path.exists():
+        try:
+            registry = json.loads(reg_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            registry = {}
+
+    repos = registry.get("repos", {})
+    repo_key = repo_path.name
+    repo_str = str(repo_path)
+
+    if repos.get(repo_key) == repo_str:
+        return  # Already registered with same path
+
+    repos[repo_key] = repo_str
+    registry["repos"] = repos
+    registry["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    reg_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  Repo registered: {repo_key} -> {repo_str}")
+
+
 def install_hooks(repo_path: Path):
-    """Install Claude Code hooks for automatic feed on PreCompact/SessionEnd."""
+    """Install Claude Code hooks for automatic feed on PreCompact/SessionEnd/Stop.
+
+    P32: Merges hook-by-hook instead of skipping when hooks key exists.
+    Also registers repo in ~/.muninn/repos.json for P20c cross-repo discovery.
+    """
     repo_path = repo_path.resolve()
     muninn_engine = Path(__file__).resolve()
     claude_dir = repo_path / ".claude"
@@ -2637,28 +2782,39 @@ def install_hooks(repo_path: Path):
 
     feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
     stop_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}" --trigger stop'
-    hooks_config = {
-        "hooks": {
-            "PreCompact": [{"type": "command", "command": feed_cmd}],
-            "SessionEnd": [{"type": "command", "command": feed_cmd}],
-            "Stop": [{"type": "command", "command": stop_cmd}],
-        }
+    required_hooks = {
+        "PreCompact": [{"type": "command", "command": feed_cmd}],
+        "SessionEnd": [{"type": "command", "command": feed_cmd}],
+        "Stop": [{"type": "command", "command": stop_cmd}],
     }
 
+    # Load existing settings or start fresh
+    existing = {}
     if settings_path.exists():
         try:
             existing = json.load(open(settings_path, encoding="utf-8"))
-            if "hooks" in existing:
-                print(f"  Hooks already configured, skipped")
-                return
-            existing["hooks"] = hooks_config["hooks"]
-            hooks_config = existing
         except (json.JSONDecodeError, ValueError):
-            pass
+            existing = {}
 
-    with open(settings_path, "w", encoding="utf-8") as f:
-        json.dump(hooks_config, f, indent=2, ensure_ascii=False)
-    print(f"  Hooks installed: PreCompact + SessionEnd + Stop")
+    existing_hooks = existing.get("hooks", {})
+    installed = []
+
+    # Merge hook-by-hook: add missing hooks, don't touch existing ones
+    for hook_name, hook_entries in required_hooks.items():
+        if hook_name not in existing_hooks:
+            existing_hooks[hook_name] = hook_entries
+            installed.append(hook_name)
+
+    if not installed:
+        print(f"  Hooks already up-to-date (PreCompact + SessionEnd + Stop)")
+    else:
+        existing["hooks"] = existing_hooks
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=2, ensure_ascii=False)
+        print(f"  Hooks installed: {' + '.join(installed)}")
+
+    # Register repo in ~/.muninn/repos.json for P20c cross-repo discovery
+    _register_repo(repo_path)
 
 
 # ── VERIFY (compression quality check) ────────────────────────────
@@ -3434,6 +3590,9 @@ def feed_from_hook(repo_path: Path):
     except Exception as e:
         print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
 
+    # P20c: Ensure repo is registered for cross-repo discovery
+    _register_repo(repo_path)
+
 
 def feed_from_stop_hook(repo_path: Path):
     """Called by Stop hook. Debounced: only feeds when new messages exist.
@@ -3515,6 +3674,9 @@ def feed_from_stop_hook(repo_path: Path):
         print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
     except Exception as e:
         print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+
+    # P20c: Ensure repo is registered for cross-repo discovery
+    _register_repo(repo_path)
 
     # 6. Update dedup — keep only last 20 sessions
     dedup[session_id] = msg_count
@@ -3726,7 +3888,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall",
+        "ingest", "recall", "upgrade-hooks",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -3773,6 +3935,14 @@ def main():
         _REPO_PATH = Path(args.file).resolve()
         _refresh_tree_paths()
         bootstrap_mycelium(Path(args.file))
+        return
+
+    if args.command == "upgrade-hooks":
+        repo = Path(args.repo or args.file or ".").resolve()
+        if not (repo / ".muninn").exists():
+            print(f"ERROR: {repo} is not a Muninn repo (no .muninn/ directory)")
+            sys.exit(1)
+        install_hooks(repo)
         return
 
     if args.command == "feed":

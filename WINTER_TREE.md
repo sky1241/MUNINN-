@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 44 briques vivantes (P0-P32 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 3887 lignes, 61 fonctions
+Etat: 46 briques vivantes (P0-P32 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 4057 lignes, 65 fonctions
 
 ## Anatomie
 
@@ -464,6 +464,37 @@ Les senior devs font exactement ca: conversations courtes, haute valeur, fermetu
 - [x] `--trigger stop` flag CLI + `install_hooks()` installe Stop sur nouveaux repos
 - [x] Teste: 1er run feed (76 msgs, x2.3), 2eme run skip (dedup), anti-loop OK
 - [x] 3 hooks maintenant: PreCompact (contexte plein) + SessionEnd (VS Code ferme) + Stop (chaque reponse)
+
+### P32b — Auto-install hooks (plug-and-play) [FAIT]
+Probleme: Stop hook devait etre ajoute MANUELLEMENT dans chaque repo. Pas scalable.
+- [x] `install_hooks()` reecrit: merge hook-par-hook au lieu de skip en bloc
+  - Si PreCompact existe mais pas Stop → ajoute seulement Stop (preserve l'existant)
+  - Si tous les 3 existent → skip (up-to-date)
+  - Preserve les permissions et autres cles du settings.local.json existant
+- [x] `upgrade-hooks` commande CLI: `muninn.py upgrade-hooks --repo <path>`
+  - Permet de mettre a jour les hooks sur les repos existants sans re-bootstrap
+- [x] `~/.muninn/repos.json` registre central — auto-rempli par install_hooks + feed hooks
+  - Structure: `{"repos": {"MUNINN-": "C:\\...", "yggdrasil-engine": "C:\\..."}, "updated": "..."}`
+  - Sert aussi de base pour P20c (decouverte cross-repo)
+- [x] `_register_repo()` appele dans: install_hooks, feed_from_hook, feed_from_stop_hook
+- [x] Teste: repo avec PreCompact+SessionEnd → Stop ajoute, permissions preservees
+- [x] Cross-platform: `Path(__file__).resolve()` pour le chemin muninn.py, zero hardcode
+
+### P20c — Virtual Branches (cross-repo tree sync) [FAIT]
+Probleme: P20b synchronise le mycelium (co-occurrences) mais PAS le contenu des branches.
+Les repos restent des silos — un Claude sur Yggdrasil ne voit pas les branches MUNINN.
+- [x] `_load_virtual_branches(query, budget)` dans boot():
+  - Lit `~/.muninn/repos.json` pour decouvrir les autres repos
+  - Pour chaque repo: charge son tree.json + branches .mn en READ-ONLY
+  - Score par TF-IDF (avec query) ou temperature (sans query), poids 0.5x vs local
+  - Max 3 branches virtuelles, dans le budget restant apres les locales
+  - Prefixe: `repo_name::branch_id` (ex: `MUNINN-::b1593`)
+- [x] Aucune ecriture dans les trees d'autres repos — read-only strict
+- [x] Dedup P19 (NCD) s'applique aussi aux branches virtuelles
+- [x] Teste: boot Yggdrasil query "compression mycelium" → charge 3 branches MUNINN
+- [x] Teste: boot Yggdrasil sans query → charge 3 branches MUNINN les plus chaudes
+- [x] Teste: boot MUNINN → branches locales remplissent le budget, zero virtual (normal)
+- [x] Les corbeaux se parlent enfin
 
 ### Flag --no-l9 + Mass Ingest (session 2026-03-09) [FAIT]
 - [x] Flag `--no-l9`: skip L9 (LLM API), utilise seulement les couches gratuites (L1-L7+L10+L11)
