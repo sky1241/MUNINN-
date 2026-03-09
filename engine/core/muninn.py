@@ -2995,12 +2995,121 @@ def _compress_code_blocks(text: str) -> str:
     return re.sub(r"```(\w*)\n(.*?)```", _compress_block, text, flags=re.DOTALL)
 
 
-def parse_transcript(jsonl_path: Path) -> list[str]:
-    """Parse a Claude Code transcript JSONL and extract text messages.
+def _parse_json_conversation(filepath: Path) -> list[str]:
+    """P38: Parse claude.ai JSON export (conversations format)."""
+    try:
+        data = json.loads(filepath.read_text(encoding="utf-8", errors="ignore"))
+    except (json.JSONDecodeError, OSError):
+        return []
 
+    texts = []
+    # Handle various JSON conversation formats
+    messages = []
+    if isinstance(data, dict):
+        # claude.ai format: {"chat_messages": [...]} or {"conversation": [...]}
+        messages = data.get("chat_messages", data.get("conversation",
+                   data.get("messages", data.get("content", []))))
+    elif isinstance(data, list):
+        messages = data
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        # Extract text content
+        content = msg.get("content", msg.get("text", ""))
+        if isinstance(content, str) and len(content.strip()) >= 10:
+            texts.append(content.strip())
+        elif isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    t = part.get("text", "")
+                    if len(t.strip()) >= 10:
+                        texts.append(t.strip())
+                elif isinstance(part, str) and len(part.strip()) >= 10:
+                    texts.append(part.strip())
+    return texts
+
+
+def _parse_markdown_conversation(filepath: Path) -> list[str]:
+    """P38: Parse markdown conversation (## Human / ## Assistant headers)."""
+    try:
+        text = filepath.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return []
+
+    texts = []
+    current = []
+    for line in text.split("\n"):
+        if re.match(r'^##\s*(Human|Assistant|User|Claude)', line, re.IGNORECASE):
+            if current:
+                block = "\n".join(current).strip()
+                if len(block) >= 10:
+                    texts.append(block)
+                current = []
+        else:
+            current.append(line)
+    if current:
+        block = "\n".join(current).strip()
+        if len(block) >= 10:
+            texts.append(block)
+    return texts
+
+
+def _detect_transcript_format(filepath: Path) -> str:
+    """P38: Detect transcript format from file content.
+
+    Returns: 'jsonl', 'json', 'markdown', or 'unknown'.
+    """
+    try:
+        first_bytes = filepath.read_bytes()[:500]
+        first_text = first_bytes.decode("utf-8", errors="ignore").strip()
+    except OSError:
+        return "unknown"
+
+    # JSONL: first line is a valid JSON object
+    first_line = first_text.split("\n")[0].strip()
+    if first_line.startswith("{"):
+        try:
+            json.loads(first_line)
+            # Check if it's a single JSON file (not JSONL)
+            # JSONL = multiple lines starting with {
+            lines = first_text.split("\n")
+            json_lines = sum(1 for l in lines[:5] if l.strip().startswith("{"))
+            if json_lines >= 2:
+                return "jsonl"
+        except json.JSONDecodeError:
+            pass
+
+    # JSON: starts with { or [
+    if first_text.startswith("{") or first_text.startswith("["):
+        try:
+            json.loads(filepath.read_text(encoding="utf-8", errors="ignore"))
+            return "json"
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Markdown: contains ## Human or ## Assistant headers
+    if re.search(r'^##\s*(Human|Assistant|User|Claude)', first_text, re.MULTILINE | re.IGNORECASE):
+        return "markdown"
+
+    return "unknown"
+
+
+def parse_transcript(jsonl_path: Path) -> list[str]:
+    """Parse a transcript and extract text messages.
+
+    P38: Auto-detects format: JSONL (Claude Code), JSON (claude.ai), markdown.
     L0 FILTER: strips tool results (77% of transcript) down to 1-line summaries.
     Keeps: user messages, assistant text, tool call names + args (not results).
     """
+    # P38: Multi-format detection
+    fmt = _detect_transcript_format(jsonl_path)
+    if fmt == "json":
+        return _parse_json_conversation(jsonl_path)
+    elif fmt == "markdown":
+        return _parse_markdown_conversation(jsonl_path)
+    # Default: JSONL (Claude Code) — fall through to original parser
+
     # P28: Claude verbal tics — full sentences that carry zero information
     _CLAUDE_TICS = re.compile(
         r"^("

@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 46 briques vivantes (P0-P32 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
-Engine: muninn.py 4090 lignes, 65 fonctions
+Etat: 52 briques vivantes (P0-P38 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 22 bugs corriges (P10+SL)
+Engine: muninn.py 4325 lignes, 69 fonctions
 
 ## Anatomie
 
@@ -538,6 +538,15 @@ recall() trouvait du contenu mais ne rechauffait pas les branches matchees.
 - [x] Affiche "(warmed N branches)" dans le header du recall
 - [x] Prepare le prochain boot: branches recherchees = plus chaudes = mieux classees
 - [x] Teste: recall → access_count 7→8, "warmed 1 branches" affiche
+
+### P38 — Parser Multi-Format [FAIT]
+parse_transcript() ne gerait que JSONL (Claude Code). Maintenant: auto-detect + 3 formats.
+- [x] `_detect_transcript_format()`: detecte JSONL, JSON, markdown depuis les premiers 500 bytes
+- [x] `_parse_json_conversation()`: claude.ai exports (chat_messages, conversation, messages)
+- [x] `_parse_markdown_conversation()`: split par ## Human/Assistant/User/Claude headers
+- [x] Fallback: format inconnu → traite comme JSONL (comportement original)
+- [x] Teste: JSONL 2 texts, JSON 2 texts, Markdown 3 texts — tous corrects
+- [x] Benchmark: 35/40 (88%) inchange — zero regression
 
 ### P33 — Decay Exponentiel Ebbinghaus [FAIT]
 Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/90`.
