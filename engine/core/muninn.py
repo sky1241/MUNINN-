@@ -477,9 +477,13 @@ def refresh_tree_metadata(tree: dict):
         node["temperature"] = compute_temperature(node)
 
 
-def read_node(name: str) -> str:
-    """Read a branch .mn file. P34: verify hash integrity before loading."""
-    tree = load_tree()
+def read_node(name: str, _tree: dict | None = None) -> str:
+    """Read a branch .mn file. P34: verify hash integrity before loading.
+
+    If _tree is provided, uses it (avoids repeated load/save in boot loops).
+    access_count and last_access are updated in-place; caller should save_tree() once.
+    """
+    tree = _tree or load_tree()
     node = tree["nodes"].get(name)
     if not node:
         return f"ERROR: node '{name}' not found"
@@ -498,7 +502,8 @@ def read_node(name: str) -> str:
 
     node["access_count"] = node.get("access_count", 0) + 1
     node["last_access"] = time.strftime("%Y-%m-%d")
-    save_tree(tree)
+    if _tree is None:
+        save_tree(tree)
 
     return filepath.read_text(encoding="utf-8")
 
@@ -1925,7 +1930,7 @@ def boot(query: str = "") -> str:
     tree = load_tree()
     nodes = tree["nodes"]
 
-    root_text = read_node("root")
+    root_text = read_node("root", _tree=tree)
     loaded = [("root", root_text)]
 
     # P23: Auto-continue — if no query, use last session's concepts
@@ -2049,10 +2054,10 @@ def boot(query: str = "") -> str:
             if loaded_tokens + node_tokens > BUDGET["max_loaded_tokens"]:
                 break
             # Check concept novelty before committing to load
-            branch_text = read_node(name)
-            branch_concepts = set(re.findall(r'[a-zA-Z]{4,}', branch_text.lower()))
+            branch_text = read_node(name, _tree=tree)
+            branch_concepts = set(re.findall(r'[a-zA-Z]{3,}', branch_text.lower()))
             new_concepts = branch_concepts - loaded_concepts
-            if branch_concepts and len(new_concepts) / max(len(branch_concepts), 1) < 0.1:
+            if len(branch_concepts) > 10 and len(new_concepts) / len(branch_concepts) < 0.05:
                 continue  # <10% new concepts, skip this branch
             loaded_concepts.update(branch_concepts)
             loaded.append((name, branch_text))
@@ -2068,9 +2073,12 @@ def boot(query: str = "") -> str:
             node_tokens = node["lines"] * BUDGET["tokens_per_line"]
             if loaded_tokens + node_tokens > BUDGET["max_loaded_tokens"]:
                 break
-            branch_text = read_node(name)
+            branch_text = read_node(name, _tree=tree)
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
+
+    # Save tree once after all reads (access_count/last_access updated in-place)
+    save_tree(tree)
 
     # P20c: Virtual branches — read-only branches from other repos
     remaining_budget = BUDGET["max_loaded_tokens"] - loaded_tokens
@@ -3827,6 +3835,37 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
         save_tree(tree)
 
 
+class _MuninnLock:
+    """Simple file lock using mkdir atomicity. Prevents concurrent hook execution."""
+    def __init__(self, repo_path: Path, name: str = "hook", timeout: int = 120):
+        self.lock_dir = repo_path / ".muninn" / f"{name}.lock"
+        self.timeout = timeout
+
+    def __enter__(self):
+        deadline = time.time() + self.timeout
+        while True:
+            try:
+                self.lock_dir.mkdir(parents=True, exist_ok=False)
+                return self
+            except FileExistsError:
+                # Check if lock is stale (older than timeout)
+                try:
+                    age = time.time() - self.lock_dir.stat().st_mtime
+                    if age > self.timeout:
+                        import shutil
+                        shutil.rmtree(self.lock_dir, ignore_errors=True)
+                        continue
+                except OSError:
+                    pass
+                if time.time() > deadline:
+                    raise TimeoutError(f"Muninn lock '{self.lock_dir}' held too long")
+                time.sleep(1)
+
+    def __exit__(self, *args):
+        import shutil
+        shutil.rmtree(self.lock_dir, ignore_errors=True)
+
+
 def _hook_log(repo_path: Path, message: str):
     """Append a timestamped line to .muninn/hook_log.txt for debugging."""
     try:
@@ -3933,6 +3972,22 @@ def feed_from_stop_hook(repo_path: Path):
 
     session_id = hook_input.get("session_id", jsonl_path.stem)
 
+    # Lock to prevent concurrent stop hooks from racing
+    try:
+        lock = _MuninnLock(repo_path, "stop_hook", timeout=120)
+        lock.__enter__()
+    except TimeoutError:
+        print("MUNINN STOP: lock timeout, skipping", file=sys.stderr)
+        return
+
+    try:
+        _feed_from_stop_hook_locked(repo_path, jsonl_path, session_id)
+    finally:
+        lock.__exit__(None, None, None)
+
+
+def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: str):
+    """Inner stop hook logic, called under lock."""
     # Count messages in transcript for dedup
     try:
         with open(jsonl_path, encoding="utf-8", errors="replace") as f:

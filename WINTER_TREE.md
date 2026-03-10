@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 47 bugs corriges (P10+SL+audit+P32fix+scan7+scan8)
-Engine: muninn.py 4461 lignes, 70 fonctions + watchdog.py 50 lignes
+Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 57 bugs corriges (P10+SL+audit+P32fix+scan7+scan8+scan9)
+Engine: muninn.py 4516 lignes, 71 fonctions + mycelium.py 1127 lignes + watchdog.py 50 lignes
 
 ## Anatomie
 
@@ -219,6 +219,17 @@ Ce que Muninn a que les autres n'ont pas:
   - LEAK: install_hooks file handle — now read_text()
   - COLLISION: feed_watch filename-only key — now project_dir/filename
   - Total: 7 bugs fixes
+- [x] Scan 9 (2026-03-10, 3 agents focus concurrency/boot/mycelium-deep):
+  - RACE: _MuninnLock (mkdir atomicity + stale detection) pour stop_hook concurrent
+  - RACE: feed_from_stop_hook wrapped sous lock (prevent double-feed)
+  - PERF: read_node() accepte _tree param, boot() charge/sauve 1 seule fois (etait N load+save)
+  - LOGIC: spread_activation propagation sur frontier seulement (pas re-propagation seeds)
+  - CRASH: mycelium get_bridges() unguarded split — now len(parts) check
+  - CRASH: mycelium pull_from_meta() unguarded split — now len(parts) check
+  - MATCH: observe_with_concepts() substring -> word boundary regex (evite faux positifs)
+  - WINDOWS: _prune_if_memory_pressure() utilisait GetPhysicallyInstalledMemory (RAM totale) — now GlobalMemoryStatusEx (RAM libre)
+  - BLOOM: filtre novelty trop agressif (10% seuil, mots <4 chars) — now 5% seuil, mots >=3 chars, min 10 concepts
+  - Total: 10 bugs fixes (dont 2 race conditions, 2 crashes, 1 perf, 1 logic, 1 matching, 1 Windows, 1 bloom, 1 lock)
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn

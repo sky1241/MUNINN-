@@ -242,8 +242,9 @@ class Mycelium:
             chunk_lower = chunk.lower()
             if len(chunk_lower) < 20:
                 continue
-            # Find which known concepts appear in this chunk
-            found = [c for c in concept_set if c in chunk_lower]
+            # Find which known concepts appear in this chunk (word boundaries)
+            found = [c for c in concept_set
+                     if re.search(r'\b' + re.escape(c) + r'\b', chunk_lower)]
             if len(found) >= 2:
                 self.observe(found)
 
@@ -288,18 +289,20 @@ class Mycelium:
                 free = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_AVPHYS_PAGES')
             else:  # Windows
                 import ctypes
-                kernel32 = ctypes.windll.kernel32
-                mem_status = ctypes.c_ulonglong()
-                kernel32.GetPhysicallyInstalledMemory(ctypes.byref(mem_status))
-                # Fallback: just check process memory
-                import sys
-                proc_mb = sys.getsizeof(self.data) / 1024 / 1024
-                if proc_mb > 200:  # mycelium dict > 200MB = prune
-                    target = len(self.data["connections"]) // 2
-                    self.MAX_CONNECTIONS = target
-                    self._prune_weakest()
-                    self.MAX_CONNECTIONS = 0
-                return
+                class MEMORYSTATUSEX(ctypes.Structure):
+                    _fields_ = [("dwLength", ctypes.c_ulong),
+                                ("dwMemoryLoad", ctypes.c_ulong),
+                                ("ullTotalPhys", ctypes.c_ulonglong),
+                                ("ullAvailPhys", ctypes.c_ulonglong),
+                                ("ullTotalPageFile", ctypes.c_ulonglong),
+                                ("ullAvailPageFile", ctypes.c_ulonglong),
+                                ("ullTotalVirtual", ctypes.c_ulonglong),
+                                ("ullAvailVirtual", ctypes.c_ulonglong),
+                                ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+                stat = MEMORYSTATUSEX()
+                stat.dwLength = ctypes.sizeof(stat)
+                ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+                free = stat.ullAvailPhys
             if free < 500 * 1024 * 1024:  # < 500MB free
                 target = len(self.data["connections"]) // 2
                 self.MAX_CONNECTIONS = target
@@ -496,11 +499,12 @@ class Mycelium:
         if not activation:
             return []
 
-        # Propagate
+        # Propagate — only from current frontier (not all activated nodes)
+        frontier = dict(activation)  # start with seeds
         for hop in range(hops):
             new_activation = {}
             factor = decay ** (hop + 1)
-            for concept, act in activation.items():
+            for concept, act in frontier.items():
                 for neighbor, weight in adj.get(concept, []):
                     spread = act * weight * factor
                     new_activation[neighbor] = new_activation.get(neighbor, 0) + spread
@@ -510,6 +514,7 @@ class Mycelium:
                     activation[concept] = act
                 else:
                     activation[concept] = max(activation[concept], act)
+            frontier = new_activation  # next hop propagates from new nodes only
 
         # Remove seeds, sort by activation
         results = [(c, a) for c, a in activation.items() if c not in seed_set]
@@ -739,7 +744,10 @@ class Mycelium:
         bridges = []
         for key, conn in self.data["connections"].items():
             if "zones" in conn and len(conn["zones"]) >= 2:
-                a, b = key.split("|")
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
                 weight = self.effective_weight(key)
                 bridges.append((a, b, conn["zones"], weight))
         bridges.sort(key=lambda x: x[3], reverse=True)
@@ -870,7 +878,10 @@ class Mycelium:
             query_set = {c.lower().strip() for c in query_concepts}
             candidates = []
             for key, conn in meta_conns.items():
-                a, b = key.split("|")
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
                 if a in query_set or b in query_set:
                     candidates.append((key, conn))
             # Sort by count descending
