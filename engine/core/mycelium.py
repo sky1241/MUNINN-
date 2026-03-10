@@ -38,6 +38,8 @@ class Mycelium:
     MAX_CONNECTIONS = 0        # 0 = no limit (adapts to available RAM)
     MIN_CONCEPT_LEN = 3       # ignore tiny words
     IMMORTAL_ZONE_THRESHOLD = 3  # connection in N+ zones = skip decay
+    SATURATION_BETA = 0.0         # A4: Lotka-Volterra saturation (0=disabled, 0.001=moderate)
+    SATURATION_THRESHOLD = 50     # A4: only apply saturation to connections with count > this
 
     def __init__(self, repo_path: Path, federated: bool = False, zone: str = None):
         self.repo_path = Path(repo_path).resolve()
@@ -349,6 +351,15 @@ class Mycelium:
                 # Halve the count for each half-life period passed
                 periods = age_days // days
                 new_count = conn["count"] >> periods  # integer division by 2^periods
+
+                # A4: Lotka-Volterra saturation — dw -= beta * w^2
+                # Only for large connections (w > threshold). Prevents unbounded growth.
+                # Source: nlin/0009025 (Lotka-Volterra carrying capacity)
+                if (self.SATURATION_BETA > 0 and
+                        new_count > self.SATURATION_THRESHOLD):
+                    saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
+                    new_count = max(1, new_count - saturation_loss)
+
                 if new_count <= 0:
                     dead.append(key)
                 else:
