@@ -4541,6 +4541,90 @@ def ingest(filepath: Path, repo_path: Path):
     print(f"  Mycelium updated")
 
 
+# ── B7: Live memory injection ─────────────────────────────────────
+
+def inject_memory(fact: str, repo_path: Path = None):
+    """B7: Inject a fact into the tree mid-session.
+
+    Creates or appends to a 'live' branch. The fact is immediately
+    available in the next boot/recall without waiting for session end.
+    Also feeds the mycelium so the concept graph learns immediately.
+
+    Source: LITERATURE #8 (live memory), Park et al. 2023
+    """
+    if not fact or not fact.strip():
+        print("ERROR: empty fact")
+        return
+
+    repo = repo_path or _REPO_PATH or Path(".").resolve()
+
+    # Ensure tree exists
+    tree = load_tree()
+    nodes = tree["nodes"]
+
+    # Find or create the 'live' branch
+    live_name = None
+    for name, node in nodes.items():
+        if node.get("type") == "branch" and "live_inject" in node.get("tags", []):
+            live_name = name
+            break
+
+    if live_name:
+        # Append to existing live branch
+        branch_dir = repo / "memory" / "branches"
+        mn_path = branch_dir / f"{live_name}.mn"
+        existing = ""
+        if mn_path.exists():
+            existing = mn_path.read_text(encoding="utf-8")
+        new_content = existing.rstrip() + "\n" + f"D> {fact.strip()}" + "\n"
+    else:
+        # Create new live branch
+        existing_ids = [int(n[1:]) for n in nodes if n.startswith("b") and n[1:].isdigit()]
+        next_id = max(existing_ids, default=-1) + 1
+        live_name = f"b{next_id:04d}"
+        new_content = f"## Live Injection\nD> {fact.strip()}\n"
+
+        branch_dir = repo / "memory" / "branches"
+        branch_dir.mkdir(parents=True, exist_ok=True)
+
+        import time
+        nodes[live_name] = {
+            "type": "branch",
+            "parent": "root",
+            "tags": ["live_inject", "injection"],
+            "access_count": 1,
+            "last_access": time.strftime("%Y-%m-%d"),
+            "usefulness": 1.0,
+        }
+
+    # Write branch file
+    branch_dir = repo / "memory" / "branches"
+    branch_dir.mkdir(parents=True, exist_ok=True)
+    mn_path = branch_dir / f"{live_name}.mn"
+    mn_path.write_text(new_content, encoding="utf-8")
+
+    # Update hash
+    nodes[live_name]["hash"] = compute_hash(mn_path)
+    nodes[live_name]["size"] = len(new_content)
+
+    save_tree(tree)
+
+    # Feed mycelium with the fact's concepts
+    try:
+        if _CORE_DIR not in sys.path:
+            sys.path.insert(0, _CORE_DIR)
+        from mycelium import Mycelium
+        m = Mycelium(repo)
+        m.observe_text(fact)
+        m.save()
+    except Exception:
+        pass  # Mycelium feed is best-effort
+
+    lines = new_content.count("\n")
+    print(f"MUNINN INJECT: '{fact[:60]}' -> {live_name} ({lines} lines)")
+    return live_name
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -4550,7 +4634,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "upgrade-hooks",
+        "ingest", "recall", "upgrade-hooks", "inject",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -4644,6 +4728,16 @@ def main():
         _REPO_PATH = repo
         _refresh_tree_paths()
         ingest(Path(args.file), repo)
+        return
+
+    if args.command == "inject":
+        if not args.file:
+            print('ERROR: fact required. Usage: muninn.py inject "important fact here"')
+            sys.exit(1)
+        repo = Path(args.repo or ".").resolve()
+        _REPO_PATH = repo
+        _refresh_tree_paths()
+        inject_memory(args.file, repo)
         return
 
     if args.command == "recall":
