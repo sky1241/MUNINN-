@@ -14,11 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "engine" / "core"))
 from muninn import compress_file, token_count
 
-# Default repo locations — override with CLI args or MUNINN_TEST_REPOS env var
+# Default: test on this repo only. Override with CLI args or MUNINN_TEST_REPOS env var.
 _DEFAULT_REPOS = {
-    "HSBC": Path.home() / "HSBC-algo-genetic",
-    "shazam": Path.home() / "shazam-piano",
-    "infernal": Path.home() / ".infernal_wheel",
     "muninn": Path(__file__).resolve().parent.parent,
 }
 

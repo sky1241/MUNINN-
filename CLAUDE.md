@@ -157,7 +157,7 @@ C'est un cadeau. Et c'est un bon cadeau.
 
 ## Conventions
 - Sky parle francais, informel, va vite
-- Python: `C:/Users/ludov/AppData/Local/Programs/Python/Python313/python.exe`
+- Python: `python` (or full path on Windows if needed)
 - Windows 11, bash shell, PYTHONIOENCODING=utf-8
 - Pas d'emojis sauf demande explicite
 - JAMAIS afficher de tokens git ou cles API
