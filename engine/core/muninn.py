@@ -573,10 +573,35 @@ def read_node(name: str, _tree: dict | None = None) -> str:
     history = node.get("access_history", [])
     history.append(time.strftime("%Y-%m-%d"))
     node["access_history"] = history[-10:]  # keep last 10
+
+    text = filepath.read_text(encoding="utf-8")
+
+    # B1: Reconsolidation — re-compress cold branches at read time
+    # Nader 2000: recalled memory is unstable, must be re-stored.
+    # Only triggers if: recall < 0.3 AND last_access > 7 days ago AND text > 3 lines
+    # Uses L10 (cue distillation) + L11 (rule extraction) — zero API calls.
+    recall = _ebbinghaus_recall(node)
+    days_ago = _days_since(node.get("access_history", ["2026-01-01"])[-2]
+                           if len(node.get("access_history", [])) >= 2
+                           else node.get("last_access", "2026-01-01"))
+    if recall < 0.3 and days_ago > 7 and text.count("\n") > 3 and name != "root":
+        try:
+            original_len = len(text)
+            reconsolidated = _cue_distill(text)
+            reconsolidated = _extract_rules(reconsolidated)
+            # B1.1: only save if it got smaller (never inflate)
+            if len(reconsolidated) < original_len:
+                filepath.write_text(reconsolidated, encoding="utf-8")
+                node["hash"] = compute_hash(filepath)
+                node["lines"] = reconsolidated.count("\n") + 1
+                text = reconsolidated
+        except Exception:
+            pass  # fail silently — reconsolidation is best-effort
+
     if _tree is None:
         save_tree(tree)
 
-    return filepath.read_text(encoding="utf-8")
+    return text
 
 
 # ── KICOMP DENSITY FILTER ────────────────────────────────────────
