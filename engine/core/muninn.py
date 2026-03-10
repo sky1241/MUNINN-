@@ -2081,6 +2081,13 @@ def boot(query: str = "") -> str:
         # TF-IDF relevance scores (0-1)
         relevance_scores = _tfidf_relevance(query, branch_contents)
 
+        # B5: Adapt sigmoid k based on session mode (convergent/divergent)
+        try:
+            session_mode = detect_session_mode()
+            m._sigmoid_k = session_mode["suggested_k"]  # type: ignore[possibly-undefined]
+        except Exception:
+            pass
+
         # Spreading Activation (Collins & Loftus 1975) — semantic boost
         # Propagates activation through mycelium to find branches that
         # share NO keywords but are semantically connected via co-occurrence
@@ -2101,6 +2108,51 @@ def boot(query: str = "") -> str:
         except Exception:
             pass  # mycelium not available or no connections
 
+        # B3: Detect blind spots — boost branches that fill structural holes
+        blind_spot_concepts = set()
+        try:
+            blind_spots = m.detect_blind_spots(top_n=20)  # type: ignore[possibly-undefined]
+            for a, b, _ in blind_spots:
+                blind_spot_concepts.add(a)
+                blind_spot_concepts.add(b)
+        except Exception:
+            pass
+
+        # B4: Predict next branches — get prediction scores
+        prediction_scores = {}
+        try:
+            predictions = predict_next(current_concepts=query_words, top_n=20)
+            prediction_scores = {name: score for name, score in predictions}
+        except Exception:
+            pass
+
+        # B6: Adjust scoring weights by session type
+        w_recall = 0.15
+        w_relevance = 0.40
+        w_activation = 0.20
+        w_usefulness = 0.10
+        w_rehearsal = 0.15
+        try:
+            session_type = classify_session()
+            stype = session_type.get("type", "unknown")
+            if stype == "debug":
+                # Debug: boost recall (recent errors) + usefulness
+                w_recall = 0.20
+                w_usefulness = 0.15
+                w_rehearsal = 0.10
+            elif stype == "explore":
+                # Explore: boost activation (spread wider)
+                w_activation = 0.30
+                w_relevance = 0.30
+                w_recall = 0.10
+            elif stype == "review":
+                # Review: boost rehearsal (need to re-read)
+                w_rehearsal = 0.25
+                w_relevance = 0.35
+                w_recall = 0.10
+        except Exception:
+            pass
+
         # Generative Agents scoring: recency + importance + relevance + activation
         scored = []
         for name, node in nodes.items():
@@ -2108,16 +2160,12 @@ def boot(query: str = "") -> str:
                 continue
 
             # Recall probability (Ebbinghaus/Settles spaced repetition)
-            # Encodes both recency AND access count in one principled metric
             recall = _ebbinghaus_recall(node)
 
             # A2: ACT-R base-level activation (Anderson 1993)
-            # Captures non-Markov memory: WHEN accesses happened, not just count.
-            # Normalized to [0,1] via sigmoid for compatibility with recall slot.
             import math
             actr_raw = _actr_activation(node)
             actr_norm = 1.0 / (1.0 + math.exp(-actr_raw))  # sigmoid -> [0,1]
-            # Blend: 70% Ebbinghaus (proven) + 30% ACT-R (new non-Markov signal)
             recall_blended = 0.7 * recall + 0.3 * actr_norm
 
             # Relevance: TF-IDF cosine similarity
@@ -2129,10 +2177,24 @@ def boot(query: str = "") -> str:
             # P36: Usefulness — feedback from past sessions (0.5 = neutral default)
             usefulness = node.get("usefulness", 0.5)
 
-            # Weighted: 0.15*recall_blended + 0.40*relevance + 0.20*activation + 0.10*usefulness + 0.15*rehearsal_need
-            # Rehearsal need: branches near forgetting threshold (0.1 < R < 0.3) need review
+            # Rehearsal need: branches near forgetting threshold
             rehearsal_need = max(0.0, 1.0 - abs(recall - 0.2) / 0.2) if 0.05 < recall < 0.4 else 0.0
-            total = 0.15 * recall_blended + 0.40 * relevance + 0.20 * activation + 0.10 * usefulness + 0.15 * rehearsal_need
+
+            # Base score with B6-adjusted weights
+            total = (w_recall * recall_blended + w_relevance * relevance +
+                     w_activation * activation + w_usefulness * usefulness +
+                     w_rehearsal * rehearsal_need)
+
+            # B3: Blind spot bonus — branches covering structural holes get +0.05
+            tags = set(node.get("tags", []))
+            if tags & blind_spot_concepts:
+                total += 0.05
+
+            # B4: Prediction bonus — predicted branches get +0.03 * prediction_score
+            pred_score = prediction_scores.get(name, 0.0)
+            if pred_score > 0:
+                total += 0.03 * min(1.0, pred_score)
+
             if total > 0.01:
                 scored.append((name, total))
 
