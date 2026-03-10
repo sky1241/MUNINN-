@@ -790,6 +790,61 @@ class Mycelium:
         bridges.sort(key=lambda x: x[3], reverse=True)
         return bridges
 
+    # ── B2: Graph anomaly detection ────────────────────────────────
+
+    def detect_anomalies(self) -> dict:
+        """B2: Detect structural anomalies in the mycelium graph.
+
+        Returns dict with keys:
+          - "isolated": concepts with degree <= 1 (poorly connected)
+          - "hubs": concepts with degree > mean + 2*std (monopolies)
+          - "weak_zones": zone names where mean connection count < 2
+        Source: LITERATURE #16 (graph anomalies), BS-1 Cell Bio briefing
+        """
+        conns = self.data["connections"]
+        if not conns:
+            return {"isolated": [], "hubs": [], "weak_zones": []}
+
+        # Build degree map
+        degree = {}
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            degree[a] = degree.get(a, 0) + 1
+            degree[b] = degree.get(b, 0) + 1
+
+        if not degree:
+            return {"isolated": [], "hubs": [], "weak_zones": []}
+
+        # Isolated: degree <= 1
+        isolated = sorted([c for c, d in degree.items() if d <= 1])
+
+        # Hubs: degree > mean + 2*std
+        vals = list(degree.values())
+        mean_d = sum(vals) / len(vals)
+        variance = sum((v - mean_d) ** 2 for v in vals) / len(vals)
+        std_d = variance ** 0.5
+        hub_threshold = mean_d + 2 * std_d
+        hubs = sorted([(c, d) for c, d in degree.items() if d > hub_threshold],
+                       key=lambda x: -x[1])
+
+        # Weak zones: zones where mean count < 2
+        weak_zones = []
+        zones = self.get_zones()
+        if zones:
+            for zone_name, count in zones.items():
+                # Get connections in this zone
+                zone_counts = []
+                for key, conn in conns.items():
+                    if "zones" in conn and zone_name in conn["zones"]:
+                        zone_counts.append(conn["count"])
+                if zone_counts and sum(zone_counts) / len(zone_counts) < 2:
+                    weak_zones.append(zone_name)
+
+        return {"isolated": isolated, "hubs": hubs, "weak_zones": weak_zones}
+
     # ── P20b: Meta-mycelium sync ──────────────────────────────────
 
     @staticmethod
