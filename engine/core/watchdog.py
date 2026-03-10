@@ -8,7 +8,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-PYTHON = sys.executable
+# Use python.exe (not pythonw.exe) for subprocess calls — muninn.py needs stdout
+_exe_dir = Path(sys.executable).parent
+PYTHON = str(_exe_dir / "python.exe") if (_exe_dir / "python.exe").exists() else sys.executable
 MUNINN = Path(__file__).resolve().parent / "muninn.py"
 REPOS_PATH = Path.home() / ".muninn" / "repos.json"
 

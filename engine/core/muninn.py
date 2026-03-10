@@ -122,6 +122,17 @@ _CB_REPO = None
 _REPO_PATH = None
 _SKIP_L9 = False
 
+# Secret patterns — applied in compress_file and compress_transcript
+_SECRET_PATTERNS = [
+    r'ghp_[A-Za-z0-9]{36,}',       # GitHub tokens
+    r'sk-[A-Za-z0-9]{20,}',         # API keys
+    r'AKIA[A-Z0-9]{16}',            # AWS access keys
+    r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # Private keys
+    r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
+    r'token[=:]\s*\S{20,}',         # Generic tokens
+    r'password[=:]\s*\S+',          # Passwords
+]
+
 
 def get_codebook():
     global _CB, _CB_REPO
@@ -1380,7 +1391,8 @@ def _llm_compress_chunk(text: str, client, context: str = "") -> tuple:
         compressed = response.content[0].text
         truncated = response.stop_reason == "max_tokens"
         if truncated:
-            print(f"  L9 WARNING: truncated [{context}]", file=sys.stderr)
+            print(f"  L9 WARNING: truncated, keeping original [{context}]", file=sys.stderr)
+            return text, response.usage
         if len(compressed) < len(text) * 0.9:
             return compressed, response.usage
         return text, response.usage
@@ -1469,6 +1481,11 @@ def _llm_compress(text: str, context: str = "") -> str:
 
 def compress_file(filepath: Path) -> str:
     text = filepath.read_text(encoding="utf-8")
+
+    # Redact secrets before any compression
+    for pat in _SECRET_PATTERNS:
+        text = re.sub(pat, '[REDACTED]', text)
+
     lines = text.split("\n")
 
     sections = []
@@ -1477,8 +1494,8 @@ def compress_file(filepath: Path) -> str:
 
     for line in lines:
         if line.startswith("## "):
-            if current_header:
-                sections.append((current_header, current_lines))
+            if current_header or current_lines:
+                sections.append((current_header or "## Preamble", current_lines))
             current_header = line
             current_lines = []
         elif line.startswith("# ") and not line.startswith("## "):
@@ -1486,8 +1503,8 @@ def compress_file(filepath: Path) -> str:
         else:
             current_lines.append(line)
 
-    if current_header:
-        sections.append((current_header, current_lines))
+    if current_header or current_lines:
+        sections.append((current_header or "## Preamble", current_lines))
 
     output = ["# MUNINN|codebook=v0.1"]
     for header, slines in sections:
@@ -2392,12 +2409,17 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
 
         # Remove old branches
         for m in members:
-            old_path = TREE_DIR / nodes[m]["file"]
-            if old_path.exists():
-                old_path.unlink()
+            node = nodes.get(m)
+            if node:
+                old_path = TREE_DIR / node["file"]
+                if old_path.exists():
+                    try:
+                        old_path.unlink()
+                    except OSError:
+                        pass
             if m in nodes.get("root", {}).get("children", []):
                 nodes["root"]["children"].remove(m)
-            del nodes[m]
+            nodes.pop(m, None)
 
         orig_lines = sum(len(contents[m].split("\n")) for m in members)
         results.append((merged_name, combined))
@@ -2866,7 +2888,7 @@ def install_hooks(repo_path: Path):
     existing = {}
     if settings_path.exists():
         try:
-            existing = json.load(open(settings_path, encoding="utf-8"))
+            existing = json.loads(settings_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, ValueError):
             existing = {}
 
@@ -3358,17 +3380,8 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
         return None
 
     # Strip secrets before compression
-    secret_patterns = [
-        r'ghp_[A-Za-z0-9]{36,}',       # GitHub tokens
-        r'sk-[A-Za-z0-9]{20,}',         # API keys
-        r'AKIA[A-Z0-9]{16}',            # AWS access keys
-        r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # Private keys
-        r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
-        r'token[=:]\s*\S{20,}',         # Generic tokens
-        r'password[=:]\s*\S+',          # Passwords
-    ]
     for i, text in enumerate(texts):
-        for pat in secret_patterns:
+        for pat in _SECRET_PATTERNS:
             texts[i] = re.sub(pat, '[REDACTED]', texts[i])
 
     # Semantic RLE: collapse debug/retry loops
@@ -4006,7 +4019,7 @@ def feed_history(repo_path: Path):
     repo_name = repo_path.name
     project_dirs = []
     for d in claude_dir.iterdir():
-        if d.is_dir() and f"-{repo_name}" in d.name:
+        if d.is_dir() and d.name.endswith(f"-{repo_name}"):
             project_dirs.append(d)
 
     if not project_dirs:
@@ -4123,7 +4136,7 @@ def feed_watch(repo_path: Path):
 
     repo_name = repo_path.name
     project_dirs = [d for d in claude_dir.iterdir()
-                    if d.is_dir() and f"-{repo_name}" in d.name]
+                    if d.is_dir() and d.name.endswith(f"-{repo_name}")]
     if not project_dirs:
         print(f"MUNINN WATCH: no project dir for '{repo_name}'", file=sys.stderr)
         return
@@ -4141,7 +4154,7 @@ def feed_watch(repo_path: Path):
     changed = []
     for project_dir in project_dirs:
         for jsonl_file in project_dir.glob("*.jsonl"):
-            key = jsonl_file.name
+            key = f"{project_dir.name}/{jsonl_file.name}"
             try:
                 current_size = jsonl_file.stat().st_size
             except OSError:

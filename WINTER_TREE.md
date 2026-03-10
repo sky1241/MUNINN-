@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 40 bugs corriges (P10+SL+audit+P32fix+scan7)
-Engine: muninn.py 4443 lignes, 70 fonctions + watchdog.py 44 lignes
+Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 47 bugs corriges (P10+SL+audit+P32fix+scan7+scan8)
+Engine: muninn.py 4461 lignes, 70 fonctions + watchdog.py 50 lignes
 
 ## Anatomie
 
@@ -210,6 +210,15 @@ Ce que Muninn a que les autres n'ont pas:
   - mycelium.py: unguarded split("|") x4 (crash sur cles malformees), _load missing OSError
   - watchdog.py: erreurs subprocess silencieuses, check existence muninn.py
   - Total: 11 bugs fixes
+- [x] Scan 8 (2026-03-10, 3 agents focus data-flow/edge/compression):
+  - SECURITY: secrets leaked through compress_file() — now uses _SECRET_PATTERNS constant
+  - DATA LOSS: L9 truncation silently accepted — now rejects truncated output
+  - DATA LOSS: compress_file dropped content before first ## header — now captures as Preamble
+  - CORRECTNESS: project dir matching too broad (substring -name) — now endswith()
+  - CRASH: del nodes[m] in sleep_consolidate — now pop(m, None) + safe unlink
+  - LEAK: install_hooks file handle — now read_text()
+  - COLLISION: feed_watch filename-only key — now project_dir/filename
+  - Total: 7 bugs fixes
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn
