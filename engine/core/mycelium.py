@@ -45,6 +45,7 @@ class Mycelium:
         self.mycelium_path = self.mycelium_dir / "mycelium.json"
         self.federated = federated  # P20.1: if False, zero change to behavior
         self.zone = zone or self.repo_path.name  # P20.2: default zone = repo name
+        self._sigmoid_k = 10  # A3: sigmoid steepness for spread_activation (0=disabled)
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -524,6 +525,16 @@ class Mycelium:
 
         # Remove seeds, sort by activation
         results = [(c, a) for c, a in activation.items() if c not in seed_set]
+        # A3: Sigmoid filter — suppress noise, preserve strong signals
+        # sigma(x) = 1 / (1 + e^(-k*(x - x0)))
+        # k=10 (steepness), x0=median activation (adaptive threshold)
+        # Source: cond-mat/0202047 (quasispecies sigmoid), Goldbeter-Koshland
+        if results and self._sigmoid_k > 0:
+            import math
+            activations = [a for _, a in results]
+            x0 = sorted(activations)[len(activations) // 2]  # median as threshold
+            results = [(c, 1.0 / (1.0 + math.exp(-self._sigmoid_k * (a - x0))))
+                       for c, a in results]
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:top_n]
 
