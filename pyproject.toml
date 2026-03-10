@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muninn-memory"
+version = "0.9.2"
+description = "LLM memory compression engine — compresses session transcripts into dense .mn files"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Sky", email = "sky1241@users.noreply.github.com" },
+]
+keywords = ["llm", "memory", "compression", "context-window", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: General",
+]
+
+[project.optional-dependencies]
+tokens = ["tiktoken>=0.5"]
+llm = ["anthropic>=0.20"]
+all = ["tiktoken>=0.5", "anthropic>=0.20"]
+
+[project.urls]
+Homepage = "https://github.com/sky1241/MUNINN-"
+Repository = "https://github.com/sky1241/MUNINN-"
+Issues = "https://github.com/sky1241/MUNINN-/issues"
+
+[project.scripts]
+muninn = "engine.core.muninn:main"
+mycelium = "engine.core.mycelium:main"
+
+[tool.setuptools.packages.find]
+include = ["engine*"]
+
+[tool.setuptools.package-data]
+"engine.core" = ["*.py"]

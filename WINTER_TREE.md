@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 55 briques vivantes (P0-P40 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus), 1 en roadmap (P21), 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
+Etat: 56 briques vivantes (P0-P40 + P41 + P20c + P21 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus), 0 en roadmap, 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
 Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
@@ -512,6 +512,15 @@ Resultat: apres un bootstrap, l'arbre etait vide — il fallait des sessions de 
 - [x] Compresse chaque fichier avec compress_file (full pipeline L1-L7+L10+L11)
 - [x] Auto-segmente en branches via grow_branches_from_session (merge NCD si overlap)
 - [x] Teste: 3 docs -> 5 branches creees au bootstrap (avant: 0)
+
+### P21 — pip install muninn (2026-03-10) [FAIT]
+Packaging: pyproject.toml + entry points pour installation via pip.
+- [x] pyproject.toml avec setuptools build backend
+- [x] engine/__init__.py + engine/core/__init__.py (package structure)
+- [x] Entry points: `muninn` (CLI) + `mycelium` (CLI)
+- [x] Optional deps: `muninn-memory[tokens]` (tiktoken), `muninn-memory[all]` (+ anthropic)
+- [x] Teste: `pip install -e .` + `muninn status` + `muninn boot` + `muninn compress` OK
+- [x] README mis a jour avec instructions pip install
 
 ### Cleanup memory/ (2026-03-08)
 - [x] memory/root.mn et b00-b07.mn contenaient des donnees YGGDRASIL depuis le commit v0 (bc647da)

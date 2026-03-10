@@ -2,7 +2,7 @@
 
 > *Odin's raven of memory — the one that always comes back.*
 
-LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 55 features, 11 compression layers (25 filters), 76 bugs squashed across 13 audit scans.
+LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 56 features, 11 compression layers (25 filters), 76 bugs squashed across 13 audit scans.
 
 **Measured result**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline, tiktoken). 92% fact retention (40-question benchmark).
 
@@ -75,35 +75,37 @@ Fractal tree with temperature-based lifecycle:
 ## Installation
 
 ```bash
-# Minimum (L0-L7, zero external dependencies)
+# Via pip (recommended)
+pip install muninn-memory            # Core (L0-L7, zero dependencies)
+pip install muninn-memory[tokens]    # + tiktoken (real token counting)
+pip install muninn-memory[all]       # + tiktoken + anthropic (L9 API)
+
+# Or from source
 git clone https://github.com/sky1241/MUNINN-.git
 cd MUNINN-
+pip install -e .                     # Editable install
 python engine/core/muninn.py bootstrap .
 
-# Recommended: real token counting
-pip install tiktoken
-
 # Optional: L9 LLM self-compress
-pip install anthropic
 export ANTHROPIC_API_KEY=sk-...
 ```
 
 ## Commands
 
 ```bash
-muninn.py status              # Tree state + temperatures + budget
-muninn.py boot [query]        # Load root + relevant branches + sessions
-muninn.py recall "query"      # Mid-session memory search
-muninn.py compress <file>     # Compress a markdown file
-muninn.py feed <transcript>   # Feed mycelium + compress to .mn
-muninn.py feed --history      # Catch up on all past transcripts
-muninn.py feed --watch        # Poll-based feed (for scheduled tasks)
-muninn.py bootstrap <repo>    # Cold start on a new repo
-muninn.py prune               # Dry-run pruning (show what would happen)
-muninn.py prune --force       # Actually prune cold/dead branches
-muninn.py verify <file>       # Check compression quality (facts, ratio)
-muninn.py ingest <folder>     # Compress reference docs into branches
-muninn.py upgrade-hooks       # Update Claude Code hooks to latest format
+muninn status              # Tree state + temperatures + budget
+muninn boot [query]        # Load root + relevant branches + sessions
+muninn recall "query"      # Mid-session memory search
+muninn compress <file>     # Compress a markdown file
+muninn feed <transcript>   # Feed mycelium + compress to .mn
+muninn feed --history      # Catch up on all past transcripts
+muninn feed --watch        # Poll-based feed (for scheduled tasks)
+muninn bootstrap <repo>    # Cold start on a new repo
+muninn prune               # Dry-run pruning (show what would happen)
+muninn prune --force       # Actually prune cold/dead branches
+muninn verify <file>       # Check compression quality (facts, ratio)
+muninn ingest <folder>     # Compress reference docs into branches
+muninn upgrade-hooks       # Update Claude Code hooks to latest format
 ```
 
 ## Claude Code Hooks
