@@ -93,6 +93,86 @@ Refs additionnelles:
 
 Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (doubles with each load at boot). Branch dies when p < 0.05.
 
+### Recherche militaire/defense — cognition et memoire (decouverts session 2026-03-10)
+
+| Papier | Financeur | Idee cle | Application Muninn |
+|--------|-----------|----------|-------------------|
+| ACT-R (Anderson 1993) | ONR + AFOSR | Activation memoire = recence + frequence + spreading. Equation base-level: B = ln(sum(t_j^(-d))) | Remplace Ebbinghaus simple — prend en compte TOUT l'historique d'acces, pas juste le dernier |
+| Endsley SA (1995) | USAF (Chief Scientist) | 3 niveaux: Perception -> Comprehension -> Projection | boot()=L1, mycelium=L2, MANQUE L3: prediction de ce qui va etre necessaire |
+| Klein RPD (1986) | Army Research Institute | Experts reconnaissent patterns (80%+), ne comparent pas options | Mycelium fusions = prototypes compiles. Manque: reconnaissance de session-type |
+| Boyd OODA (1976) | USAF Colonel | Orient = phase critique, ou modeles mentaux + experience se synthetisent | Compression = accelerer l'Orient du prochain cousin |
+| Soar chunking (Laird 1987) | DARPA + ONR + AFOSR | Tout apprentissage = compilation de sous-buts en regles directes | Fusions mycelium = chunking conceptuel. Manque: chunking procedural |
+| CLS (McClelland 1995) | Non confirme militaire | Deux systemes: hippocampe (rapide, episodes) + neocortex (lent, patterns) | sessions.mn=hippocampe, branches=neocortex, sleep=transfert. Manque: neocortex influence l'encodage |
+| Reconsolidation (Nader 2000) | NIMH + HFSP | Souvenir rappele = instable, doit etre re-stocke, peut etre modifie | Chaque boot() devrait re-evaluer/re-compresser la branche chargee |
+| DARPA RAM Replay (2013) | DARPA | Consolidation memoire pendant sommeil via stimulation | Valide notre _sleep_consolidate() |
+| DARPA AugCog (2001) | DARPA | Filtrage adaptatif selon charge cognitive du combattant | Valide notre pipeline L0-L10 = gestion charge cognitive |
+| DARPA L2M (2017) | DARPA | Apprentissage continu sans oubli catastrophique | Valide architecture CLS: capture rapide + consolidation lente |
+| DARPA KAIROS (2019) | DARPA | Schemas = templates compresses d'evenements recurrents | Nos L11 rules + fusions = schemas compiles |
+
+### Pistes non-implementees identifiees
+
+1. **Endsley Level 3 — Projection** : predire ce qui va etre necessaire AVANT la query
+2. **Klein RPD — Reconnaissance de session-type** : "cette session ressemble a la session X"
+3. **CLS — Compression context-aware** : compresser en sachant ce que l'arbre contient deja
+4. **Reconsolidation — Branches mutables** : re-compresser une branche a chaque acces
+5. **ACT-R base-level** : historique d'acces complet (pas juste last_access + count)
+6. **Soar chunking procedural** : compiler des PROCEDURES (pas juste des concepts)
+7. **Mycelium comme moteur d'inference** : generer des insights pendant le sommeil (reve)
+
+### Pistes architecturales (brainstorm session 2026-03-10)
+
+8. **Live memory injection** : hook Stop cherche dans la memoire a chaque reponse, injecte du contexte mid-conversation (pas juste au boot)
+9. **Query-conditional compression at read time** : recompresser les branches selon la query au boot (LLMLingua, note #1 dans LITERATURE.md, jamais implemente)
+10. **Synthese / reve** : pendant sleep consolidation, generer de nouvelles connexions entre concepts distants (pas juste merger des branches)
+11. **Temporal patterns** : tracker les co-occurrences ACROSS sessions (pas juste within), detecter "chaque fois que X, puis Y"
+12. **Metacognition** : le LLM sait ce qu'il sait et ce qu'il ne sait pas, peut demander a sa memoire
+
+### Pistes graphe — le mycelium comme vrai reseau (session 2026-03-10)
+
+13. **Chemins** : plus court chemin entre concepts jamais vus ensemble — decouverte de liens implicites
+14. **Clusters** : iles isolees dans le graphe = silos de connaissance, zones aveugles
+15. **Trous structurels** : ponts manquants entre clusters (= structural holes Yggdrasil, echelle utilisateur)
+16. **Anomalies** : connexions anormalement fortes/faibles par rapport au voisinage
+17. **Dynamique temporelle** : comment le graphe evolue — clusters qui grandissent vs meurent
+18. **Angles morts** : "tu n'as jamais connecte X et Y, mais relies par Z"
+
+### Pistes non explorées — a creuser
+
+19. **Biologie de l'evolution** : selection naturelle sur branches/fusions? mutation? crossover? fitness?
+20. **Direction WTF** : chercher dans domaines inattendus (physique, mycologie reelle, immunologie, thermodynamique?)
+21. **Le graphe qui PENSE** : combiner Klein RPD + Endsley L3 + trous structurels = le mycelium detecte, predit, et revele les angles morts
+
+### Huginn — le corbeau manquant (session 2026-03-10)
+
+22. **Huginn = pensee** : Muninn stocke, Huginn pense. Le mycelium observe mais ne reflechit jamais.
+    Manque: synthese, generation d'insights, "tiens c'est bizarre que..."
+23. **Compression dans la mauvaise direction?** : on transforme histoires->data, mais le LLM lit des histoires.
+    Les decisions en narratif ("on est passe a PostgreSQL parce qu'ACID") > en data ("D>MongoDB->PostgreSQL|ACID")
+24. **Modele utilisateur** : on se souvient du projet, pas du codeur. Zero profil Sky.
+    Patterns de communication, preferences, facon de penser, signaux ("sa me gratte" = breakthrough)
+
+### Mode trip — psilocybine du mycelium (session 2026-03-10)
+
+25. **Carhart-Harris 2012-2014** (Imperial College) : psilocybine dissout le Default Mode Network,
+    augmente entropie neurale, cree connexions entre zones normalement isolees.
+    Le mycelium est trop convergent (renforce le fort, tue le faible).
+    Manque: mode divergent — laisser le reseau explorer connexions improbables entre clusters distants.
+    La psilocybine pousse SUR du mycelium. C'etait dans le nom depuis le debut.
+
+### LA BRIQUE — Liane Muninn x Yggdrasil (session 2026-03-10)
+
+26. **Mycelium = ce que TU penses** (tes concepts, connexions, angles morts)
+    **Yggdrasil = ce que LE MONDE sait** (348M papiers, 65K concepts, trous structurels)
+    Branche les deux: le mycelium revele les trous dans TA tete, Yggdrasil trouve
+    ce qui REMPLIT ces trous dans la litterature mondiale. Pas un bibliothecaire — un trip guide.
+
+27. **Formules LaTeX → glyphes Yggdrasil** : les equations de Muninn (p=2^(-delta/h),
+    NCD, TF-IDF, spreading activation) injectees dans Yggdrasil comme glyphes.
+    Yggdrasil trouve des papiers avec les MEMES structures mathematiques dans des
+    domaines completement differents. Recherche par FORME, pas par mot.
+    L'espace de recherche n'est pas "papers about memory" — c'est "papers with same math."
+    Deux domaines sans rapport qui utilisent la meme equation = connexion WTF invisible aux mots-cles.
+
 ## Ce qui est unique a Muninn (pas dans la litterature)
 
 - **Mycelium vivant** — codebook qui POUSSE par co-occurrence, decay biologique.
@@ -127,3 +207,10 @@ Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (d
 - Pimsleur: "A memory schedule" (1967), Modern Language Journal 51(2), 73-75
 - Leitner: "So lernt man lernen" (1972), Verlag Herder
 - Settles & Meeder: "A Trainable Spaced Repetition Model for Language Learning" (2016), ACL 2016, 1848-1858
+- Anderson: "Rules of the Mind" (1993), Erlbaum; also "An Integrated Theory of the Mind" (2004), Psychological Review 111(4)
+- Endsley: "Toward a Theory of Situation Awareness in Dynamic Systems" (1995), Human Factors 37(1), 32-64
+- Klein, Calderwood & Clinton-Cirocco: "Rapid Decision Making on the Fire Ground" (1986), Human Factors Society 30th; reprint JCEDM 4(3), 2010
+- Boyd: "Destruction and Creation" (1976), unpublished essay; "A Discourse on Winning and Losing" (1987), posthumous
+- Laird, Newell & Rosenbloom: "SOAR: An Architecture for General Intelligence" (1987), Artificial Intelligence 33(1), 1-64
+- McClelland, McNaughton & O'Reilly: "Why There Are Complementary Learning Systems" (1995), Psychological Review 102(3), 419-457
+- Nader, Schafe & LeDoux: "Fear Memories Require Protein Synthesis for Reconsolidation" (2000), Nature 406, 722-726
