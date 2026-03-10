@@ -8,9 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Use python.exe (not pythonw.exe) for subprocess calls — muninn.py needs stdout
+# Use pythonw.exe for subprocess calls to avoid console windows popping up.
+# muninn.py output is captured (capture_output=True), so no console needed.
 _exe_dir = Path(sys.executable).parent
-PYTHON = str(_exe_dir / "python.exe") if (_exe_dir / "python.exe").exists() else sys.executable
+_pythonw = _exe_dir / "pythonw.exe"
+PYTHON = str(_pythonw) if _pythonw.exists() else sys.executable
 MUNINN = Path(__file__).resolve().parent / "muninn.py"
 REPOS_PATH = Path.home() / ".muninn" / "repos.json"
 
@@ -34,11 +36,14 @@ def main():
         if not (repo / ".muninn").exists():
             continue
         try:
+            # CREATE_NO_WINDOW prevents any console flash on Windows
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             result = subprocess.run(
                 [PYTHON, str(MUNINN), "feed", "--watch", "--repo", str(repo)],
                 timeout=300,
                 capture_output=True,
                 text=True,
+                creationflags=creationflags,
             )
             if result.returncode != 0:
                 print(f"WATCHDOG: {name} failed (exit {result.returncode}): {result.stderr[:200]}", file=sys.stderr)
