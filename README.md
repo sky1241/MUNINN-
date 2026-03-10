@@ -1,215 +1,207 @@
 # Muninn
 
-> *Le corbeau de la memoire — celui qui revient toujours.*
+> *Odin's raven of memory — the one that always comes back.*
 
-Moteur de compression memoire pour LLM. 43 features, 11 couches de compression (25 filtres), zero dependance obligatoire.
+LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 53 features, 11 compression layers (25 filters), 76 bugs squashed across 12 audit scans.
 
-## Le probleme
+**Measured result**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline, tiktoken). 92% fact retention (40-question benchmark).
 
-Les LLM n'ont pas de memoire persistante. Chaque session repart de zero.
-Le seul hack actuel : un fichier MEMORY.md (200 lignes, ~3K tokens) injecte dans le contexte.
-Quand le contexte se remplit, tout deborde et disparait.
+## The Problem
 
-## Ce que fait Muninn
+LLMs have no persistent memory. Each session starts from zero. The only hack: a `MEMORY.md` file (~200 lines, ~3K tokens) injected into context. When context fills up, everything overflows and disappears.
 
-Muninn compresse les transcripts de session en fichiers `.mn` ultra-denses
-et les recharge intelligemment au boot suivant.
+## What Muninn Does
 
-**Resultat mesure** : x4.4 moyen sur 230 fichiers / 4 repos / 855K tokens (full pipeline, tiktoken). 92% des faits preserves (benchmark 40 questions).
+1. **Compresses** session transcripts through 11 layers (regex-only, zero dependencies)
+2. **Learns** via a living co-occurrence network (mycelium) that grows with each session
+3. **Retrieves** intelligently at boot using TF-IDF + Spreading Activation scoring
+4. **Persists** across sessions via a fractal L-system tree with temperature-based pruning
 
 ## Architecture
 
 ```
                   BOOT (query)
                      |
-              [session_index]──── P22: cherche dans les 50 dernieres sessions
+              [session_index]     P22: search last 50 sessions
                      |
-              [recall "query"]─── P29: recherche mid-session
+              [recall "query"]    P29: mid-session memory search
                      |
-         ┌──────────┼──────────┐
+         +----------+----------+
       [root.mn]  [branches]  [last .mn]
          |           |           |
-      toujours    TF-IDF +   auto-continue
-      charge      spreading     P23
-                  activation
+      always       TF-IDF +   auto-continue
+      loaded       spreading     P23
+                   activation
                      |
-              ┌──────┴──────┐
+              +------+------+
            [mycelium]    [tree.json]
            co-occurrences   L-system
            fusions/decay    temperature
 ```
 
-## Pipeline de compression (25 filtres, 11 couches)
+## Compression Pipeline
 
 ```
-L0:  tool output strip (x3.5)     <- le plus gros gain, 74% du transcript est du bruit
+L0:  tool output strip (x3.5)     <- biggest win, 74% of transcript is noise
 L1:  markdown strip                L2:  filler words
 L3:  phrase compression            L4:  number shortening
-L5:  universal rules               L6:  mycelium (abbreviations apprises)
-L7:  fact extraction               L10: cue distillation (Carmack move)
-L11: rule extraction (Kolmogorov)  L9:  LLM self-compress (Haiku API, optionnel)
-+P24: causal preservation          +P25: priority survival (KIComp density)
-+P26: line dedup                   +P27: read dedup
-+P28: Claude tics filter           +Semantic RLE (debug loop collapse)
-+Contradiction resolution          +NCD dedup (zlib similarity)
-+Context-Aware Merging             +Bloom concept tracking (boot)
-+R1-Compress chunking (L9)         +Optimal Forgetting (cold re-compress)
-+Sleep Consolidation (cold merge)  +Spreading Activation (boot retrieval)
+L5:  universal rules               L6:  mycelium abbreviations (learned)
+L7:  fact extraction               L10: cue distillation (Bartlett 1932)
+L11: rule extraction (Kolmogorov)  L9:  LLM self-compress (Haiku, optional)
 ```
 
-- **L0-L7, L10-L11** : regex pur, zero dependance, instantane
-- **L10** : Cue Distillation — vire la connaissance generique que le LLM sait deja (Bartlett 1932 + Predictive Coding 1999)
-- **L11** : Rule Extraction — factorise les patterns repetitifs en regles (Kolmogorov 1965)
-- **L9** : `pip install anthropic` — Claude Haiku via API (x2 additionnel)
+Additional filters: P24 causal preservation, P25 priority survival, P26/P27 dedup, P28 tics filter, Semantic RLE, NCD similarity, Bloom concept tracking, Sleep Consolidation, Spreading Activation.
 
-## Le mycelium (codebook vivant)
+- **L0-L7, L10-L11**: pure regex, zero dependencies, instant
+- **L9**: `pip install anthropic` — Claude Haiku via API (x2 additional gain)
 
-Reseau de co-occurrences qui pousse a chaque session :
-- Concepts frequents ensemble -> connexion forte -> fusion (abbreviation apprise)
-- Connexions mortes -> decay -> disparition
-- Plus on l'utilise, mieux il compresse
-- Fichier : `.muninn/mycelium.json`
+## Mycelium (Living Codebook)
 
-## L'arbre (memoire structuree)
+Co-occurrence network that grows with each session:
+- Concepts seen together → strong connection → fusion (learned abbreviation)
+- Unused connections → decay → removal
+- Federated across repos (P20b meta-mycelium at `~/.muninn/meta_mycelium.json`)
+- Spreading Activation for semantic retrieval (Collins & Loftus 1975)
 
-Arbre fractal L-system :
-- Racine (toujours chargee) -> pointeurs vers branches
-- Branches (chargees si pertinentes via TF-IDF + Spreading Activation + Park et al. 2023)
-- Temperature par noeud : chaud = lu souvent, froid = oublie et elague
-- Budget : 30K tokens max = 15% du contexte
+## Memory Tree (L-System)
 
-## Memoire intelligente
-
-- **Tags** : B> bug/fix, E> error, F> fact, D> decision, A> architecture
-- **Priority survival** : quand le budget deborde, les decisions et bugs survivent en dernier
-- **Causal preservation** : "because X" est protege de la compression
-- **Error/fix memory** : erreurs + solutions auto-surfacees au boot si la query matche
-- **Session index** : catalogue des 50 dernieres sessions, cherchable au boot et mid-session
-- **Auto-continue** : boot sans query = reprend les topics de la session precedente
-
-## Commandes
-
-```bash
-muninn.py status              # Etat de l'arbre + temperatures
-muninn.py boot [query]        # Charge root + branches pertinentes + sessions
-muninn.py recall "query"      # Recherche mid-session dans toute la memoire
-muninn.py compress <fichier>  # Compresse un fichier markdown
-muninn.py feed <transcript>   # Nourrit le mycelium + compresse en .mn
-muninn.py feed --history      # Rattrape tous les transcripts passes
-muninn.py bootstrap <repo>    # Cold start sur un nouveau repo
-muninn.py prune [--force]     # Elagage (froid -> supprime)
-muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
-muninn.py ingest <dossier>    # Compresse des docs de reference en branches
-```
-
-## Resultats mesures (tiktoken, mars 2026)
-
-### Par fichier (full pipeline L1-L7+L10+L11+L9)
-
-| Contexte | Ratio |
-|----------|-------|
-| HSBC METHODOLOGIE (6K tok) | **x13.8** |
-| HSBC ARBRE (5K tok) | **x11.4** |
-| Deployment hardware (7K tok) | **x9.6** |
-| Biomecanique gestes (7K tok) | **x7.8** |
-| SOL.md full pipeline (20K chars) | **x7.7** |
-| Wearable UX research (8K tok) | **x7.4** |
-
-### Cross-repo (230 fichiers, 4 repos, 8 mars 2026)
-
-| Repo | Fichiers | Input | Output | Ratio |
-|------|----------|-------|--------|-------|
-| infernal-wheel | 58 | 535K tok | 87K tok | **x6.2** |
-| HSBC-algo-genetic | 115 | 194K tok | 64K tok | **x3.0** |
-| shazam-piano | 45 | 107K tok | 37K tok | **x2.9** |
-| MUNINN- | 12 | 19K tok | 8K tok | **x2.3** |
-| **TOTAL** | **230** | **855K tok** | **196K tok** | **x4.4** |
-
-Cout API (Haiku) : **$0.21** pour 230 fichiers.
-
-### Benchmark factuel
-
-- 40 questions sur texte compresse -> **37/40 correct (92%)**
-- Methode : text search pur, zero API, reproductible par quiconque
-
-## 4 Carmack moves (fondations theoriques)
-
-| Move | Technique | Reference | Gain |
-|------|-----------|-----------|------|
-| #1 | Cue Distillation (L10) | Bartlett 1932 + Predictive Coding 1999 | Vire ce que le LLM sait deja |
-| #2 | Rule Extraction (L11) | Kolmogorov 1965 | Factorise les patterns en regles |
-| #3 | Sleep Consolidation | Wilson & McNaughton 1994 | Fusionne les branches froides |
-| #4 | Spreading Activation | Collins & Loftus 1975 | Retrieval semantique via reseau |
+Fractal tree with temperature-based lifecycle:
+- **Root** (always loaded) → pointers to branches
+- **Branches** (loaded if relevant via TF-IDF + activation + Park et al. 2023 scoring)
+- **Temperature**: hot = frequently accessed, cold = forgotten and pruned
+- **Sleep Consolidation**: cold branches merged before deletion (Wilson & McNaughton 1994)
+- **Budget**: 30K tokens max loaded = 15% of context window
 
 ## Installation
 
 ```bash
-# Minimum (L0-L7, zero dependance externe)
+# Minimum (L0-L7, zero external dependencies)
 git clone https://github.com/sky1241/MUNINN-.git
 cd MUNINN-
 python engine/core/muninn.py bootstrap .
 
-# Token counting reel (recommande)
+# Recommended: real token counting
 pip install tiktoken
 
-# Optionnel: L9 (LLM self-compress)
+# Optional: L9 LLM self-compress
 pip install anthropic
 export ANTHROPIC_API_KEY=sk-...
 ```
 
-## Hooks Claude Code
+## Commands
 
-Le bootstrap configure automatiquement les hooks.
-Sinon, ajouter dans `.claude/settings.local.json` :
+```bash
+muninn.py status              # Tree state + temperatures + budget
+muninn.py boot [query]        # Load root + relevant branches + sessions
+muninn.py recall "query"      # Mid-session memory search
+muninn.py compress <file>     # Compress a markdown file
+muninn.py feed <transcript>   # Feed mycelium + compress to .mn
+muninn.py feed --history      # Catch up on all past transcripts
+muninn.py feed --watch        # Poll-based feed (for scheduled tasks)
+muninn.py bootstrap <repo>    # Cold start on a new repo
+muninn.py prune               # Dry-run pruning (show what would happen)
+muninn.py prune --force       # Actually prune cold/dead branches
+muninn.py verify <file>       # Check compression quality (facts, ratio)
+muninn.py ingest <folder>     # Compress reference docs into branches
+muninn.py upgrade-hooks       # Update Claude Code hooks to latest format
+```
+
+## Claude Code Hooks
+
+Bootstrap configures hooks automatically. Manual setup:
+
 ```json
 {
   "hooks": {
     "PreCompact": [{ "type": "command", "command": "python engine/core/muninn.py feed --repo ." }],
-    "SessionEnd": [{ "type": "command", "command": "python engine/core/muninn.py feed --repo ." }]
+    "SessionEnd": [{ "type": "command", "command": "python engine/core/muninn.py feed --repo ." }],
+    "Stop": [{ "type": "command", "command": "python engine/core/muninn.py feed --trigger stop --repo ." }]
   }
 }
 ```
 
-## Structure du repo
+A watchdog (`engine/core/watchdog.py`) runs every 15 minutes via Task Scheduler as a failsafe, feeding only transcripts that grew since last check.
+
+## Benchmarks (tiktoken, March 2026)
+
+### Per-file (full pipeline L1-L7+L10+L11+L9)
+
+| Context | Ratio |
+|---------|-------|
+| HSBC Methodology (6K tok) | **x13.8** |
+| HSBC Tree (5K tok) | **x11.4** |
+| Deployment hardware (7K tok) | **x9.6** |
+| Biomechanics gestures (7K tok) | **x7.8** |
+| SOL.md full pipeline (20K chars) | **x7.7** |
+| Wearable UX research (8K tok) | **x7.4** |
+
+### Cross-repo (230 files, 4 repos)
+
+| Repo | Files | Input | Output | Ratio |
+|------|-------|-------|--------|-------|
+| infernal-wheel | 58 | 535K tok | 87K tok | **x6.2** |
+| HSBC-algo-genetic | 115 | 194K tok | 64K tok | **x3.0** |
+| shazam-piano | 45 | 107K tok | 37K tok | **x2.9** |
+| MUNINN- | 12 | 19K tok | 8K tok | **x2.3** |
+| **Total** | **230** | **855K tok** | **196K tok** | **x4.4** |
+
+API cost (Haiku): **$0.21** for 230 files.
+
+### Factual retention
+
+- 40 questions on compressed text → **37/40 correct (92%)**
+- Method: pure text search, zero API, reproducible
+
+## Theoretical Foundations
+
+| # | Technique | Reference | Purpose |
+|---|-----------|-----------|---------|
+| 1 | Cue Distillation (L10) | Bartlett 1932, Rao & Ballard 1999 | Strip knowledge the LLM already has |
+| 2 | Rule Extraction (L11) | Kolmogorov 1965 | Factor repeated patterns into rules |
+| 3 | Sleep Consolidation | Wilson & McNaughton 1994 | Merge cold branches before deletion |
+| 4 | Spreading Activation | Collins & Loftus 1975 | Semantic retrieval through co-occurrence network |
+
+## Repo Structure
 
 ```
-engine/core/
-  muninn.py        # Moteur principal (3775 lignes, 60 fonctions)
-  mycelium.py      # Tracker co-occurrences (1105 lignes, federe + meta + spreading activation)
-  tokenizer.py     # Wrapper tiktoken
+engine/
+  core/
+    muninn.py          Main engine (4575 lines, 72 functions)
+    mycelium.py        Co-occurrence network (1134 lines)
+    tokenizer.py       tiktoken wrapper with fallback
+    watchdog.py        Scheduled task runner (55 lines)
 memory/
-  tree.json        # Arbre L-system
-  root.mn          # Memoire racine
-  b*.mn            # Branches
+  tree.json            L-system tree metadata
+  root.mn              Root memory (always loaded)
+  b*.mn                Branch files
 tests/
-  test_l8_ordering.py
-  benchmark/
+  benchmark/           Factual retention benchmark (40 questions)
+  test_*.py            Unit tests
 docs/
-  LITERATURE.md    # Revue de litterature (15+ papiers)
-  BENCHMARK_*.md   # Resultats de benchmarks
-.muninn/           # Donnees locales (gitignored)
-  mycelium.json    # Reseau co-occurrences
-  sessions/*.mn    # Transcripts compresses
-  session_index.json
-  errors.json
+  LITERATURE.md        Literature review (15+ papers)
+  BENCHMARK_*.md       Benchmark results
+.muninn/               Local data (gitignored)
+  mycelium.json        Co-occurrence network
+  sessions/*.mn        Compressed transcripts
+  session_index.json   Session catalog
+  errors.json          Error/fix pairs (P18)
+  hook_log.txt         Hook execution log
+  watch_state.json     Watchdog poll state
+  stop_dedup.json      Stop hook deduplication
+.github/
+  workflows/ci.yml     CI: tree integrity + engine tests + benchmark
 ```
-
-## Origine
-
-Cree par Sky (electricien, autodidacte, 11 mois de code).
-Ne de l'observation que la memoire LLM n'est pas un probleme de stockage
-mais un probleme de compression. Le nom vient du corbeau d'Odin — celui qui
-se souvient de tout.
 
 ## References
 
 - Bartlett, F.C. (1932). *Remembering*. Cambridge University Press.
 - Collins, A.M. & Loftus, E.F. (1975). A spreading-activation theory of semantic processing. *Psychological Review*, 82(6).
 - Kolmogorov, A.N. (1965). Three approaches to the quantitative definition of information. *Problems of Information Transmission*, 1(1).
-- Wilson, M.A. & McNaughton, B.L. (1994). Reactivation of hippocampal ensemble memories during sleep. *Science*, 265(5172).
 - Park, J.S. et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*.
+- Rao, R.P.N. & Ballard, D.H. (1999). Predictive coding in the visual cortex. *Nature Neuroscience*, 2(1).
+- Wilson, M.A. & McNaughton, B.L. (1994). Reactivation of hippocampal ensemble memories during sleep. *Science*, 265(5172).
 - Jiang, H. et al. (2023). LLMLingua: Compressing Prompts for Accelerated Inference. *EMNLP 2023*.
 
-## Licence
+## License
 
 MIT

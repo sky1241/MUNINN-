@@ -1,7 +1,18 @@
+# Muninn local data
 .muninn/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Secrets
 setup_key.py
-*.tmp
 .env
+*.key
+
+# Temp
+*.tmp
+
+# Claude Code (local settings only, hooks are in settings.local.json)
 .claude/settings.json
