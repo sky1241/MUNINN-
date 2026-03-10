@@ -256,7 +256,10 @@ class Mycelium:
         for key, conn in conns.items():
             if conn["count"] >= self.FUSION_THRESHOLD:
                 if key not in fusions:
-                    a, b = key.split("|")
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
                     fused_form = f"{a}+{b}"
                     fusions[key] = {
                         "concepts": [a, b],
@@ -301,7 +304,8 @@ class Mycelium:
                                 ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
                 stat = MEMORYSTATUSEX()
                 stat.dwLength = ctypes.sizeof(stat)
-                ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+                if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                    return  # API failed, don't prune
                 free = stat.ullAvailPhys
             if free < 500 * 1024 * 1024:  # < 500MB free
                 target = len(self.data["connections"]) // 2
@@ -319,6 +323,8 @@ class Mycelium:
         """
         if days is None:
             days = self.DECAY_HALF_LIFE
+        if days <= 0:
+            return 0
 
         today = time.strftime("%Y-%m-%d")
         conns = self.data["connections"]
@@ -893,9 +899,10 @@ class Mycelium:
                 meta_conns.items(), key=lambda x: x[1]["count"], reverse=True
             )[:max_pull]
 
+        import copy
         for key, conn in candidates:
             if key not in local_conns:
-                local_conns[key] = dict(conn)
+                local_conns[key] = copy.deepcopy(conn)
                 pulled += 1
 
         # Also pull fusions for pulled connections
@@ -903,7 +910,7 @@ class Mycelium:
         local_fusions = self.data.setdefault("fusions", {})
         for key in list(local_conns.keys()):
             if key in meta_fusions and key not in local_fusions:
-                local_fusions[key] = dict(meta_fusions[key])
+                local_fusions[key] = copy.deepcopy(meta_fusions[key])
 
         return pulled
 

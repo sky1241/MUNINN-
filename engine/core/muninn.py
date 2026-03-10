@@ -1990,7 +1990,7 @@ def boot(query: str = "") -> str:
         # share NO keywords but are semantically connected via co-occurrence
         activation_scores = {}  # branch_name -> activation bonus
         try:
-            activated = m.spread_activation(query_words, hops=2, decay=0.5, top_n=50)
+            activated = m.spread_activation(query_words, hops=2, decay=0.5, top_n=50)  # type: ignore[possibly-undefined]
             if activated:
                 # Map activated concepts to branches that contain them
                 activated_set = {c: a for c, a in activated}
@@ -2058,7 +2058,7 @@ def boot(query: str = "") -> str:
             branch_concepts = set(re.findall(r'[a-zA-Z]{3,}', branch_text.lower()))
             new_concepts = branch_concepts - loaded_concepts
             if len(branch_concepts) > 10 and len(new_concepts) / len(branch_concepts) < 0.05:
-                continue  # <10% new concepts, skip this branch
+                continue  # <5% new concepts, skip this branch
             loaded_concepts.update(branch_concepts)
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
@@ -3115,13 +3115,10 @@ def _detect_transcript_format(filepath: Path) -> str:
         except json.JSONDecodeError:
             pass
 
-    # JSON: starts with { or [
-    if first_text.startswith("{") or first_text.startswith("["):
-        try:
-            json.loads(filepath.read_text(encoding="utf-8", errors="ignore"))
-            return "json"
-        except (json.JSONDecodeError, OSError):
-            pass
+    # JSON: starts with [ (array of messages). Don't read whole file to validate —
+    # if first bytes look like JSON array and it's not JSONL, assume json.
+    if first_text.startswith("["):
+        return "json"
 
     # Markdown: contains ## Human or ## Assistant headers
     if re.search(r'^##\s*(Human|Assistant|User|Claude)', first_text, re.MULTILINE | re.IGNORECASE):
@@ -3787,11 +3784,15 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
                     continue
                 try:
                     msg = json.loads(line)
-                    content_parts = msg.get("message", {}).get("content", [])
-                    for part in content_parts:
-                        if isinstance(part, dict) and part.get("type") == "text":
-                            words = re.findall(r'[a-zA-Z]{4,}', part["text"].lower())
-                            session_concepts.update(words)
+                    content = msg.get("message", {}).get("content", [])
+                    if isinstance(content, str):
+                        words = re.findall(r'[a-zA-Z]{4,}', content.lower())
+                        session_concepts.update(words)
+                    elif isinstance(content, list):
+                        for part in content:
+                            if isinstance(part, dict) and part.get("type") == "text":
+                                words = re.findall(r'[a-zA-Z]{4,}', part["text"].lower())
+                                session_concepts.update(words)
                 except (json.JSONDecodeError, KeyError, TypeError):
                     continue
     except OSError:
@@ -3904,37 +3905,43 @@ def feed_from_hook(repo_path: Path):
 
     print(f"MUNINN {hook_event}: processing {jsonl_path.name} for {repo_path.name}", file=sys.stderr)
 
-    # 0. P36: Update usefulness scores before anything modifies the tree
-    _update_usefulness(repo_path, jsonl_path)
-
-    # 1. Feed mycelium (co-occurrences)
-    count = feed_from_transcript(jsonl_path, repo_path)
-    print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
-
-    # 2. Compress transcript into a .mn session file
-    mn_path = compress_transcript(jsonl_path, repo_path)
-
-    # 3. Auto-segment into tree branches (Brique 3)
-    if mn_path:
-        grow_branches_from_session(mn_path)
-
-    # 4. Refresh tree temperatures
-    tree = load_tree()
-    refresh_tree_metadata(tree)
-    save_tree(tree)
-
-    # 5. P20b: Sync to meta-mycelium (cross-repo memory)
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from mycelium import Mycelium
-        m = Mycelium(repo_path)
-        pushed = m.sync_to_meta()
-        print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-    except Exception as e:
-        print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+        # 0. P36: Update usefulness scores before anything modifies the tree
+        _update_usefulness(repo_path, jsonl_path)
 
-    # P20c: Ensure repo is registered for cross-repo discovery
-    _register_repo(repo_path)
+        # 1. Feed mycelium (co-occurrences)
+        count = feed_from_transcript(jsonl_path, repo_path)
+        print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
+
+        # 2. Compress transcript into a .mn session file
+        mn_path = compress_transcript(jsonl_path, repo_path)
+
+        # 3. Auto-segment into tree branches (Brique 3)
+        if mn_path:
+            grow_branches_from_session(mn_path)
+
+        # 4. Refresh tree temperatures
+        tree = load_tree()
+        refresh_tree_metadata(tree)
+        save_tree(tree)
+
+        # 5. P20b: Sync to meta-mycelium (cross-repo memory)
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from mycelium import Mycelium
+            m = Mycelium(repo_path)
+            pushed = m.sync_to_meta()
+            print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+        except Exception as e:
+            print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+
+        # P20c: Ensure repo is registered for cross-repo discovery
+        _register_repo(repo_path)
+    except Exception as e:
+        _hook_log(repo_path, f"CRITICAL feed_from_hook crashed: {e}")
+        print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -4048,7 +4055,7 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
     # 6. Update dedup — keep only last 20 sessions
     dedup[session_id] = msg_count
     if len(dedup) > 20:
-        oldest = sorted(dedup, key=lambda k: dedup[k])[:len(dedup) - 20]
+        oldest = sorted(dedup.keys())[:len(dedup) - 20]  # session_ids are timestamp-based, lexicographic = chronological
         for k in oldest:
             del dedup[k]
     dedup_path.parent.mkdir(parents=True, exist_ok=True)

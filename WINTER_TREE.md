@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 57 bugs corriges (P10+SL+audit+P32fix+scan7+scan8+scan9)
-Engine: muninn.py 4516 lignes, 71 fonctions + mycelium.py 1127 lignes + watchdog.py 50 lignes
+Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 67 bugs corriges (P10+SL+audit+P32fix+scan7+scan8+scan9+scan10)
+Engine: muninn.py 4523 lignes, 71 fonctions + mycelium.py 1131 lignes + watchdog.py 53 lignes
 
 ## Anatomie
 
@@ -230,6 +230,18 @@ Ce que Muninn a que les autres n'ont pas:
   - WINDOWS: _prune_if_memory_pressure() utilisait GetPhysicallyInstalledMemory (RAM totale) — now GlobalMemoryStatusEx (RAM libre)
   - BLOOM: filtre novelty trop agressif (10% seuil, mots <4 chars) — now 5% seuil, mots >=3 chars, min 10 concepts
   - Total: 10 bugs fixes (dont 2 race conditions, 2 crashes, 1 perf, 1 logic, 1 matching, 1 Windows, 1 bloom, 1 lock)
+- [x] Scan 10 (2026-03-10, 4 agents full sweep hooks/tree/CLI/mycelium):
+  - SILENT DEATH: feed_from_hook pipeline crash = lost session — now try/except + traceback + hook_log
+  - DATA: dedup eviction sorted by msg_count (wrong) — now sorted by session_id (chronological)
+  - DATA: _update_usefulness string content iterated chars — now handles str + list[dict]
+  - CRASH: _check_fusions unguarded split("|") — now len(parts) check
+  - CRASH: decay(days=0) ZeroDivisionError — now early return
+  - WINDOWS: GlobalMemoryStatusEx return value unchecked — now guards API failure
+  - PERF: _detect_transcript_format read entire 55MB file for JSON check — now first-bytes only
+  - CORRUPTION: pull_from_meta shallow dict copy — zones list shared between meta/local — now deepcopy
+  - COSMETIC: bloom comment said 10% but code was 5% — comment fixed
+  - FIX: watchdog subprocess window spam — pythonw.exe + CREATE_NO_WINDOW
+  - Total: 10 bugs fixes (dont 2 data, 2 crash, 1 silent death, 1 corruption, 1 perf, 1 Windows, 1 cosmetic, 1 UX)
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn
