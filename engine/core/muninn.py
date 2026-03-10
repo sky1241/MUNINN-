@@ -435,7 +435,7 @@ def compute_hash(filepath: Path) -> str:
     return hashlib.sha256(content).hexdigest()[:8]
 
 
-def _ebbinghaus_recall(node: dict) -> float:
+def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5) -> float:
     """Spaced repetition recall probability (Settles & Meeder 2016).
 
     p = 2^(-delta / h)
@@ -443,11 +443,16 @@ def _ebbinghaus_recall(node: dict) -> float:
     where delta = days since last access, h = half-life.
     Half-life doubles with each review (load at boot), starting at 7 days.
     A branch loaded 5 times has h = 7 * 2^5 = 224 days — very stable.
+
+    A1 upgrade: h is now modulated by usefulness (proxy for importance).
+    h = 7 * 2^reviews * usefulness^beta
+    When usefulness=1.0 (default), behavior is identical to pre-A1.
+    Sources: GARCH (Bollerslev 1986), PLOS Bio 2018 (antibody half-lives), BS-6.
     """
-    import math
     delta = _days_since(node.get("last_access", "2026-01-01"))
     reviews = node.get("access_count", 0)
-    half_life = 7.0 * (2 ** min(reviews, 10))  # cap at 2^10 to avoid overflow
+    usefulness = max(0.1, node.get("usefulness", 1.0))  # clamp [0.1, 1.0] — A1.7 safety
+    half_life = 7.0 * (2 ** min(reviews, 10)) * (usefulness ** _h_beta)
     if half_life <= 0:
         return 0.0
     return 2.0 ** (-delta / half_life)
