@@ -48,6 +48,7 @@ class Mycelium:
         self.federated = federated  # P20.1: if False, zero change to behavior
         self.zone = zone or self.repo_path.name  # P20.2: default zone = repo name
         self._sigmoid_k = 10  # A3: sigmoid steepness for spread_activation (0=disabled)
+        self._spectral_gap = None  # A5: computed by detect_zones()
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -690,6 +691,14 @@ class Mycelium:
         except Exception as e:
             print(f"detect_zones eigsh failed: {e}", file=sys.stderr)
             return {}
+
+        # A5: Spectral gap = lambda_2 / lambda_1 (mixing time metric)
+        # Source: Bowman (Stanford, >1000 cit.), BS-1 Cell Bio briefing
+        sorted_eigs = sorted(eigenvalues, reverse=True)
+        if len(sorted_eigs) >= 2 and sorted_eigs[0] > 0:
+            self._spectral_gap = sorted_eigs[1] / sorted_eigs[0]
+        else:
+            self._spectral_gap = None
 
         # 5. KMeans on L2-normalized eigenvectors
         norms = np.linalg.norm(eigenvectors, axis=1, keepdims=True)
