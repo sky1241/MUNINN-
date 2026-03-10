@@ -173,6 +173,30 @@ Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (d
     L'espace de recherche n'est pas "papers about memory" — c'est "papers with same math."
     Deux domaines sans rapport qui utilisent la meme equation = connexion WTF invisible aux mots-cles.
 
+### Scan cross-domaine — 7 isomorphismes confirmes (session 2026-03-10)
+
+Scan Yggdrasil (172K paires Uzzi, 833K papers glyphes) + web (80 sources):
+les formules de Muninn existent IDENTIQUES dans des domaines etrangers.
+Detail: docs/FORMULES_ETRANGERES.md (30 eq LaTeX, 60+ vars mappees).
+
+| Muninn | Domaine etranger | Score | Source | Actionable? |
+|--------|-----------------|-------|--------|-------------|
+| F3 TF-IDF | Replicateur-mutateur (bio evo) | 19/20 | cond-mat/0004072 | Validation theorique |
+| F8 Decay+cooc | Lotka-Volterra (ecologie) | 19/20 | nlin/0009025 | Code: ajouter saturation beta*N^2 |
+| F3 TF-IDF | Entropie AA (biochimie) | 19/20 | physics/0012003 | Validation theorique |
+| F4+F8 | Quasispecies sigmoid (evolution) | ISOMORPHE | cond-mat/0202047 | Code: sigmoid sur spreading |
+| F1 Ebbinghaus | Affinity maturation (immunologie) | 18/20 | PNAS+Science 2022 | PAPIER a ecrire |
+| F5 EMA | EWMA finance | 18/20 | standard | Code: alpha adaptatif GARCH |
+| F1 Ebbinghaus | Arbesman demi-vie faits | 17/20 | Arbesman 2012 | Validation theorique |
+
+3 ameliorations code inspirees des isomorphismes:
+1. **GARCH sur F5**: alpha adaptatif selon volatilite des feedbacks (Bollerslev 1986)
+2. **Sigmoid sur F4**: seuil non-lineaire dans spreading activation (cond-mat/0202047)
+3. **Saturation sur F8**: terme beta*N^2 (carrying capacity) dans decay mycelium (nlin/0009025)
+
+128 anti-signaux P5 = ponts que personne n'a pris entre Muninn et 8 domaines scientifiques.
+22/23 Type C en Cell Biology = plus gros blind spot.
+
 ## Ce qui est unique a Muninn (pas dans la litterature)
 
 - **Mycelium vivant** — codebook qui POUSSE par co-occurrence, decay biologique.
@@ -214,3 +238,10 @@ Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (d
 - Laird, Newell & Rosenbloom: "SOAR: An Architecture for General Intelligence" (1987), Artificial Intelligence 33(1), 1-64
 - McClelland, McNaughton & O'Reilly: "Why There Are Complementary Learning Systems" (1995), Psychological Review 102(3), 419-457
 - Nader, Schafe & LeDoux: "Fear Memories Require Protein Synthesis for Reconsolidation" (2000), Nature 406, 722-726
+- Uzzi et al.: "Atypical Combinations and Scientific Impact" (2013), Science 342(6157), 468-472
+- Price: "Selection and Covariance" (1970), Nature 227, 520-521
+- Huang & Ferrell: "Ultrasensitivity in the Mitogen-Activated Protein Kinase Cascade" (1996), PNAS 93, 10078-10083
+- Bollerslev: "Generalized Autoregressive Conditional Heteroskedasticity" (1986), J Econometrics 31, 307-327
+- Shaffer: "Minimum Population Sizes for Species Conservation" (1981), BioScience 31(2), 131-134
+- Arbesman: "The Half-Life of Facts" (2012), Current, New York
+- Carhart-Harris et al.: "Neural correlates of the psychedelic state" (2012), PNAS 109(6), 2138-2143
