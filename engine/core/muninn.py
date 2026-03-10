@@ -458,6 +458,55 @@ def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5) -> float:
     return 2.0 ** (-delta / half_life)
 
 
+def _actr_activation(node: dict, _d: float = 0.5) -> float:
+    """ACT-R base-level activation (Anderson 1993).
+
+    B = ln(sum(t_j^(-d)))
+
+    where t_j = days since j-th access, d = decay parameter (0.5 default).
+    Uses access_history if available, falls back to synthetic timestamps
+    from last_access + access_count.
+
+    A2 upgrade: captures non-Markov memory — WHEN matters, not just HOW MANY.
+    Sources: ACT-R (Anderson 1993), Cell Systems 2017 (non-Markov), BS-3.
+
+    Returns activation on [~-5, ~3] scale. Used as bonus in boot() scoring,
+    NOT as replacement for _ebbinghaus_recall (which stays for prune/temperature).
+    """
+    import math
+    history = node.get("access_history", [])
+
+    if not history:
+        # Fallback: synthesize timestamps from last_access + access_count
+        last = node.get("last_access", "2026-01-01")
+        count = max(1, node.get("access_count", 1))
+        days_ago = max(1, _days_since(last))
+        # Spread count accesses uniformly from days_ago to 1 day ago
+        if count == 1:
+            history = [last]
+        else:
+            from datetime import datetime, timedelta
+            try:
+                base = datetime.strptime(last, "%Y-%m-%d")
+            except ValueError:
+                base = datetime.now()
+            step = max(1, days_ago // count)
+            history = [(base - timedelta(days=step * i)).strftime("%Y-%m-%d")
+                       for i in range(min(count, 10))]
+
+    if not history:
+        return 0.0
+
+    total = 0.0
+    for ts in history:
+        t_j = max(1, _days_since(ts))  # at least 1 day to avoid 0^(-d)
+        total += t_j ** (-_d)
+
+    if total <= 0:
+        return 0.0
+    return math.log(total)
+
+
 def _days_since(date_str: str) -> int:
     """Days since a YYYY-MM-DD date string. Returns 90 on parse error."""
     try:
@@ -520,6 +569,10 @@ def read_node(name: str, _tree: dict | None = None) -> str:
 
     node["access_count"] = node.get("access_count", 0) + 1
     node["last_access"] = time.strftime("%Y-%m-%d")
+    # A2: append to access_history (cap at 10 most recent)
+    history = node.get("access_history", [])
+    history.append(time.strftime("%Y-%m-%d"))
+    node["access_history"] = history[-10:]  # keep last 10
     if _tree is None:
         save_tree(tree)
 
@@ -2033,6 +2086,15 @@ def boot(query: str = "") -> str:
             # Encodes both recency AND access count in one principled metric
             recall = _ebbinghaus_recall(node)
 
+            # A2: ACT-R base-level activation (Anderson 1993)
+            # Captures non-Markov memory: WHEN accesses happened, not just count.
+            # Normalized to [0,1] via sigmoid for compatibility with recall slot.
+            import math
+            actr_raw = _actr_activation(node)
+            actr_norm = 1.0 / (1.0 + math.exp(-actr_raw))  # sigmoid -> [0,1]
+            # Blend: 70% Ebbinghaus (proven) + 30% ACT-R (new non-Markov signal)
+            recall_blended = 0.7 * recall + 0.3 * actr_norm
+
             # Relevance: TF-IDF cosine similarity
             relevance = relevance_scores.get(name, 0.0)
 
@@ -2042,10 +2104,10 @@ def boot(query: str = "") -> str:
             # P36: Usefulness — feedback from past sessions (0.5 = neutral default)
             usefulness = node.get("usefulness", 0.5)
 
-            # Weighted: 0.15*recall + 0.40*relevance + 0.20*activation + 0.10*usefulness + 0.15*rehearsal_need
+            # Weighted: 0.15*recall_blended + 0.40*relevance + 0.20*activation + 0.10*usefulness + 0.15*rehearsal_need
             # Rehearsal need: branches near forgetting threshold (0.1 < R < 0.3) need review
             rehearsal_need = max(0.0, 1.0 - abs(recall - 0.2) / 0.2) if 0.05 < recall < 0.4 else 0.0
-            total = 0.15 * recall + 0.40 * relevance + 0.20 * activation + 0.10 * usefulness + 0.15 * rehearsal_need
+            total = 0.15 * recall_blended + 0.40 * relevance + 0.20 * activation + 0.10 * usefulness + 0.15 * rehearsal_need
             if total > 0.01:
                 scored.append((name, total))
 
@@ -2281,6 +2343,10 @@ def recall(query: str) -> str:
                 if node:
                     node["access_count"] = node.get("access_count", 0) + 1
                     node["last_access"] = time.strftime("%Y-%m-%d")
+                    # A2: update access_history
+                    history = node.get("access_history", [])
+                    history.append(time.strftime("%Y-%m-%d"))
+                    node["access_history"] = history[-10:]
             save_tree(tree)
         except Exception:
             pass
