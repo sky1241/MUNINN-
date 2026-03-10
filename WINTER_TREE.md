@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 56 briques vivantes (P0-P40 + P41 + P20c + P21 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus) + scan cross-domaine, 0 en roadmap, 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
+Etat: 56 briques vivantes (P0-P40 + P41 + P20c + P21 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus) + scan cross-domaine + briefing Cell Bio 22 BS + plan de bataille TIER 1 (6 upgrades), 0 en roadmap, 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
 Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
@@ -719,6 +719,31 @@ Chiffres cles:
 Insight: les formules de Muninn ne sont pas des inventions CS — ce sont des structures
 universelles que la biologie, l'evolution, l'ecologie et la finance ont decouvertes
 independamment. Darwin = Muninn.
+
+### Briefing Cell Biology — 22 Blind Spots (session 2026-03-10) [RECU]
+Source: cousin Yggdrasil. 22/23 paires Type C en cell bio = plus gros blind spot du scan.
+3 concepts Muninn (eigenvalues, Markov, exp decay) x 10 concepts bio = 22 trous.
+22 papers pionniers sur 833K. 6 blind spots actionables (BS-1 a BS-6).
+2 deja integres dans le plan de bataille: BS-6 = A1 (h adaptatif), BS-3 = A2 (access_history).
+Detail: docs/BRIEFING_CELLBIO_22BS.md
+Papers cles: Cell Systems 2017 (non-Markov), PLOS Bio 2018 (h variable), PNAS 2024 (Mittag-Leffler).
+Meta-resultat: Muninn fait deja de la bio cellulaire computationnelle sans le savoir.
+
+### Plan de Bataille TIER 1 — 6 upgrades formula=data (session 2026-03-10) [EN COURS]
+Bornes de validation strictes AVANT code. Un upgrade = un commit = un push.
+Detail complet: docs/PLAN_BATAILLE_TIER1.md
+
+| # | Upgrade | Formule cible | Lignes | Sources (convergence) |
+|---|---------|---------------|--------|-----------------------|
+| A1 | h adaptatif (F1+F5) | h = h_base * 2^reviews * usefulness^beta | ~20 | GARCH + PLOS Bio 2018 + BS-6 |
+| A2 | access_history (F1) | B = ln(sum(t_j^(-d))) ACT-R | ~30 | ACT-R + Cell Systems 2017 + BS-3 |
+| A3 | Sigmoid spreading (F4) | sigma(x) = 1/(1+e^(-k(x-x0))) | ~30 | cond-mat/0202047 |
+| A4 | Saturation decay (F8) | dw = -w/tau - beta*w^2 | ~15 | Lotka-Volterra nlin/0009025 |
+| A5 | Spectral gap metric | gap = lambda_2 / lambda_1 | ~5 | Bowman Stanford |
+| B1 | Reconsolidation boot | L10+L11 sur branche froide | ~40 | Nader 2000 + DARPA RAM |
+
+Protocole: baseline → code → unit tests → regression → pass/fail → commit.
+Pieges identifies: usefulness=0 (clamp 0.1), backward compat tree.json, sigmoid placement, entier decay.
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)

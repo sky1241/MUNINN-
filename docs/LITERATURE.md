@@ -245,3 +245,10 @@ Detail: docs/FORMULES_ETRANGERES.md (30 eq LaTeX, 60+ vars mappees).
 - Shaffer: "Minimum Population Sizes for Species Conservation" (1981), BioScience 31(2), 131-134
 - Arbesman: "The Half-Life of Facts" (2012), Current, New York
 - Carhart-Harris et al.: "Neural correlates of the psychedelic state" (2012), PNAS 109(6), 2138-2143
+- Bowman et al.: "An Introduction to Markov State Models" (2014), Advances in Experimental Medicine and Biology 797, 7-22 (>1000 cit., Stanford)
+- Hormoz et al.: "Inferring Cell-Fate Bifurcations from Transcriptomic Data" (2016), Cell Systems 3(2), 187-197 (cellules souches = non-Markov)
+- Amanna, Carlson & Slifka: "Duration of Humoral Immunity to Common Viral and Vaccine Antigens" (2007), PLOS Biology 5(7), e156 (~400 cit., antibody half-lives)
+- Antia et al.: "Heterogeneity and longevity of antibody memory" (2018), PLOS Biology 16(8), e2006601
+- Garrido et al.: "A unifying Gamma-Mittag-Leffler kernel for decay processes" (2024), PNAS 121(37)
+- Faber et al.: "First-principles GW calculations for DNA and RNA nucleobases" (2011), arXiv:1101.3738
+- Simserides: "Electron or hole transfer along DNA dimers, trimers and polymers" (2014), arXiv:1402.0654
