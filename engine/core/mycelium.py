@@ -845,6 +845,126 @@ class Mycelium:
 
         return {"isolated": isolated, "hubs": hubs, "weak_zones": weak_zones}
 
+    # ── B3: Blind spot detection (angles morts) ────────────────────
+
+    def detect_blind_spots(self, top_n: int = 20) -> list[tuple[str, str, str]]:
+        """B3: Find concept pairs that SHOULD be connected but aren't.
+
+        Two heuristics:
+        1. Same-zone gap: concepts in the same zone with no direct connection
+           but both have high degree (top 20% in zone). These are structural holes.
+        2. Transitive gap: A-B connected, B-C connected, but A-C not connected,
+           and both A-C have degree >= 5.
+
+        Returns list of (concept_a, concept_b, reason) sorted by estimated
+        importance (product of degrees).
+        Source: Burt 1992 (structural holes), BS-4 Hodge Laplacien
+        """
+        conns = self.data["connections"]
+        if len(conns) < 10:
+            return []
+
+        # Build degree map (lightweight — only counts)
+        degree = {}
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            degree[a] = degree.get(a, 0) + 1
+            degree[b] = degree.get(b, 0) + 1
+
+        if not degree:
+            return []
+
+        # For large graphs (>100K connections), only analyze mid-range concepts
+        # Top concepts are always connected; blind spots live in the middle tier
+        max_concepts = 500
+        if len(degree) > max_concepts:
+            # Take concepts with degree in [10, 90th percentile] — the "interesting" range
+            sorted_by_deg = sorted(degree.items(), key=lambda x: -x[1])
+            p90 = sorted_by_deg[len(sorted_by_deg) // 10][1] if len(sorted_by_deg) > 10 else 999999
+            mid_range = [(c, d) for c, d in sorted_by_deg if 10 <= d <= p90]
+            mid_range.sort(key=lambda x: -x[1])
+            top_concepts_set = set(c for c, _ in mid_range[:max_concepts])
+        else:
+            top_concepts_set = set(degree.keys())
+
+        # Build connection set and adjacency ONLY for top concepts
+        conn_set = set()
+        adj = {}
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            if a in top_concepts_set or b in top_concepts_set:
+                conn_set.add((a, b))
+                conn_set.add((b, a))
+            if a in top_concepts_set and b in top_concepts_set:
+                adj.setdefault(a, set()).add(b)
+                adj.setdefault(b, set()).add(a)
+
+        blind_spots = []
+
+        # Heuristic 1: Same-zone gaps (needs zones tagged on connections)
+        try:
+            zones = self.detect_zones()
+        except Exception:
+            zones = {}
+
+        if zones:
+            for zone_name, members in zones.items():
+                if len(members) < 3:
+                    continue
+                # Top 20% by degree in this zone (capped at 30)
+                zone_degs = [(c, degree.get(c, 0)) for c in members
+                             if c in top_concepts_set]
+                zone_degs.sort(key=lambda x: -x[1])
+                cutoff = min(30, max(1, len(zone_degs) // 5))
+                top_zone = [c for c, _ in zone_degs[:cutoff]]
+
+                for i, ca in enumerate(top_zone):
+                    for cb in top_zone[i+1:]:
+                        if (ca, cb) not in conn_set:
+                            score = degree.get(ca, 0) * degree.get(cb, 0)
+                            blind_spots.append((ca, cb, f"zone_gap:{zone_name}", score))
+
+        # Heuristic 2: Transitive gaps (A-B, B-C exist, A-C missing)
+        # Only check top-degree concepts, cap neighbors at 20
+        min_degree = 5
+        max_neighbors = 20
+        checked = set()
+        for b_concept in top_concepts_set:
+            neighbors = adj.get(b_concept)
+            if not neighbors or degree.get(b_concept, 0) < min_degree:
+                continue
+            neighbor_list = [n for n in neighbors if degree.get(n, 0) >= min_degree]
+            if len(neighbor_list) > max_neighbors:
+                neighbor_list.sort(key=lambda n: -degree.get(n, 0))
+                neighbor_list = neighbor_list[:max_neighbors]
+            for i, a in enumerate(neighbor_list):
+                for c in neighbor_list[i+1:]:
+                    pair = tuple(sorted([a, c]))
+                    if pair in checked:
+                        continue
+                    checked.add(pair)
+                    if (a, c) not in conn_set:
+                        score = degree.get(a, 0) * degree.get(c, 0)
+                        blind_spots.append((a, c, f"transitive_via:{b_concept}", score))
+
+        # Deduplicate and sort by score
+        seen = set()
+        unique = []
+        for a, b, reason, score in blind_spots:
+            pair = tuple(sorted([a, b]))
+            if pair not in seen:
+                seen.add(pair)
+                unique.append((pair[0], pair[1], reason, score))
+
+        unique.sort(key=lambda x: -x[3])
+        return [(a, b, reason) for a, b, reason, _ in unique[:top_n]]
+
     # ── P20b: Meta-mycelium sync ──────────────────────────────────
 
     @staticmethod
