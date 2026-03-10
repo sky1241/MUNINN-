@@ -2393,6 +2393,80 @@ def recall(query: str) -> str:
     return "\n".join(output)
 
 
+# ── B4: Endsley L3 Prediction ────────────────────────────────────
+
+def predict_next(current_concepts: list[str] = None, top_n: int = 5) -> list[tuple[str, float]]:
+    """B4: Predict which branches will be needed next.
+
+    Uses spreading activation from current session concepts to find
+    branches the user hasn't loaded yet but likely will need.
+    Endsley Level 3 = projection of future state from current situation.
+
+    Args:
+        current_concepts: concepts seen so far (if None, reads from last session)
+        top_n: how many predictions to return
+
+    Returns:
+        list of (branch_name, prediction_score) sorted descending.
+    Source: Endsley 1995 (Situation Awareness), Collins & Loftus 1975
+    """
+    repo = _REPO_PATH or Path(".")
+
+    # Get current concepts from session or parameter
+    if not current_concepts:
+        # Try to extract from last session index
+        index_path = repo / ".muninn" / "session_index.json"
+        if index_path.exists():
+            try:
+                index = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(index, list) and index:
+                    current_concepts = index[-1].get("concepts", [])
+            except (json.JSONDecodeError, OSError):
+                pass
+        if not current_concepts:
+            return []
+
+    # Spread activation through mycelium
+    try:
+        if _CORE_DIR not in sys.path:
+            sys.path.insert(0, _CORE_DIR)
+        from mycelium import Mycelium
+        m = Mycelium(repo)
+        activated = m.spread_activation(current_concepts, hops=2, top_n=50)
+    except Exception:
+        activated = []
+
+    if not activated:
+        return []
+
+    # Load tree to find unloaded branches
+    tree = load_tree()
+    nodes = tree["nodes"]
+    activated_set = {c for c, _ in activated}
+    activated_dict = dict(activated)
+
+    # Score each branch by how many activated concepts it covers
+    predictions = []
+    for name, node in nodes.items():
+        if node.get("type") != "branch":
+            continue
+        tags = set(node.get("tags", []))
+        if not tags:
+            continue
+        # Score = sum of activation for matching tags
+        overlap = tags & activated_set
+        if overlap:
+            score = sum(activated_dict.get(t, 0) for t in overlap)
+            # Penalize recently accessed (already loaded = less useful to predict)
+            recall = _ebbinghaus_recall(node)
+            if recall > 0.8:
+                score *= 0.3  # heavily penalize already-fresh branches
+            predictions.append((name, score))
+
+    predictions.sort(key=lambda x: -x[1])
+    return predictions[:top_n]
+
+
 # ── DECODE ────────────────────────────────────────────────────────
 
 def decode_line(line: str) -> str:
