@@ -1581,7 +1581,7 @@ def build_tree(filepath: Path):
         if len(root_lines) > BUDGET["root_lines"]:
             print(f"  WARNING: root {len(root_lines)} > {BUDGET['root_lines']}, force-splitting")
             overflow_refs = []
-            while len(root_lines) > BUDGET["root_lines"] - len(overflow_refs):
+            while len(root_lines) > BUDGET["root_lines"] - len(overflow_refs) and len(overflow_refs) < BUDGET["root_lines"] - 1:
                 overflow = root_lines.pop()
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
@@ -2515,7 +2515,7 @@ def show_status():
     for name, node in nodes.items():
         ntype = node["type"]
         prefix = {"root": "R", "branch": "B", "leaf": "L"}.get(ntype, "?")
-        fill = node["lines"] / node["max_lines"] * 100
+        fill = node["lines"] / max(node["max_lines"], 1) * 100
         over = " OVER!" if node["lines"] > node["max_lines"] else ""
         total_lines += node["lines"]
         h = node.get("hash", "?")[:8]
@@ -2942,7 +2942,7 @@ def verify_compression(filepath: Path):
 
     print(f"=== MUNINN VERIFY: {filepath.name} ===")
     print(f"\n  Compression ({tok_method}):")
-    print(f"    {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}, -{(orig_tokens - comp_tokens) / orig_tokens * 100:.0f}%)")
+    print(f"    {orig_tokens} -> {comp_tokens} tokens (x{ratio:.1f}, -{(orig_tokens - comp_tokens) / max(orig_tokens, 1) * 100:.0f}%)")
     print(f"\n  Facts ({len(orig_facts)} found):")
     print(f"    Preserved: {len(preserved)}/{len(orig_facts)}")
     if lost:
@@ -3759,19 +3759,20 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
     # Extract concepts from session transcript
     session_concepts = set()
     try:
-        for line in open(jsonl_path, encoding="utf-8", errors="replace"):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-                content_parts = msg.get("message", {}).get("content", [])
-                for part in content_parts:
-                    if isinstance(part, dict) and part.get("type") == "text":
-                        words = re.findall(r'[a-zA-Z]{4,}', part["text"].lower())
-                        session_concepts.update(words)
-            except (json.JSONDecodeError, KeyError, TypeError):
-                continue
+        with open(jsonl_path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                    content_parts = msg.get("message", {}).get("content", [])
+                    for part in content_parts:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            words = re.findall(r'[a-zA-Z]{4,}', part["text"].lower())
+                            session_concepts.update(words)
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
     except OSError:
         return
 
@@ -3921,7 +3922,8 @@ def feed_from_stop_hook(repo_path: Path):
 
     # Count messages in transcript for dedup
     try:
-        msg_count = sum(1 for _ in open(jsonl_path, encoding="utf-8", errors="replace"))
+        with open(jsonl_path, encoding="utf-8", errors="replace") as f:
+            msg_count = sum(1 for _ in f)
     except OSError:
         return
     if msg_count == 0:
@@ -4140,7 +4142,10 @@ def feed_watch(repo_path: Path):
     for project_dir in project_dirs:
         for jsonl_file in project_dir.glob("*.jsonl"):
             key = jsonl_file.name
-            current_size = jsonl_file.stat().st_size
+            try:
+                current_size = jsonl_file.stat().st_size
+            except OSError:
+                continue
             last_size = state.get(key, 0)
             if current_size > last_size:
                 changed.append(jsonl_file)
@@ -4153,7 +4158,7 @@ def feed_watch(repo_path: Path):
     print(f"MUNINN WATCH: {len(changed)} transcript(s) changed")
 
     for jsonl_path in changed:
-        _hook_log(repo_path, f"WATCH feeding {jsonl_path.name} ({jsonl_path.stat().st_size} bytes)")
+        _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
 
         # Feed mycelium
         count = feed_from_transcript(jsonl_path, repo_path)

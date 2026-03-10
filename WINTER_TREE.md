@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 52 briques vivantes (P0-P38 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 28 bugs corriges (P10+SL+audit)
-Engine: muninn.py 4333 lignes, 69 fonctions
+Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 40 bugs corriges (P10+SL+audit+P32fix+scan7)
+Engine: muninn.py 4443 lignes, 70 fonctions + watchdog.py 44 lignes
 
 ## Anatomie
 
@@ -204,6 +204,12 @@ Ce que Muninn a que les autres n'ont pas:
 - [x] Scan 5: build_tree boucle infinie (pop+append ne retrecit jamais)
 - [x] Scan 6: CLEAN — 0 nouveau bug
 - Total: 14 bugs corriges, 0 restant (6 scans complets)
+- [x] Scan 7 (2026-03-10, 3 agents paralleles, muninn+mycelium+watchdog):
+  - muninn.py: ZeroDivisionError x2 (max_lines=0, orig_tokens=0), boucle infinie force-split,
+    file handle leaks x2, OSError crash dans feed_watch
+  - mycelium.py: unguarded split("|") x4 (crash sur cles malformees), _load missing OSError
+  - watchdog.py: erreurs subprocess silencieuses, check existence muninn.py
+  - Total: 11 bugs fixes
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn
@@ -457,7 +463,9 @@ Theorie: Wilson & McNaughton 1994 — consolidation episodique->semantique penda
 Bug critique: conversations courtes (pas de PreCompact) + fermeture manuelle (pas de SessionEnd) = data perdue.
 Les senior devs font exactement ca: conversations courtes, haute valeur, fermeture rapide.
 - [x] Hook `Stop` fire a chaque reponse Claude — seul hook qui garantit la capture
-- [x] Anti-boucle: `stop_hook_active=true` → skip (empeche boucle infinie)
+- [x] BUG CORRIGE (2026-03-09): `stop_hook_active` n'est PAS un anti-boucle — Claude Code
+  l'envoie TOUJOURS a true dans le JSON du Stop hook. L'ancien guard tuait 100% des captures.
+  Vrai anti-boucle = dedup par session_id + msg_count (etait deja la, jamais atteint)
 - [x] Dedup: `.muninn/stop_dedup.json` stocke `{session_id: msg_count}`
   - Meme conversation, meme nombre de messages → skip (zero recompression)
   - Nouveau message detecte → feed complet (mycelium + compress + branches + meta-sync)
@@ -465,6 +473,7 @@ Les senior devs font exactement ca: conversations courtes, haute valeur, fermetu
 - [x] `--trigger stop` flag CLI + `install_hooks()` installe Stop sur nouveaux repos
 - [x] Teste: 1er run feed (76 msgs, x2.3), 2eme run skip (dedup), anti-loop OK
 - [x] 3 hooks maintenant: PreCompact (contexte plein) + SessionEnd (VS Code ferme) + Stop (chaque reponse)
+- [x] `_hook_log()`: log fichier `.muninn/hook_log.txt` sur chaque entree de hook (diagnostic)
 
 ### P32b — Auto-install hooks (plug-and-play) [FAIT]
 Probleme: Stop hook devait etre ajoute MANUELLEMENT dans chaque repo. Pas scalable.
@@ -580,6 +589,20 @@ Bug: commentaire disait `0.995^hours` mais code faisait du lineaire `1.0 - days/
   | TOTAL | 1968 | 8.0M | 817K | x9.8 | 711 |
 - [x] Cout L9 estime si actif: ~$238 (surtout Yggdrasil 8.7M lignes)
 - [x] L1-L7+L10+L11 gratuit = suffisant pour la majorite des cas
+
+### P41 — Watchdog (poll-based capture) [FAIT]
+Probleme: les hooks Stop/PreCompact/SessionEnd ne tirent pas toujours (sessions multiples
+ouvertes sur le meme repo, fermeture d'un seul onglet = rien ne fire).
+Solution: timer toutes les 15 minutes qui rattrape tout ce qui a ete manque.
+- [x] `feed --watch`: compare la taille des JSONL vs `watch_state.json`, ne feed que ce qui a grandi
+  - Zero travail si rien n'a change (return instantane)
+  - Dedup natif par taille de fichier (pas de recompression si identique)
+- [x] `watchdog.py`: itere tous les repos de `~/.muninn/repos.json`, lance `feed --watch` sur chacun
+  - Timeout 5min par repo, capture_output (silencieux)
+- [x] Tache planifiee Windows `MuninnWatchdog`: toutes les 15 minutes
+  - `schtasks /tn MuninnWatchdog`, enabled, survit aux reboots
+- [x] Teste: 1er run = feed all, 2eme run = "nothing changed" (instantane)
+- Filet garanti: meme si AUCUN hook ne tire, le watchdog rattrape toutes les 15 min
 
 ### P39 — Liane WT3 : Muninn bibliothecaire [TODO — POST-WT3]
 Muninn ne stocke pas les papers. Il devient le bibliothecaire personnalise de Sky.

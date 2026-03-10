@@ -53,9 +53,9 @@ class Mycelium:
             try:
                 with open(self.mycelium_path, encoding="utf-8") as f:
                     return json.load(f)
-            except (json.JSONDecodeError, ValueError):
+            except (json.JSONDecodeError, ValueError, OSError) as e:
                 import sys
-                print("WARNING: mycelium.json corrupted, re-initializing", file=sys.stderr)
+                print(f"WARNING: mycelium.json load failed: {e}", file=sys.stderr)
         return {
             "version": 1,
             "repo": self.repo_path.name,
@@ -532,7 +532,10 @@ class Mycelium:
         # Count how many connections each concept participates in
         concept_conn_count = {}
         for key in conns:
-            a, b = key.split("|")
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
             concept_conn_count[a] = concept_conn_count.get(a, 0) + 1
             concept_conn_count[b] = concept_conn_count.get(b, 0) + 1
 
@@ -605,9 +608,11 @@ class Mycelium:
         # 1. Build concept index and sparse matrix
         concepts = set()
         for key in conns:
-            a, b = key.split("|")
-            concepts.add(a)
-            concepts.add(b)
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            concepts.add(parts[0])
+            concepts.add(parts[1])
         concepts = sorted(concepts)
         idx = {c: i for i, c in enumerate(concepts)}
         N = len(concepts)
@@ -618,7 +623,10 @@ class Mycelium:
         # Build sparse adjacency
         rows, cols, vals = [], [], []
         for key, conn in conns.items():
-            a, b = key.split("|")
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
             i, j = idx[a], idx[b]
             w = conn["count"]
             rows.extend([i, j])
@@ -697,7 +705,10 @@ class Mycelium:
         conns = self.data["connections"]
         tagged = 0
         for key, conn in conns.items():
-            a, b = key.split("|")
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
             zone_a = concept_to_zone.get(a)
             zone_b = concept_to_zone.get(b)
             if "zones" not in conn:
