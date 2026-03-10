@@ -2467,6 +2467,138 @@ def predict_next(current_concepts: list[str] = None, top_n: int = 5) -> list[tup
     return predictions[:top_n]
 
 
+# ── B5: Session mode detection (convergent/divergent) ────────────
+
+def detect_session_mode(concepts: list[str] = None) -> dict:
+    """B5: Detect if current session is convergent or divergent.
+
+    Convergent: focused work (debug, fix) — few unique concepts, high repetition.
+    Divergent: exploratory (brainstorm, research) — many unique concepts, low repetition.
+
+    Uses concept diversity ratio: unique_concepts / total_mentions.
+    High ratio (>0.6) = divergent, low ratio (<0.4) = convergent.
+
+    Returns dict with:
+      - mode: "convergent" | "divergent" | "balanced"
+      - diversity: float in [0, 1]
+      - suggested_k: sigmoid k value for spreading activation
+      - concept_count: number of unique concepts
+
+    Source: Carhart-Harris 2012 (entropic brain), Guilford 1967 (divergent thinking)
+    """
+    repo = _REPO_PATH or Path(".")
+
+    # Get concepts from parameter or last session
+    if not concepts:
+        index_path = repo / ".muninn" / "session_index.json"
+        if index_path.exists():
+            try:
+                index = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(index, list) and index:
+                    concepts = index[-1].get("concepts", [])
+            except (json.JSONDecodeError, OSError):
+                pass
+        if not concepts:
+            return {"mode": "balanced", "diversity": 0.5, "suggested_k": 10, "concept_count": 0}
+
+    # Compute diversity: unique / total
+    total = len(concepts)
+    unique = len(set(concepts))
+    diversity = unique / max(total, 1)
+
+    # Classify
+    if diversity > 0.6:
+        mode = "divergent"
+        suggested_k = 5    # low k = wide sigmoid = more exploration
+    elif diversity < 0.4:
+        mode = "convergent"
+        suggested_k = 20   # high k = sharp sigmoid = tight focus
+    else:
+        mode = "balanced"
+        suggested_k = 10   # default
+
+    return {
+        "mode": mode,
+        "diversity": round(diversity, 4),
+        "suggested_k": suggested_k,
+        "concept_count": unique,
+    }
+
+
+# ── B6: Klein RPD session-type classification ────────────────────
+
+def classify_session(concepts: list[str] = None, tagged_lines: list[str] = None) -> dict:
+    """B6: Recognize session type from concept and tag patterns.
+
+    Session types:
+      - debug: error/fix patterns, E> tags dominant
+      - feature: new concepts, D> decision tags
+      - explore: high diversity, many unique concepts
+      - refactor: code concepts dominant, low diversity
+      - review: B> benchmark tags, F> fact tags
+
+    Returns dict with:
+      - type: str (one of the above)
+      - confidence: float in [0, 1]
+      - tag_profile: dict of tag counts
+
+    Source: Klein 1986 (Recognition-Primed Decision)
+    """
+    repo = _REPO_PATH or Path(".")
+
+    # Get data from parameters or session index
+    if not concepts or not tagged_lines:
+        index_path = repo / ".muninn" / "session_index.json"
+        if index_path.exists():
+            try:
+                index = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(index, list) and index:
+                    entry = index[-1]
+                    if not concepts:
+                        concepts = entry.get("concepts", [])
+                    if not tagged_lines:
+                        tagged_lines = entry.get("tagged", [])
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    if not concepts and not tagged_lines:
+        return {"type": "unknown", "confidence": 0.0, "tag_profile": {}}
+
+    # Count tag types
+    tag_counts = {"E": 0, "D": 0, "B": 0, "F": 0, "A": 0}
+    for line in (tagged_lines or []):
+        for prefix in tag_counts:
+            if line.startswith(f"{prefix}>"):
+                tag_counts[prefix] += 1
+                break
+
+    total_tags = sum(tag_counts.values())
+
+    # Compute concept diversity
+    mode_info = detect_session_mode(concepts)
+    diversity = mode_info["diversity"]
+
+    # Classify by dominant signal
+    scores = {
+        "debug": tag_counts["E"] * 3 + (1.0 - diversity) * 2,
+        "feature": tag_counts["D"] * 2 + diversity * 2,
+        "explore": diversity * 5 + mode_info["concept_count"] * 0.1,
+        "refactor": (1.0 - diversity) * 3 + (tag_counts["A"] * 2 if tag_counts["A"] else 0),
+        "review": tag_counts["B"] * 3 + tag_counts["F"] * 2,
+    }
+
+    best_type = max(scores, key=scores.get)
+    best_score = scores[best_type]
+    total_score = sum(scores.values())
+    confidence = best_score / max(total_score, 0.01)
+
+    return {
+        "type": best_type,
+        "confidence": round(confidence, 4),
+        "tag_profile": tag_counts,
+    }
+
+
 # ── DECODE ────────────────────────────────────────────────────────
 
 def decode_line(line: str) -> str:
