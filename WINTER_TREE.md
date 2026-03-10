@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 54 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus), 1 en roadmap (P21), 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
-Engine: muninn.py 4578 lignes, 72 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
+Etat: 55 briques vivantes (P0-P40 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus), 1 en roadmap (P21), 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
+Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
 
@@ -503,6 +503,15 @@ Formule: p = 2^(-delta / h), h = 7 * 2^min(reviews, 10) jours.
 - [x] Poids boot: 0.15*recall + 0.40*relevance + 0.20*activation + 0.10*usefulness + 0.15*rehearsal_need
 - [x] Refs ajoutees dans docs/LITERATURE.md (5 papiers verifies)
 - [x] Tests: 4/4 PASS (unit test, status, prune, boot)
+
+### P40 — Bootstrap Branch Creation (2026-03-10) [FAIT]
+Gap: bootstrap scannait les fichiers pour le mycelium + creait root.mn, mais ne creait PAS de branches.
+Resultat: apres un bootstrap, l'arbre etait vide — il fallait des sessions de travail pour creer du contenu.
+- [x] _bootstrap_branches() dans muninn.py (~50 lignes)
+- [x] Selectionne les 20 plus gros .md/.txt (100B-100KB), trie par taille descendante
+- [x] Compresse chaque fichier avec compress_file (full pipeline L1-L7+L10+L11)
+- [x] Auto-segmente en branches via grow_branches_from_session (merge NCD si overlap)
+- [x] Teste: 3 docs -> 5 branches creees au bootstrap (avant: 0)
 
 ### Cleanup memory/ (2026-03-08)
 - [x] memory/root.mn et b00-b07.mn contenaient des donnees YGGDRASIL depuis le commit v0 (bc647da)

@@ -2,7 +2,7 @@
 
 > *Odin's raven of memory — the one that always comes back.*
 
-LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 54 features, 11 compression layers (25 filters), 76 bugs squashed across 13 audit scans.
+LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 55 features, 11 compression layers (25 filters), 76 bugs squashed across 13 audit scans.
 
 **Measured result**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline, tiktoken). 92% fact retention (40-question benchmark).
 
@@ -167,7 +167,7 @@ API cost (Haiku): **$0.21** for 230 files.
 ```
 engine/
   core/
-    muninn.py          Main engine (4578 lines, 72 functions)
+    muninn.py          Main engine (4632 lines, 73 functions)
     mycelium.py        Co-occurrence network (1134 lines)
     tokenizer.py       tiktoken wrapper with fallback
     watchdog.py        Scheduled task runner (55 lines)

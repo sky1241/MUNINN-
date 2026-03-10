@@ -2649,6 +2649,59 @@ def bootstrap_mycelium(repo_path: Path):
     generate_winter_tree(repo_path, file_count, m)
     install_hooks(repo_path)
 
+    # P40: Create branches from scanned files (not just root + mycelium)
+    _bootstrap_branches(repo_path, skip_dirs)
+
+
+def _bootstrap_branches(repo_path: Path, skip_dirs: set):
+    """P40: Create branches from repo docs during bootstrap.
+
+    Selects the most important markdown/text files (by size, descending),
+    compresses each with compress_file, and auto-segments into branches
+    via grow_branches_from_session. Caps at 20 files to keep bootstrap fast.
+    """
+    candidates = []
+    for pattern in ["**/*.md", "**/*.txt"]:
+        for f in repo_path.glob(pattern):
+            parts = f.relative_to(repo_path).parts
+            if any(p.startswith(".") or p in skip_dirs for p in parts):
+                continue
+            try:
+                size = f.stat().st_size
+                if 100 < size < 100_000:  # Skip tiny and huge files
+                    candidates.append((size, f))
+            except OSError:
+                continue
+
+    # Sort by size descending (bigger docs = more content), cap at 20
+    candidates.sort(reverse=True)
+    candidates = candidates[:20]
+
+    if not candidates:
+        return
+
+    mn_dir = TREE_DIR
+    mn_dir.mkdir(parents=True, exist_ok=True)
+
+    total_branches = 0
+    for _size, f in candidates:
+        try:
+            compressed = compress_file(f)
+            if len(compressed.strip()) < 30:
+                continue
+            mn_temp = mn_dir / f"_bootstrap_{f.stem}.mn"
+            mn_temp.write_text(compressed, encoding="utf-8")
+            created = grow_branches_from_session(mn_temp)
+            total_branches += created
+            if mn_temp.exists():
+                mn_temp.unlink()
+        except Exception as exc:
+            print(f"  WARNING: branch creation failed for {f.name}: {exc}", file=sys.stderr)
+            continue
+
+    if total_branches > 0:
+        print(f"  P40: {len(candidates)} docs -> {total_branches} branches created")
+
 
 def generate_root_mn(repo_path: Path, file_count: int, mycelium):
     """Generate root.mn in dense machine-optimal format (SOL.mn template)."""
