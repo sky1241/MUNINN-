@@ -2,7 +2,7 @@
 
 > *Odin's raven of memory — the one that always comes back.*
 
-LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 53 features, 11 compression layers (25 filters), 76 bugs squashed across 12 audit scans.
+LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 54 features, 11 compression layers (25 filters), 76 bugs squashed across 13 audit scans.
 
 **Measured result**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline, tiktoken). 92% fact retention (40-question benchmark).
 
@@ -160,13 +160,14 @@ API cost (Haiku): **$0.21** for 230 files.
 | 2 | Rule Extraction (L11) | Kolmogorov 1965 | Factor repeated patterns into rules |
 | 3 | Sleep Consolidation | Wilson & McNaughton 1994 | Merge cold branches before deletion |
 | 4 | Spreading Activation | Collins & Loftus 1975 | Semantic retrieval through co-occurrence network |
+| 5 | Spaced Repetition | Settles & Meeder 2016 (Ebbinghaus 1885) | Branch lifecycle via forgetting curve p = 2^(-delta/h) |
 
 ## Repo Structure
 
 ```
 engine/
   core/
-    muninn.py          Main engine (4575 lines, 72 functions)
+    muninn.py          Main engine (4578 lines, 72 functions)
     mycelium.py        Co-occurrence network (1134 lines)
     tokenizer.py       tiktoken wrapper with fallback
     watchdog.py        Scheduled task runner (55 lines)
@@ -200,6 +201,7 @@ docs/
 - Park, J.S. et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*.
 - Rao, R.P.N. & Ballard, D.H. (1999). Predictive coding in the visual cortex. *Nature Neuroscience*, 2(1).
 - Wilson, M.A. & McNaughton, B.L. (1994). Reactivation of hippocampal ensemble memories during sleep. *Science*, 265(5172).
+- Settles, B. & Meeder, B. (2016). A Trainable Spaced Repetition Model for Language Learning. *ACL 2016*, 1848-1858.
 - Jiang, H. et al. (2023). LLMLingua: Compressing Prompts for Accelerated Inference. *EMNLP 2023*.
 
 ## License

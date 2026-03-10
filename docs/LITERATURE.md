@@ -81,6 +81,18 @@ Refs additionnelles:
 - PCToolkit: github.com/3DAgentWorld/Toolkit-for-Prompt-Compression (IJCAI 2025)
 - ACON: arxiv.org/abs/2510.00615
 
+### Carmack Move #5: Spaced Repetition (Ebbinghaus 1885 / Settles 2016)
+
+| Papier | Idee cle | Application Muninn |
+|--------|----------|--------------------|
+| Ebbinghaus (1885) | Forgetting curve: memory decays over time unless rehearsed | Branch memory lifecycle — stability grows with each boot load |
+| Murdock (1960) | Exponential approximation: R = e^(-t/S) | Simpler model for branch recall probability |
+| Pimsleur (1967) | Graduated-interval recall schedule | Rehearsal slots at boot for branches near forgetting threshold |
+| Leitner (1972) | Box system: correct=advance, wrong=return | Loaded branches gain stability, unused branches decay |
+| Settles & Meeder (2016) | Half-life regression: p = 2^(-delta/h), trained on 13M Duolingo traces | Our formula — h doubles with each review, branch-level tracking |
+
+Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (doubles with each load at boot). Branch dies when p < 0.05.
+
 ## Ce qui est unique a Muninn (pas dans la litterature)
 
 - **Mycelium vivant** — codebook qui POUSSE par co-occurrence, decay biologique.
@@ -110,3 +122,8 @@ Refs additionnelles:
 - Word2Vec: arxiv.org/abs/1301.3781
 - GloVe: nlp.stanford.edu/projects/glove/
 - Norman: "The Design of Everyday Things" (1988)
+- Ebbinghaus: "Uber das Gedachtnis" (1885), Leipzig: Duncker & Humblot
+- Murdock: "The distinctiveness of stimuli" (1960), Psychological Review 67(1)
+- Pimsleur: "A memory schedule" (1967), Modern Language Journal 51(2), 73-75
+- Leitner: "So lernt man lernen" (1972), Verlag Herder
+- Settles & Meeder: "A Trainable Spaced Repetition Model for Language Learning" (2016), ACL 2016, 1848-1858

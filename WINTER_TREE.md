@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 75 bugs corriges (P10+SL+audit+P32fix+scan7-scan12)
-Engine: muninn.py 4575 lignes, 72 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
+Etat: 54 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus), 1 en roadmap (P21), 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
+Engine: muninn.py 4578 lignes, 72 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
 
@@ -491,6 +491,18 @@ Theorie: Wilson & McNaughton 1994 — consolidation episodique->semantique penda
 - [x] Integre dans prune(): cold branches fusionnees avant deletion des dead
 - [x] Teste: 2 branches codec (NCD=0.57) fusionnees, 1 architecture preservee
 - [x] Tags, access_count, children mis a jour dans l'arbre
+
+### Spaced Repetition (Carmack move #5) [FAIT]
+Theorie: Ebbinghaus 1885 (forgetting curve) + Settles & Meeder 2016 (half-life regression, ACL).
+Formule: p = 2^(-delta / h), h = 7 * 2^min(reviews, 10) jours.
+- [x] _ebbinghaus_recall(node) — calcule probabilite de rappel par branche
+- [x] _days_since(date_str) — utilitaire jours depuis derniere visite
+- [x] compute_temperature() reecrit: 80% recall + 20% fill_heat (etait 50% access + 30% recency + 20% fill)
+- [x] Boot scoring: recall remplace recency+importance, ajout rehearsal_need (branches pres du seuil d'oubli)
+- [x] Prune thresholds: R >= 0.4 = hot, R < 0.15 = cold, R < 0.05 = dead (etait temp-based)
+- [x] Poids boot: 0.15*recall + 0.40*relevance + 0.20*activation + 0.10*usefulness + 0.15*rehearsal_need
+- [x] Refs ajoutees dans docs/LITERATURE.md (5 papiers verifies)
+- [x] Tests: 4/4 PASS (unit test, status, prune, boot)
 
 ### Cleanup memory/ (2026-03-08)
 - [x] memory/root.mn et b00-b07.mn contenaient des donnees YGGDRASIL depuis le commit v0 (bc647da)

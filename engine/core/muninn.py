@@ -434,39 +434,50 @@ def compute_hash(filepath: Path) -> str:
     return hashlib.sha256(content).hexdigest()[:8]
 
 
+def _ebbinghaus_recall(node: dict) -> float:
+    """Spaced repetition recall probability (Settles & Meeder 2016).
+
+    p = 2^(-delta / h)
+
+    where delta = days since last access, h = half-life.
+    Half-life doubles with each review (load at boot), starting at 7 days.
+    A branch loaded 5 times has h = 7 * 2^5 = 224 days — very stable.
+    """
+    import math
+    delta = _days_since(node.get("last_access", "2026-01-01"))
+    reviews = node.get("access_count", 0)
+    half_life = 7.0 * (2 ** min(reviews, 10))  # cap at 2^10 to avoid overflow
+    if half_life <= 0:
+        return 0.0
+    return 2.0 ** (-delta / half_life)
+
+
+def _days_since(date_str: str) -> int:
+    """Days since a YYYY-MM-DD date string. Returns 90 on parse error."""
+    try:
+        return max(0, (datetime.now() - datetime.strptime(date_str, "%Y-%m-%d")).days)
+    except ValueError:
+        return 90
+
+
 def compute_temperature(node: dict) -> float:
-    """Temperature score: how "hot" is this node (0.0=frozen, 1.0=burning).
+    """Temperature score: how "hot" is this node (0.0=frozen, 1.0+=burning).
 
     Based on:
-    - access_count (more access = hotter)
-    - recency (accessed recently = hotter)
+    - Ebbinghaus recall probability (spaced repetition, Settles 2016)
     - fill ratio (fuller = hotter, needs attention)
 
-    Inspired by COCOM (2025): variable compression by importance.
-    Root 1.5x, hot branches 3x, cold leaves 6x.
+    The recall probability naturally encodes both recency and access count
+    through the half-life model: h = 7 * 2^reviews.
     """
-    access = node.get("access_count", 0)
-    last = node.get("last_access", "2026-01-01")
     fill = node.get("lines", 0) / max(node.get("max_lines", 1), 1)
-
-    # Recency: days since last access (0 = today)
-    try:
-        days_cold = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
-    except ValueError:
-        days_cold = 90
-
-    # Access heat: log scale, caps at ~1.0 for 10+ accesses
-    import math
-    access_heat = min(1.0, math.log1p(access) / math.log1p(10))
-
-    # Recency heat: 1.0 = today, decays to 0 over 90 days
-    recency_heat = max(0.0, 1.0 - days_cold / 90)
+    recall = _ebbinghaus_recall(node)
 
     # Fill pressure: nodes near budget get hotter (need split/compress)
     fill_heat = fill ** 2  # quadratic: only significant near full
 
-    # Weighted combination
-    temp = 0.5 * access_heat + 0.3 * recency_heat + 0.2 * fill_heat
+    # 80% recall-driven, 20% fill pressure
+    temp = 0.8 * recall + 0.2 * fill_heat
     return round(temp, 2)
 
 
@@ -2012,19 +2023,9 @@ def boot(query: str = "") -> str:
             if name == "root":
                 continue
 
-            # Recency: exponential decay (Ebbinghaus 1885)
-            # 0.995^hours: ~0.89 after 1 day, ~0.43 after 7 days, ~0.03 after 30 days
-            last = node.get("last_access", "2026-01-01")
-            try:
-                days_cold = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
-            except ValueError:
-                days_cold = 90
-            recency = 0.995 ** (days_cold * 24)
-
-            # Importance: log-scaled access count
-            import math
-            access = node.get("access_count", 0)
-            importance = min(1.0, math.log1p(access) / math.log1p(10))
+            # Recall probability (Ebbinghaus/Settles spaced repetition)
+            # Encodes both recency AND access count in one principled metric
+            recall = _ebbinghaus_recall(node)
 
             # Relevance: TF-IDF cosine similarity
             relevance = relevance_scores.get(name, 0.0)
@@ -2035,8 +2036,10 @@ def boot(query: str = "") -> str:
             # P36: Usefulness — feedback from past sessions (0.5 = neutral default)
             usefulness = node.get("usefulness", 0.5)
 
-            # Weighted: 0.1*recency + 0.1*importance + 0.45*relevance + 0.2*activation + 0.15*usefulness
-            total = 0.1 * recency + 0.1 * importance + 0.45 * relevance + 0.2 * activation + 0.15 * usefulness
+            # Weighted: 0.15*recall + 0.40*relevance + 0.20*activation + 0.10*usefulness + 0.15*rehearsal_need
+            # Rehearsal need: branches near forgetting threshold (0.1 < R < 0.3) need review
+            rehearsal_need = max(0.0, 1.0 - abs(recall - 0.2) / 0.2) if 0.05 < recall < 0.4 else 0.0
+            total = 0.15 * recall + 0.40 * relevance + 0.20 * activation + 0.10 * usefulness + 0.15 * rehearsal_need
             if total > 0.01:
                 scored.append((name, total))
 
@@ -2460,23 +2463,23 @@ def prune(dry_run: bool = True):
     for name, node in branches.items():
         temp = node.get("temperature", 0)
         acc = node.get("access_count", 0)
-        last = node.get("last_access", "2026-01-01")
-        try:
-            days_ago = (datetime.now() - datetime.strptime(last, "%Y-%m-%d")).days
-        except ValueError:
-            days_ago = 90
+        recall = _ebbinghaus_recall(node)
+        days_ago = _days_since(node.get("last_access", "2026-01-01"))
 
-        if temp >= 0.4:
+        # Spaced repetition thresholds (Settles 2016):
+        # R > 0.4 = hot (strong recall), R < 0.05 = dead (forgotten)
+        # 0.05 <= R < 0.15 = cold (fading, candidate for re-compression)
+        if recall >= 0.4:
             hot.append((name, temp))
-            print(f"  HOT  {name}: t={temp:.2f} acc={acc}")
-        elif temp == 0 and days_ago >= 90:
+            print(f"  HOT  {name}: R={recall:.2f} t={temp:.2f} h={7*(2**min(acc,10)):.0f}d acc={acc}")
+        elif recall < 0.05:
             dead.append((name, days_ago))
-            print(f"  DEAD {name}: t={temp:.2f} cold {days_ago}d")
-        elif temp < 0.1 and days_ago >= 30:
+            print(f"  DEAD {name}: R={recall:.3f} t={temp:.2f} cold {days_ago}d")
+        elif recall < 0.15:
             cold.append((name, days_ago))
-            print(f"  COLD {name}: t={temp:.2f} cold {days_ago}d")
+            print(f"  COLD {name}: R={recall:.2f} t={temp:.2f} cold {days_ago}d")
         else:
-            print(f"  OK   {name}: t={temp:.2f} acc={acc}")
+            print(f"  OK   {name}: R={recall:.2f} t={temp:.2f} acc={acc}")
 
     recompressed = 0
     if not dry_run:
