@@ -3810,7 +3810,7 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
                             if isinstance(part, dict) and part.get("type") == "text":
                                 words = re.findall(r'[a-zA-Z]{4,}', part["text"].lower())
                                 session_concepts.update(words)
-                except (json.JSONDecodeError, KeyError, TypeError):
+                except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
                     continue
     except OSError:
         return
