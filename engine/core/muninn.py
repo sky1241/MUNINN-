@@ -4406,6 +4406,7 @@ def main():
     parser.add_argument("--no-l9", action="store_true", help="Skip L9 (LLM API) — use only free layers")
     parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
                         help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
+    parser.add_argument("--force", action="store_true", help="Force operation (e.g., prune without dry-run)")
 
     args = parser.parse_args()
 
@@ -4456,7 +4457,13 @@ def main():
         return
 
     if args.command == "feed":
-        repo = Path(args.repo or args.file or ".").resolve()
+        # --repo is authoritative. For direct file mode without --repo, use CWD (not the JSONL path).
+        if args.repo:
+            repo = Path(args.repo).resolve()
+        elif args.file and Path(args.file).suffix == ".jsonl":
+            repo = Path(".").resolve()  # don't use JSONL path as repo
+        else:
+            repo = Path(args.file or ".").resolve()
         _REPO_PATH = repo
         _refresh_tree_paths()
         if args.watch:
@@ -4511,8 +4518,7 @@ def main():
         return
 
     if args.command == "prune":
-        force = args.file == "--force"
-        prune(dry_run=not force)
+        prune(dry_run=not args.force)
         return
 
     if args.command == "decode":

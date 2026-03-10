@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 73 bugs corriges (P10+SL+audit+P32fix+scan7-scan11)
-Engine: muninn.py 4569 lignes, 72 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
+Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 75 bugs corriges (P10+SL+audit+P32fix+scan7-scan12)
+Engine: muninn.py 4575 lignes, 72 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
 
@@ -250,6 +250,10 @@ Ce que Muninn a que les autres n'ont pas:
   - CORRUPTION: _register_repo atomic write (tempfile + os.replace, was write_text)
   - POLLUTION: sys.path.insert dedup (9 sites insertaient le meme path indefiniment)
   - Total: 6 bugs fixes (dont 2 race, 2 data loss, 1 corruption, 1 pollution)
+- [x] Scan 12 (2026-03-10, CLI argument parsing):
+  - CLI: prune --force cassé (argparse rejetait --force) — now proper --force flag
+  - CLI: feed <file.jsonl> sans --repo utilisait le JSONL comme repo path — now CWD fallback
+  - Total: 2 bugs fixes
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn
