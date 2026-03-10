@@ -2,8 +2,8 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 67 bugs corriges (P10+SL+audit+P32fix+scan7+scan8+scan9+scan10)
-Engine: muninn.py 4523 lignes, 71 fonctions + mycelium.py 1131 lignes + watchdog.py 53 lignes
+Etat: 53 briques vivantes (P0-P38 + P41 + P20c + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation), 1 en roadmap (P21), 3 supprimees (P3), 73 bugs corriges (P10+SL+audit+P32fix+scan7-scan11)
+Engine: muninn.py 4569 lignes, 72 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
 
@@ -242,6 +242,14 @@ Ce que Muninn a que les autres n'ont pas:
   - COSMETIC: bloom comment said 10% but code was 5% — comment fixed
   - FIX: watchdog subprocess window spam — pythonw.exe + CREATE_NO_WINDOW
   - Total: 10 bugs fixes (dont 2 data, 2 crash, 1 silent death, 1 corruption, 1 perf, 1 Windows, 1 cosmetic, 1 UX)
+- [x] Scan 11 (2026-03-10, suite scan 10 — hooks concurrency hardening):
+  - RACE: feed_from_hook now locked (meme lock "hook" que stop_hook — interlocking)
+  - RACE: feed_watch now locked (meme lock "hook" — prevent concurrent watch+hook)
+  - DATA LOSS: feed_watch saves state per-file (was all-or-nothing, crash = re-process all)
+  - DATA LOSS: feed_watch wraps each file in try/except (1 crash doesn't kill all)
+  - CORRUPTION: _register_repo atomic write (tempfile + os.replace, was write_text)
+  - POLLUTION: sys.path.insert dedup (9 sites insertaient le meme path indefiniment)
+  - Total: 6 bugs fixes (dont 2 race, 2 data loss, 1 corruption, 1 pollution)
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn

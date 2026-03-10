@@ -99,7 +99,7 @@ def load_codebook(repo_path: Path = None) -> dict:
     learned_abbreviations = {}
     if repo_path:
         try:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
             from mycelium import Mycelium
             m = Mycelium(repo_path)
             mycelium_rules = m.get_compression_rules()
@@ -121,6 +121,7 @@ _CB = None
 _CB_REPO = None
 _REPO_PATH = None
 _SKIP_L9 = False
+_CORE_DIR = str(Path(__file__).resolve().parent)
 
 # Secret patterns — applied in compress_file and compress_transcript
 _SECRET_PATTERNS = [
@@ -1950,7 +1951,7 @@ def boot(query: str = "") -> str:
     if query:
         # P15: Query expansion via mycelium co-occurrences
         try:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
             from mycelium import Mycelium
             m = Mycelium(_REPO_PATH or Path("."))
 
@@ -2602,7 +2603,7 @@ def bootstrap_mycelium(repo_path: Path):
     repo_path = repo_path.resolve()
     print(f"=== MUNINN BOOTSTRAP: {repo_path.name} ===")
 
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
     from mycelium import Mycelium
 
     m = Mycelium(repo_path)
@@ -2868,7 +2869,23 @@ def _register_repo(repo_path: Path):
     repos[repo_key] = repo_str
     registry["repos"] = repos
     registry["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    reg_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
+    # Atomic write to prevent concurrent hook corruption
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=str(reg_path.parent), suffix=".tmp")
+    try:
+        os.write(fd, json.dumps(registry, indent=2, ensure_ascii=False).encode("utf-8"))
+        os.close(fd)
+        os.replace(tmp, str(reg_path))
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     print(f"  Repo registered: {repo_key} -> {repo_str}")
 
 
@@ -3259,7 +3276,7 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
 
 def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     """Feed the mycelium from a single transcript JSONL file."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
     from mycelium import Mycelium
 
     m = Mycelium(repo_path)
@@ -3905,6 +3922,14 @@ def feed_from_hook(repo_path: Path):
 
     print(f"MUNINN {hook_event}: processing {jsonl_path.name} for {repo_path.name}", file=sys.stderr)
 
+    # Lock to prevent concurrent hooks (Stop + PreCompact) from racing on tree.json
+    try:
+        lock = _MuninnLock(repo_path, "hook", timeout=120)
+        lock.__enter__()
+    except TimeoutError:
+        print(f"MUNINN {hook_event}: lock timeout, skipping", file=sys.stderr)
+        return
+
     try:
         # 0. P36: Update usefulness scores before anything modifies the tree
         _update_usefulness(repo_path, jsonl_path)
@@ -3927,7 +3952,7 @@ def feed_from_hook(repo_path: Path):
 
         # 5. P20b: Sync to meta-mycelium (cross-repo memory)
         try:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
             from mycelium import Mycelium
             m = Mycelium(repo_path)
             pushed = m.sync_to_meta()
@@ -3942,6 +3967,8 @@ def feed_from_hook(repo_path: Path):
         print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
+    finally:
+        lock.__exit__(None, None, None)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -3981,7 +4008,7 @@ def feed_from_stop_hook(repo_path: Path):
 
     # Lock to prevent concurrent stop hooks from racing
     try:
-        lock = _MuninnLock(repo_path, "stop_hook", timeout=120)
+        lock = _MuninnLock(repo_path, "hook", timeout=120)
         lock.__enter__()
     except TimeoutError:
         print("MUNINN STOP: lock timeout, skipping", file=sys.stderr)
@@ -4041,7 +4068,7 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
 
     # 5. Sync to meta-mycelium
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
         from mycelium import Mycelium
         m = Mycelium(repo_path)
         pushed = m.sync_to_meta()
@@ -4068,7 +4095,7 @@ def feed_history(repo_path: Path):
     Scans ~/.claude/projects/<project>/ for .jsonl files and digests them.
     Tracks which files have been digested in .muninn/fed_transcripts.json.
     """
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
     from mycelium import Mycelium
 
     # Find the project's transcript directory
@@ -4232,41 +4259,60 @@ def feed_watch(repo_path: Path):
 
     print(f"MUNINN WATCH: {len(changed)} transcript(s) changed")
 
-    for jsonl_path in changed:
-        _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
-
-        # Feed mycelium
-        count = feed_from_transcript(jsonl_path, repo_path)
-        print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
-
-        # Compress transcript
-        mn_path = compress_transcript(jsonl_path, repo_path)
-
-        # Auto-segment into branches
-        if mn_path:
-            grow_branches_from_session(mn_path)
-
-    # Refresh tree
-    tree = load_tree()
-    refresh_tree_metadata(tree)
-    save_tree(tree)
-
-    # Sync to meta-mycelium
+    # Lock to prevent concurrent watch + hook from racing
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from mycelium import Mycelium
-        m = Mycelium(repo_path)
-        pushed = m.sync_to_meta()
-        print(f"  SYNC: {pushed} connections -> meta-mycelium")
-    except Exception as e:
-        print(f"  SYNC warning: {e}", file=sys.stderr)
+        lock = _MuninnLock(repo_path, "hook", timeout=120)
+        lock.__enter__()
+    except TimeoutError:
+        print("MUNINN WATCH: lock timeout, skipping", file=sys.stderr)
+        return
 
-    _register_repo(repo_path)
+    fed_count = 0
+    try:
+        for jsonl_path in changed:
+            try:
+                _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
 
-    # Save watch state
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-    _hook_log(repo_path, f"WATCH done: {len(changed)} transcript(s) fed")
+                # Feed mycelium
+                count = feed_from_transcript(jsonl_path, repo_path)
+                print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
+
+                # Compress transcript
+                mn_path = compress_transcript(jsonl_path, repo_path)
+
+                # Auto-segment into branches
+                if mn_path:
+                    grow_branches_from_session(mn_path)
+                fed_count += 1
+            except Exception as e:
+                print(f"  WATCH error on {jsonl_path.name}: {e}", file=sys.stderr)
+                _hook_log(repo_path, f"WATCH error {jsonl_path.name}: {e}")
+
+            # Save state after each file so progress isn't lost on crash
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+        if fed_count > 0:
+            # Refresh tree
+            tree = load_tree()
+            refresh_tree_metadata(tree)
+            save_tree(tree)
+
+            # Sync to meta-mycelium
+            try:
+                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+                from mycelium import Mycelium
+                m = Mycelium(repo_path)
+                pushed = m.sync_to_meta()
+                print(f"  SYNC: {pushed} connections -> meta-mycelium")
+            except Exception as e:
+                print(f"  SYNC warning: {e}", file=sys.stderr)
+
+            _register_repo(repo_path)
+    finally:
+        lock.__exit__(None, None, None)
+
+    _hook_log(repo_path, f"WATCH done: {fed_count}/{len(changed)} transcript(s) fed")
 
 
 def ingest(filepath: Path, repo_path: Path):
@@ -4321,7 +4367,7 @@ def ingest(filepath: Path, repo_path: Path):
         print(f"  {f.name}: {len(content)} -> {len(compressed)} chars (x{ratio:.1f}), {created} branches")
 
     # Nourrit aussi le mycelium avec le contenu
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
     from mycelium import Mycelium
     m = Mycelium(repo_path)
     m.start_session()
