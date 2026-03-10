@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 56 briques vivantes (P0-P40 + P41 + P20c + P21 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus), 0 en roadmap, 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
+Etat: 56 briques vivantes (P0-P40 + P41 + P20c + P21 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus) + scan cross-domaine, 0 en roadmap, 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
 Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
@@ -692,11 +692,39 @@ Difference avec Yggdrasil: Ygg cherche par metadonnees objectives. Muninn cherch
 Yggdrasil construit la liste. Muninn l'avale. Le champignon pousse dessus.
 Pas prioritaire. Apres WT3.
 
-### P21 — pip install muninn [TODO — GROS]
-- [ ] pyproject.toml + setup
-- [ ] Entry point CLI: `muninn bootstrap .`
-- [ ] README install instructions
-- [ ] Publier sur PyPI
+### Scan Cross-Domaine Muninn x Yggdrasil (session 2026-03-10) [FAIT]
+Recherche: quels domaines scientifiques utilisent les MEMES equations que Muninn?
+Methode: scan Uzzi z-scores (172K paires, 65K concepts) + scan glyphes WT2 (833K papers) + web (80 sources).
+7 isomorphismes confirmes entre formules Muninn et domaines etrangers:
+
+| # | Muninn | Domaine etranger | Score | Source |
+|---|--------|-----------------|-------|--------|
+| 1 | F3 TF-IDF | Replicateur-mutateur (bio evo) | 19/20 | cond-mat/0004072 |
+| 2 | F8 Decay+cooc | Lotka-Volterra (ecologie) | 19/20 | nlin/0009025 |
+| 3 | F3 TF-IDF | Entropie AA positionnelle (biochimie) | 19/20 | physics/0012003 |
+| 4 | F4+F8 Spreading+Decay | Quasispecies sigmoid (evolution) | ISOMORPHE | cond-mat/0202047 |
+| 5 | F1 Ebbinghaus | Affinity maturation (immunologie) | 18/20 | PNAS+Science 2022 |
+| 6 | F5 EMA | EWMA finance | 18/20 | standard + cond-mat/0001117 |
+| 7 | F1 Ebbinghaus | Arbesman demi-vie faits | 17/20 | Arbesman 2012 |
+
+Chiffres cles:
+- 128 anti-signaux P5 (portes secretes entre domaines)
+- 22/23 Type C en Cell Biology (plus gros blind spot)
+- 30 equations LaTeX, 60+ variables mappees 1:1
+- docs/FORMULES_ETRANGERES.md = compilation finale (7 pistes, mappings, verdicts)
+- docs/SCAN_MUNINN_YGG.md = synthese 3 couches (Uzzi + web + glyphes)
+- docs/RECHERCHE_WEB_PISTES.md = 10 pistes web evaluees
+- docs/PROMPT_YGG_*.md = 3 prompts pour le cousin Yggdrasil
+
+Insight: les formules de Muninn ne sont pas des inventions CS — ce sont des structures
+universelles que la biologie, l'evolution, l'ecologie et la finance ont decouvertes
+independamment. Darwin = Muninn.
+
+### P21 — PyPI publish [TODO]
+- [x] pyproject.toml + setup (FAIT, ligne 516)
+- [x] Entry points CLI: muninn + mycelium (FAIT)
+- [x] pip install -e . teste OK (FAIT)
+- [ ] Publier sur PyPI (pas encore fait)
 
 ### Concurrence mise a jour (mars 2026)
 - Mem0 (90K stars, $24M YC): graph+vector+KV, memory taxonomy, hosted service
