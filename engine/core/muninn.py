@@ -2225,6 +2225,17 @@ def boot(query: str = "") -> str:
                      w_activation * activation + w_usefulness * usefulness +
                      w_rehearsal * rehearsal_need)
 
+            # V7B: ACO pheromone scoring (Dorigo, Maniezzo, Colorni 1996)
+            # p_ij = tau^alpha * eta^beta — combines history (tau) and local relevance (eta)
+            # tau = usefulness * recall (pheromone = past success * freshness)
+            # eta = relevance (heuristic = current query match)
+            # alpha=1, beta=2 (beta>alpha = favor local relevance over history)
+            tau = max(0.01, usefulness * recall_blended)  # pheromone deposit
+            eta = max(0.01, relevance)  # local heuristic
+            aco_score = min(1.0, tau * (eta ** 2))  # tau^1 * eta^2, clamped
+            # Blend: 80% original + 20% ACO (ACO amplifies high-relevance + high-history)
+            total = 0.8 * total + 0.2 * aco_score
+
             # B3: Blind spot bonus — branches covering structural holes get +0.05
             tags = set(node.get("tags", []))
             if tags & blind_spot_concepts:
