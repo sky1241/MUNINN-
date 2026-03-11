@@ -159,6 +159,69 @@ Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (d
     Manque: mode divergent — laisser le reseau explorer connexions improbables entre clusters distants.
     La psilocybine pousse SUR du mycelium. C'etait dans le nom depuis le debut.
 
+### Formules du vrai champignon — BARE Wave Model (Nature 2025, session 2026-03-11)
+
+Le vrai mycelium pousse selon ces equations differentielles (Nature 2025, travelling-wave strategy):
+
+```
+dn/dt = alpha*n - beta*n*rho + div(J(n))     # tips: naissent, fusionnent, bougent
+drho/dt = v*n                                  # filaments: les tips laissent une trace
+```
+
+Variables:
+- n = densite de tips (pointes exploratrices, mm^-2)
+- rho = densite d'hyphes (reseau etabli, um/mm^2)
+- alpha = taux de branchement (~0.04/h = 4%/h) — EXPLORATION
+- beta = taux d'anastomose/fusion (~23 um/h) — EXPLOITATION
+- v = vitesse des tips (~200 um/h)
+- rho_sat ~ 1000 um/mm^2 (auto-regulation: branching = anastomose)
+
+Auto-regulation: quand rho monte (reseau dense), beta*n*rho tue les tips → exploitation.
+Quand rho bas (territoire vierge), tips proliferent → exploration pure.
+La psilocybine = baisser beta temporairement → tips explorent sans fusionner.
+
+Entropie (Carhart-Harris 2014): H = -sum(p * log(p)) sur motifs de connectivite.
+Psychedelique = haute entropie = plus de motifs uniques = dissolution du Default Mode Network.
+
+Traduction Muninn:
+| Biologie          | Muninn                                          |
+|-------------------|-------------------------------------------------|
+| tips (n)          | connexions exploratoires nouvelles               |
+| hyphes (rho)      | connexions etablies (count eleve)                |
+| alpha (branching)  | taux creation liens cross-cluster                |
+| beta (anastomose) | taux fusion quand rejoint cluster existant        |
+| rho_sat           | MAX_CONNECTIONS / densite locale                 |
+| psilocybine       | baisser beta → tips explorent sans fusionner     |
+| entropie H        | diversite des motifs de connectivite             |
+
+Sources:
+- Nature 2025: "A travelling-wave strategy for plant-fungal trade" (PMC11882455)
+- Carhart-Harris 2014: "The entropic brain" (PMC3909994)
+- Microbiology Spectrum 2017: "The Mycelium as a Network" (PMC11687498)
+- IMA Fungus 2011: "Mathematical modelling of fungal growth" (PMC3317364)
+- ISME 2021: "Network traits predict ecological strategies in fungi"
+
+### Plan HUGINN — Muninn stocke, Huginn pense (session 2026-03-11)
+
+3 briques, meme code genetique que le vrai champignon:
+
+H1: Mode trip (psilocybine) — trip() dans mycelium.py
+    Trouve clusters distants, cree connexions exploratoires faibles entre eux.
+    Modele BARE Wave: alpha*n cree, beta*n*rho fusionne, auto-regulation.
+    Connexions marquees "dream" (type special, decay rapide si pas renforcees).
+    Se declenche dans prune() / sleep consolidation.
+
+H2: Synthese/reve — dream() genere des insights pendant sleep
+    Analyse patterns temporels cross-sessions.
+    Detecte correlations ("chaque fois X puis Y"), anomalies, contradictions.
+    Ecrit dans .muninn/insights.json, surface au boot comme P18.
+
+H3: Huginn CLI — muninn.py think
+    Formule les insights en langage naturel.
+    "Tu parles de X depuis 5 sessions mais jamais connecte a Y"
+    "Chaque fois que debug, ensuite refactor"
+    "Connexion improbable trouvee: A-B-C (score 0.7)"
+
 ### LA BRIQUE — Liane Muninn x Yggdrasil (session 2026-03-10)
 
 26. **Mycelium = ce que TU penses** (tes concepts, connexions, angles morts)

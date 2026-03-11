@@ -819,12 +819,43 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 
 **Reste a faire**:
 - P21: publier sur PyPI (pyproject.toml pret)
-- Mode trip divergent (LITERATURE.md #25): exploration improbable entre clusters distants (Carhart-Harris 2012)
-- Synthese/reve (LITERATURE.md #10): generer nouvelles connexions pendant sleep consolidation
-- Huginn (LITERATURE.md #22): "Muninn stocke, Huginn pense" — synthese et insights
 - P31: full arXiv run (attend WT3)
 - P39: liane Yggdrasil (attend WT3)
 - Explication A-Z du systeme pour Sky
+
+### Plan HUGINN — "Muninn stocke, Huginn pense" (session 2026-03-11) [EN COURS]
+
+Base scientifique: BARE Wave Model (Nature 2025) + Entropic Brain (Carhart-Harris 2014).
+Le vrai champignon: dn/dt = alpha*n - beta*n*rho (tips naissent, fusionnent avec le reseau).
+La psilocybine: baisser beta → tips explorent sans fusionner → entropie monte.
+
+| # | Brique | Description | Difficulte | ~Lignes |
+|---|--------|-------------|-----------|---------|
+| H1 | Mode trip | trip() — connexions exploratoires cross-cluster (BARE Wave alpha/beta) | Moyen | ~80 |
+| H2 | Synthese/reve | dream() — patterns temporels + insights pendant sleep consolidation | Moyen | ~100 |
+| H3 | Huginn CLI | think + CLI — formule insights en langage naturel, surface au boot | Moyen | ~120 |
+
+H1: trip() dans mycelium.py
+- Trouve clusters distants (reutilise detect_zones/spectral)
+- Cree connexions exploratoires entre concepts de clusters differents
+- Marquees type="dream", decay rapide si pas renforcees par usage reel
+- Auto-regulation BARE Wave: alpha*n cree, beta*n*rho limite (quand rho dense, moins de tips)
+- Entropie H = -sum(p*log(p)) sur distribution des degres → mesure avant/apres
+- Se declenche dans prune() ou CLI `muninn.py trip`
+
+H2: dream() dans mycelium.py
+- Pendant sleep consolidation, analyse patterns cross-sessions
+- Detecte correlations temporelles: "X toujours suivi de Y"
+- Detecte absences: "X et Y jamais connectes mais relient Z"
+- Ecrit .muninn/insights.json (timestamp, type, concepts, score, text)
+- Insights surfacees au boot comme P18 error/fix pairs
+
+H3: huginn_think() dans muninn.py + CLI
+- Lit insights.json + analyse live du graphe
+- Formule en langage naturel: "Tu parles de X depuis 5 sessions..."
+- CLI: `muninn.py think` — affiche top insights
+- Boot: top 3 insights affiches si pertinents a la query
+- Le deuxieme corbeau d'Odin prend vie
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
