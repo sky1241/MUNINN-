@@ -1132,19 +1132,26 @@ class Mycelium:
 
         Returns dict {long_form: short_form}.
         """
-        fusions = self.get_fusions()
-        if not fusions:
-            return {}
-
         abbrevs = {}
-        for key, fusion in fusions.items():
-            if fusion["strength"] >= 8:
-                a, b = fusion["concepts"]
-                # Only abbreviate when short is a prefix of long
-                # (e.g., "comp" is prefix of "compression")
-                long, short = (a, b) if len(a) > len(b) else (b, a)
-                if long.startswith(short) and len(short) >= 3:
-                    abbrevs[long] = short
+        if self._db is not None:
+            # SQL-native: only fetch strong fusions (strength >= 8)
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute(
+                "SELECT a, b, strength FROM fusions WHERE strength >= 8"
+            ):
+                a = id_to_name.get(row[0], self._db._concept_name(row[0]))
+                b = id_to_name.get(row[1], self._db._concept_name(row[1]))
+                long_form, short = (a, b) if len(a) > len(b) else (b, a)
+                if long_form.startswith(short) and len(short) >= 3:
+                    abbrevs[long_form] = short
+        else:
+            fusions = self.get_fusions()
+            for key, fusion in fusions.items():
+                if fusion["strength"] >= 8:
+                    a, b = fusion["concepts"]
+                    long_form, short = (a, b) if len(a) > len(b) else (b, a)
+                    if long_form.startswith(short) and len(short) >= 3:
+                        abbrevs[long_form] = short
         return abbrevs
 
     def start_session(self):

@@ -99,6 +99,8 @@ class MyceliumDB:
             CREATE INDEX IF NOT EXISTS idx_edges_b ON edges(b);
             CREATE INDEX IF NOT EXISTS idx_edges_count ON edges(count);
             CREATE INDEX IF NOT EXISTS idx_edges_last_seen ON edges(last_seen);
+            CREATE INDEX IF NOT EXISTS idx_fusions_a ON fusions(a);
+            CREATE INDEX IF NOT EXISTS idx_fusions_b ON fusions(b);
             CREATE INDEX IF NOT EXISTS idx_fusions_strength ON fusions(strength);
             CREATE INDEX IF NOT EXISTS idx_edge_zones_zone ON edge_zones(zone);
         """)
@@ -531,14 +533,22 @@ class MyceliumDB:
         return row[0] if row else 0
 
     def all_degrees(self) -> dict[str, int]:
-        """Get degree for all concepts. Returns {name: degree}."""
+        """Get degree for all concepts. Returns {name: degree}.
+
+        Uses SQL aggregation — O(1) Python, all work done by SQLite engine.
+        """
         id_to_name = {v: k for k, v in self._concept_cache.items()}
         degree = {}
-        for row in self._conn.execute("SELECT a, b FROM edges"):
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
-            degree[a_name] = degree.get(a_name, 0) + 1
-            degree[b_name] = degree.get(b_name, 0) + 1
+        # UNION ALL: count each edge for both endpoints
+        for row in self._conn.execute("""
+            SELECT concept_id, SUM(cnt) as degree FROM (
+                SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
+                UNION ALL
+                SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
+            ) GROUP BY concept_id
+        """):
+            name = id_to_name.get(row[0], self._concept_name(row[0]))
+            degree[name] = row[1]
         return degree
 
     def neighbors(self, concept: str, top_n: int = None) -> list[tuple[str, int]]:
