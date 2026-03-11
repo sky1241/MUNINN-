@@ -2087,10 +2087,11 @@ def boot(query: str = "") -> str:
             except (json.JSONDecodeError, OSError):
                 pass
 
-    # Defaults for variables set inside the query block (C2, B3, B4)
+    # Defaults for variables set inside the query block (C2, B3, B4, V8B)
     blind_spot_concepts = set()
     blind_spots = []
     prediction_scores = {}
+    scored = []
 
     if query:
         # P15: Query expansion via mycelium co-occurrences
@@ -3366,38 +3367,129 @@ def prune(dry_run: bool = True):
         except Exception as e:
             print(f"  H1/H2 skipped: {e}", file=sys.stderr)
 
-        # V9A: Bioelectric regeneration (Shomrat & Levin 2013)
-        # Before deleting dead branches, diffuse their concepts to survivors
-        # via mycelium gap junctions. Information fragments survive in neighbors.
-        # dV_i/dt = -g_leak*(V_i - E_leak) + sum_j g_gap*(V_j - V_i)
-        _regen_count = 0
+        # V9A+: Fact-level regeneration (Shomrat & Levin 2013)
+        # Before deleting dead branches, extract tagged facts (D>/B>/F>/E>/A>)
+        # from the dying .mn file and inject them into the closest surviving branch.
+        # The content survives, not just the tag labels.
+        _regen_tag_re = re.compile(r'^[DBFEA]>\s')
+        _regen_facts_total = 0
+        _regen_tags_total = 0
         try:
             if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
             from mycelium import Mycelium
             m_regen = Mycelium(_REPO_PATH or Path("."))
             surviving = {n for n in nodes if n != "root" and n not in dict(dead)}
+            dead_set = {n for n, _ in dead}
+
             for name, days in dead:
                 if name not in nodes:
                     continue
-                dead_tags = set(nodes[name].get("tags", []))
-                if not dead_tags:
-                    continue
-                # Find surviving neighbors via mycelium
-                for dtag in list(dead_tags)[:5]:  # top 5 tags
-                    related = m_regen.get_related(dtag, top_n=5)
+                dead_node = nodes[name]
+                dead_tags = set(dead_node.get("tags", []))
+                dead_filepath = TREE_DIR / dead_node.get("file", "")
+
+                # --- Step 1: Read .mn file and extract tagged facts ---
+                facts = []
+                if dead_filepath.exists():
+                    try:
+                        content = dead_filepath.read_text(encoding="utf-8")
+                        for line in content.split("\n"):
+                            stripped = line.strip()
+                            if _regen_tag_re.match(stripped):
+                                facts.append(stripped)
+                            # Also harvest facts from prior REGEN sections (transitive)
+                    except (OSError, UnicodeDecodeError):
+                        pass  # fallback to tag-only diffusion
+
+                # --- Step 2: Find best surviving branch ---
+                best_survivor = None
+                best_score = -1
+
+                # Strategy A: mycelium proximity
+                for dtag in list(dead_tags)[:5]:
+                    related = m_regen.get_related(dtag, top_n=10)
                     for concept, strength in related:
-                        # Find a surviving branch that has this concept
                         for sname in surviving:
                             stags = set(nodes[sname].get("tags", []))
-                            if concept in stags and dtag not in stags:
-                                # Diffuse: add ghost tag to surviving branch
-                                nodes[sname].setdefault("tags", []).append(dtag)
-                                _regen_count += 1
-                                break  # one recipient per concept
-            if _regen_count > 0:
-                print(f"  V9A REGEN: {_regen_count} concepts diffused to survivors")
+                            if concept in stags:
+                                if strength > best_score:
+                                    best_score = strength
+                                    best_survivor = sname
+
+                # Strategy B: most tags in common
+                if best_survivor is None and dead_tags:
+                    max_overlap = 0
+                    for sname in surviving:
+                        stags = set(nodes[sname].get("tags", []))
+                        overlap = len(dead_tags & stags)
+                        if overlap > max_overlap:
+                            max_overlap = overlap
+                            best_survivor = sname
+
+                # Strategy C: most recently accessed surviving branch
+                if best_survivor is None:
+                    latest_access = ""
+                    for sname in surviving:
+                        la = nodes[sname].get("last_access", "")
+                        if la > latest_access:
+                            latest_access = la
+                            best_survivor = sname
+
+                if best_survivor is None:
+                    continue  # no survivors at all
+
+                # --- Step 3: Inject facts into survivor .mn ---
+                if facts:
+                    survivor_node = nodes[best_survivor]
+                    survivor_filepath = TREE_DIR / survivor_node.get("file", "")
+                    if survivor_filepath.exists():
+                        try:
+                            survivor_content = survivor_filepath.read_text(encoding="utf-8")
+                        except (OSError, UnicodeDecodeError):
+                            survivor_content = ""
+                    else:
+                        survivor_content = ""
+
+                    # Dedup: don't inject facts already present in survivor
+                    existing_lines = set(l.strip() for l in survivor_content.split("\n"))
+                    new_facts = [f for f in facts if f not in existing_lines]
+
+                    if new_facts:
+                        # Build REGEN section
+                        regen_header = f"## REGEN: {name} ({time.strftime('%Y-%m-%d')})"
+                        # Check idempotency: if this exact REGEN header exists, skip
+                        if regen_header not in survivor_content:
+                            regen_block = "\n" + regen_header + "\n" + "\n".join(new_facts) + "\n"
+                            combined = survivor_content.rstrip() + regen_block
+
+                            # Resolve contradictions (stale numbers)
+                            combined = _resolve_contradictions(combined)
+
+                            # Budget check: if > 200 lines, recompress with L10+L11
+                            if combined.count("\n") > 200:
+                                combined = _cue_distill(combined)
+                                combined = _extract_rules(combined)
+
+                            survivor_filepath.write_text(combined, encoding="utf-8")
+                            _regen_facts_total += len(new_facts)
+
+                # --- Step 4: Tag diffusion (original V9A logic, always runs) ---
+                if dead_tags:
+                    for dtag in list(dead_tags)[:5]:
+                        related = m_regen.get_related(dtag, top_n=5)
+                        for concept, strength in related:
+                            for sname in surviving:
+                                stags = set(nodes[sname].get("tags", []))
+                                if concept in stags and dtag not in stags:
+                                    nodes[sname].setdefault("tags", []).append(dtag)
+                                    _regen_tags_total += 1
+                                    break
+
+            if _regen_facts_total > 0 or _regen_tags_total > 0:
+                print(f"  V9A+ REGEN: {_regen_facts_total} facts + "
+                      f"{_regen_tags_total} tags diffused to survivors")
         except Exception as e:
-            print(f"  V9A regen skipped: {e}", file=sys.stderr)
+            print(f"  V9A+ regen skipped: {e}", file=sys.stderr)
 
         for name, days in dead:
             if name not in nodes:
@@ -4670,6 +4762,17 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
             "n_negative": session_sentiment["n_negative"],
             "n_neutral": session_sentiment["n_neutral"],
         }
+        # V10B: Russell circumplex mapping — emotional label for the session
+        try:
+            from sentiment import circumplex_map
+            affect = circumplex_map(
+                session_sentiment["mean_valence"],
+                session_sentiment["mean_arousal"],
+            )
+            entry["sentiment"]["quadrant"] = affect["quadrant"]
+            entry["sentiment"]["label"] = affect["label"]
+        except (ImportError, Exception):
+            pass
 
     # Dedup by filename
     index = [e for e in index if e.get("file") != mn_path.name]
