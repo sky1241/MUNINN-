@@ -935,6 +935,13 @@ class Mycelium:
             Seeds themselves are excluded from results.
         """
         # Build adjacency index for fast lookup
+        # S3: Penalize high-degree hub concepts (top 5%) during propagation.
+        # Hub nodes connect to everything — without penalty, all queries converge
+        # to the same top-N results. Penalty: edges touching hubs get weight / 10.
+        if self._high_degree_cache is None:
+            self._high_degree_cache = self._get_high_degree_concepts()
+        hub_concepts = self._high_degree_cache
+        seed_lower = {s.lower().strip() for s in seeds}
         adj = {}  # concept -> [(neighbor, weight)]
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
@@ -944,6 +951,10 @@ class Mycelium:
                 if not a_name or not b_name:
                     continue
                 w = float(row[2])
+                # Penalize edges through hub concepts (unless they are seeds)
+                if (a_name in hub_concepts and a_name not in seed_lower) or \
+                   (b_name in hub_concepts and b_name not in seed_lower):
+                    w *= 0.1
                 adj.setdefault(a_name, []).append((b_name, w))
                 adj.setdefault(b_name, []).append((a_name, w))
         else:
@@ -956,6 +967,9 @@ class Mycelium:
                     continue
                 a, b = parts
                 w = float(val["count"])
+                if (a in hub_concepts and a not in seed_lower) or \
+                   (b in hub_concepts and b not in seed_lower):
+                    w *= 0.1
                 adj.setdefault(a, []).append((b, w))
                 adj.setdefault(b, []).append((a, w))
         if not adj:
@@ -1105,38 +1119,13 @@ class Mycelium:
     def get_learned_fillers(self) -> list[str]:
         """Identify filler words from the mycelium.
 
-        A filler = a word that appears in MANY connections but NEVER fuses.
+        DISABLED: Returns empty list. The L2 hardcoded filler list in compress_line()
+        already handles stop word removal. Mycelium-learned fillers caused critical
+        data loss — high-frequency domain words (boot, tree, compression, commit)
+        were incorrectly classified as fillers and stripped during compression.
+        See: Audit V4, BUG 8 (14346 words including all domain keywords).
         """
-        if self._db is not None:
-            degree = self._db.all_degrees()
-            if not degree:
-                return []
-            fused_concepts = set()
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b FROM fusions"):
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                fused_concepts.add(a_name)
-                fused_concepts.add(b_name)
-            return sorted(c for c, d in degree.items() if d >= 10 and c not in fused_concepts)
-        else:
-            conns = self.data["connections"]
-            fusions = self.data["fusions"]
-            if not conns:
-                return []
-            concept_conn_count = {}
-            for key in conns:
-                parts = key.split("|")
-                if len(parts) != 2:
-                    continue
-                a, b = parts
-                concept_conn_count[a] = concept_conn_count.get(a, 0) + 1
-                concept_conn_count[b] = concept_conn_count.get(b, 0) + 1
-            fused_concepts = set()
-            for key, fusion in fusions.items():
-                for c in fusion["concepts"]:
-                    fused_concepts.add(c)
-            return sorted(c for c, d in concept_conn_count.items() if d >= 10 and c not in fused_concepts)
+        return []
 
     def get_learned_abbreviations(self) -> dict:
         """Generate abbreviation rules from strong fusions.

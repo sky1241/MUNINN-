@@ -1113,8 +1113,14 @@ def compress_section(header: str, lines: list[str]) -> str:
     for pattern, code in sorted(state_words.items(), key=lambda x: len(x[0]), reverse=True):
         if pattern in header.upper():
             state = code
+            # Strip state word with dash prefix (e.g. "— COMPLETE")
             header = re.sub(
                 rf"\s*[—\-]+\s*{re.escape(pattern)}", "",
+                header, flags=re.IGNORECASE
+            )
+            # Also strip state word at end without dash (e.g. "x4.5 VALIDE")
+            header = re.sub(
+                rf"\s+{re.escape(pattern)}\s*$", "",
                 header, flags=re.IGNORECASE
             )
             break
