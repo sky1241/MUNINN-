@@ -27,6 +27,20 @@ import time
 from collections import Counter
 from pathlib import Path
 
+# Import mycelium_db — works both as package (from .mycelium_db) and standalone
+try:
+    from .mycelium_db import MyceliumDB, days_to_date, date_to_days, today_days
+    try:
+        from .mycelium_db import ConceptTranslator
+    except ImportError:
+        ConceptTranslator = None  # type: ignore[assignment,misc]
+except ImportError:
+    from mycelium_db import MyceliumDB, days_to_date, date_to_days, today_days  # type: ignore[no-redef]
+    try:
+        from mycelium_db import ConceptTranslator  # type: ignore[no-redef]
+    except ImportError:
+        ConceptTranslator = None  # type: ignore[assignment,misc]
+
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
@@ -122,7 +136,6 @@ class Mycelium:
 
     def _load_from_sqlite(self) -> dict:
         """Load mycelium data from SQLite database into memory dict."""
-        from .mycelium_db import MyceliumDB, days_to_date
         db = MyceliumDB(self.db_path)
         try:
             data = {
@@ -140,7 +153,6 @@ class Mycelium:
 
     def _migrate_json_to_sqlite(self):
         """Migrate mycelium.json to mycelium.db (one-time operation)."""
-        from .mycelium_db import MyceliumDB
         # This creates the .db and renames .json to .json.bak
         db = MyceliumDB.migrate_from_json(self.mycelium_path, self.db_path)
         db.set_meta("migration_complete", "1")
@@ -153,15 +165,14 @@ class Mycelium:
         S4 (TIER 3): Flushes pending translations before save.
         No temp files, no pretty-print explosion, crash-safe WAL.
         """
-        from .mycelium_db import MyceliumDB, date_to_days, today_days
         self.mycelium_dir.mkdir(exist_ok=True)
         self.data["updated"] = time.strftime("%Y-%m-%d")
 
         # S4: Flush pending translations before save
         try:
-            from .mycelium_db import ConceptTranslator
-            translator = ConceptTranslator.get()
-            translator.flush_pending()
+            if ConceptTranslator:
+                translator = ConceptTranslator.get()
+                translator.flush_pending()
         except Exception:
             pass
 
@@ -248,9 +259,9 @@ class Mycelium:
 
         # S4: Normalize non-English concepts to English
         try:
-            from .mycelium_db import ConceptTranslator
-            translator = ConceptTranslator.get()
-            clean = translator.normalize_concepts(clean)
+            if ConceptTranslator:
+                translator = ConceptTranslator.get()
+                clean = translator.normalize_concepts(clean)
         except Exception:
             pass  # Graceful: no tiktoken/anthropic = no translation
 
@@ -1211,8 +1222,6 @@ class Mycelium:
         - last_seen: latest
         - fusions: merge if exists in meta, add if new
         """
-        from .mycelium_db import MyceliumDB, date_to_days, today_days
-
         meta_db_p = self.meta_db_path()
         meta_json_p = self.meta_path()
         meta_db_p.parent.mkdir(exist_ok=True)
@@ -1311,8 +1320,6 @@ class Mycelium:
 
     def _pull_from_meta_sqlite(self, query_concepts, max_pull):
         """Pull from SQLite meta-mycelium."""
-        from .mycelium_db import MyceliumDB
-
         db = MyceliumDB(self.meta_db_path())
         try:
             local_conns = self.data["connections"]
@@ -1343,8 +1350,6 @@ class Mycelium:
                     "SELECT a, b, count, first_seen, last_seen FROM edges "
                     "ORDER BY count DESC LIMIT ?", (max_pull,)
                 ).fetchall()
-
-            from .mycelium_db import days_to_date
 
             for row in rows:
                 a_name = id_to_name.get(row[0], db._concept_name(row[0]))
@@ -1646,8 +1651,7 @@ def main():
         print(f"Synced {pushed} connections from {m.data['repo']} -> {meta_db_p}")
         # Show meta status
         if meta_db_p.exists():
-            from .mycelium_db import MyceliumDB as _MDB
-            _db = _MDB(meta_db_p)
+            _db = MyceliumDB(meta_db_p)
             repos_str = _db.get_meta("repos", "")
             repos = repos_str.split(",") if repos_str else []
             total = _db.connection_count()
