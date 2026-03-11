@@ -1762,7 +1762,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
     while i < len(sections):
         header = sections[i].strip() if i < len(sections) else ""
         body = sections[i + 1].strip() if i + 1 < len(sections) else ""
-        if header.startswith("## ") and body and len(body) > 20:
+        if header.startswith("## ") and body and body.count("\n") >= 4:
             segments.append((header, body))
         i += 2
 
@@ -1776,7 +1776,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             chunk = lines[j:j + chunk_size]
             header = f"## {chunk[0][:60].strip()}"
             body = "\n".join(chunk)
-            if len(body) > 20:
+            if body.count("\n") >= 4:
                 segments.append((header, body))
 
     if not segments:
