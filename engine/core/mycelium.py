@@ -62,9 +62,26 @@ class Mycelium:
         """
         self.mycelium_dir.mkdir(parents=True, exist_ok=True)
 
-        # Case 1: SQLite exists — load from it
+        # Case 1: SQLite exists — load from it (check migration completeness)
         if self.db_path.exists():
-            return self._load_from_sqlite()
+            # Verify DB is not a partial migration
+            try:
+                import sqlite3
+                conn = sqlite3.connect(str(self.db_path), timeout=5)
+                marker = conn.execute(
+                    "SELECT value FROM meta WHERE key='migration_complete'"
+                ).fetchone()
+                conn.close()
+                if marker or not self.mycelium_path.exists():
+                    # DB is complete OR no JSON to fall back to
+                    return self._load_from_sqlite()
+                else:
+                    # Partial migration: delete corrupt DB and retry
+                    self.db_path.unlink()
+            except Exception:
+                if not self.mycelium_path.exists():
+                    return self._load_from_sqlite()
+                self.db_path.unlink(missing_ok=True)
 
         # Case 2: JSON exists — migrate to SQLite, then load
         if self.mycelium_path.exists():
@@ -116,6 +133,7 @@ class Mycelium:
         from .mycelium_db import MyceliumDB
         # This creates the .db and renames .json to .json.bak
         db = MyceliumDB.migrate_from_json(self.mycelium_path, self.db_path)
+        db.set_meta("migration_complete", "1")
         db.close()
 
     def save(self):
@@ -156,6 +174,8 @@ class Mycelium:
                                  ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
                 db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                                  ("session_count", str(self.data.get("session_count", 0))))
+                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("migration_complete", "1"))
                 # Clear and rewrite (simpler than diffing for Phase 1)
                 db._conn.execute("DELETE FROM edges")
                 db._conn.execute("DELETE FROM fusions")
@@ -174,7 +194,7 @@ class Mycelium:
                     db._conn.execute(
                         "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
                         "VALUES (?, ?, ?, ?, ?)",
-                        (a_id, b_id, conn["count"], fs, ls)
+                        (a_id, b_id, conn.get("count", 1), fs, ls)
                     )
                     for zone in conn.get("zones", []):
                         db._conn.execute(
@@ -193,7 +213,7 @@ class Mycelium:
                     db._conn.execute(
                         "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
                         "VALUES (?, ?, ?, ?, ?)",
-                        (a_id, b_id, fusion["form"], fusion["strength"], fa)
+                        (a_id, b_id, fusion.get("form", f"{a}+{b}"), fusion.get("strength", 1), fa)
                     )
         finally:
             db.close()
@@ -1292,7 +1312,6 @@ class Mycelium:
                 ).fetchall()
 
             from .mycelium_db import days_to_date
-            import copy
 
             for row in rows:
                 a_name = id_to_name.get(row[0], db._concept_name(row[0]))
