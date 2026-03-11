@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques vivantes + TIER 1-3 (236 PASS) + HUGINN (3 briques, 24 PASS) + Bio-Vectors (22 formules, 28 papiers), CI vert, 1 supprimee (P3), 1 impasse (Meta-Tokens)
-Engine: muninn.py 5455 lignes, 91 fonctions + mycelium.py 1983 lignes, 44 fonctions + mycelium_db.py 930 lignes = 8368 total
-Tests: 28 fichiers, 160+ bornes, 0 FAIL
+Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT COMPLETE: 5 phases remediation done.
+Engine: muninn.py 5830 lignes, 90 fonctions + mycelium.py 2077 lignes, 45 fonctions + mycelium_db.py 930 lignes = 8837 total
+Tests: 44 fichiers, 229+ bornes PASS (tests FAKE remplaces par tests PROD), 0 FAIL
 
 ## Anatomie
 
@@ -861,7 +861,7 @@ H3: huginn_think() dans muninn.py (~90 lignes)
 - Le deuxieme corbeau d'Odin prend vie
 - Commit: 56ef1b3
 
-### Bio-Vectors — Cerveau Biomimetique (session 2026-03-11) [PLANNING]
+### Bio-Vectors — Cerveau Biomimetique (session 2026-03-11) [DONE — AUDITED]
 
 Recherche: 11 vecteurs bio-cognitifs pour Muninn. Chacun = angle d'optimisation unique.
 Methode: scan Yggdrasil (36 paires, 65K concepts) + JSON 22 formules + scan croise.
@@ -937,6 +937,32 @@ Scan 36 paires de concepts sur 65K OpenAlex:
 - Signaux moderes: primate×RL cos=0.251 (V2 pont), swarm×ranking cos=0.469 (V5 confirme)
 - P4 purs: planarian×distributed cos=-0.001 (V9), cephalopod×distributed cos=-0.017 (V1)
 - Faux amis: "active learning"=e-learning, "online learning"=e-learning, "error correction"=econometrie
+
+### AUDIT SENIOR DEV (session 2026-03-11) [DONE]
+
+Audit brutal: chaque feature verifiee dans le code, pas dans les docs.
+Resultat: 5 phases de remediation executees, 229+ bornes PASS, 0 FAIL.
+
+#### Verdicts Bio-Vectors apres remediation
+
+| Verdict | Vecteurs | Status |
+|---------|----------|--------|
+| **REAL** (11) | V2B, V4B, V5B, V7B, V9A, V9B + V1A, V3A, V3B, V5A, V11B (boosted) | Coefficients reels |
+| **ACTIVE** (3) | V6A, V6B, V10A | VADER installe, pipeline actif |
+| **WIRED** (1) | V10B Circumplex | Branche dans session_index |
+| ~~COSMETIC~~ | 0 | Tous boostes en Phase 3 |
+| ~~DORMANT~~ | 0 | Tous actives en Phase 1 |
+| ~~PHANTOM~~ | 0 | V10B wire en Phase 2 |
+
+#### 5 phases executees
+
+- [x] **PHASE 1**: pip install vaderSentiment → V6A+V6B+V10A actifs
+- [x] **PHASE 2**: Fix V8B scored init, V10B wire circumplex, A5 doc as diagnostic
+- [x] **PHASE 3**: Boost V1A x100, V3A x2, V3B sigmoid fix, V5A x2.7, V11B x3-7
+- [x] **PHASE 4**: 10 biovector tests + C2/C3 remplaces par tests PROD (40+ bornes)
+- [x] **PHASE 5**: 9 silent except:pass → stderr, dead code removed (effective_budget, COMPRESSION_BY_TEMP)
+
+Commits: 1f1f86f, daf6845, 0cea991, 26b42f6, cf43e8f
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
