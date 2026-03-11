@@ -243,10 +243,12 @@ class Mycelium:
         """Canonical key for a pair (alphabetical order)."""
         return f"{min(a,b)}|{max(a,b)}"
 
-    def observe(self, concepts: list[str]):
+    def observe(self, concepts: list[str], arousal: float = 0.0):
         """Record co-occurrence of concepts in this context.
 
-        Every pair of concepts in the list gets a +1 connection strength.
+        Every pair of concepts in the list gets a +E(a) connection strength.
+        V6A (Richter-Levin 2003): E(a) = 1 + kappa * a^n / (a^n + theta^n)
+        When arousal=0, E(a)=1.0 (backward compatible, same as +1).
         This is called when processing user input or compressing text.
         S4 (TIER 3): Non-English concepts auto-translated via tokenizer + Haiku.
         """
@@ -269,6 +271,18 @@ class Mycelium:
 
         conns = self.data["connections"]
 
+        # V6A: Emotional tagging — Hill function boost (Richter-Levin 2003)
+        # E(a) = 1 + kappa * a^n / (a^n + theta^n)
+        # kappa=1.0, n=3, theta=0.5 (Hill switch: sharp activation around theta)
+        _kappa = 1.0
+        _hill_n = 3
+        _hill_theta = 0.5
+        a = max(0.0, float(arousal))
+        if a > 0.0:
+            e_a = 1.0 + _kappa * (a ** _hill_n) / (a ** _hill_n + _hill_theta ** _hill_n)
+        else:
+            e_a = 1.0  # no boost
+
         # Record all pairs
         for i in range(len(clean)):
             for j in range(i + 1, len(clean)):
@@ -281,7 +295,7 @@ class Mycelium:
                     }
                     if self.federated:
                         conns[key]["zones"] = []
-                conns[key]["count"] += 1
+                conns[key]["count"] += e_a
                 conns[key]["last_seen"] = time.strftime("%Y-%m-%d")
                 # P20.2: track which zones this connection appears in
                 if self.federated:
@@ -311,7 +325,7 @@ class Mycelium:
                 if fusion_concepts:
                     self._p41_recursion_guard = True
                     try:
-                        self.observe(fusion_concepts)
+                        self.observe(fusion_concepts)  # V6A: no arousal for fusions (structural, not emotional)
                     finally:
                         self._p41_recursion_guard = False
 
@@ -325,13 +339,14 @@ class Mycelium:
             # Safety: check RAM only when network gets very large
             self._prune_if_memory_pressure()
 
-    def observe_text(self, text: str):
+    def observe_text(self, text: str, arousal: float = 0.0):
         """Extract concepts from raw text and observe co-occurrences.
 
         Works on any text — user messages, code, documentation.
         Chunks text by paragraphs so only nearby concepts co-occur,
         avoiding O(n²) explosion on large documents while keeping
         all concepts (no cap).
+        V6A: arousal param passed to observe() for emotional tagging.
         """
         # Split into chunks (paragraphs / double-newline blocks)
         chunks = re.split(r'\n\s*\n', text)
@@ -351,7 +366,7 @@ class Mycelium:
                     concepts.append(e)
             concepts = list(set(concepts))
             if len(concepts) >= 2:
-                self.observe(concepts)
+                self.observe(concepts, arousal=arousal)
             return
 
         # Large text — observe each chunk separately
@@ -370,7 +385,7 @@ class Mycelium:
                     concepts.append(e)
             concepts = list(set(concepts))
             if len(concepts) >= 2:
-                self.observe(concepts)
+                self.observe(concepts, arousal=arousal)
 
     def observe_latex(self, text: str):
         """Observe co-occurrences in LaTeX source, chunked by sections.
@@ -582,7 +597,7 @@ class Mycelium:
             if age_days > days:
                 # Halve the count for each half-life period passed
                 periods = age_days // days
-                new_count = conn["count"] >> periods  # integer division by 2^periods
+                new_count = conn["count"] / (2 ** periods)  # V6A-safe: works with float counts
 
                 # A4: Lotka-Volterra saturation — dw -= beta * w^2
                 # Only for large connections (w > threshold). Prevents unbounded growth.

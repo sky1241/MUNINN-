@@ -76,7 +76,7 @@ class MyceliumDB:
             CREATE TABLE IF NOT EXISTS edges (
                 a INTEGER NOT NULL,
                 b INTEGER NOT NULL,
-                count INTEGER NOT NULL DEFAULT 0,
+                count REAL NOT NULL DEFAULT 0,
                 first_seen INTEGER NOT NULL,
                 last_seen INTEGER NOT NULL,
                 PRIMARY KEY (a, b)
@@ -85,7 +85,7 @@ class MyceliumDB:
                 a INTEGER NOT NULL,
                 b INTEGER NOT NULL,
                 form TEXT NOT NULL,
-                strength INTEGER NOT NULL,
+                strength REAL NOT NULL,
                 fused_at INTEGER NOT NULL,
                 PRIMARY KEY (a, b)
             ) WITHOUT ROWID;

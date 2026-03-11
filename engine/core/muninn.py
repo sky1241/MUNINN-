@@ -4035,7 +4035,9 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
 
 
 def feed_from_transcript(jsonl_path: Path, repo_path: Path):
-    """Feed the mycelium from a single transcript JSONL file."""
+    """Feed the mycelium from a single transcript JSONL file.
+    V6A: Per-message arousal via VADER -> passed to observe() for emotional tagging.
+    """
     if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
     from mycelium import Mycelium
 
@@ -4048,7 +4050,12 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
         return 0
 
     for text in texts:
-        m.observe_text(text)
+        # V6A: Score arousal per message for emotional tagging
+        msg_arousal = 0.0
+        if _HAS_SENTIMENT:
+            s = score_sentiment(text)
+            msg_arousal = s["arousal"]
+        m.observe_text(text, arousal=msg_arousal)
 
     m.save()
     return len(texts)
