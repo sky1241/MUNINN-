@@ -594,7 +594,7 @@ class MyceliumDB:
             ORDER BY count DESC
         """
         params = (cid, cid, cid)
-        if top_n:
+        if top_n is not None:
             query += " LIMIT ?"
             params = (cid, cid, cid, top_n)
 

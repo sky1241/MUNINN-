@@ -1032,9 +1032,11 @@ def extract_facts(text: str) -> list[str]:
     for m in re.finditer(r'\$(\d+\.?\d*)', text):
         facts.append(f"${m.group(1)}")
 
-    # Commit hashes
+    # Commit hashes (require at least one letter to avoid pure-digit false positives)
     for m in re.finditer(r'\b([a-f0-9]{7,12})\b', text):
-        facts.append(m.group(1))
+        val = m.group(1)
+        if re.search(r'[a-f]', val):  # must contain a hex letter, not just digits
+            facts.append(val)
 
     # Filenames and paths
     for m in re.finditer(r'\b[\w/]+\.(?:py|rs|ts|js|json|yaml|yml|toml|md|gz|npz|npy)\b', text):
@@ -1245,11 +1247,12 @@ def _resolve_contradictions(text: str) -> str:
             if old_text != line:
                 # Guard: numbered list items (1. X, 2. X) are NOT contradictions.
                 # Detect: skeleton starts with _NUM_ + list marker, lines are near-consecutive.
-                is_numbered_list = (
-                    re.match(r'^_num_[\.\)]\s', skel)
-                    and abs(i - old_idx) <= 3  # within 3 lines of each other
+                is_list_item = (
+                    (re.match(r'^_num_[\.\)]\s', skel)       # numbered: 1. X, 2) X
+                     or re.match(r'^[-*]\s', line.strip()))   # bullet: - X, * X
+                    and abs(i - old_idx) <= 5  # within 5 lines of each other
                 )
-                if not is_numbered_list:
+                if not is_list_item:
                     # Same structure, different numbers = contradiction
                     if skel not in contradictions:
                         contradictions[skel] = set()
@@ -3150,8 +3153,9 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
         combined = _cue_distill(combined)
         combined = _extract_rules(combined)
 
-        # Name the consolidated branch
-        merged_name = f"{leader}_consolidated"
+        # Name the consolidated branch (strip existing _consolidated suffix to avoid stacking)
+        base_leader = re.sub(r'(_consolidated)+$', '', leader)
+        merged_name = f"{base_leader}_consolidated"
 
         # Write the consolidated file
         merged_file = f"{merged_name}.mn"
@@ -4790,6 +4794,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
         norm = re.sub(r'[^\w\s]', '', dline.lower()).strip()
         norm = re.sub(r'\s+', ' ', norm)
         if not norm:
+            deduped_lines.append(dline)  # preserve blank lines as structural separators
             continue
         if norm in seen_hashes:
             continue

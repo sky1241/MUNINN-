@@ -539,6 +539,13 @@ class Mycelium:
                             if row[0] in hd_ids or row[1] in hd_ids:
                                 self._db._conn.execute(
                                     "DELETE FROM fusions WHERE a=? AND b=?", (row[0], row[1]))
+                # Remove stale fusions (edge dropped below threshold or edge deleted)
+                self._db._conn.execute("""
+                    DELETE FROM fusions WHERE NOT EXISTS (
+                        SELECT 1 FROM edges e WHERE e.a = fusions.a AND e.b = fusions.b
+                        AND e.count >= ?
+                    )
+                """, (self.FUSION_THRESHOLD,))
                 for row in self._db._conn.execute(
                         "SELECT a, b, count FROM edges WHERE count >= ?",
                         (self.FUSION_THRESHOLD,)):
@@ -1142,13 +1149,16 @@ class Mycelium:
         """
         abbrevs = {}
         if self._db is not None:
-            # SQL-native: only fetch strong fusions (strength >= 8)
+            # SQL-native: only fetch strong fusions with prefix relationship
+            # Filter in SQL: form contains '+', strength >= 8
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
             for row in self._db._conn.execute(
-                "SELECT a, b, strength FROM fusions WHERE strength >= 8"
+                "SELECT a, b FROM fusions WHERE strength >= 8"
             ):
-                a = id_to_name.get(row[0], self._db._concept_name(row[0]))
-                b = id_to_name.get(row[1], self._db._concept_name(row[1]))
+                a = id_to_name.get(row[0])
+                b = id_to_name.get(row[1])
+                if not a or not b:
+                    continue
                 long_form, short = (a, b) if len(a) > len(b) else (b, a)
                 if long_form.startswith(short) and len(short) >= 3:
                     abbrevs[long_form] = short
