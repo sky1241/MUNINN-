@@ -2196,6 +2196,43 @@ def boot(query: str = "") -> str:
         except Exception:
             pass
 
+        # V3B: Bayesian Theory of Mind — infer user goal from recent queries
+        # (Baker, Saxe, Tenenbaum 2009, Cognition)
+        # P(goal|actions) ~ exp(-cost) * prior
+        # actions = last 3-5 session queries, goal = branch topic alignment
+        btom_scores = {}  # branch_name -> goal alignment score
+        try:
+            import math
+            index_path = _REPO_PATH / ".muninn" / "session_index.json"
+            if index_path.exists():
+                idx = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(idx, list) and len(idx) >= 2:
+                    # Collect concepts from last 5 sessions (actions)
+                    recent = idx[-5:]
+                    action_concepts = {}  # concept -> frequency across recent sessions
+                    for sess in recent:
+                        for c in sess.get("concepts", []):
+                            action_concepts[c] = action_concepts.get(c, 0) + 1
+                    if action_concepts:
+                        # Normalize to probabilities
+                        total_freq = sum(action_concepts.values())
+                        action_probs = {c: f / total_freq for c, f in action_concepts.items()}
+                        # Score each branch by goal alignment
+                        for bname, bcontent in branch_contents.items():
+                            bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
+                            # Cost = negative overlap (more overlap = lower cost)
+                            overlap = bwords & set(action_probs.keys())
+                            if overlap:
+                                # P(actions|goal) ~ exp(-cost), cost = 1 - alignment
+                                alignment = sum(action_probs[w] for w in overlap)
+                                # Prior = usefulness (Bayesian prior from past success)
+                                prior = nodes[bname].get("usefulness", 0.5)
+                                # Posterior ~ likelihood * prior
+                                posterior = math.exp(-1.0 / max(0.01, alignment)) * prior
+                                btom_scores[bname] = min(1.0, posterior)
+        except Exception:
+            pass
+
         # B6: Adjust scoring weights by session type
         w_recall = 0.15
         w_relevance = 0.40
@@ -2297,6 +2334,11 @@ def boot(query: str = "") -> str:
             pred_score = prediction_scores.get(name, 0.0)
             if pred_score > 0:
                 total += 0.03 * min(1.0, pred_score)
+
+            # V3B: BToM goal alignment bonus (Baker, Saxe, Tenenbaum 2009)
+            btom_score = btom_scores.get(name, 0.0)
+            if btom_score > 0:
+                total += 0.04 * btom_score  # max +0.04
 
             # V11B: Boyd-Richerson 3 cultural biases (Boyd & Richerson 1985)
             # (1) Conformist bias: dp = beta*p*(1-p)*(2p-1)
@@ -3159,6 +3201,20 @@ def prune(dry_run: bool = True):
     print(f"  Branches: {len(branches)}")
     print()
 
+    # V9B: Reed-Solomon redundancy (Reed & Solomon 1960)
+    # Compute concept redundancy: how many branches carry each concept.
+    # Branches that are sole carriers (redundancy=1) of concepts get protection.
+    # d_min >= n-k+1: minimum distance determines correction capability.
+    _concept_carriers = {}  # concept -> set of branch names
+    for bname, bnode in branches.items():
+        for tag in bnode.get("tags", []):
+            _concept_carriers.setdefault(tag, set()).add(bname)
+    # Fragile concepts: carried by only 1 branch (redundancy=1, no error correction)
+    _fragile_branches = set()  # branches that are sole carriers
+    for concept, carriers in _concept_carriers.items():
+        if len(carriers) == 1:
+            _fragile_branches.update(carriers)
+
     hot, cold, dead = [], [], []
 
     for name, node in branches.items():
@@ -3174,8 +3230,13 @@ def prune(dry_run: bool = True):
             hot.append((name, temp))
             print(f"  HOT  {name}: R={recall:.2f} t={temp:.2f} h={7*(2**min(acc,10)):.0f}d acc={acc}")
         elif recall < 0.05:
-            dead.append((name, days_ago))
-            print(f"  DEAD {name}: R={recall:.3f} t={temp:.2f} cold {days_ago}d")
+            # V9B: Protect fragile branches (sole carriers of unique concepts)
+            if name in _fragile_branches:
+                cold.append((name, days_ago))  # demote to cold instead of dead
+                print(f"  V9B  {name}: R={recall:.3f} PROTECTED (sole carrier) -> cold")
+            else:
+                dead.append((name, days_ago))
+                print(f"  DEAD {name}: R={recall:.3f} t={temp:.2f} cold {days_ago}d")
         elif recall < 0.15:
             cold.append((name, days_ago))
             print(f"  COLD {name}: R={recall:.2f} t={temp:.2f} cold {days_ago}d")
@@ -3227,6 +3288,39 @@ def prune(dry_run: bool = True):
                     print(f"    [{ins['type']}] {ins['text'][:80]}")
         except Exception as e:
             print(f"  H1/H2 skipped: {e}", file=sys.stderr)
+
+        # V9A: Bioelectric regeneration (Shomrat & Levin 2013)
+        # Before deleting dead branches, diffuse their concepts to survivors
+        # via mycelium gap junctions. Information fragments survive in neighbors.
+        # dV_i/dt = -g_leak*(V_i - E_leak) + sum_j g_gap*(V_j - V_i)
+        _regen_count = 0
+        try:
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+            from mycelium import Mycelium
+            m_regen = Mycelium(_REPO_PATH or Path("."))
+            surviving = {n for n in nodes if n != "root" and n not in dict(dead)}
+            for name, days in dead:
+                if name not in nodes:
+                    continue
+                dead_tags = set(nodes[name].get("tags", []))
+                if not dead_tags:
+                    continue
+                # Find surviving neighbors via mycelium
+                for dtag in list(dead_tags)[:5]:  # top 5 tags
+                    related = m_regen.get_related(dtag, top_n=5)
+                    for concept, strength in related:
+                        # Find a surviving branch that has this concept
+                        for sname in surviving:
+                            stags = set(nodes[sname].get("tags", []))
+                            if concept in stags and dtag not in stags:
+                                # Diffuse: add ghost tag to surviving branch
+                                nodes[sname].setdefault("tags", []).append(dtag)
+                                _regen_count += 1
+                                break  # one recipient per concept
+            if _regen_count > 0:
+                print(f"  V9A REGEN: {_regen_count} concepts diffused to survivors")
+        except Exception as e:
+            print(f"  V9A regen skipped: {e}", file=sys.stderr)
 
         for name, days in dead:
             if name not in nodes:
