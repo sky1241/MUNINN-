@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5+4 wiring, 74 PASS) + TIER 3 (11 upgrades, 126 PASS), CI vert, 1 supprimee (P3), 1 impasse (Meta-Tokens)
-Engine: muninn.py 5289 lignes, 82 fonctions + mycelium.py 1663 lignes, 39 fonctions + mycelium_db.py 930 lignes = 7882 total
-Tests: 25 fichiers, 126+ bornes, 0 FAIL
+Etat: 56 briques vivantes + TIER 1-3 (236 PASS) + HUGINN (3 briques, 24 PASS), CI vert, 1 supprimee (P3), 1 impasse (Meta-Tokens)
+Engine: muninn.py 5455 lignes, 91 fonctions + mycelium.py 1983 lignes, 44 fonctions + mycelium_db.py 930 lignes = 8368 total
+Tests: 28 fichiers, 160+ bornes, 0 FAIL
 
 ## Anatomie
 
@@ -823,39 +823,42 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 - P39: liane Yggdrasil (attend WT3)
 - Explication A-Z du systeme pour Sky
 
-### Plan HUGINN — "Muninn stocke, Huginn pense" (session 2026-03-11) [EN COURS]
+### Plan HUGINN — "Muninn stocke, Huginn pense" (session 2026-03-11) [DONE]
 
 Base scientifique: BARE Wave Model (Nature 2025) + Entropic Brain (Carhart-Harris 2014).
 Le vrai champignon: dn/dt = alpha*n - beta*n*rho (tips naissent, fusionnent avec le reseau).
 La psilocybine: baisser beta → tips explorent sans fusionner → entropie monte.
 
-| # | Brique | Description | Difficulte | ~Lignes |
-|---|--------|-------------|-----------|---------|
-| H1 | Mode trip | trip() — connexions exploratoires cross-cluster (BARE Wave alpha/beta) | Moyen | ~80 |
-| H2 | Synthese/reve | dream() — patterns temporels + insights pendant sleep consolidation | Moyen | ~100 |
-| H3 | Huginn CLI | think + CLI — formule insights en langage naturel, surface au boot | Moyen | ~120 |
+| # | Brique | Description | Bornes | Status |
+|---|--------|-------------|--------|--------|
+| H1 | Mode trip | trip() — connexions exploratoires cross-cluster (BARE Wave alpha/beta) | 9/9 PASS | DONE |
+| H2 | Synthese/reve | dream() — insights pendant sleep consolidation | 7/7 PASS | DONE |
+| H3 | Huginn CLI | huginn_think() + CLI think + boot surfacing | 8/8 PASS | DONE |
 
-H1: trip() dans mycelium.py
-- Trouve clusters distants (reutilise detect_zones/spectral)
+**Total: 24 bornes, 24 PASS, 0 FAIL.**
+
+H1: trip() dans mycelium.py (~90 lignes)
+- Trouve clusters distants (spectral si scipy, BFS fallback sinon)
 - Cree connexions exploratoires entre concepts de clusters differents
 - Marquees type="dream", decay rapide si pas renforcees par usage reel
 - Auto-regulation BARE Wave: alpha*n cree, beta*n*rho limite (quand rho dense, moins de tips)
 - Entropie H = -sum(p*log(p)) sur distribution des degres → mesure avant/apres
 - Se declenche dans prune() ou CLI `muninn.py trip`
+- Commit: 2e47a64
 
-H2: dream() dans mycelium.py
-- Pendant sleep consolidation, analyse patterns cross-sessions
-- Detecte correlations temporelles: "X toujours suivi de Y"
-- Detecte absences: "X et Y jamais connectes mais relient Z"
+H2: dream() dans mycelium.py (~120 lignes)
+- Analyse graphe: strong pairs, absences, validated dreams, cluster imbalance, health
 - Ecrit .muninn/insights.json (timestamp, type, concepts, score, text)
-- Insights surfacees au boot comme P18 error/fix pairs
+- Se declenche dans prune() apres trip()
+- Commit: 2fc2f9b
 
-H3: huginn_think() dans muninn.py + CLI
-- Lit insights.json + analyse live du graphe
-- Formule en langage naturel: "Tu parles de X depuis 5 sessions..."
-- CLI: `muninn.py think` — affiche top insights
-- Boot: top 3 insights affiches si pertinents a la query
+H3: huginn_think() dans muninn.py (~90 lignes)
+- Lit insights.json, filtre par pertinence a la query
+- Formule en langage naturel avec icones (BOND, BLIND SPOT, CONFIRMED, WARNING, HEALTH)
+- CLI: `muninn.py think [query]` — affiche top insights
+- Boot: top 3 insights affiches via _surface_insights_for_boot()
 - Le deuxieme corbeau d'Odin prend vie
+- Commit: 56ef1b3
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
