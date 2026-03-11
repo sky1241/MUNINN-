@@ -1372,6 +1372,150 @@ class Mycelium:
 
         return zones
 
+    # ── H2: Synthèse / rêve — generate insights during sleep ─────
+    #
+    # During sleep consolidation, analyze patterns in the graph and
+    # generate insights: temporal correlations, absences, anomalies.
+    # Writes to .muninn/insights.json for boot surfacing.
+
+    def dream(self) -> list[dict]:
+        """H2: Generate insights by analyzing the mycelium graph.
+
+        Detects:
+        1. Temporal patterns: concepts that always appear together across sessions
+        2. Absences: high-degree concepts that SHOULD connect but don't
+        3. Dream bridges: dream connections (H1) that got reinforced = validated
+        4. Clusters imbalance: one zone dominates, others starve
+
+        Returns list of insight dicts, also saves to .muninn/insights.json.
+        Source: Wilson & McNaughton 1994 (sleep consolidation generates insights).
+        """
+        import math
+
+        conns = self.data["connections"]
+        if len(conns) < 10:
+            return []
+
+        insights = []
+
+        # Build degree + adjacency
+        degree = {}
+        adj = {}
+        for key, conn in conns.items():
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            degree[a] = degree.get(a, 0) + 1
+            degree[b] = degree.get(b, 0) + 1
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+
+        if not degree:
+            return []
+
+        # 1. Strong pairs: concepts with unusually high co-occurrence
+        avg_count = sum(c.get("count", 1) for c in conns.values()) / max(len(conns), 1)
+        for key, conn in conns.items():
+            if conn.get("count", 0) > avg_count * 5 and conn.get("count", 0) >= 10:
+                parts = key.split("|")
+                if len(parts) == 2:
+                    insights.append({
+                        "type": "strong_pair",
+                        "concepts": parts,
+                        "score": round(conn["count"] / avg_count, 2),
+                        "text": f"{parts[0]} and {parts[1]} are inseparable "
+                                f"(x{conn['count'] / avg_count:.1f} avg strength)",
+                    })
+
+        # 2. Absences: high-degree concepts with no direct connection
+        sorted_concepts = sorted(degree.items(), key=lambda x: -x[1])
+        top_concepts = [c for c, d in sorted_concepts[:min(30, len(sorted_concepts))]]
+        for i, a in enumerate(top_concepts):
+            for b in top_concepts[i+1:]:
+                if b not in adj.get(a, set()):
+                    # High-degree concepts not connected = surprising absence
+                    score = (degree[a] + degree[b]) / 2
+                    if score >= 5:
+                        insights.append({
+                            "type": "absence",
+                            "concepts": [a, b],
+                            "score": round(score, 2),
+                            "text": f"{a} (deg={degree[a]}) and {b} (deg={degree[b]}) "
+                                    f"never co-occur — blind spot?",
+                        })
+
+        # 3. Validated dreams: dream connections that got reinforced (count > 1)
+        for key, conn in conns.items():
+            if conn.get("type") == "dream" and conn.get("count", 0) > 1:
+                parts = key.split("|")
+                if len(parts) == 2:
+                    insights.append({
+                        "type": "validated_dream",
+                        "concepts": parts,
+                        "score": conn["count"],
+                        "text": f"Dream connection {parts[0]}-{parts[1]} confirmed "
+                                f"by real usage (count={conn['count']})",
+                    })
+
+        # 4. Cluster imbalance: detect if one zone has >60% of connections
+        zones = self.detect_zones()
+        if not zones:
+            zones = self._bfs_zones(degree)
+        if len(zones) >= 2:
+            zone_sizes = {z: len(members) for z, members in zones.items()}
+            total = sum(zone_sizes.values())
+            if total > 0:
+                dominant = max(zone_sizes.items(), key=lambda x: x[1])
+                ratio = dominant[1] / total
+                if ratio > 0.6:
+                    insights.append({
+                        "type": "imbalance",
+                        "concepts": [dominant[0]],
+                        "score": round(ratio, 2),
+                        "text": f"Zone '{dominant[0][:30]}' dominates with "
+                                f"{ratio:.0%} of concepts — explore other zones?",
+                    })
+
+        # 5. Graph entropy as health metric
+        entropy = self._graph_entropy(degree)
+        max_entropy = math.log2(len(degree)) if len(degree) > 1 else 1
+        health = entropy / max_entropy if max_entropy > 0 else 0
+        insights.append({
+            "type": "health",
+            "concepts": [],
+            "score": round(health, 4),
+            "text": f"Graph entropy: {entropy:.2f}/{max_entropy:.2f} "
+                    f"(health={health:.0%}, 1.0=max diversity)",
+        })
+
+        # Sort by score descending, cap at 20
+        insights.sort(key=lambda x: -x.get("score", 0))
+        insights = insights[:20]
+
+        # Save to disk
+        self._save_insights(insights)
+
+        return insights
+
+    def _save_insights(self, insights: list[dict]):
+        """Save insights to .muninn/insights.json."""
+        insights_path = self.mycelium_dir / "insights.json"
+        # Load existing, append new with timestamp, keep last 50
+        existing = []
+        if insights_path.exists():
+            try:
+                existing = json.loads(insights_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                existing = []
+        timestamp = time.strftime("%Y-%m-%d %H:%M")
+        for ins in insights:
+            ins["timestamp"] = timestamp
+        combined = insights + existing
+        combined = combined[:50]
+        insights_path.write_text(json.dumps(combined, indent=2, ensure_ascii=False),
+                                  encoding="utf-8")
+
     # ── P20b: Meta-mycelium sync ──────────────────────────────────
 
     @staticmethod

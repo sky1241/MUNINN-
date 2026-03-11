@@ -2966,8 +2966,14 @@ def prune(dry_run: bool = True):
                 print(f"  H1 TRIP: {trip_result['created']} dream connections "
                       f"(entropy {trip_result['entropy_before']:.2f} -> "
                       f"{trip_result['entropy_after']:.2f})")
+            # H2: Dream/synthesis — generate insights during sleep
+            dream_insights = m.dream()
+            if dream_insights:
+                print(f"  H2 DREAM: {len(dream_insights)} insights generated")
+                for ins in dream_insights[:3]:
+                    print(f"    [{ins['type']}] {ins['text'][:80]}")
         except Exception as e:
-            print(f"  H1 trip skipped: {e}", file=sys.stderr)
+            print(f"  H1/H2 skipped: {e}", file=sys.stderr)
 
         for name, days in dead:
             if name not in nodes:
