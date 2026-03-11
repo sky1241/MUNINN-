@@ -441,7 +441,8 @@ def compute_hash(filepath: Path) -> str:
 
 
 def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5,
-                       _alpha_v: float = 0.3, _alpha_a: float = 0.2) -> float:
+                       _alpha_v: float = 0.3, _alpha_a: float = 0.2,
+                       _lambda_ewc: float = 0.5) -> float:
     """Spaced repetition recall probability (Settles & Meeder 2016).
 
     p = 2^(-delta / h)
@@ -460,6 +461,11 @@ def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5,
     Emotional memories (high |valence| or arousal) decay SLOWER.
     When valence=0 and arousal=0 (default), behavior is identical to pre-V6B.
     Sources: Talmi 2013 (Curr Dir Psychol Sci), McGaugh 2004 (Trends Neurosci).
+
+    V4B upgrade: EWC Fisher importance (Kirkpatrick et al. 2017, PNAS).
+    h *= (1 + lambda_ewc * F_i) where F_i = fisher_importance (0-1).
+    High-F branches (critical for past recalls) decay SLOWER.
+    When fisher_importance is absent (default 0), behavior is identical to pre-V4B.
     """
     delta = _days_since(node.get("last_access", "2026-01-01"))
     reviews = node.get("access_count", 0)
@@ -470,6 +476,10 @@ def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5,
     valence = node.get("valence", 0.0)
     arousal = max(0.0, node.get("arousal", 0.0))  # clamp: arousal is always >= 0
     half_life *= (1.0 + _alpha_v * abs(valence) + _alpha_a * arousal)
+
+    # V4B: EWC Fisher importance (Kirkpatrick 2017)
+    fisher = max(0.0, min(1.0, node.get("fisher_importance", 0.0)))
+    half_life *= (1.0 + _lambda_ewc * fisher)
 
     if half_life <= 0:
         return 0.0
@@ -2213,6 +2223,23 @@ def boot(query: str = "") -> str:
         except Exception:
             pass
 
+        # V11B: Boyd-Richerson cultural transmission pre-compute (Boyd & Richerson 1985)
+        # (1) Conformist bias: tag frequency across all branches (popular = boosted)
+        # (2) Prestige bias: td_value from V2B (successful history)
+        # (3) Guided variation: correction toward mean usefulness (mu=0.1)
+        _tag_freq = {}  # tag -> count of branches with that tag
+        _all_usefulness = []
+        for _n, _nd in nodes.items():
+            if _n == "root":
+                continue
+            for _t in _nd.get("tags", []):
+                _tag_freq[_t] = _tag_freq.get(_t, 0) + 1
+            _all_usefulness.append(_nd.get("usefulness", 0.5))
+        _n_branches = max(1, len(_all_usefulness))
+        _mean_usefulness = sum(_all_usefulness) / _n_branches if _all_usefulness else 0.5
+        # Normalize tag frequencies to [0,1]
+        _max_tag_freq = max(_tag_freq.values()) if _tag_freq else 1
+
         # Generative Agents scoring: recency + importance + relevance + activation
         scored = []
         for name, node in nodes.items():
@@ -2270,6 +2297,27 @@ def boot(query: str = "") -> str:
             pred_score = prediction_scores.get(name, 0.0)
             if pred_score > 0:
                 total += 0.03 * min(1.0, pred_score)
+
+            # V11B: Boyd-Richerson 3 cultural biases (Boyd & Richerson 1985)
+            # (1) Conformist bias: dp = beta*p*(1-p)*(2p-1)
+            #     p = fraction of branches sharing this tag profile (popularity)
+            _node_tags = node.get("tags", [])
+            if _node_tags and _tag_freq:
+                _p = sum(_tag_freq.get(t, 0) for t in _node_tags) / (_max_tag_freq * max(1, len(_node_tags)))
+                _p = max(0.01, min(0.99, _p))
+                _conform_dp = 0.3 * _p * (1.0 - _p) * (2.0 * _p - 1.0)  # beta=0.3
+                total += 0.02 * _conform_dp  # scaled contribution
+
+            # (2) Prestige bias: p' = sum(w_i * p_i) — td_value as prestige
+            _td_value = node.get("td_value", 0.5)
+            _prestige = _td_value * usefulness  # prestige = success * usefulness
+            total += 0.02 * _prestige  # max +0.02
+
+            # (3) Guided variation: delta = mu*(p_opt - p)
+            #     Pushes score toward population mean usefulness (convergence)
+            _mu = 0.1
+            _guided_delta = _mu * (_mean_usefulness - usefulness)
+            total += 0.02 * _guided_delta  # nudge toward mean (can be negative)
 
             if total > 0.01:
                 scored.append((name, total))
@@ -4722,7 +4770,30 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
         td_bonus = max(0.0, delta) * 0.1  # positive surprise adds up to +0.1
         node["usefulness"] = round(0.7 * old_score + 0.3 * reward + td_bonus, 3)
         node["usefulness"] = min(1.0, node["usefulness"])  # cap at 1.0
+
+        # V4B: EWC Fisher importance (Kirkpatrick et al. 2017)
+        # F_i = proxy for how critical this branch is to system performance.
+        # Computed as normalized(access_count * usefulness * td_value).
+        # High-F branches get slower decay in _ebbinghaus_recall.
+        _ac = node.get("access_count", 0)
+        _u = node["usefulness"]
+        _tv = node.get("td_value", 0.5)
+        # Raw Fisher: product of usage signals, normalize later
+        _fisher_raw = _ac * _u * _tv
+        node["_fisher_raw"] = round(_fisher_raw, 4)
+
         updated = True
+
+    # V4B: Normalize Fisher importance to [0, 1] across all updated branches
+    if updated:
+        max_fisher = max((nodes[b].get("_fisher_raw", 0) for b in boot_branches
+                          if b in nodes), default=1.0)
+        if max_fisher > 0:
+            for bname in boot_branches:
+                if bname in nodes and "_fisher_raw" in nodes[bname]:
+                    nodes[bname]["fisher_importance"] = round(
+                        nodes[bname]["_fisher_raw"] / max_fisher, 4)
+                    del nodes[bname]["_fisher_raw"]
 
     if updated:
         save_tree(tree)
