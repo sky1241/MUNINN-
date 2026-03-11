@@ -27,10 +27,12 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def simulate_td(node, reward, gamma=0.9, alpha=0.1):
-    """Simulate what _update_usefulness does for V2B."""
+def simulate_td(node, reward, gamma=0.9, alpha=0.1, v_next_mean=0.5):
+    """Simulate what _update_usefulness does for V2B.
+    v_next_mean: mean td_value across all branches (mean-field Bellman backup).
+    """
     v_current = node.get("td_value", 0.5)
-    v_next = v_current  # self-ref approximation
+    v_next = v_next_mean  # mean-field Bellman backup (not self-ref)
     delta = reward + gamma * v_next - v_current
     v_new = v_current + alpha * delta
     v_new = max(0.0, min(1.0, v_new))
@@ -39,7 +41,7 @@ def simulate_td(node, reward, gamma=0.9, alpha=0.1):
 
     old_score = node.get("usefulness", 0.5)
     td_bonus = max(0.0, delta) * 0.1
-    node["usefulness"] = round(min(1.0, 0.7 * old_score + 0.3 * reward + td_bonus), 3)
+    node["usefulness"] = round(max(0.0, min(1.0, 0.7 * old_score + 0.3 * reward + td_bonus)), 3)
     return delta
 
 
@@ -57,7 +59,7 @@ def test_v2b_2_negative_delta():
     node = {"usefulness": 0.7, "td_value": 0.7}
     old_u = node["usefulness"]
     delta = simulate_td(node, reward=0.0)
-    # delta = 0 + 0.9*0.7 - 0.7 = -0.07
+    # delta = 0 + 0.9*0.5 - 0.7 = -0.25 (mean-field v_next=0.5)
     check("V2B.2", delta < 0 and node["usefulness"] < old_u,
           f"delta={delta:.4f}, usefulness {old_u}->{node['usefulness']}")
 

@@ -4885,6 +4885,11 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
     tree_dir = _get_tree_dir()
     updated = False
 
+    # V2B fix: compute mean td_value across all branches for proper Bellman backup
+    _all_td = [nodes[b].get("td_value", 0.5) for b in boot_branches
+                if b in nodes and "::" not in b]
+    _mean_td = sum(_all_td) / max(1, len(_all_td)) if _all_td else 0.5
+
     for bname in boot_branches:
         if bname not in nodes or "::" in bname:  # skip virtual branches
             continue
@@ -4912,8 +4917,8 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
         _gamma = 0.9
         _alpha_td = 0.1
         v_current = node.get("td_value", 0.5)  # V(s), default 0.5
-        # V(s_next) ~ average V of all branches (steady-state approximation)
-        v_next = v_current  # self-referencing: next state ~ current value
+        # V(s_next) ~ mean V across all branches (mean-field Bellman backup)
+        v_next = _mean_td
         delta = reward + _gamma * v_next - v_current
         v_new = v_current + _alpha_td * delta
         v_new = max(0.0, min(1.0, v_new))  # clamp [0, 1]
@@ -4925,8 +4930,7 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
         old_score = node.get("usefulness", 0.5)
         # Blend: 70% old + 30% reward, plus TD bonus (delta > 0 = surprise boost)
         td_bonus = max(0.0, delta) * 0.1  # positive surprise adds up to +0.1
-        node["usefulness"] = round(0.7 * old_score + 0.3 * reward + td_bonus, 3)
-        node["usefulness"] = min(1.0, node["usefulness"])  # cap at 1.0
+        node["usefulness"] = round(max(0.0, min(1.0, 0.7 * old_score + 0.3 * reward + td_bonus)), 3)
 
         # V4B: EWC Fisher importance (Kirkpatrick et al. 2017)
         # F_i = proxy for how critical this branch is to system performance.
