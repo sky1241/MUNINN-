@@ -938,6 +938,109 @@ Scan 36 paires de concepts sur 65K OpenAlex:
 - P4 purs: planarian×distributed cos=-0.001 (V9), cephalopod×distributed cos=-0.017 (V1)
 - Faux amis: "active learning"=e-learning, "online learning"=e-learning, "error correction"=econometrie
 
+### Immune System Layer — Recherche (session 2026-03-11) [TODO]
+
+Origine: convergence V9A+ (Levin 2013) avec immunologie computationnelle.
+Question: les maths du systeme immunitaire apportent quoi de NOUVEAU a Muninn?
+
+#### 5 modeles evalues, 3 retenus
+
+| Modele | Source primaire | Verdict | Raison |
+|--------|---------------|---------|--------|
+| Danger Theory (DCA) | Matzinger (1994) Annu Rev Immunol 12:991; Greensmith, Aickelin & Cayzer (2005) ICARIS LNCS 3627:291 | **NOUVEAU — axe orthogonal** | Protection par contexte de session (stress), pas par contenu. Rien dans Muninn ne fait ca. |
+| Immune Network (suppression) | Jerne (1974) Ann Immunol 125C:373; Perelson (1989) Immunol Rev 110:5; Farmer, Packard & Perelson (1986) Physica D 22:187 | **NOUVEAU — auto-dedup continu** | Branches similaires se suppriment mutuellement. Remplace le batch NCD de sleep_consolidate par un mecanisme continu. |
+| Negative Selection | Forrest, Perelson, Allen & Cherukuri (1994) IEEE S&P:202 | **NOUVEAU — sante memoire** | Self-model detecte branches corrompues/anormales. Zero introspection actuellement. |
+| CLONALG (Clonal Selection) | de Castro & Von Zuben (2002) IEEE Trans Evol Comput 6:239 | SKIP — couvert | Ebbinghaus + L10/L11 reconsolidation couvrent deja keep/kill + recompression. |
+| ODE idiotypique | Farmer, Packard & Perelson (1986) Physica D 22:187 | SKIP — trop lourd | Mycelium + spreading activation + decay = meme espace fonctionnel. |
+
+#### Formules retenues
+
+**I1 — Danger Theory: session danger score (Matzinger 1994, Greensmith 2005)**
+
+Papier: Matzinger P. "Tolerance, danger, and the extended family." Annu Rev Immunol 1994;12:991-1045.
+Algo: Greensmith J, Aickelin U, Cayzer S. "Introducing Dendritic Cells as a Novel Immune-Inspired Algorithm for Anomaly Detection." ICARIS 2005, LNCS 3627:153-167.
+
+```
+session_danger = w1 * error_rate + w2 * retry_loops + w3 * topic_switches + w4 * (1 - rle_ratio)
+
+  w1=0.4, w2=0.3, w3=0.2, w4=0.1 (defauts, calibrables)
+  error_rate    = lignes E> / lignes totales dans le transcript
+  retry_loops   = boucles debug detectees par Semantic RLE (P26, existe deja)
+  topic_switches = changements de sujet (nombre de ## headers ou pivots semantiques)
+  rle_ratio     = ratio Semantic RLE (13msg->5 = 0.38 = chaotique = danger)
+
+Effet sur la branche:
+  h_boosted = h * (1 + gamma * session_danger)     gamma=1.0 defaut
+
+  h = demi-vie Ebbinghaus (Settles & Meeder 2016)
+  session danger haute → h augmente → branche survit plus longtemps
+  session safe → h inchange → decay normal
+```
+
+Injection: `_ebbinghaus_recall()` ligne 419. ~10 lignes. Session danger calcule dans feed_from_hook().
+
+**I2 — Suppression competitive: recall adjustment (Perelson 1989)**
+
+Papier: Perelson AS. "Immune Network Theory." Immunol Rev 1989;110:5-36.
+Modele original: dx_i/dt = c*(sum(m_ij*x_j) - sum(s_ik*x_k)) - k*x_i
+
+```
+Pour chaque branche i:
+  suppression_i = alpha * SUM( sim(i,j) * recall_j )   pour tout j != i ou NCD(i,j) < 0.4
+
+  recall_effectif_i = max(0, recall_i - suppression_i)
+
+  alpha = 0.1 (force de suppression, defaut)
+  sim(i,j) = 1 - NCD(i,j)   (NCD = Normalized Compression Distance, Cilibrasi & Vitanyi 2005)
+  seuil NCD < 0.4 = branches tres similaires seulement
+```
+
+Effet: deux branches quasi-identiques → la plus faible perd du recall → meurt plus vite → auto-dedup.
+Injection: `prune()` ligne 3244, avant classification hot/cold/dead. ~20 lignes.
+NCD existe deja: `_ncd()` ligne 698.
+
+**I3 — Negative Selection: memory health check (Forrest 1994)**
+
+Papier: Forrest S, Perelson AS, Allen L, Cherukuri R. "Self-Nonself Discrimination in a Computer." IEEE Symposium on Security and Privacy, 1994:202-212.
+
+```
+Phase 1 — construire le self-profile (une fois, dans status ou diagnose):
+  self = {
+    token_density:  median( tokens_par_ligne pour toutes branches ),
+    fact_ratio:     median( lignes_taguees / lignes_totales ),
+    line_count:     median( nombre_de_lignes ),
+  }
+
+Phase 2 — detecter les anomalies (dans prune ou boot):
+  distance(b, self) = SUM( |b.metric - self.metric| / self.metric )
+
+  anomaly(b) = 1  si  distance(b, self) > theta    theta=2.0 defaut (2x la mediane)
+               0  sinon
+```
+
+Effet: branches corrompues, compression ratee, ou drift structure → flaggees avant qu'elles polluent boot().
+Injection: `prune()` ou `boot()` comme health check. ~15 lignes.
+Utilise: `_count_tokens()` (existe), tag detection (existe).
+
+#### Estimation effort
+
+| Formule | Lignes de code | Fonctions touchees | Dependances |
+|---------|---------------|-------------------|-------------|
+| I1 Danger Theory | ~10 | _ebbinghaus_recall(), feed_from_hook() | Semantic RLE (P26, existe) |
+| I2 Suppression | ~20 | prune() | _ncd() (existe) |
+| I3 Negative Selection | ~15 | prune() ou boot(), status | _count_tokens() (existe) |
+| **Total** | **~45 lignes** | | **Zero nouvelle dependance** |
+
+#### Ce que ca change au pitch
+
+Aucun systeme de memoire LLM n'a de couche immunitaire:
+- Mem0, Letta, Zep: stockent ou oublient. Pas de triage par stress de session.
+- MemOS: Memory OS, mais pas d'auto-diagnostic sante.
+- Personne ne fait de suppression competitive continue entre unites de memoire.
+
+Muninn aurait: compression (L0-L11) + cerveau (Bio-Vectors) + systeme immunitaire (I1-I3).
+Le seul moteur de memoire qui se protege, se diagnostique, et adapte sa survie au contexte.
+
 ### AUDIT SENIOR DEV (session 2026-03-11) [DONE]
 
 Audit brutal: chaque feature verifiee dans le code, pas dans les docs.
