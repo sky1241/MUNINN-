@@ -271,6 +271,29 @@ class Mycelium:
 
         # Check for new fusions
         self._check_fusions()
+
+        # P41: Self-referential growth — observe fusions as second-order co-occurrences
+        # Ratio: max 1/3 of original concept count (prevents feedback loop convergence)
+        if clean and not getattr(self, '_p41_recursion_guard', False):
+            fusions = self.data.get("fusions", {})
+            if fusions:
+                # Extract fusion concept pairs that overlap with current concepts
+                fusion_concepts = []
+                clean_set = set(clean)
+                for key, fdata in fusions.items():
+                    parts = key.split("|")
+                    if len(parts) == 2 and (parts[0] in clean_set or parts[1] in clean_set):
+                        fusion_concepts.append(f"{parts[0]}_{parts[1]}")
+                # Cap at 1/3 of original to prevent convergence
+                max_fusions = max(1, len(clean) // 3)
+                fusion_concepts = fusion_concepts[:max_fusions]
+                if fusion_concepts:
+                    self._p41_recursion_guard = True
+                    try:
+                        self.observe(fusion_concepts)
+                    finally:
+                        self._p41_recursion_guard = False
+
         if self.federated:
             self._invalidate_zone_cache()
 

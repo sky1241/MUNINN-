@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5 upgrades, 32 PASS) + TIER 3 (7 upgrades, 106 PASS), 0 en roadmap, 3 supprimees (P3), 77 bugs corriges
+Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5 upgrades, 32 PASS) + TIER 3 (8 upgrades, 111 PASS), 0 en roadmap, 3 supprimees (P3), 77 bugs corriges
 Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
@@ -767,6 +767,7 @@ All 5 upgrades wired into boot() pipeline.
 C1: Saturation beta active (Lotka-Volterra beta=0.001, freine les connexions monopoles >50 count). 5 bornes.
 C2: Boot feedback log — .muninn/boot_feedback.json, tracks blind spots covered/uncovered, last 20 boots. 5 bornes.
 C6: CLI diagnose — `muninn.py diagnose` full health: tree/mycelium/anomalies/blind spots/sessions. 5 bornes.
+P41: Mycelium auto-referentiel — observe fusions as 2nd-order co-occurrences (1/3 ratio cap). 5 bornes.
 Probleme: mycelium.json explose (376 Mo Muninn, 173 Mo Ygg, 946 Mo meta = 1.5 Go total).
 4 jours, 103 sessions chez Ygg = 716K connections, 479K fusions. JSON pretty-print = 16M lignes.
 VSCode crash, RAM saturee, et ca va empirer (arXiv = 2449 tars a venir).
