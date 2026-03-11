@@ -2222,6 +2222,25 @@ def boot(query: str = "") -> str:
             loaded_concepts.update(branch_concepts)
             loaded.append((name, branch_text))
             loaded_tokens += node_tokens
+
+        # C3: Auto-preload top predictions that weren't already loaded
+        loaded_names = {n for n, _ in loaded}
+        if prediction_scores:
+            top_preds = sorted(prediction_scores.items(), key=lambda x: x[1], reverse=True)
+            for pred_name, pred_score in top_preds[:3]:  # max 3 preloads
+                if pred_name in loaded_names or pred_name not in nodes:
+                    continue
+                if pred_score < 0.3:
+                    break  # only preload strong predictions
+                node = nodes[pred_name]
+                node_tokens = node["lines"] * BUDGET["tokens_per_line"]
+                if loaded_tokens + node_tokens > BUDGET["max_loaded_tokens"]:
+                    break
+                branch_text = read_node(pred_name, _tree=tree)
+                if branch_text:
+                    loaded.append((pred_name, branch_text))
+                    loaded_tokens += node_tokens
+                    loaded_names.add(pred_name)
     else:
         ranked = sorted(
             [(n, d) for n, d in nodes.items() if n != "root"],
