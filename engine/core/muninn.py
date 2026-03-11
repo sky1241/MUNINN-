@@ -2239,6 +2239,41 @@ def boot(query: str = "") -> str:
                 scored.append((name, total))
 
         scored.sort(key=lambda x: x[1], reverse=True)
+
+        # V5B: Cross-inhibition winner-take-all (Seeley et al. 2012, Science)
+        # When top branches have similar scores (within 15%), they cross-inhibit.
+        # Better branch (higher r) wins. beta controls inhibition strength.
+        # dNA/dt = rA*(1-NA/K)*NA - beta*NB*NA
+        # Simplified: iterate until convergence or max_iter
+        _beta_inhib = 0.3   # inhibition strength (0=disabled)
+        _K_inhib = 1.0      # carrying capacity
+        _max_iter = 10
+        if _beta_inhib > 0 and len(scored) >= 2:
+            top_score = scored[0][1]
+            # Find competing branches (within 15% of top)
+            competitors = [(n, s) for n, s in scored if s >= top_score * 0.85]
+            if len(competitors) >= 2:
+                # Run Lotka-Volterra competition
+                # N = current score (normalized), r = relevance (fitness)
+                pop = {n: s for n, s in competitors}
+                for _ in range(_max_iter):
+                    new_pop = {}
+                    for n, s in pop.items():
+                        # Growth: r * (1 - N/K) * N
+                        r = relevance_scores.get(n, 0.1)
+                        growth = r * (1.0 - s / _K_inhib) * s
+                        # Inhibition from all other competitors
+                        inhibition = sum(_beta_inhib * pop[m] * s
+                                        for m in pop if m != n)
+                        new_s = s + 0.1 * (growth - inhibition)  # dt=0.1
+                        new_pop[n] = max(0.001, min(_K_inhib, new_s))
+                    pop = new_pop
+                # Update scores with competition result
+                score_map = dict(scored)
+                for n, s in pop.items():
+                    score_map[n] = s
+                scored = sorted(score_map.items(), key=lambda x: x[1], reverse=True)
+
         loaded_tokens = nodes["root"]["lines"] * BUDGET["tokens_per_line"]
 
         # Bloom-style concept tracking: skip branches that add <10% new concepts
@@ -4627,11 +4662,30 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
 
         # Usefulness = fraction of branch concepts that appeared in session
         overlap = branch_concepts & session_concepts
-        usefulness = len(overlap) / len(branch_concepts)
+        reward = len(overlap) / len(branch_concepts)  # r_t in [0, 1]
 
-        # Exponential moving average: 0.7 * old + 0.3 * new
+        # V2B: TD-Learning reward prediction error (Schultz, Dayan, Montague 1997)
+        # delta_t = r_t + gamma * V(s_next) - V(s_t)
+        # V(s_t) <- V(s_t) + alpha * delta_t
+        # gamma=0.9 (future discount), alpha=0.1 (learning rate)
+        _gamma = 0.9
+        _alpha_td = 0.1
+        v_current = node.get("td_value", 0.5)  # V(s), default 0.5
+        # V(s_next) ~ average V of all branches (steady-state approximation)
+        v_next = v_current  # self-referencing: next state ~ current value
+        delta = reward + _gamma * v_next - v_current
+        v_new = v_current + _alpha_td * delta
+        v_new = max(0.0, min(1.0, v_new))  # clamp [0, 1]
+        node["td_value"] = round(v_new, 4)
+        node["td_delta"] = round(delta, 4)  # store last delta for debugging
+
+        # Usefulness updated via EMA as before, now also informed by TD
+        # Branches with positive delta (better than expected) get boosted
         old_score = node.get("usefulness", 0.5)
-        node["usefulness"] = round(0.7 * old_score + 0.3 * usefulness, 3)
+        # Blend: 70% old + 30% reward, plus TD bonus (delta > 0 = surprise boost)
+        td_bonus = max(0.0, delta) * 0.1  # positive surprise adds up to +0.1
+        node["usefulness"] = round(0.7 * old_score + 0.3 * reward + td_bonus, 3)
+        node["usefulness"] = min(1.0, node["usefulness"])  # cap at 1.0
         updated = True
 
     if updated:
