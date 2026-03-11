@@ -31,9 +31,19 @@ def date_to_days(d: str) -> int:
         return (date.today() - _EPOCH_REF).days
 
 
-def days_to_date(days: int) -> str:
-    """Convert epoch-days integer back to 'YYYY-MM-DD' string."""
-    dt = _EPOCH_REF + timedelta(days=days)
+def days_to_date(days) -> str:
+    """Convert epoch-days integer back to 'YYYY-MM-DD' string.
+
+    Handles TEXT values stored by legacy code (returns them as-is if valid date).
+    """
+    if isinstance(days, str):
+        if len(days) == 10 and days[4] == '-':
+            return days
+        try:
+            days = int(days)
+        except (ValueError, TypeError):
+            return "2026-01-01"
+    dt = _EPOCH_REF + timedelta(days=int(days))
     return dt.strftime("%Y-%m-%d")
 
 
@@ -329,7 +339,7 @@ class MyceliumDB:
         return row is not None
 
     def upsert_fusion(self, concept_a: str, concept_b: str,
-                      form: str, strength: int, fused_at: int = None):
+                      form: str, strength: int, fused_at=None):
         """Create or update a fusion."""
         a_key = min(concept_a, concept_b)
         b_key = max(concept_a, concept_b)
@@ -337,6 +347,8 @@ class MyceliumDB:
         b_id = self._get_or_create_concept(b_key)
         if fused_at is None:
             fused_at = today_days()
+        elif isinstance(fused_at, str):
+            fused_at = date_to_days(fused_at)
 
         self._conn.execute("""
             INSERT INTO fusions (a, b, form, strength, fused_at)
@@ -555,20 +567,18 @@ class MyceliumDB:
     def all_degrees(self) -> dict[str, int]:
         """Get degree for all concepts. Returns {name: degree}.
 
-        Uses SQL aggregation — O(1) Python, all work done by SQLite engine.
+        Uses SQL aggregation + JOIN for name resolution (no Python linear scan).
         """
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         degree = {}
-        # UNION ALL: count each edge for both endpoints
         for row in self._conn.execute("""
-            SELECT concept_id, SUM(cnt) as degree FROM (
+            SELECT c.name, SUM(d.cnt) as degree FROM (
                 SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
                 UNION ALL
                 SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
-            ) GROUP BY concept_id
+            ) d JOIN concepts c ON c.id = d.concept_id
+            GROUP BY d.concept_id
         """):
-            name = id_to_name.get(row[0], self._concept_name(row[0]))
-            degree[name] = row[1]
+            degree[row[0]] = row[1]
         return degree
 
     def neighbors(self, concept: str, top_n: int = None) -> list[tuple[str, int]]:

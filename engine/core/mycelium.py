@@ -2212,7 +2212,7 @@ class Mycelium:
                         self._db.upsert_fusion(
                             a_name, b_name,
                             form=frow[2], strength=frow[3],
-                            fused_at=days_to_date(frow[4]),
+                            fused_at=frow[4],
                         )
             else:
                 local_conns = self.data["connections"]
