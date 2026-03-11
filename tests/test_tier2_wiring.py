@@ -82,8 +82,9 @@ def test_w4_session_type_weights():
     debug = muninn.classify_session(["error", "fix", "bug"] * 5,
                                      ["E> crash", "E> fix applied", "E> resolved"])
     assert debug["type"] == "debug", f"W4 FAIL: expected debug, got {debug['type']}"
-    # Explore session
-    explore = muninn.classify_session([f"topic{i}" for i in range(20)], [])
+    # Explore session — pass non-empty tagged_lines to avoid session_index fallback
+    explore = muninn.classify_session([f"topic{i}" for i in range(20)],
+                                       ["D> exploring new area"])
     assert explore["type"] == "explore", f"W4 FAIL: expected explore, got {explore['type']}"
     # Verify the weight adjustment logic exists in boot (structural check)
     import inspect

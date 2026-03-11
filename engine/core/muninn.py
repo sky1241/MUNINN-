@@ -2295,8 +2295,8 @@ def boot(query: str = "") -> str:
             tau = max(0.01, usefulness * recall_blended)  # pheromone deposit
             eta = max(0.01, relevance)  # local heuristic
             aco_score = min(1.0, tau * (eta ** 2))  # tau^1 * eta^2, clamped
-            # Blend: 80% original + 20% ACO (ACO amplifies high-relevance + high-history)
-            total = 0.8 * total + 0.2 * aco_score
+            # Additive bonus: reward branches with strong history + relevance
+            total += 0.05 * aco_score
 
             # B3: Blind spot bonus — branches covering structural holes get +0.05
             tags = set(node.get("tags", []))

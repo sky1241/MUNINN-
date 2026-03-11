@@ -379,9 +379,9 @@ def _compute_scores(nodes, branch_contents, query, disable=None, mycelium=None):
             tau = max(0.01, usefulness * recall_blended)
             eta = max(0.01, relevance)
             aco_score = min(1.0, tau * (eta ** 2))
-            old_total = total
-            total = 0.8 * total + 0.2 * aco_score
-            components["V7B_aco"] = total - old_total
+            bonus = 0.05 * aco_score
+            total += bonus
+            components["V7B_aco"] = bonus
         else:
             components["V7B_aco"] = 0.0
 
