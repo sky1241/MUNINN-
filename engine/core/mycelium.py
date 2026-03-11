@@ -796,6 +796,85 @@ class Mycelium:
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:top_n]
 
+    def transitive_inference(self, concept: str, max_hops: int = 3,
+                              beta: float = 0.5, top_n: int = 15,
+                              min_strength: float = 0.01) -> list[tuple[str, float]]:
+        """V3A Transitive inference value transfer (Wynne 1995, Paz-y-Mino 2004).
+
+        If A->B strong and B->C strong, infer A->C with weight = product of
+        edge strengths along path * beta^hops. Unlike spreading activation,
+        this tracks multiplicative chain strength (ordered transitive closure).
+
+        V(A->C) = strength(A,B) * strength(B,C) * beta^2
+
+        Args:
+            concept: starting concept
+            max_hops: maximum chain length (3 = A->B->C->D)
+            beta: decay per hop (0.5 = halves each step)
+            top_n: max concepts to return
+            min_strength: prune paths below this threshold
+
+        Returns:
+            list of (concept, inferred_strength) sorted descending.
+        """
+        conns = self.data["connections"]
+        if not conns:
+            return []
+
+        concept = concept.lower().strip()
+
+        # Build adjacency with raw weights (no normalization — chain product)
+        adj = {}  # concept -> [(neighbor, weight)]
+        max_weight = 0.0
+        for key, val in conns.items():
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            w = float(val["count"])
+            if w > max_weight:
+                max_weight = w
+            adj.setdefault(a, []).append((b, w))
+            adj.setdefault(b, []).append((a, w))
+
+        if concept not in adj or max_weight == 0:
+            return []
+
+        # Normalize weights to [0,1] for meaningful products
+        inv_max = 1.0 / max_weight
+        for c in adj:
+            adj[c] = [(n, w * inv_max) for n, w in adj[c]]
+
+        # BFS with multiplicative path strength + relaxation
+        # Unlike spreading activation, we track path products and allow
+        # updates if a longer path is stronger (Dijkstra-like relaxation).
+        inferred = {}  # concept -> best inferred strength
+        frontier = [(concept, 1.0)]  # (node, cumulative_strength)
+        seed = concept
+
+        for hop in range(1, max_hops + 1):
+            decay = beta ** hop
+            next_frontier = {}  # node -> best path_strength (deduped)
+            for node, path_strength in frontier:
+                for neighbor, edge_w in adj.get(node, []):
+                    if neighbor == seed:
+                        continue  # never return to seed
+                    chain_strength = path_strength * edge_w * decay
+                    if chain_strength < min_strength:
+                        continue
+                    # Update inferred if this path is stronger
+                    if neighbor not in inferred or chain_strength > inferred[neighbor]:
+                        inferred[neighbor] = chain_strength
+                    # Dedup frontier: keep best path_strength per node
+                    raw_path = path_strength * edge_w
+                    if neighbor not in next_frontier or raw_path > next_frontier[neighbor]:
+                        next_frontier[neighbor] = raw_path
+            frontier = list(next_frontier.items())
+
+        # Sort by inferred strength
+        results = sorted(inferred.items(), key=lambda x: x[1], reverse=True)
+        return results[:top_n]
+
     def get_learned_fillers(self) -> list[str]:
         """Identify filler words from the mycelium.
 

@@ -2147,6 +2147,26 @@ def boot(query: str = "") -> str:
         except Exception:
             pass  # mycelium not available or no connections
 
+        # V3A: Transitive inference (Wynne 1995, Paz-y-Mino 2004)
+        # Ordered chain reasoning: A->B->C infers A->C with decaying strength.
+        # Complements spreading activation — tracks multiplicative path strength.
+        transitive_scores = {}  # branch_name -> transitive bonus
+        try:
+            for qw in query_words[:5]:  # top 5 query words to limit compute
+                inferred = m.transitive_inference(qw, max_hops=3, beta=0.5, top_n=20)  # type: ignore[possibly-undefined]
+                if inferred:
+                    inferred_set = {c: s for c, s in inferred}
+                    for bname, bcontent in branch_contents.items():
+                        bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
+                        overlap = bwords & set(inferred_set.keys())
+                        if overlap:
+                            t_score = sum(inferred_set[w] for w in overlap)
+                            t_norm = min(1.0, t_score / max(len(overlap), 1))
+                            transitive_scores[bname] = max(
+                                transitive_scores.get(bname, 0), t_norm)
+        except Exception:
+            pass
+
         # B3: Detect blind spots — boost branches that fill structural holes
         blind_spot_concepts = set()
         blind_spots = []
@@ -2240,6 +2260,11 @@ def boot(query: str = "") -> str:
             tags = set(node.get("tags", []))
             if tags & blind_spot_concepts:
                 total += 0.05
+
+            # V3A: Transitive inference bonus — branches reachable via ordered chains
+            t_score = transitive_scores.get(name, 0.0)
+            if t_score > 0:
+                total += 0.05 * t_score  # max +0.05
 
             # B4: Prediction bonus — predicted branches get +0.03 * prediction_score
             pred_score = prediction_scores.get(name, 0.0)
