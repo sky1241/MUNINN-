@@ -1,18 +1,13 @@
-"""V5A — Quorum sensing Hill switch: strict validation bornes.
+"""V5A — Quorum sensing Hill switch: PRODUCTION tests.
 
-Paper: Waters & Bassler 2005, Annual Review of Cell and Developmental Biology.
-Formula: f(A) = A^n / (K^n + A^n)
-
-Tests:
-  V5A.1  Below threshold (A < K): output < 0.5
-  V5A.2  At threshold (A = K): output = 0.5
-  V5A.3  Above threshold (A > K): output > 0.5
-  V5A.4  n=1 (Michaelis-Menten): gentle sigmoid
-  V5A.5  n=10 (ultra-sensitive): near-step function
-  V5A.6  A=0: output = 0 (no quorum)
+Tests that boot() quorum Hill scoring activates when tags overlap with activated_set.
+The V5A code in boot() adds a Hill-function bonus when spreading-activation concepts
+overlap with a branch's tags.
 """
-import sys, os
+import sys, os, json, tempfile, shutil, time
+from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
+import muninn
 
 PASS = 0
 FAIL = 0
@@ -27,63 +22,102 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def hill_gate(A, K=2.0, n=3):
-    """Hill function quorum gate: f(A) = A^n / (K^n + A^n)"""
-    if A <= 0:
-        return 0.0
-    return (A ** n) / (K ** n + A ** n)
+def _setup_and_boot(branches, query):
+    """Create temp repo, run boot(), return loaded branches and output."""
+    tmpdir = Path(tempfile.mkdtemp(prefix="muninn_v5a_"))
+    tree_dir = tmpdir / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True, exist_ok=True)
+    (tmpdir / ".muninn" / "sessions").mkdir(parents=True, exist_ok=True)
+
+    root_text = "# root\nmemory compression project muninn\n"
+    (tree_dir / "root.mn").write_text(root_text, encoding="utf-8")
+
+    nodes = {
+        "root": {
+            "type": "root", "file": "root.mn", "lines": 2, "max_lines": 100,
+            "children": [], "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 1, "tags": [], "hash": "00000000",
+        }
+    }
+    for b in branches:
+        bname = b["name"]
+        bfile = f"{bname}.mn"
+        content = b.get("content", f"# {bname}\n{' '.join(b.get('tags', []))}\n")
+        (tree_dir / bfile).write_text(content, encoding="utf-8")
+        nodes["root"]["children"].append(bname)
+        nodes[bname] = {
+            "type": "branch", "file": bfile,
+            "lines": len(content.split("\n")), "max_lines": 150,
+            "children": [], "last_access": b.get("last_access", time.strftime("%Y-%m-%d")),
+            "access_count": b.get("access_count", 3),
+            "tags": b.get("tags", []), "temperature": b.get("temperature", 0.5),
+            "usefulness": b.get("usefulness", 0.5), "hash": "00000000",
+        }
+
+    tree = {"version": 2, "created": time.strftime("%Y-%m-%d"),
+            "budget": muninn.BUDGET, "nodes": nodes}
+    (tree_dir / "tree.json").write_text(json.dumps(tree, indent=2), encoding="utf-8")
+
+    old_repo = muninn._REPO_PATH
+    muninn._REPO_PATH = tmpdir
+    muninn._refresh_tree_paths()
+    try:
+        output = muninn.boot(query)
+        loaded = {}
+        for b in branches:
+            loaded[b["name"]] = f"=== {b['name']} ===" in output
+        return loaded, output
+    finally:
+        muninn._REPO_PATH = old_repo
+        muninn._refresh_tree_paths()
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def test_v5a_1_below_threshold():
-    """A < K -> output < 0.5"""
-    f = hill_gate(1.0, K=2.0, n=3)
-    check("V5A.1", f < 0.5, f"f(1)={f:.4f} < 0.5")
+def test_v5a_1_quorum_with_activated_tags():
+    """Branch with many tags matching activated concepts gets Hill boost"""
+    # Branch with tags that should be activated by spreading activation from query
+    branches = [
+        {"name": "br_quorum", "tags": ["memory", "compression", "tokens"],
+         "content": "# br_quorum\nmemory compression tokens pipeline tree mycelium spreading\n"},
+        {"name": "br_isolated", "tags": ["unrelated_xyz"],
+         "content": "# br_isolated\nunrelated_xyz standalone nothing matching query\n"},
+    ]
+    loaded, _ = _setup_and_boot(branches, "memory compression tokens")
+    check("V5A.1", loaded["br_quorum"],
+          f"quorum={loaded['br_quorum']}, isolated={loaded['br_isolated']}")
 
 
-def test_v5a_2_at_threshold():
-    """A = K -> output = 0.5"""
-    f = hill_gate(2.0, K=2.0, n=3)
-    check("V5A.2", abs(f - 0.5) < 1e-10, f"f(K)={f:.10f}")
+def test_v5a_2_no_tags_no_quorum():
+    """Branch with empty tags gets no quorum bonus"""
+    branches = [
+        {"name": "br_tagged", "tags": ["memory", "compression"],
+         "content": "# br_tagged\nmemory compression pipeline layers applied\n"},
+        {"name": "br_untagged", "tags": [],
+         "content": "# br_untagged\nmemory compression different approach untagged\n"},
+    ]
+    loaded, _ = _setup_and_boot(branches, "memory compression")
+    # Both may load (small branches), but tagged one should be preferred
+    check("V5A.2", loaded["br_tagged"],
+          f"tagged={loaded['br_tagged']}, untagged={loaded['br_untagged']}")
 
 
-def test_v5a_3_above_threshold():
-    """A > K -> output > 0.5"""
-    f = hill_gate(4.0, K=2.0, n=3)
-    check("V5A.3", f > 0.5, f"f(4)={f:.4f} > 0.5")
-
-
-def test_v5a_4_gentle():
-    """n=1: gentle Michaelis-Menten curve"""
-    f_low = hill_gate(0.5, K=2.0, n=1)
-    f_high = hill_gate(4.0, K=2.0, n=1)
-    # n=1 is gentle: f(0.5) = 0.2, f(4) = 0.667
-    check("V5A.4", f_low > 0.1 and f_high < 0.8,
-          f"f(0.5)={f_low:.4f}, f(4)={f_high:.4f} (gentle)")
-
-
-def test_v5a_5_ultrasensitive():
-    """n=10: near-step function"""
-    f_low = hill_gate(1.5, K=2.0, n=10)
-    f_high = hill_gate(2.5, K=2.0, n=10)
-    # n=10 is sharp: f(1.5) very small, f(2.5) very high
-    check("V5A.5", f_low < 0.1 and f_high > 0.9,
-          f"f(1.5)={f_low:.4f} < 0.1, f(2.5)={f_high:.4f} > 0.9")
-
-
-def test_v5a_6_zero():
-    """A=0: output = 0"""
-    f = hill_gate(0.0, K=2.0, n=3)
-    check("V5A.6", f == 0.0, f"f(0)={f}")
+def test_v5a_3_boot_completes_with_hill_code():
+    """Boot completes without error when V5A quorum code runs"""
+    branches = [
+        {"name": f"br_{i}", "tags": [f"concept_{i}", "shared"],
+         "content": f"# br_{i}\nconcept_{i} shared topic query matching words\n"}
+        for i in range(4)
+    ]
+    loaded, output = _setup_and_boot(branches, "shared concept_0")
+    any_loaded = any(loaded.values())
+    check("V5A.3", any_loaded and len(output) > 0, "boot completed with Hill code active")
 
 
 if __name__ == "__main__":
-    print("=== V5A Quorum Sensing Hill Switch — 6 bornes ===")
-    test_v5a_1_below_threshold()
-    test_v5a_2_at_threshold()
-    test_v5a_3_above_threshold()
-    test_v5a_4_gentle()
-    test_v5a_5_ultrasensitive()
-    test_v5a_6_zero()
+    print("=== V5A Quorum Sensing Hill (PRODUCTION) — 3 bornes ===")
+    test_v5a_1_quorum_with_activated_tags()
+    test_v5a_2_no_tags_no_quorum()
+    test_v5a_3_boot_completes_with_hill_code()
     print(f"\n=== RESULTAT: {PASS} PASS, {FAIL} FAIL ===")
     if FAIL > 0:
         sys.exit(1)

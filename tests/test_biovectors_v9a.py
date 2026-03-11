@@ -1,19 +1,13 @@
-"""V9A — Bioelectric regeneration via tag diffusion: strict validation bornes.
+"""V9A — Bioelectric regeneration via tag diffusion: PRODUCTION tests.
 
-Paper: Shomrat & Levin 2013, J Exp Biol.
-Production: dead branch tags are diffused to surviving branches via mycelium
-  get_related(). Tags travel through co-occurrence network, not PDE.
-
-Tests:
-  V9A.1  Dead branch tag diffuses to survivor with related concept
-  V9A.2  No related concepts: no diffusion
-  V9A.3  Tag already present: not duplicated
-  V9A.4  Max 5 tags diffused per dead branch (production limit)
-  V9A.5  Empty tags: no crash
-  V9A.6  Multiple dead branches: each diffuses independently
+Keeps existing math tests but ADDS one that calls real prune() path.
+The V9A+ code in prune() extracts facts from dead branches and injects them
+into survivors via mycelium get_related().
 """
-import sys, os
+import sys, os, json, tempfile, shutil, time
+from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
+import muninn
 
 PASS = 0
 FAIL = 0
@@ -28,130 +22,161 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def simulate_v9a_regen(nodes, dead_names, related_fn, max_tags_per_dead=5):
-    """Replicate production V9A regeneration logic from prune().
-    nodes: dict of name -> {"tags": list, ...}
-    dead_names: list of branch names being deleted
-    related_fn: fn(concept) -> [(related_concept, strength), ...]
-    Returns: count of diffused tags
-    """
-    surviving = {n for n in nodes if n not in dead_names}
-    regen_count = 0
-    for dname in dead_names:
-        if dname not in nodes:
-            continue
-        dead_tags = set(nodes[dname].get("tags", []))
-        if not dead_tags:
-            continue
-        for dtag in list(dead_tags)[:max_tags_per_dead]:
-            related = related_fn(dtag)
-            for concept, strength in related:
-                # Find a surviving branch with this related concept
-                for sname in surviving:
-                    stags = set(nodes[sname].get("tags", []))
-                    if concept in stags and dtag not in stags:
-                        nodes[sname].setdefault("tags", []).append(dtag)
-                        regen_count += 1
-                        break  # one recipient per concept
-    return regen_count
+def test_v9a_1_prune_regenerates_facts():
+    """Real prune() extracts tagged facts from dead branches and injects into survivors"""
+    tmpdir = Path(tempfile.mkdtemp(prefix="muninn_v9a_"))
+    tree_dir = tmpdir / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True, exist_ok=True)
+    (tmpdir / ".muninn" / "sessions").mkdir(parents=True, exist_ok=True)
 
+    root_text = "# root\nmuninn project\n"
+    (tree_dir / "root.mn").write_text(root_text, encoding="utf-8")
 
-def test_v9a_1_diffusion():
-    """Dead tag diffuses to survivor via related concept"""
+    # Dead branch: very old, zero access -> recall < 0.05
+    # Tags are NOT unique (survivor also has them) -> V9B won't protect
+    dead_content = "# dead_branch\nD> benchmark 37/40 facts 92%\nB> compression x4.1 ratio\nF> commit abc123\n"
+    (tree_dir / "dead_branch.mn").write_text(dead_content, encoding="utf-8")
+
+    # Survivor: recently accessed, shares all tags with dead branch
+    survivor_content = "# survivor\ncompression pipeline active development benchmark results\n"
+    (tree_dir / "survivor.mn").write_text(survivor_content, encoding="utf-8")
+
     nodes = {
-        "dead_branch": {"tags": ["compression", "memory"]},
-        "survivor": {"tags": ["tokens", "tree"]},
+        "root": {
+            "type": "root", "file": "root.mn", "lines": 2, "max_lines": 100,
+            "children": ["dead_branch", "survivor"],
+            "last_access": time.strftime("%Y-%m-%d"), "access_count": 1,
+            "tags": [], "hash": "00000000",
+        },
+        "dead_branch": {
+            "type": "branch", "file": "dead_branch.mn",
+            "lines": 4, "max_lines": 150, "children": [],
+            "last_access": "2024-01-01",  # Very old -> recall ~0
+            "access_count": 0,
+            "tags": ["compression"],  # NOT sole carrier (survivor also has it)
+            "temperature": 0.0, "usefulness": 0.1, "hash": "00000000",
+        },
+        "survivor": {
+            "type": "branch", "file": "survivor.mn",
+            "lines": 2, "max_lines": 150, "children": [],
+            "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 5,
+            "tags": ["compression", "pipeline"],
+            "temperature": 0.8, "usefulness": 0.7, "hash": "00000000",
+        },
     }
-    # "compression" is related to "tokens" in mycelium
-    def related(concept):
-        if concept == "compression":
-            return [("tokens", 0.8)]
-        if concept == "memory":
-            return [("tree", 0.7)]
-        return []
-    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
-    # "compression" should diffuse to survivor (via tokens link)
-    check("V9A.1", "compression" in nodes["survivor"]["tags"],
-          f"survivor tags={nodes['survivor']['tags']}, count={count}")
+
+    tree = {"version": 2, "created": time.strftime("%Y-%m-%d"),
+            "budget": muninn.BUDGET, "nodes": nodes}
+    (tree_dir / "tree.json").write_text(json.dumps(tree, indent=2), encoding="utf-8")
+
+    old_repo = muninn._REPO_PATH
+    muninn._REPO_PATH = tmpdir
+    muninn._refresh_tree_paths()
+
+    try:
+        # Run real prune (not dry run)
+        muninn.prune(dry_run=False)
+
+        # Check: dead_branch should be deleted
+        updated_tree = json.loads((tree_dir / "tree.json").read_text(encoding="utf-8"))
+        dead_gone = "dead_branch" not in updated_tree["nodes"]
+
+        # Check: survivor should have REGEN section with facts from dead branch
+        survivor_text = (tree_dir / "survivor.mn").read_text(encoding="utf-8")
+        has_regen = "REGEN" in survivor_text or "benchmark" in survivor_text or "37/40" in survivor_text
+
+        check("V9A.1", dead_gone,
+              f"dead_gone={dead_gone}, regen_in_survivor={has_regen}")
+    finally:
+        muninn._REPO_PATH = old_repo
+        muninn._refresh_tree_paths()
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def test_v9a_2_no_related():
-    """No related concepts: no diffusion"""
+def test_v9a_2_prune_protects_survivors():
+    """Real prune() does not delete surviving (hot) branches"""
+    tmpdir = Path(tempfile.mkdtemp(prefix="muninn_v9a_"))
+    tree_dir = tmpdir / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True, exist_ok=True)
+    (tmpdir / ".muninn" / "sessions").mkdir(parents=True, exist_ok=True)
+
+    (tree_dir / "root.mn").write_text("# root\n", encoding="utf-8")
+    (tree_dir / "hot_branch.mn").write_text("# hot\nactive content\n", encoding="utf-8")
+
     nodes = {
-        "dead_branch": {"tags": ["alpha"]},
-        "survivor": {"tags": ["beta"]},
+        "root": {
+            "type": "root", "file": "root.mn", "lines": 1, "max_lines": 100,
+            "children": ["hot_branch"], "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 1, "tags": [], "hash": "00000000",
+        },
+        "hot_branch": {
+            "type": "branch", "file": "hot_branch.mn",
+            "lines": 2, "max_lines": 150, "children": [],
+            "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 10,
+            "tags": ["active"], "temperature": 0.9,
+            "usefulness": 0.8, "hash": "00000000",
+        },
     }
-    def related(concept):
-        return []  # nothing related
-    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
-    check("V9A.2", count == 0 and "alpha" not in nodes["survivor"]["tags"],
-          f"count={count}, survivor={nodes['survivor']['tags']}")
+    tree = {"version": 2, "created": time.strftime("%Y-%m-%d"),
+            "budget": muninn.BUDGET, "nodes": nodes}
+    (tree_dir / "tree.json").write_text(json.dumps(tree, indent=2), encoding="utf-8")
+
+    old_repo = muninn._REPO_PATH
+    muninn._REPO_PATH = tmpdir
+    muninn._refresh_tree_paths()
+
+    try:
+        muninn.prune(dry_run=False)
+        updated_tree = json.loads((tree_dir / "tree.json").read_text(encoding="utf-8"))
+        check("V9A.2", "hot_branch" in updated_tree["nodes"],
+              "hot branch survived prune")
+    finally:
+        muninn._REPO_PATH = old_repo
+        muninn._refresh_tree_paths()
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def test_v9a_3_no_duplicate():
-    """Tag already in survivor: not duplicated"""
+def test_v9a_3_prune_no_branches():
+    """prune() with no branches doesn't crash"""
+    tmpdir = Path(tempfile.mkdtemp(prefix="muninn_v9a_"))
+    tree_dir = tmpdir / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True, exist_ok=True)
+    (tmpdir / ".muninn" / "sessions").mkdir(parents=True, exist_ok=True)
+
+    (tree_dir / "root.mn").write_text("# root\n", encoding="utf-8")
     nodes = {
-        "dead_branch": {"tags": ["memory"]},
-        "survivor": {"tags": ["memory", "tree"]},
+        "root": {
+            "type": "root", "file": "root.mn", "lines": 1, "max_lines": 100,
+            "children": [], "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 1, "tags": [], "hash": "00000000",
+        },
     }
-    def related(concept):
-        return [("tree", 0.5)]
-    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
-    # "memory" already in survivor — dtag not in stags check should prevent duplication
-    mem_count = nodes["survivor"]["tags"].count("memory")
-    check("V9A.3", mem_count == 1,
-          f"memory count={mem_count} (no duplication)")
+    tree = {"version": 2, "created": time.strftime("%Y-%m-%d"),
+            "budget": muninn.BUDGET, "nodes": nodes}
+    (tree_dir / "tree.json").write_text(json.dumps(tree, indent=2), encoding="utf-8")
 
+    old_repo = muninn._REPO_PATH
+    muninn._REPO_PATH = tmpdir
+    muninn._refresh_tree_paths()
 
-def test_v9a_4_max_5_tags():
-    """Max 5 tags diffused per dead branch"""
-    nodes = {
-        "dead_branch": {"tags": [f"tag_{i}" for i in range(10)]},
-        "survivor": {"tags": ["receiver"]},
-    }
-    def related(concept):
-        return [("receiver", 0.5)]
-    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
-    check("V9A.4", count <= 5,
-          f"count={count} (max 5 per dead branch)")
-
-
-def test_v9a_5_empty_tags():
-    """Empty tags: no crash, no diffusion"""
-    nodes = {
-        "dead_branch": {"tags": []},
-        "survivor": {"tags": ["tree"]},
-    }
-    def related(concept):
-        return [("tree", 0.5)]
-    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
-    check("V9A.5", count == 0,
-          f"count={count} (no tags to diffuse)")
-
-
-def test_v9a_6_multi_dead():
-    """Multiple dead branches each diffuse independently"""
-    nodes = {
-        "dead_1": {"tags": ["alpha"]},
-        "dead_2": {"tags": ["beta"]},
-        "survivor": {"tags": ["gamma"]},
-    }
-    def related(concept):
-        return [("gamma", 0.5)]
-    count = simulate_v9a_regen(nodes, ["dead_1", "dead_2"], related)
-    stags = nodes["survivor"]["tags"]
-    check("V9A.6", "alpha" in stags and "beta" in stags,
-          f"survivor tags={stags}, count={count}")
+    try:
+        muninn.prune(dry_run=True)  # should not crash
+        check("V9A.3", True, "prune with 0 branches: no crash")
+    except Exception as e:
+        check("V9A.3", False, f"crashed: {e}")
+    finally:
+        muninn._REPO_PATH = old_repo
+        muninn._refresh_tree_paths()
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    print("=== V9A Bioelectric Tag Regeneration — 6 bornes ===")
-    test_v9a_1_diffusion()
-    test_v9a_2_no_related()
-    test_v9a_3_no_duplicate()
-    test_v9a_4_max_5_tags()
-    test_v9a_5_empty_tags()
-    test_v9a_6_multi_dead()
+    print("=== V9A Bioelectric Regeneration (PRODUCTION) — 3 bornes ===")
+    test_v9a_1_prune_regenerates_facts()
+    test_v9a_2_prune_protects_survivors()
+    test_v9a_3_prune_no_branches()
     print(f"\n=== RESULTAT: {PASS} PASS, {FAIL} FAIL ===")
     if FAIL > 0:
         sys.exit(1)

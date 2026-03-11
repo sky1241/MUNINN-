@@ -1,18 +1,12 @@
-"""V2B — TD-Learning reward prediction error: strict validation bornes.
+"""V2B — TD-Learning reward prediction error: PRODUCTION tests.
 
-Paper: Schultz, Dayan, Montague 1997, Science.
-Formula: delta = r + gamma * V(s_next) - V(s); V(s) += alpha * delta
-
-Tests:
-  V2B.1  delta > 0 after successful recall (reward=high) -> usefulness increases
-  V2B.2  delta < 0 after useless recall (reward=low) -> usefulness decreases
-  V2B.3  V(s) converges (doesn't diverge) over 100 simulations
-  V2B.4  gamma=0 behavior: delta = reward - V(s) only (no look-ahead)
-  V2B.5  td_value and td_delta stored in node
-  V2B.6  Usefulness stays in [0, 1] after extreme inputs
+Tests that _update_usefulness() in muninn.py actually updates td_value and usefulness
+in tree.json when given a session transcript. Calls real production code.
 """
-import sys, os
+import sys, os, json, tempfile, shutil, time
+from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
+import muninn
 
 PASS = 0
 FAIL = 0
@@ -27,95 +21,140 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def simulate_td(node, reward, gamma=0.9, alpha=0.1, v_next_mean=0.5):
-    """Simulate what _update_usefulness does for V2B.
-    v_next_mean: mean td_value across all branches (mean-field Bellman backup).
-    """
-    v_current = node.get("td_value", 0.5)
-    v_next = v_next_mean  # mean-field Bellman backup (not self-ref)
-    delta = reward + gamma * v_next - v_current
-    v_new = v_current + alpha * delta
-    v_new = max(0.0, min(1.0, v_new))
-    node["td_value"] = round(v_new, 4)
-    node["td_delta"] = round(delta, 4)
+def _setup_usefulness_test(branch_tags, branch_content, session_words,
+                           initial_usefulness=0.5, initial_td=0.5):
+    """Create temp repo + JSONL transcript, run _update_usefulness, return updated node."""
+    tmpdir = Path(tempfile.mkdtemp(prefix="muninn_v2b_"))
+    tree_dir = tmpdir / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True, exist_ok=True)
+    muninn_dir = tmpdir / ".muninn"
+    (muninn_dir / "sessions").mkdir(parents=True, exist_ok=True)
 
-    old_score = node.get("usefulness", 0.5)
-    td_bonus = max(0.0, delta) * 0.1
-    node["usefulness"] = round(max(0.0, min(1.0, 0.7 * old_score + 0.3 * reward + td_bonus)), 3)
-    return delta
+    # Root
+    (tree_dir / "root.mn").write_text("# root\nproject\n", encoding="utf-8")
+
+    # Branch
+    (tree_dir / "branch_test.mn").write_text(branch_content, encoding="utf-8")
+
+    nodes = {
+        "root": {
+            "type": "root", "file": "root.mn", "lines": 2, "max_lines": 100,
+            "children": ["branch_test"], "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 1, "tags": [], "hash": "00000000",
+        },
+        "branch_test": {
+            "type": "branch", "file": "branch_test.mn",
+            "lines": len(branch_content.split("\n")), "max_lines": 150,
+            "children": [], "last_access": time.strftime("%Y-%m-%d"),
+            "access_count": 3, "tags": branch_tags, "temperature": 0.5,
+            "usefulness": initial_usefulness, "td_value": initial_td,
+            "hash": "00000000",
+        }
+    }
+    tree = {"version": 2, "created": time.strftime("%Y-%m-%d"),
+            "budget": muninn.BUDGET, "nodes": nodes}
+    (tree_dir / "tree.json").write_text(json.dumps(tree, indent=2), encoding="utf-8")
+
+    # Last boot manifest (required by _update_usefulness)
+    last_boot = {"branches": ["branch_test"], "query": "test",
+                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
+    (muninn_dir / "last_boot.json").write_text(json.dumps(last_boot), encoding="utf-8")
+
+    # JSONL transcript with session_words
+    jsonl_path = muninn_dir / "sessions" / "test_session.jsonl"
+    lines = []
+    for word in session_words:
+        msg = {"message": {"content": f"Working on {word} implementation details"}}
+        lines.append(json.dumps(msg))
+    jsonl_path.write_text("\n".join(lines), encoding="utf-8")
+
+    # Point muninn at this repo
+    old_repo = muninn._REPO_PATH
+    muninn._REPO_PATH = tmpdir
+    muninn._refresh_tree_paths()
+
+    try:
+        # Call the REAL production function
+        muninn._update_usefulness(tmpdir, jsonl_path)
+
+        # Reload tree to get updated values
+        updated_tree = json.loads((tree_dir / "tree.json").read_text(encoding="utf-8"))
+        return updated_tree["nodes"].get("branch_test", {})
+    finally:
+        muninn._REPO_PATH = old_repo
+        muninn._refresh_tree_paths()
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def test_v2b_1_positive_delta():
-    """Successful recall (high reward) -> positive delta -> usefulness increases"""
-    node = {"usefulness": 0.5, "td_value": 0.5}
-    old_u = node["usefulness"]
-    delta = simulate_td(node, reward=0.9)
-    check("V2B.1", delta > 0 and node["usefulness"] > old_u,
-          f"delta={delta:.4f}, usefulness {old_u}->{node['usefulness']}")
+def test_v2b_1_high_overlap_increases_usefulness():
+    """High session overlap with branch -> usefulness increases"""
+    # Branch about "memory compression tokens" — session uses the same words
+    node = _setup_usefulness_test(
+        branch_tags=["memory", "compression"],
+        branch_content="# branch_test\nmemory compression tokens pipeline layers filters\n",
+        session_words=["memory", "compression", "tokens", "pipeline", "layers", "filters"],
+        initial_usefulness=0.5, initial_td=0.5,
+    )
+    check("V2B.1", node.get("usefulness", 0) > 0.5,
+          f"usefulness={node.get('usefulness')} (should be > 0.5)")
 
 
-def test_v2b_2_negative_delta():
-    """Useless recall (zero reward) -> negative delta -> usefulness decreases"""
-    node = {"usefulness": 0.7, "td_value": 0.7}
-    old_u = node["usefulness"]
-    delta = simulate_td(node, reward=0.0)
-    # delta = 0 + 0.9*0.5 - 0.7 = -0.25 (mean-field v_next=0.5)
-    check("V2B.2", delta < 0 and node["usefulness"] < old_u,
-          f"delta={delta:.4f}, usefulness {old_u}->{node['usefulness']}")
+def test_v2b_2_no_overlap_decreases_usefulness():
+    """Zero session overlap -> usefulness decreases"""
+    node = _setup_usefulness_test(
+        branch_tags=["memory", "compression"],
+        branch_content="# branch_test\nmemory compression tokens pipeline layers\n",
+        session_words=["quantum", "physics", "relativity", "spacetime"],
+        initial_usefulness=0.7, initial_td=0.7,
+    )
+    check("V2B.2", node.get("usefulness", 1) < 0.7,
+          f"usefulness={node.get('usefulness')} (should be < 0.7)")
 
 
-def test_v2b_3_convergence():
-    """V(s) converges over 100 iterations with constant reward=0.6"""
-    node = {"usefulness": 0.5, "td_value": 0.5}
-    for _ in range(100):
-        simulate_td(node, reward=0.6)
-    v = node["td_value"]
-    # Should converge toward reward/(1-gamma) but clamped at 1.0
-    ok = 0.0 <= v <= 1.0 and v == v  # not NaN
-    check("V2B.3", ok, f"V(s) after 100 iters = {v:.4f}")
-
-
-def test_v2b_4_gamma_zero():
-    """gamma=0: delta = reward - V(s), no look-ahead"""
-    node = {"usefulness": 0.5, "td_value": 0.3}
-    delta = simulate_td(node, reward=0.8, gamma=0.0)
-    expected = 0.8 - 0.3  # = 0.5
-    check("V2B.4", abs(delta - expected) < 0.01,
-          f"delta={delta:.4f}, expected={expected:.4f}")
-
-
-def test_v2b_5_td_fields():
-    """td_value and td_delta stored in node"""
-    node = {"usefulness": 0.5}
-    simulate_td(node, reward=0.7)
-    ok = "td_value" in node and "td_delta" in node
-    check("V2B.5", ok,
+def test_v2b_3_td_value_stored():
+    """td_value and td_delta are stored in the node after update"""
+    node = _setup_usefulness_test(
+        branch_tags=["test"],
+        branch_content="# branch_test\ntest data verification\n",
+        session_words=["test", "data"],
+        initial_usefulness=0.5, initial_td=0.5,
+    )
+    check("V2B.3", "td_value" in node and "td_delta" in node,
           f"td_value={node.get('td_value')}, td_delta={node.get('td_delta')}")
 
 
-def test_v2b_6_clamped():
-    """Usefulness stays in [0, 1] after extreme inputs"""
-    node_high = {"usefulness": 0.99, "td_value": 0.99}
-    simulate_td(node_high, reward=1.0)
-    node_low = {"usefulness": 0.01, "td_value": 0.01}
-    simulate_td(node_low, reward=0.0)
-    ok = (0.0 <= node_high["usefulness"] <= 1.0 and
-          0.0 <= node_low["usefulness"] <= 1.0 and
-          0.0 <= node_high["td_value"] <= 1.0 and
-          0.0 <= node_low["td_value"] <= 1.0)
-    check("V2B.6", ok,
-          f"high: u={node_high['usefulness']}, v={node_high['td_value']}; "
-          f"low: u={node_low['usefulness']}, v={node_low['td_value']}")
+def test_v2b_4_td_value_changes():
+    """td_value actually changes from initial after update"""
+    node = _setup_usefulness_test(
+        branch_tags=["alpha"],
+        branch_content="# branch_test\nalpha beta gamma delta epsilon zeta\n",
+        session_words=["alpha", "beta", "gamma", "delta", "epsilon", "zeta"],
+        initial_usefulness=0.5, initial_td=0.5,
+    )
+    check("V2B.4", node.get("td_value", 0.5) != 0.5,
+          f"td_value={node.get('td_value')} (changed from 0.5)")
+
+
+def test_v2b_5_usefulness_clamped():
+    """Usefulness stays in [0, 1] even with extreme initial values"""
+    node = _setup_usefulness_test(
+        branch_tags=["test"],
+        branch_content="# branch_test\ntest extreme values boundary\n",
+        session_words=["test", "extreme", "values", "boundary"],
+        initial_usefulness=0.99, initial_td=0.99,
+    )
+    ok = 0.0 <= node.get("usefulness", -1) <= 1.0 and 0.0 <= node.get("td_value", -1) <= 1.0
+    check("V2B.5", ok,
+          f"usefulness={node.get('usefulness')}, td_value={node.get('td_value')}")
 
 
 if __name__ == "__main__":
-    print("=== V2B TD-Learning — 6 bornes ===")
-    test_v2b_1_positive_delta()
-    test_v2b_2_negative_delta()
-    test_v2b_3_convergence()
-    test_v2b_4_gamma_zero()
-    test_v2b_5_td_fields()
-    test_v2b_6_clamped()
+    print("=== V2B TD-Learning (PRODUCTION) — 5 bornes ===")
+    test_v2b_1_high_overlap_increases_usefulness()
+    test_v2b_2_no_overlap_decreases_usefulness()
+    test_v2b_3_td_value_stored()
+    test_v2b_4_td_value_changes()
+    test_v2b_5_usefulness_clamped()
     print(f"\n=== RESULTAT: {PASS} PASS, {FAIL} FAIL ===")
     if FAIL > 0:
         sys.exit(1)
