@@ -2219,17 +2219,16 @@ def boot(query: str = "") -> str:
                         action_probs = {c: f / total_freq for c, f in action_concepts.items()}
                         # Score each branch by goal alignment
                         for bname, bcontent in branch_contents.items():
-                            bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
-                            # Cost = negative overlap (more overlap = lower cost)
-                            overlap = bwords & set(action_probs.keys())
-                            if overlap:
-                                # P(actions|goal) ~ exp(-cost), cost = 1 - alignment
-                                alignment = sum(action_probs[w] for w in overlap)
-                                # Prior = usefulness (Bayesian prior from past success)
-                                prior = nodes[bname].get("usefulness", 0.5)
-                                # Posterior ~ likelihood * prior
-                                posterior = math.exp(-1.0 / max(0.01, alignment)) * prior
-                                btom_scores[bname] = min(1.0, posterior)
+                            try:
+                                bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
+                                overlap = bwords & set(action_probs.keys())
+                                if overlap:
+                                    alignment = sum(action_probs[w] for w in overlap)
+                                    prior = nodes[bname].get("usefulness", 0.5)
+                                    posterior = math.exp(-1.0 / max(0.01, alignment)) * prior
+                                    btom_scores[bname] = min(1.0, posterior)
+                            except (KeyError, TypeError):
+                                continue
         except Exception:
             pass
 
@@ -4949,12 +4948,12 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
     if updated:
         max_fisher = max((nodes[b].get("_fisher_raw", 0) for b in boot_branches
                           if b in nodes), default=1.0)
-        if max_fisher > 0:
-            for bname in boot_branches:
-                if bname in nodes and "_fisher_raw" in nodes[bname]:
+        for bname in boot_branches:
+            if bname in nodes and "_fisher_raw" in nodes[bname]:
+                if max_fisher > 0:
                     nodes[bname]["fisher_importance"] = round(
                         nodes[bname]["_fisher_raw"] / max_fisher, 4)
-                    del nodes[bname]["_fisher_raw"]
+                del nodes[bname]["_fisher_raw"]
 
     if updated:
         save_tree(tree)
