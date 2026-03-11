@@ -1,9 +1,10 @@
 # MUNINN — Winter Tree (Baobab)
 
 Type: Baobab (gros tronc, petites branches)
-Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5 upgrades, 32 PASS) + TIER 3 (11 upgrades, 126 PASS), 0 en roadmap, 3 supprimees (P3), 78 bugs corriges
-Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
+Phase: MATURE — pipeline complet, 3 TIERs valides
+Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5+4 wiring, 74 PASS) + TIER 3 (11 upgrades, 126 PASS), CI vert, 1 supprimee (P3), 1 impasse (Meta-Tokens)
+Engine: muninn.py 5289 lignes, 82 fonctions + mycelium.py 1663 lignes, 39 fonctions + mycelium_db.py 930 lignes = 7882 total
+Tests: 25 fichiers, 126+ bornes, 0 FAIL
 
 ## Anatomie
 
@@ -772,6 +773,10 @@ C3: Auto-preload predictions — top 3 B4 predictions (score>=0.3) pre-chargees 
 C4: Real-time k adaptation — adapt_k() in recall()+inject_memory(), sigmoid k adjusts mid-session. 5 bornes.
 C7: Contradiction resolution in B1 — _resolve_contradictions() before L10+L11 in reconsolidation. 5 bornes.
 FIX: SQLite PermissionError on Windows — conn.close() before unlink, try/except on locked .db files.
+FIX: boot() UnboundLocalError — blind_spot_concepts init before query block.
+FIX: mycelium.py relative imports — top-level try/except for package+standalone.
+FIX: CI workflow — mycelium.db check (S1 migration) instead of mycelium.json.
+CI: VERT (all steps pass: tree, engine, mycelium, benchmark, feed).
 Probleme: mycelium.json explose (376 Mo Muninn, 173 Mo Ygg, 946 Mo meta = 1.5 Go total).
 4 jours, 103 sessions chez Ygg = 716K connections, 479K fusions. JSON pretty-print = 16M lignes.
 VSCode crash, RAM saturee, et ca va empirer (arXiv = 2449 tars a venir).
@@ -799,6 +804,27 @@ S3: degre du graphe = detection universelle de stopwords (un mot connecte a tout
 S4: tokenizer comme detecteur de langue + batch API + cache perpetuel dans la DB.
 Ordre: S1+S2 (stockage) → S3 (filtre) → S4 (traduction).
 Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic deja optionnel).
+
+### Audit complet (2026-03-11) — Etat des lieux
+
+**Pipeline compression**: 11 couches (L0-L7, L9, L10, L11) + 7 filtres (P17, P24-P28) = TOUT OPERATIONNEL
+**Features P-series**: 19/19 FAIT (P3 supprime, P21 partiel), toutes branchees et testees
+**Shopping list**: 9/20 FAIT, 1 impasse (Meta-Tokens), 6 skip, 2 maybe, 1 later
+**Carmack moves**: 5/5 FAIT (L10 cue, L11 rules, sleep consolidation, spreading activation, spaced repetition)
+**TIER 1**: 6/6 FAIT (A1-A5, B1), 36 bornes, 100% PASS
+**TIER 2**: 5/5 upgrades + 4 wiring FAIT (B2-B7, W1-W6), 74 bornes, 100% PASS
+**TIER 3**: 11/11 FAIT (S1-S4, C1-C7, P41), 126 bornes cumul, CI vert
+**Cross-domain**: 7 pistes analysees, 4 isomorphismes LaTeX-confirmes (FORMULES_ETRANGERES.md)
+**Tests**: 25 fichiers, 126+ bornes, 0 FAIL, 0 SKIP
+
+**Reste a faire**:
+- P21: publier sur PyPI (pyproject.toml pret)
+- Mode trip divergent (LITERATURE.md #25): exploration improbable entre clusters distants (Carhart-Harris 2012)
+- Synthese/reve (LITERATURE.md #10): generer nouvelles connexions pendant sleep consolidation
+- Huginn (LITERATURE.md #22): "Muninn stocke, Huginn pense" — synthese et insights
+- P31: full arXiv run (attend WT3)
+- P39: liane Yggdrasil (attend WT3)
+- Explication A-Z du systeme pour Sky
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
