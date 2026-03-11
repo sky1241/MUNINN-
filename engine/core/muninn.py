@@ -2044,6 +2044,11 @@ def boot(query: str = "") -> str:
             except (json.JSONDecodeError, OSError):
                 pass
 
+    # Defaults for variables set inside the query block (C2, B3, B4)
+    blind_spot_concepts = set()
+    blind_spots = []
+    prediction_scores = {}
+
     if query:
         # P15: Query expansion via mycelium co-occurrences
         try:
