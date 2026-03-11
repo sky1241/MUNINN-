@@ -2110,6 +2110,7 @@ def boot(query: str = "") -> str:
 
         # B3: Detect blind spots — boost branches that fill structural holes
         blind_spot_concepts = set()
+        blind_spots = []
         try:
             blind_spots = m.detect_blind_spots(top_n=20)  # type: ignore[possibly-undefined]
             for a, b, _ in blind_spots:
@@ -2246,6 +2247,41 @@ def boot(query: str = "") -> str:
         for vname, vtext, vtokens in virtual:
             loaded.append((vname, vtext))
             loaded_tokens += vtokens
+
+    # C2: Boot feedback log — record which blind spots were covered
+    if blind_spot_concepts and loaded:
+        covered = set()
+        uncovered = set()
+        for a, b, reason in blind_spots:
+            pair = f"{a}|{b}"
+            loaded_tags = set()
+            for _, text in loaded:
+                loaded_tags.update(re.findall(r'[a-zA-Z]{3,}', text.lower()))
+            if a in loaded_tags and b in loaded_tags:
+                covered.add(pair)
+            else:
+                uncovered.add(pair)
+        feedback = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "query": query or "",
+            "blind_spots_total": len(blind_spot_concepts) // 2,
+            "covered": list(covered),
+            "uncovered": list(uncovered),
+            "branches_loaded": [n for n, _ in loaded],
+        }
+        feedback_path = (_REPO_PATH or MUNINN_ROOT) / ".muninn" / "boot_feedback.json"
+        try:
+            import json as _json
+            history = []
+            if feedback_path.exists():
+                history = _json.loads(feedback_path.read_text(encoding="utf-8"))
+                if not isinstance(history, list):
+                    history = [history]
+            history.append(feedback)
+            history = history[-20:]  # keep last 20 boots
+            feedback_path.write_text(_json.dumps(history, indent=1, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
 
     # P19: Dedup branches — skip if NCD similarity > 0.6 (too similar)
     deduped = []
