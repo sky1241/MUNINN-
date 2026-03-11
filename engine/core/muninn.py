@@ -2378,6 +2378,12 @@ def boot(query: str = "") -> str:
             output.append("\n=== known_fixes ===")
             output.append(error_hints)
 
+    # H3: Surface Huginn insights at boot
+    if _REPO_PATH:
+        huginn_output = _surface_insights_for_boot(query)
+        if huginn_output:
+            output.append("\n" + huginn_output)
+
     # P36: Save boot manifest for feedback loop
     if _REPO_PATH:
         try:
@@ -2887,6 +2893,101 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
               f"{orig_lines} -> {len(combined.split(chr(10)))} lines")
 
     return results
+
+
+# ── H3: HUGINN — the thinking raven ─────────────────────────────
+
+def huginn_think(query: str = "", top_n: int = 5) -> list[dict]:
+    """H3: Formulate insights in natural language. The second raven speaks.
+
+    Reads .muninn/insights.json (written by dream()), filters by relevance
+    to query, and formats as human-readable messages.
+    Source: Norse mythology — Huginn (thought) + Muninn (memory).
+
+    Returns list of dicts: {type, text, score, age, formatted}.
+    """
+    repo = _REPO_PATH or Path(".")
+    insights_path = repo / ".muninn" / "insights.json"
+    if not insights_path.exists():
+        return []
+
+    try:
+        raw = json.loads(insights_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    if not raw:
+        return []
+
+    # Age calculation (days since insight)
+    now = time.strftime("%Y-%m-%d")
+    for ins in raw:
+        ts = ins.get("timestamp", "")[:10]
+        try:
+            from datetime import datetime
+            delta = (datetime.strptime(now, "%Y-%m-%d") - datetime.strptime(ts, "%Y-%m-%d")).days
+        except (ValueError, TypeError):
+            delta = 0
+        ins["age_days"] = delta
+
+    # Filter by query relevance if query provided
+    if query:
+        q_words = set(query.lower().split())
+        scored = []
+        for ins in raw:
+            concepts = ins.get("concepts", [])
+            text = ins.get("text", "").lower()
+            # Score: concept match + text word overlap
+            match = sum(1 for w in q_words if any(w in c.lower() for c in concepts))
+            match += sum(0.5 for w in q_words if w in text)
+            ins["relevance"] = match
+            scored.append(ins)
+        # Keep only relevant (>0) or top by score if nothing matches
+        relevant = [s for s in scored if s["relevance"] > 0]
+        if relevant:
+            raw = sorted(relevant, key=lambda x: (-x["relevance"], -x.get("score", 0)))
+        else:
+            raw = sorted(raw, key=lambda x: -x.get("score", 0))
+
+    # Format each insight as natural language
+    TYPE_ICONS = {
+        "strong_pair": "BOND",
+        "absence": "BLIND SPOT",
+        "validated_dream": "CONFIRMED",
+        "imbalance": "WARNING",
+        "health": "HEALTH",
+    }
+
+    results = []
+    for ins in raw[:top_n]:
+        itype = ins.get("type", "insight")
+        icon = TYPE_ICONS.get(itype, "INSIGHT")
+        text = ins.get("text", "")
+        score = ins.get("score", 0)
+        age = ins.get("age_days", 0)
+        age_str = "today" if age == 0 else f"{age}d ago"
+
+        formatted = f"[{icon}] {text} (score={score}, {age_str})"
+        results.append({
+            "type": itype,
+            "text": text,
+            "score": score,
+            "age": age,
+            "formatted": formatted,
+        })
+
+    return results
+
+
+def _surface_insights_for_boot(query: str = "") -> str:
+    """H3: Surface top 3 relevant insights at boot time."""
+    insights = huginn_think(query=query, top_n=3)
+    if not insights:
+        return ""
+    lines = ["=== huginn_insights ==="]
+    for ins in insights:
+        lines.append(f"  {ins['formatted']}")
+    return "\n".join(lines)
 
 
 # ── PRUNE (R4) ───────────────────────────────────────────────────
@@ -5113,7 +5214,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "upgrade-hooks", "inject", "diagnose", "trip",
+        "ingest", "recall", "upgrade-hooks", "inject", "diagnose", "trip", "think",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -5182,6 +5283,23 @@ def main():
             print(f"    {d['from']} <-> {d['to']} (zones: {d['zones'][0][:20]}|{d['zones'][1][:20]})")
         if result["created"] > 10:
             print(f"    ... and {result['created'] - 10} more")
+        return
+
+    if args.command == "think":
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        query = args.file or ""
+        insights = huginn_think(query=query, top_n=10)
+        print("=== HUGINN THINK (H3) ===")
+        if not insights:
+            print("  No insights yet. Run `muninn.py prune` to generate (dream runs during sleep).")
+        else:
+            for ins in insights:
+                print(f"  {ins['formatted']}")
+            print(f"\n  {len(insights)} insight(s) total")
         return
 
     if args.command == "scan":
