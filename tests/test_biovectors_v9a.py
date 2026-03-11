@@ -1,16 +1,16 @@
-"""V9A — Bioelectric gap junction regeneration: strict validation bornes.
+"""V9A — Bioelectric regeneration via tag diffusion: strict validation bornes.
 
 Paper: Shomrat & Levin 2013, J Exp Biol.
-Also: Levin 2012, BioEssays.
-Formula: dV_i/dt = -g_leak*(V_i - E_leak) + sum_j g_gap*(V_j - V_i) + I_ion
+Production: dead branch tags are diffused to surviving branches via mycelium
+  get_related(). Tags travel through co-occurrence network, not PDE.
 
 Tests:
-  V9A.1  Diffusion formula: neighbors converge toward dead node's value
-  V9A.2  Leak: isolated node decays to E_leak
-  V9A.3  Gap junction: connected nodes share state
-  V9A.4  Multiple iterations -> convergence
-  V9A.5  Regeneration preserves total information (conservation)
-  V9A.6  Empty neighbors: no diffusion, no crash
+  V9A.1  Dead branch tag diffuses to survivor with related concept
+  V9A.2  No related concepts: no diffusion
+  V9A.3  Tag already present: not duplicated
+  V9A.4  Max 5 tags diffused per dead branch (production limit)
+  V9A.5  Empty tags: no crash
+  V9A.6  Multiple dead branches: each diffuses independently
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
@@ -28,91 +28,130 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def gap_junction_step(V, neighbors, g_leak=0.1, E_leak=0.0, g_gap=0.3):
-    """One step of bioelectric gap junction diffusion.
-    V: dict of node_id -> voltage (state value)
-    neighbors: dict of node_id -> [neighbor_ids]
-    Returns new V dict.
+def simulate_v9a_regen(nodes, dead_names, related_fn, max_tags_per_dead=5):
+    """Replicate production V9A regeneration logic from prune().
+    nodes: dict of name -> {"tags": list, ...}
+    dead_names: list of branch names being deleted
+    related_fn: fn(concept) -> [(related_concept, strength), ...]
+    Returns: count of diffused tags
     """
-    V_new = {}
-    for i in V:
-        leak = -g_leak * (V[i] - E_leak)
-        gap = sum(g_gap * (V[j] - V[i]) for j in neighbors.get(i, []) if j in V)
-        V_new[i] = V[i] + leak + gap
-    return V_new
+    surviving = {n for n in nodes if n not in dead_names}
+    regen_count = 0
+    for dname in dead_names:
+        if dname not in nodes:
+            continue
+        dead_tags = set(nodes[dname].get("tags", []))
+        if not dead_tags:
+            continue
+        for dtag in list(dead_tags)[:max_tags_per_dead]:
+            related = related_fn(dtag)
+            for concept, strength in related:
+                # Find a surviving branch with this related concept
+                for sname in surviving:
+                    stags = set(nodes[sname].get("tags", []))
+                    if concept in stags and dtag not in stags:
+                        nodes[sname].setdefault("tags", []).append(dtag)
+                        regen_count += 1
+                        break  # one recipient per concept
+    return regen_count
 
 
 def test_v9a_1_diffusion():
-    """Neighbors converge toward dead node's value via gap junctions"""
-    # Node A=1.0 (dead), B=0.0, C=0.0. B and C connected to A.
-    V = {"A": 1.0, "B": 0.0, "C": 0.0}
-    neighbors = {"A": ["B", "C"], "B": ["A"], "C": ["A"]}
-    V2 = gap_junction_step(V, neighbors, g_gap=0.3, g_leak=0.0)
-    # B and C should increase toward A's value
-    check("V9A.1", V2["B"] > 0 and V2["C"] > 0,
-          f"B: {V['B']:.2f}->{V2['B']:.3f}, C: {V['C']:.2f}->{V2['C']:.3f}")
+    """Dead tag diffuses to survivor via related concept"""
+    nodes = {
+        "dead_branch": {"tags": ["compression", "memory"]},
+        "survivor": {"tags": ["tokens", "tree"]},
+    }
+    # "compression" is related to "tokens" in mycelium
+    def related(concept):
+        if concept == "compression":
+            return [("tokens", 0.8)]
+        if concept == "memory":
+            return [("tree", 0.7)]
+        return []
+    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
+    # "compression" should diffuse to survivor (via tokens link)
+    check("V9A.1", "compression" in nodes["survivor"]["tags"],
+          f"survivor tags={nodes['survivor']['tags']}, count={count}")
 
 
-def test_v9a_2_leak():
-    """Isolated node decays to E_leak"""
-    V = {"A": 1.0}
-    neighbors = {"A": []}
-    for _ in range(20):
-        V = gap_junction_step(V, neighbors, g_leak=0.1, E_leak=0.0)
-    check("V9A.2", abs(V["A"]) < 0.15,
-          f"after 20 steps: V={V['A']:.4f} (decayed toward 0)")
+def test_v9a_2_no_related():
+    """No related concepts: no diffusion"""
+    nodes = {
+        "dead_branch": {"tags": ["alpha"]},
+        "survivor": {"tags": ["beta"]},
+    }
+    def related(concept):
+        return []  # nothing related
+    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
+    check("V9A.2", count == 0 and "alpha" not in nodes["survivor"]["tags"],
+          f"count={count}, survivor={nodes['survivor']['tags']}")
 
 
-def test_v9a_3_gap_sharing():
-    """Connected nodes share state via gap junctions"""
-    V = {"A": 1.0, "B": 0.0}
-    neighbors = {"A": ["B"], "B": ["A"]}
-    V2 = gap_junction_step(V, neighbors, g_gap=0.3, g_leak=0.0)
-    # A should decrease, B should increase
-    check("V9A.3", V2["A"] < V["A"] and V2["B"] > V["B"],
-          f"A: {V['A']:.2f}->{V2['A']:.3f}, B: {V['B']:.2f}->{V2['B']:.3f}")
+def test_v9a_3_no_duplicate():
+    """Tag already in survivor: not duplicated"""
+    nodes = {
+        "dead_branch": {"tags": ["memory"]},
+        "survivor": {"tags": ["memory", "tree"]},
+    }
+    def related(concept):
+        return [("tree", 0.5)]
+    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
+    # "memory" already in survivor — dtag not in stags check should prevent duplication
+    mem_count = nodes["survivor"]["tags"].count("memory")
+    check("V9A.3", mem_count == 1,
+          f"memory count={mem_count} (no duplication)")
 
 
-def test_v9a_4_convergence():
-    """Multiple iterations -> nodes converge to same value"""
-    V = {"A": 1.0, "B": 0.0, "C": 0.5}
-    neighbors = {"A": ["B", "C"], "B": ["A", "C"], "C": ["A", "B"]}
-    for _ in range(50):
-        V = gap_junction_step(V, neighbors, g_gap=0.2, g_leak=0.01, E_leak=0.0)
-    values = list(V.values())
-    spread = max(values) - min(values)
-    check("V9A.4", spread < 0.05,
-          f"after 50 steps: spread={spread:.4f}, values={[round(v,4) for v in values]}")
+def test_v9a_4_max_5_tags():
+    """Max 5 tags diffused per dead branch"""
+    nodes = {
+        "dead_branch": {"tags": [f"tag_{i}" for i in range(10)]},
+        "survivor": {"tags": ["receiver"]},
+    }
+    def related(concept):
+        return [("receiver", 0.5)]
+    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
+    check("V9A.4", count <= 5,
+          f"count={count} (max 5 per dead branch)")
 
 
-def test_v9a_5_conservation():
-    """Regeneration preserves total information when g_leak=0"""
-    V = {"A": 1.0, "B": 0.0, "C": 0.0}
-    neighbors = {"A": ["B", "C"], "B": ["A"], "C": ["A"]}
-    total_before = sum(V.values())
-    V = gap_junction_step(V, neighbors, g_gap=0.3, g_leak=0.0)
-    total_after = sum(V.values())
-    check("V9A.5", abs(total_before - total_after) < 1e-10,
-          f"before={total_before:.4f}, after={total_after:.4f}")
+def test_v9a_5_empty_tags():
+    """Empty tags: no crash, no diffusion"""
+    nodes = {
+        "dead_branch": {"tags": []},
+        "survivor": {"tags": ["tree"]},
+    }
+    def related(concept):
+        return [("tree", 0.5)]
+    count = simulate_v9a_regen(nodes, ["dead_branch"], related)
+    check("V9A.5", count == 0,
+          f"count={count} (no tags to diffuse)")
 
 
-def test_v9a_6_empty_neighbors():
-    """No neighbors: no diffusion, no crash"""
-    V = {"A": 0.8}
-    neighbors = {}
-    V2 = gap_junction_step(V, neighbors, g_gap=0.3, g_leak=0.1, E_leak=0.0)
-    ok = "A" in V2 and V2["A"] == V2["A"]  # not NaN
-    check("V9A.6", ok, f"A={V2['A']:.4f} (leak only, no crash)")
+def test_v9a_6_multi_dead():
+    """Multiple dead branches each diffuse independently"""
+    nodes = {
+        "dead_1": {"tags": ["alpha"]},
+        "dead_2": {"tags": ["beta"]},
+        "survivor": {"tags": ["gamma"]},
+    }
+    def related(concept):
+        return [("gamma", 0.5)]
+    count = simulate_v9a_regen(nodes, ["dead_1", "dead_2"], related)
+    stags = nodes["survivor"]["tags"]
+    check("V9A.6", "alpha" in stags and "beta" in stags,
+          f"survivor tags={stags}, count={count}")
 
 
 if __name__ == "__main__":
-    print("=== V9A Bioelectric Gap Junction Regeneration — 6 bornes ===")
+    print("=== V9A Bioelectric Tag Regeneration — 6 bornes ===")
     test_v9a_1_diffusion()
-    test_v9a_2_leak()
-    test_v9a_3_gap_sharing()
-    test_v9a_4_convergence()
-    test_v9a_5_conservation()
-    test_v9a_6_empty_neighbors()
+    test_v9a_2_no_related()
+    test_v9a_3_no_duplicate()
+    test_v9a_4_max_5_tags()
+    test_v9a_5_empty_tags()
+    test_v9a_6_multi_dead()
     print(f"\n=== RESULTAT: {PASS} PASS, {FAIL} FAIL ===")
     if FAIL > 0:
         sys.exit(1)

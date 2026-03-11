@@ -467,7 +467,7 @@ def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5,
     High-F branches (critical for past recalls) decay SLOWER.
     When fisher_importance is absent (default 0), behavior is identical to pre-V4B.
     """
-    delta = _days_since(node.get("last_access", "2026-01-01"))
+    delta = _days_since(node.get("last_access", time.strftime("%Y-%m-%d")))
     reviews = node.get("access_count", 0)
     usefulness = max(0.1, node.get("usefulness", 1.0))  # clamp [0.1, 1.0] — A1.7 safety
     half_life = 7.0 * (2 ** min(reviews, 10)) * (usefulness ** _h_beta)
@@ -506,7 +506,7 @@ def _actr_activation(node: dict, _d: float = 0.5) -> float:
 
     if not history:
         # Fallback: synthesize timestamps from last_access + access_count
-        last = node.get("last_access", "2026-01-01")
+        last = node.get("last_access", time.strftime("%Y-%m-%d"))
         count = max(1, node.get("access_count", 1))
         days_ago = max(1, _days_since(last))
         # Spread count accesses uniformly from days_ago to 1 day ago
@@ -609,9 +609,9 @@ def read_node(name: str, _tree: dict | None = None) -> str:
     # Only triggers if: recall < 0.3 AND last_access > 7 days ago AND text > 3 lines
     # Uses L10 (cue distillation) + L11 (rule extraction) — zero API calls.
     recall = _ebbinghaus_recall(node)
-    days_ago = _days_since(node.get("access_history", ["2026-01-01"])[-2]
+    days_ago = _days_since(node.get("access_history", [time.strftime("%Y-%m-%d")])[-2]
                            if len(node.get("access_history", [])) >= 2
-                           else node.get("last_access", "2026-01-01"))
+                           else node.get("last_access", time.strftime("%Y-%m-%d")))
     if recall < 0.3 and days_ago > 7 and text.count("\n") > 3 and name != "root":
         try:
             original_len = len(text)
@@ -2141,6 +2141,7 @@ def boot(query: str = "") -> str:
         # Propagates activation through mycelium to find branches that
         # share NO keywords but are semantically connected via co-occurrence
         activation_scores = {}  # branch_name -> activation bonus
+        activated_set = {}  # concept -> activation strength (for V5A quorum)
         try:
             activated = m.spread_activation(query_words, hops=2, decay=0.5, top_n=50)  # type: ignore[possibly-undefined]
             if activated:
@@ -2152,8 +2153,8 @@ def boot(query: str = "") -> str:
                     if overlap:
                         # Activation score = sum of activations for matching concepts
                         act_score = sum(activated_set[w] for w in overlap)
-                        # Normalize to [0, 1] range (cap at 1.0)
-                        activation_scores[bname] = min(1.0, act_score / max(len(overlap), 1))
+                        # Cap at 1.0 (don't penalize broad connections)
+                        activation_scores[bname] = min(1.0, act_score)
         except Exception:
             pass  # mycelium not available or no connections
 
@@ -2364,11 +2365,9 @@ def boot(query: str = "") -> str:
             # Activate ONLY when enough neighbors are co-activated (quorum)
             # f(A) = A^n / (K^n + A^n), activated = number of activated co-occurring tags
             _node_tags_set = set(node.get("tags", []))
-            if _node_tags_set and activation_scores:
-                # Count how many activated concepts overlap with this branch's tags
-                _activated_count = sum(1 for t in _node_tags_set
-                                       if t in {c for c, _ in
-                                                 (list(activation_scores.items())[:50] if activation_scores else [])})
+            if _node_tags_set and activated_set:
+                # Count how many spreading-activation concepts overlap with this branch's tags
+                _activated_count = sum(1 for t in _node_tags_set if t in activated_set)
                 _K_quorum = 2.0  # threshold: need at least ~2 activated neighbors
                 _n_hill = 3      # Hill coefficient (steepness)
                 if _activated_count > 0:
@@ -2400,35 +2399,33 @@ def boot(query: str = "") -> str:
         # When top branches have similar scores (within 15%), they cross-inhibit.
         # Better branch (higher r) wins. beta controls inhibition strength.
         # dNA/dt = rA*(1-NA/K)*NA - beta*NB*NA
-        # Simplified: iterate until convergence or max_iter
+        # Scores normalized to [0,1] before LV, then denormalized back.
         _beta_inhib = 0.3   # inhibition strength (0=disabled)
         _K_inhib = 1.0      # carrying capacity
         _max_iter = 10
         if _beta_inhib > 0 and len(scored) >= 2:
             top_score = scored[0][1]
-            # Find competing branches (within 15% of top)
-            competitors = [(n, s) for n, s in scored if s >= top_score * 0.85]
-            if len(competitors) >= 2:
-                # Run Lotka-Volterra competition
-                # N = current score (normalized), r = relevance (fitness)
-                pop = {n: s for n, s in competitors}
-                for _ in range(_max_iter):
-                    new_pop = {}
+            if top_score > 0:
+                # Find competing branches (within 15% of top)
+                competitors = [(n, s) for n, s in scored if s >= top_score * 0.85]
+                if len(competitors) >= 2:
+                    # Normalize to [0,1] for LV dynamics (avoid scale mismatch)
+                    pop = {n: s / top_score for n, s in competitors}
+                    for _ in range(_max_iter):
+                        new_pop = {}
+                        for n, s in pop.items():
+                            r = relevance_scores.get(n, 0.1)
+                            growth = r * (1.0 - s / _K_inhib) * s
+                            inhibition = sum(_beta_inhib * pop[m] * s
+                                            for m in pop if m != n)
+                            new_s = s + 0.1 * (growth - inhibition)  # dt=0.1
+                            new_pop[n] = max(0.001, min(_K_inhib, new_s))
+                        pop = new_pop
+                    # Denormalize back to original scale and update
+                    score_map = dict(scored)
                     for n, s in pop.items():
-                        # Growth: r * (1 - N/K) * N
-                        r = relevance_scores.get(n, 0.1)
-                        growth = r * (1.0 - s / _K_inhib) * s
-                        # Inhibition from all other competitors
-                        inhibition = sum(_beta_inhib * pop[m] * s
-                                        for m in pop if m != n)
-                        new_s = s + 0.1 * (growth - inhibition)  # dt=0.1
-                        new_pop[n] = max(0.001, min(_K_inhib, new_s))
-                    pop = new_pop
-                # Update scores with competition result
-                score_map = dict(scored)
-                for n, s in pop.items():
-                    score_map[n] = s
-                scored = sorted(score_map.items(), key=lambda x: x[1], reverse=True)
+                        score_map[n] = s * top_score  # restore scale
+                    scored = sorted(score_map.items(), key=lambda x: x[1], reverse=True)
 
         loaded_tokens = nodes["root"]["lines"] * BUDGET["tokens_per_line"]
 
@@ -3112,17 +3109,35 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
             node = nodes.get(m, {})
             all_tags.update(node.get("tags", []))
 
+        # Prioritize sole-carrier tags (V9B protection: don't lose unique concepts)
+        # Count how many OTHER branches (not in this merge group) carry each tag
+        _other_branches = {n: nd for n, nd in nodes.items()
+                          if n not in members and n != "root" and nd.get("type") == "branch"}
+        _sole_tags = []  # tags only carried by members of this merge
+        _common_tags = []
+        for t in sorted(all_tags):
+            carried_elsewhere = any(t in _ob.get("tags", []) for _ob in _other_branches.values())
+            if not carried_elsewhere:
+                _sole_tags.append(t)
+            else:
+                _common_tags.append(t)
+        # Sole-carrier tags first, then fill remaining slots with common tags
+        _final_tags = _sole_tags + [t for t in _common_tags if t not in _sole_tags]
+
         # Create consolidated node in tree
         nodes[merged_name] = {
             "type": "branch",
             "file": merged_file,
             "lines": len(combined.split("\n")),
             "max_lines": 150,
-            "tags": sorted(all_tags)[:10],
+            "tags": _final_tags[:max(10, len(_sole_tags))],  # keep ALL sole-carriers even if >10
             "temperature": 0.1,  # warm enough to not get immediately pruned
             "access_count": sum(nodes.get(m, {}).get("access_count", 0) for m in members),
-            "last_access": max(nodes.get(m, {}).get("last_access", "2026-01-01") for m in members),
+            "last_access": max(nodes.get(m, {}).get("last_access", time.strftime("%Y-%m-%d")) for m in members),
             "created": time.strftime("%Y-%m-%d"),
+            "usefulness": round(max(nodes.get(m, {}).get("usefulness", 0.5) for m in members), 3),
+            "td_value": round(max(nodes.get(m, {}).get("td_value", 0.5) for m in members), 4),
+            "fisher_importance": round(max(nodes.get(m, {}).get("fisher_importance", 0.0) for m in members), 4),
         }
 
         # Add as child of root
@@ -3283,7 +3298,7 @@ def prune(dry_run: bool = True):
         temp = node.get("temperature", 0)
         acc = node.get("access_count", 0)
         recall = _ebbinghaus_recall(node)
-        days_ago = _days_since(node.get("last_access", "2026-01-01"))
+        days_ago = _days_since(node.get("last_access", time.strftime("%Y-%m-%d")))
 
         # Spaced repetition thresholds (Settles 2016):
         # R > 0.4 = hot (strong recall), R < 0.05 = dead (forgotten)
@@ -4953,6 +4968,8 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
                 if max_fisher > 0:
                     nodes[bname]["fisher_importance"] = round(
                         nodes[bname]["_fisher_raw"] / max_fisher, 4)
+                else:
+                    nodes[bname]["fisher_importance"] = 0.0
                 del nodes[bname]["_fisher_raw"]
 
     if updated:

@@ -1,14 +1,15 @@
-"""V1A — Coupled oscillator arm control: strict validation bornes.
+"""V1A — Coupled oscillator temperature coupling: strict validation bornes.
 
 Paper: Yekutieli et al. 2005, J Neurophysiology.
-Formula: tau_i = J*theta_ddot + B*theta_dot + K*theta + sum_j C_ij*(theta_i - theta_j)
+Production formula: coupling_sum += C * (temp_j - temp_i) for shared tags
+  total += 0.01 * clamp(coupling_sum, -0.05, 0.05)
 
 Tests:
-  V1A.1  Coupling pulls connected nodes toward each other
-  V1A.2  No coupling (C=0): nodes independent
-  V1A.3  Strong coupling: convergence to mean
-  V1A.4  Damping (B>0): oscillations decay
-  V1A.5  Spring (K>0): restoring force toward equilibrium
+  V1A.1  Coupling pulls warmer node down, cooler node up (shared tags)
+  V1A.2  No shared tags: zero coupling
+  V1A.3  Coupling is bounded (clamp ±0.05 * 0.01 = ±0.0005)
+  V1A.4  Multiple shared tags: coupling accumulates
+  V1A.5  Same temperature: zero coupling
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
@@ -26,89 +27,100 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def oscillator_step(theta, theta_dot, neighbors, C=0.1, K=0.5, B=0.3, dt=0.1):
-    """One step of coupled oscillator dynamics.
-    theta: dict of node -> position
-    theta_dot: dict of node -> velocity
-    neighbors: dict of node -> [neighbor_ids]
-    Returns: new theta, theta_dot
+def temperature_coupling(nodes, C=0.1, max_tags=3):
+    """Replicate production V1A coupling logic from boot().
+    nodes: dict of name -> {"temperature": float, "tags": list}
+    Returns: dict of name -> coupling_bonus (before 0.01 * clamp)
     """
-    new_theta = {}
-    new_theta_dot = {}
-    for i in theta:
-        coupling = sum(C * (theta[j] - theta[i]) for j in neighbors.get(i, []) if j in theta)
-        spring = -K * theta[i]
-        damping = -B * theta_dot[i]
-        accel = spring + damping + coupling  # J=1
-        new_theta_dot[i] = theta_dot[i] + accel * dt
-        new_theta[i] = theta[i] + new_theta_dot[i] * dt
-    return new_theta, new_theta_dot
+    results = {}
+    for name, node in nodes.items():
+        my_temp = node.get("temperature", 0.5)
+        node_tags = set(node.get("tags", []))
+        coupling_sum = 0.0
+        for tag in list(node_tags)[:max_tags]:
+            for other_name, other_node in nodes.items():
+                if other_name == name:
+                    continue
+                if tag in set(other_node.get("tags", [])):
+                    other_temp = other_node.get("temperature", 0.5)
+                    coupling_sum += C * (other_temp - my_temp)
+                    break  # one coupling per tag (production behavior)
+        # Production applies: 0.01 * clamp(coupling_sum, -0.05, 0.05)
+        bonus = 0.01 * max(-0.05, min(0.05, coupling_sum))
+        results[name] = bonus
+    return results
 
 
 def test_v1a_1_coupling():
-    """Coupling pulls connected nodes toward each other"""
-    t = {"A": 1.0, "B": 0.0}
-    td = {"A": 0.0, "B": 0.0}
-    n = {"A": ["B"], "B": ["A"]}
-    t2, _ = oscillator_step(t, td, n, C=0.5, K=0.0, B=0.0)
-    # A should decrease, B should increase (pulled toward each other)
-    check("V1A.1", t2["A"] < t["A"] and t2["B"] > t["B"],
-          f"A: {t['A']:.2f}->{t2['A']:.3f}, B: {t['B']:.2f}->{t2['B']:.3f}")
+    """Shared tag: hot node gets negative bonus, cold node gets positive"""
+    nodes = {
+        "A": {"temperature": 0.9, "tags": ["memory"]},
+        "B": {"temperature": 0.1, "tags": ["memory"]},
+    }
+    r = temperature_coupling(nodes)
+    # A is hot, B is cold, shared "memory" tag -> A pulled down, B pulled up
+    check("V1A.1", r["A"] < 0 and r["B"] > 0,
+          f"A={r['A']:.6f}, B={r['B']:.6f}")
 
 
-def test_v1a_2_no_coupling():
-    """C=0: nodes evolve independently"""
-    t = {"A": 1.0, "B": -1.0}
-    td = {"A": 0.0, "B": 0.0}
-    n = {"A": ["B"], "B": ["A"]}
-    t2, _ = oscillator_step(t, td, n, C=0.0, K=0.5, B=0.0)
-    # Both should move toward 0 independently (spring only)
-    check("V1A.2", abs(t2["A"]) < abs(t["A"]) and abs(t2["B"]) < abs(t["B"]),
-          f"A: {t['A']:.2f}->{t2['A']:.3f}, B: {t['B']:.2f}->{t2['B']:.3f}")
+def test_v1a_2_no_shared_tags():
+    """No shared tags: zero coupling"""
+    nodes = {
+        "A": {"temperature": 0.9, "tags": ["memory"]},
+        "B": {"temperature": 0.1, "tags": ["compression"]},
+    }
+    r = temperature_coupling(nodes)
+    check("V1A.2", r["A"] == 0 and r["B"] == 0,
+          f"A={r['A']}, B={r['B']} (no shared tags)")
 
 
-def test_v1a_3_convergence():
-    """Strong coupling: nodes converge to same value"""
-    t = {"A": 1.0, "B": 0.0, "C": 0.5}
-    td = {"A": 0.0, "B": 0.0, "C": 0.0}
-    n = {"A": ["B", "C"], "B": ["A", "C"], "C": ["A", "B"]}
-    for _ in range(100):
-        t, td = oscillator_step(t, td, n, C=1.0, K=0.1, B=0.8)
-    spread = max(t.values()) - min(t.values())
-    check("V1A.3", spread < 0.1,
-          f"spread={spread:.4f}, values=[{t['A']:.4f}, {t['B']:.4f}, {t['C']:.4f}]")
+def test_v1a_3_bounded():
+    """Coupling is bounded: max absolute bonus = 0.01 * 0.05 = 0.0005"""
+    nodes = {
+        "A": {"temperature": 0.0, "tags": ["x", "y", "z"]},
+        "B": {"temperature": 1.0, "tags": ["x", "y", "z"]},
+    }
+    r = temperature_coupling(nodes)
+    # Even with large temp difference and 3 tags, bonus is clamped
+    check("V1A.3", abs(r["A"]) <= 0.0005 + 1e-10 and abs(r["B"]) <= 0.0005 + 1e-10,
+          f"A={r['A']:.6f}, B={r['B']:.6f}, max=0.0005")
 
 
-def test_v1a_4_damping():
-    """B>0: oscillations decay"""
-    t = {"A": 1.0}
-    td = {"A": 0.5}
-    n = {}
-    # Run with damping
-    for _ in range(200):
-        t, td = oscillator_step(t, td, n, C=0.0, K=0.5, B=0.5)
-    check("V1A.4", abs(t["A"]) < 0.5 and abs(td["A"]) < 0.5,
-          f"theta={t['A']:.4f}, velocity={td['A']:.4f} (damped)")
+def test_v1a_4_multi_tags():
+    """Multiple shared tags: coupling accumulates before clamp"""
+    nodes_1 = {
+        "A": {"temperature": 0.8, "tags": ["mem"]},
+        "B": {"temperature": 0.2, "tags": ["mem"]},
+    }
+    nodes_3 = {
+        "A": {"temperature": 0.8, "tags": ["mem", "tree", "comp"]},
+        "B": {"temperature": 0.2, "tags": ["mem", "tree", "comp"]},
+    }
+    r1 = temperature_coupling(nodes_1)
+    r3 = temperature_coupling(nodes_3)
+    # 3 shared tags should give stronger coupling than 1 (until clamp kicks in)
+    check("V1A.4", abs(r3["A"]) >= abs(r1["A"]),
+          f"1_tag={r1['A']:.6f}, 3_tags={r3['A']:.6f}")
 
 
-def test_v1a_5_spring():
-    """K>0: restoring force pulls toward 0"""
-    t = {"A": 2.0}
-    td = {"A": 0.0}
-    n = {}
-    t2, td2 = oscillator_step(t, td, n, C=0.0, K=1.0, B=0.0)
-    # Spring should pull A toward 0
-    check("V1A.5", abs(t2["A"]) < abs(t["A"]),
-          f"A: {t['A']:.2f}->{t2['A']:.3f} (spring restoring)")
+def test_v1a_5_same_temp():
+    """Same temperature: zero coupling regardless of shared tags"""
+    nodes = {
+        "A": {"temperature": 0.5, "tags": ["memory", "tree"]},
+        "B": {"temperature": 0.5, "tags": ["memory", "tree"]},
+    }
+    r = temperature_coupling(nodes)
+    check("V1A.5", r["A"] == 0.0 and r["B"] == 0.0,
+          f"A={r['A']}, B={r['B']} (same temp)")
 
 
 if __name__ == "__main__":
-    print("=== V1A Coupled Oscillator — 5 bornes ===")
+    print("=== V1A Temperature Coupling — 5 bornes ===")
     test_v1a_1_coupling()
-    test_v1a_2_no_coupling()
-    test_v1a_3_convergence()
-    test_v1a_4_damping()
-    test_v1a_5_spring()
+    test_v1a_2_no_shared_tags()
+    test_v1a_3_bounded()
+    test_v1a_4_multi_tags()
+    test_v1a_5_same_temp()
     print(f"\n=== RESULTAT: {PASS} PASS, {FAIL} FAIL ===")
     if FAIL > 0:
         sys.exit(1)
