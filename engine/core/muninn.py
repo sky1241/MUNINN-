@@ -457,6 +457,12 @@ def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5,
     fisher = max(0.0, min(1.0, node.get("fisher_importance", 0.0)))
     half_life *= (1.0 + _lambda_ewc * fisher)
 
+    # I1: Danger Theory DCA (Greensmith 2008)
+    # Chaotic sessions (errors, retries, topic switches) produce more durable branches.
+    # h *= (1 + gamma * danger_score). When danger_score=0 (default), no effect.
+    danger = max(0.0, min(1.0, node.get("danger_score", 0.0)))
+    half_life *= (1.0 + danger)  # gamma=1.0 implicit
+
     if half_life <= 0:
         return 0.0
     return 2.0 ** (-delta / half_life)
@@ -1872,6 +1878,9 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             if session_sentiment is not None:
                 new_node["valence"] = session_sentiment.get("mean_valence", 0.0)
                 new_node["arousal"] = session_sentiment.get("mean_arousal", 0.0)
+                # I1: Propagate danger score for Danger Theory DCA
+                if session_sentiment.get("danger_score", 0) > 0:
+                    new_node["danger_score"] = session_sentiment["danger_score"]
             nodes[branch_name] = new_node
             # Add to root's children
             if branch_name not in nodes.get("root", {}).get("children", []):
@@ -2351,7 +2360,7 @@ def boot(query: str = "") -> str:
                 if _activated_count > 0:
                     _quorum = (_activated_count ** _n_hill) / (
                         _K_quorum ** _n_hill + _activated_count ** _n_hill)
-                    total += 0.08 * _quorum  # V5A: max +0.08 (was 0.03, cosmetic)
+                    total += 0.03 * _quorum  # V5A: max +0.03 (tuned by retrieval benchmark)
 
             # V1A: Coupled oscillator (Yekutieli et al. 2005)
             # Temperature coupling: branches connected via mycelium push toward each other
@@ -2364,9 +2373,9 @@ def boot(query: str = "") -> str:
                         continue
                     if _t in set(_snode.get("tags", [])):
                         _other_temp = _snode.get("temperature", 0.5)
-                        _coupling_sum += 0.1 * (_other_temp - _my_temp)
+                        _coupling_sum += 0.02 * (_other_temp - _my_temp)
                         break  # one coupling per tag
-            total += max(-0.05, min(0.05, _coupling_sum))  # V1A: direct coupling, no extra damper
+            total += max(-0.02, min(0.02, _coupling_sum))  # V1A: tuned by retrieval benchmark
 
             if total > 0.01:
                 scored.append((name, total))
@@ -2378,14 +2387,14 @@ def boot(query: str = "") -> str:
         # Better branch (higher r) wins. beta controls inhibition strength.
         # dNA/dt = rA*(1-NA/K)*NA - beta*NB*NA
         # Scores normalized to [0,1] before LV, then denormalized back.
-        _beta_inhib = 0.3   # inhibition strength (0=disabled)
+        _beta_inhib = 0.05  # inhibition strength (tuned by retrieval benchmark)
         _K_inhib = 1.0      # carrying capacity
-        _max_iter = 10
+        _max_iter = 5
         if _beta_inhib > 0 and len(scored) >= 2:
             top_score = scored[0][1]
             if top_score > 0:
-                # Find competing branches (within 15% of top)
-                competitors = [(n, s) for n, s in scored if s >= top_score * 0.85]
+                # Only top 5 competitors (not all within 15% — that killed relevant branches)
+                competitors = scored[:5]
                 if len(competitors) >= 2:
                     # Normalize to [0,1] for LV dynamics (avoid scale mismatch)
                     pop = {n: s / top_score for n, s in competitors}
@@ -3270,13 +3279,101 @@ def prune(dry_run: bool = True):
         if len(carriers) == 1:
             _fragile_branches.update(carriers)
 
+    # I2: Competitive Suppression (Perelson 1989)
+    # Similar branches suppress each other's recall — the weaker one dies faster.
+    # recall_eff_i = recall_i - alpha * sum(NCD_sim(i,j) * recall_j) for NCD < 0.4
+    _i2_alpha = 0.1
+    _branch_recalls = {}
+    for bname, bnode in branches.items():
+        _branch_recalls[bname] = _ebbinghaus_recall(bnode)
+    # Read branch content for NCD (only if enough branches to make suppression useful)
+    _branch_content = {}
+    if len(branches) >= 2:
+        for bname, bnode in branches.items():
+            fpath = TREE_DIR / bnode.get("file", "")
+            if fpath.is_file():
+                try:
+                    _branch_content[bname] = fpath.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    _branch_content[bname] = ""
+            else:
+                _branch_content[bname] = ""
+    # Compute suppression
+    _suppression = {b: 0.0 for b in branches}
+    for bi in branches:
+        if bi not in _branch_content:
+            continue
+        for bj in branches:
+            if bi == bj or bj not in _branch_content:
+                continue
+            if not _branch_content[bi] or not _branch_content[bj]:
+                continue
+            ncd = _ncd(_branch_content[bi], _branch_content[bj])
+            if ncd < 0.4:  # very similar
+                sim = 1.0 - ncd
+                _suppression[bi] += sim * _branch_recalls.get(bj, 0)
+    # Apply suppression to effective recall
+    _effective_recall = {}
+    for bname in branches:
+        _effective_recall[bname] = max(0.0,
+            _branch_recalls[bname] - _i2_alpha * _suppression[bname])
+
+    # I3: Negative Selection (Forrest 1994)
+    # Detect anomalous branches by comparing to median profile.
+    # Anomalies (too long, zero facts, extreme density) get demoted to cold.
+    _i3_anomalies = set()
+    if len(branches) >= 3:
+        import statistics
+        _line_counts = []
+        _fact_ratios = []
+        for bname, bnode in branches.items():
+            lc = bnode.get("lines", 0)
+            _line_counts.append(lc)
+            # Compute fact ratio from tags in content
+            fpath = TREE_DIR / bnode.get("file", "")
+            tagged = 0
+            total = max(1, lc)
+            if fpath.is_file():
+                try:
+                    text = fpath.read_text(encoding="utf-8")
+                    for tl in text.split("\n"):
+                        st = tl.strip()
+                        if st and st[:2] in ("D>", "B>", "F>", "E>", "A>"):
+                            tagged += 1
+                    total = max(1, len(text.split("\n")))
+                except (OSError, UnicodeDecodeError):
+                    pass
+            _fact_ratios.append(tagged / total)
+
+        _med_lines = statistics.median(_line_counts) if _line_counts else 10
+        _med_facts = statistics.median(_fact_ratios) if _fact_ratios else 0.3
+
+        for idx, (bname, bnode) in enumerate(branches.items()):
+            lc = _line_counts[idx] if idx < len(_line_counts) else 0
+            fr = _fact_ratios[idx] if idx < len(_fact_ratios) else 0
+            dist = 0.0
+            if _med_lines > 0:
+                dist += abs(lc - _med_lines) / max(_med_lines, 1)
+            if _med_facts > 0:
+                dist += abs(fr - _med_facts) / max(_med_facts, 0.01)
+            elif fr == 0:
+                dist += 1.0  # zero facts when median is also zero = not anomalous
+            if dist > 2.0:
+                _i3_anomalies.add(bname)
+
     hot, cold, dead = [], [], []
 
     for name, node in branches.items():
         temp = node.get("temperature", 0)
         acc = node.get("access_count", 0)
-        recall = _ebbinghaus_recall(node)
+        recall = _effective_recall[name]  # I2: use suppressed recall
         days_ago = _days_since(node.get("last_access", time.strftime("%Y-%m-%d")))
+
+        # I3: Anomalous branches get demoted to cold regardless of recall
+        if name in _i3_anomalies and recall >= 0.15:
+            cold.append((name, days_ago))
+            print(f"  I3 ANOMALY {name}: R={recall:.2f} demoted to cold (abnormal profile)")
+            continue
 
         # Spaced repetition thresholds (Settles 2016):
         # R > 0.4 = hot (strong recall), R < 0.05 = dead (forgotten)
@@ -3457,6 +3554,9 @@ def prune(dry_run: bool = True):
 
                                 survivor_filepath.write_text(combined, encoding="utf-8")
                                 _regen_facts_total += len(new_facts)
+                                # Update hash + line count so boot() P34 integrity check passes
+                                nodes[best_survivor]["hash"] = compute_hash(survivor_filepath)
+                                nodes[best_survivor]["lines"] = combined.count("\n") + 1
 
                     # --- Step 4: Tag diffusion (original V9A logic, always runs) ---
                     if dead_tags:
@@ -4701,7 +4801,15 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
         session_sentiment = score_session(texts)
 
     # P22: Update session index for future retrieval
-    _update_session_index(repo_path, mn_path, result, ratio, session_sentiment)
+    _danger = _update_session_index(repo_path, mn_path, result, ratio, session_sentiment)
+
+    # I1: Piggyback danger_score into session_sentiment for grow_branches_from_session
+    if _danger and _danger > 0:
+        if session_sentiment is None:
+            session_sentiment = {"mean_valence": 0.0, "mean_arousal": 0.0,
+                                 "peak_valence": 0.0, "peak_arousal": 0.0,
+                                 "n_positive": 0, "n_negative": 0, "n_neutral": 0}
+        session_sentiment["danger_score"] = _danger
 
     return mn_path, session_sentiment
 
@@ -4737,12 +4845,34 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
             word_freq[w] = word_freq.get(w, 0) + 1
     top_concepts = sorted(word_freq, key=word_freq.get, reverse=True)[:10]
 
+    # I1: Danger Theory DCA (Greensmith 2008)
+    # Compute session danger signal from error rate, retry patterns, topic switches.
+    _total_lines = max(1, len(compressed.split("\n")))
+    _error_lines = sum(1 for l in compressed.split("\n") if l.strip().startswith("E>"))
+    _error_rate = _error_lines / _total_lines
+    _retry_count = len(re.findall(r'(?i)\b(retry|debug|fix|error|traceback|failed)\b', compressed))
+    _retry_rate = min(1.0, _retry_count / max(1, _total_lines) * 5)
+    _topic_switches = 0
+    _prev_concepts = set()
+    for line in compressed.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("D>") or stripped.startswith("B>"):
+            cur_words = set(re.findall(r'[A-Za-z]{4,}', stripped.lower()))
+            if _prev_concepts and len(cur_words & _prev_concepts) == 0:
+                _topic_switches += 1
+            _prev_concepts = cur_words
+    _switch_rate = min(1.0, _topic_switches / max(1, _total_lines) * 10)
+    _chaos_ratio = min(1.0, max(0.0, 1.0 - (ratio / 5.0))) if ratio > 0 else 0.5
+    _danger_score = round(
+        0.4 * _error_rate + 0.3 * _retry_rate + 0.2 * _switch_rate + 0.1 * _chaos_ratio, 4)
+
     entry = {
         "file": mn_path.name,
         "date": time.strftime("%Y-%m-%d"),
         "ratio": round(ratio, 1),
         "concepts": top_concepts,
         "tagged": tagged[:15],  # max 15 tagged lines per session
+        "danger_score": _danger_score,  # I1
     }
 
     # V10A: VADER sentiment (scored on RAW messages in compress_transcript)
@@ -4775,6 +4905,8 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
     # Keep last 50 sessions in index (even if .mn files are pruned to 10)
     index = index[-50:]
     index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return _danger_score  # I1: propagate to grow_branches_from_session
 
 
 def _load_relevant_sessions(query: str, sessions_dir: Path, latest_name: str,
