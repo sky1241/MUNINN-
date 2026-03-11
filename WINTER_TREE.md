@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 56 briques vivantes (P0-P40 + P41 + P20c + P21 + 8 shopping list + L10/L11 + Spreading Activation + Sleep Consolidation + Ebbinghaus) + scan cross-domaine + briefing Cell Bio 22 BS + plan de bataille TIER 1 (6 upgrades), 0 en roadmap, 3 supprimees (P3), 76 bugs corriges (P10+SL+audit+P32fix+scan7-scan13)
+Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5 upgrades, 32 PASS) + TIER 3 (4 upgrades, EN COURS), 0 en roadmap, 3 supprimees (P3), 76 bugs corriges
 Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
@@ -729,9 +729,10 @@ Detail: docs/BRIEFING_CELLBIO_22BS.md
 Papers cles: Cell Systems 2017 (non-Markov), PLOS Bio 2018 (h variable), PNAS 2024 (Mittag-Leffler).
 Meta-resultat: Muninn fait deja de la bio cellulaire computationnelle sans le savoir.
 
-### Plan de Bataille TIER 1 — 6 upgrades formula=data (session 2026-03-10) [EN COURS]
+### Plan de Bataille TIER 1 — 6 upgrades formula=data (session 2026-03-10) [FAIT]
 Bornes de validation strictes AVANT code. Un upgrade = un commit = un push.
 Detail complet: docs/PLAN_BATAILLE_TIER1.md
+6 upgrades, 36 bornes, all validated (36 PASS, 0 FAIL, 0 SKIP).
 
 | # | Upgrade | Formule cible | Lignes | Sources (convergence) |
 |---|---------|---------------|--------|-----------------------|
@@ -744,6 +745,52 @@ Detail complet: docs/PLAN_BATAILLE_TIER1.md
 
 Protocole: baseline → code → unit tests → regression → pass/fail → commit.
 Pieges identifies: usefulness=0 (clamp 0.1), backward compat tree.json, sigmoid placement, entier decay.
+Key results: recall separation 4.3x, reconsolidation 43% reduction, boot overlap 88%.
+Commits: 7487e94..2325e05 (8 commits). Tests: tests/test_tier1_*.py.
+Backward compat: all defaults reproduce pre-TIER1 behavior exactly.
+
+### Plan de Bataille TIER 2 — Structural Intelligence (session 2026-03-10) [FAIT]
+5 upgrades, 32 bornes, all validated (32 PASS, 0 FAIL).
+
+| # | Upgrade | Description | Sources |
+|---|---------|-------------|---------|
+| B2 | Graph anomaly detection | detect_anomalies() — isolated/hubs/weak_zones | Graph theory |
+| B3 | Blind spot detection | detect_blind_spots() — structural holes | Burt 1992 |
+| B7 | Live injection | inject_memory() + CLI `inject "fact"` | — |
+| B4 | Endsley L3 Prediction | predict_next() via spreading activation | Endsley 1995 |
+| B5+B6 | Session mode + RPD type | convergent/divergent + debug/feature/explore/refactor/review | Klein RPD |
+
+Commits: 6d1a685..7e5e287 (5 commits). Tests: tests/test_tier2_*.py.
+All 5 upgrades wired into boot() pipeline.
+
+### Plan de Bataille TIER 3 — Mycelium Storage Revolution (session 2026-03-11) [EN COURS]
+Probleme: mycelium.json explose (376 Mo Muninn, 173 Mo Ygg, 946 Mo meta = 1.5 Go total).
+4 jours, 103 sessions chez Ygg = 716K connections, 479K fusions. JSON pretty-print = 16M lignes.
+VSCode crash, RAM saturee, et ca va empirer (arXiv = 2449 tars a venir).
+
+| # | Upgrade | Description | Gain attendu |
+|---|---------|-------------|--------------|
+| S1 | SQLite storage | JSON → SQLite normalise (concepts=IDs entiers, WITHOUT ROWID, WAL) | x5 disque, x100 RAM |
+| S2 | Epoch-days dates | "2026-03-11" (10 bytes) → entier jours depuis epoch (2 bytes) | Integre dans S1 |
+| S3 | Degree filter | Avant fusion: concept avec trop de voisins = stopword = pas de fusion | Universel, zero langue |
+| S4 | Auto-translate | tiktoken detect (1 tok=EN, 2+=etranger) → batch Haiku → cache | Universel toutes langues |
+
+Schema SQLite:
+```sql
+PRAGMA journal_mode=WAL;
+CREATE TABLE concepts (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+CREATE TABLE edges (a INT, b INT, count INT, first_seen INT, last_seen INT, PRIMARY KEY(a,b)) WITHOUT ROWID;
+CREATE TABLE fusions (a INT, b INT, form TEXT, strength INT, fused_at INT, PRIMARY KEY(a,b)) WITHOUT ROWID;
+CREATE INDEX idx_edges_a ON edges(a);
+CREATE INDEX idx_edges_b ON edges(b);
+```
+
+Dates: epoch-days depuis 2020-01-01 (entier, bijectif, queryable).
+Migration auto: detecte .json → importe → .json.bak.
+S3: degre du graphe = detection universelle de stopwords (un mot connecte a tout = bruit).
+S4: tokenizer comme detecteur de langue + batch API + cache perpetuel dans la DB.
+Ordre: S1+S2 (stockage) → S3 (filtre) → S4 (traduction).
+Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic deja optionnel).
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)

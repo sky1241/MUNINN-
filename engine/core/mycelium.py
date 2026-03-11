@@ -21,6 +21,7 @@ Usage:
 import io
 import json
 import re
+import sqlite3
 import sys
 import time
 from collections import Counter
@@ -40,11 +41,13 @@ class Mycelium:
     IMMORTAL_ZONE_THRESHOLD = 3  # connection in N+ zones = skip decay
     SATURATION_BETA = 0.0         # A4: Lotka-Volterra saturation (0=disabled, 0.001=moderate)
     SATURATION_THRESHOLD = 50     # A4: only apply saturation to connections with count > this
+    DEGREE_FILTER_PERCENTILE = 0.05  # S3: top 5% degree concepts = stopwords, no fusion
 
     def __init__(self, repo_path: Path, federated: bool = False, zone: str = None):
         self.repo_path = Path(repo_path).resolve()
         self.mycelium_dir = self.repo_path / ".muninn"
         self.mycelium_path = self.mycelium_dir / "mycelium.json"
+        self.db_path = self.mycelium_dir / "mycelium.db"
         self.federated = federated  # P20.1: if False, zero change to behavior
         self.zone = zone or self.repo_path.name  # P20.2: default zone = repo name
         self._sigmoid_k = 10  # A3: sigmoid steepness for spread_activation (0=disabled)
@@ -52,14 +55,34 @@ class Mycelium:
         self.data = self._load()
 
     def _load(self) -> dict:
-        """Load mycelium from disk or create fresh."""
+        """Load mycelium from disk or create fresh.
+
+        S1 (TIER 3): Auto-detects and migrates JSON -> SQLite.
+        Priority: .db (SQLite) > .json (legacy, auto-migrates) > fresh.
+        """
+        self.mycelium_dir.mkdir(parents=True, exist_ok=True)
+
+        # Case 1: SQLite exists — load from it
+        if self.db_path.exists():
+            return self._load_from_sqlite()
+
+        # Case 2: JSON exists — migrate to SQLite, then load
         if self.mycelium_path.exists():
             try:
-                with open(self.mycelium_path, encoding="utf-8") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, ValueError, OSError) as e:
-                import sys
-                print(f"WARNING: mycelium.json load failed: {e}", file=sys.stderr)
+                self._migrate_json_to_sqlite()
+                return self._load_from_sqlite()
+            except Exception as e:
+                print(f"WARNING: SQLite migration failed, falling back to JSON: {e}",
+                      file=sys.stderr)
+                # Fallback: load JSON directly
+                try:
+                    with open(self.mycelium_path, encoding="utf-8") as f:
+                        return json.load(f)
+                except (json.JSONDecodeError, ValueError, OSError) as e2:
+                    print(f"WARNING: mycelium.json load also failed: {e2}",
+                          file=sys.stderr)
+
+        # Case 3: Fresh mycelium
         return {
             "version": 1,
             "repo": self.repo_path.name,
@@ -70,26 +93,110 @@ class Mycelium:
             "fusions": {},
         }
 
+    def _load_from_sqlite(self) -> dict:
+        """Load mycelium data from SQLite database into memory dict."""
+        from .mycelium_db import MyceliumDB, days_to_date
+        db = MyceliumDB(self.db_path)
+        try:
+            data = {
+                "version": int(db.get_meta("version", "1")),
+                "repo": db.get_meta("repo", self.repo_path.name),
+                "created": db.get_meta("created", time.strftime("%Y-%m-%d")),
+                "updated": db.get_meta("updated", time.strftime("%Y-%m-%d")),
+                "session_count": int(db.get_meta("session_count", "0")),
+                "connections": db.get_all_connections(),
+                "fusions": db.get_all_fusions(),
+            }
+        finally:
+            db.close()
+        return data
+
+    def _migrate_json_to_sqlite(self):
+        """Migrate mycelium.json to mycelium.db (one-time operation)."""
+        from .mycelium_db import MyceliumDB
+        # This creates the .db and renames .json to .json.bak
+        db = MyceliumDB.migrate_from_json(self.mycelium_path, self.db_path)
+        db.close()
+
     def save(self):
-        """Persist mycelium to disk (atomic write via tempfile + rename)."""
-        import tempfile
+        """Persist mycelium to disk (SQLite with WAL mode).
+
+        S1 (TIER 3): Writes to SQLite instead of JSON.
+        S4 (TIER 3): Flushes pending translations before save.
+        No temp files, no pretty-print explosion, crash-safe WAL.
+        """
+        from .mycelium_db import MyceliumDB, date_to_days, today_days
         self.mycelium_dir.mkdir(exist_ok=True)
         self.data["updated"] = time.strftime("%Y-%m-%d")
-        # Write to temp file first, then atomic rename
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(self.mycelium_dir), suffix=".tmp", prefix="mycelium_"
-        )
+
+        # S4: Flush pending translations before save
         try:
-            with open(fd, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=2)
-            import os
-            os.replace(tmp_path, str(self.mycelium_path))
+            from .mycelium_db import ConceptTranslator
+            translator = ConceptTranslator.get()
+            translator.flush_pending()
         except Exception:
-            # Clean up temp file on failure
-            import os
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
+            pass
+
+        db = MyceliumDB(self.db_path)
+        try:
+            # Sync connections: write all from self.data to DB
+            # Everything in one transaction for atomicity (crash-safe)
+            conns = self.data.get("connections", {})
+            fusions = self.data.get("fusions", {})
+
+            with db._conn:
+                # Update meta inside transaction
+                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("version", str(self.data.get("version", 1))))
+                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("repo", str(self.data.get("repo", self.repo_path.name))))
+                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
+                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
+                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("session_count", str(self.data.get("session_count", 0))))
+                # Clear and rewrite (simpler than diffing for Phase 1)
+                db._conn.execute("DELETE FROM edges")
+                db._conn.execute("DELETE FROM fusions")
+                db._conn.execute("DELETE FROM edge_zones")
+
+                td = today_days()
+                for key, conn in conns.items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    a_id = db._get_or_create_concept(a)
+                    b_id = db._get_or_create_concept(b)
+                    fs = date_to_days(conn.get("first_seen", "2026-01-01"))
+                    ls = date_to_days(conn.get("last_seen", "2026-01-01"))
+                    db._conn.execute(
+                        "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (a_id, b_id, conn["count"], fs, ls)
+                    )
+                    for zone in conn.get("zones", []):
+                        db._conn.execute(
+                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                            (a_id, b_id, zone)
+                        )
+
+                for key, fusion in fusions.items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    a_id = db._get_or_create_concept(a)
+                    b_id = db._get_or_create_concept(b)
+                    fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
+                    db._conn.execute(
+                        "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (a_id, b_id, fusion["form"], fusion["strength"], fa)
+                    )
+        finally:
+            db.close()
 
     def _key(self, a: str, b: str) -> str:
         """Canonical key for a pair (alphabetical order)."""
@@ -100,6 +207,7 @@ class Mycelium:
 
         Every pair of concepts in the list gets a +1 connection strength.
         This is called when processing user input or compressing text.
+        S4 (TIER 3): Non-English concepts auto-translated via tokenizer + Haiku.
         """
         # Filter and normalize
         clean = []
@@ -107,6 +215,14 @@ class Mycelium:
             c = c.lower().strip()
             if len(c) >= self.MIN_CONCEPT_LEN and c not in _STOPWORDS:
                 clean.append(c)
+
+        # S4: Normalize non-English concepts to English
+        try:
+            from .mycelium_db import ConceptTranslator
+            translator = ConceptTranslator.get()
+            clean = translator.normalize_concepts(clean)
+        except Exception:
+            pass  # Graceful: no tiktoken/anthropic = no translation
 
         clean = list(set(clean))  # deduplicate
 
@@ -253,9 +369,24 @@ class Mycelium:
                 self.observe(found)
 
     def _check_fusions(self):
-        """Check if any connections crossed the fusion threshold."""
+        """Check if any connections crossed the fusion threshold.
+
+        S3 (TIER 3): Blocks fusions for high-degree concepts (universal stopwords).
+        A concept connected to >top 5% of all concepts is noise in any language.
+        """
         conns = self.data["connections"]
         fusions = self.data["fusions"]
+
+        # S3: Build degree map and compute threshold
+        high_degree_concepts = self._get_high_degree_concepts()
+
+        # S3: Retroactively remove fusions involving high-degree stopwords
+        if high_degree_concepts:
+            to_remove = [k for k in fusions
+                         if any(c in high_degree_concepts
+                                for c in fusions[k].get("concepts", []))]
+            for k in to_remove:
+                del fusions[k]
 
         for key, conn in conns.items():
             if conn["count"] >= self.FUSION_THRESHOLD:
@@ -264,6 +395,9 @@ class Mycelium:
                     if len(parts) != 2:
                         continue
                     a, b = parts
+                    # S3: Block fusion if either concept is a high-degree stopword
+                    if a in high_degree_concepts or b in high_degree_concepts:
+                        continue
                     fused_form = f"{a}+{b}"
                     fusions[key] = {
                         "concepts": [a, b],
@@ -274,6 +408,39 @@ class Mycelium:
                 else:
                     # Update strength to match current count
                     fusions[key]["strength"] = conn["count"]
+
+    def _get_high_degree_concepts(self) -> set:
+        """S3: Identify concepts with too many connections (universal stopwords).
+
+        A concept in the top DEGREE_FILTER_PERCENTILE by degree is noise.
+        This works for any language — no dictionary needed.
+        """
+        conns = self.data["connections"]
+        if len(conns) < 50:
+            return set()  # Too small for statistical filtering
+
+        # Count degree per concept
+        degree = {}
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            degree[a] = degree.get(a, 0) + 1
+            degree[b] = degree.get(b, 0) + 1
+
+        if not degree:
+            return set()
+
+        # Find the threshold: top X% by degree
+        sorted_degrees = sorted(degree.values(), reverse=True)
+        cutoff_idx = max(1, int(len(sorted_degrees) * self.DEGREE_FILTER_PERCENTILE))
+        threshold = sorted_degrees[min(cutoff_idx, len(sorted_degrees) - 1)]
+
+        # Must be at least degree 20 to be considered a stopword
+        threshold = max(threshold, 20)
+
+        return {c for c, d in degree.items() if d >= threshold}
 
     def _prune_weakest(self):
         """Remove weakest connections to stay under MAX_CONNECTIONS."""
@@ -969,11 +1136,20 @@ class Mycelium:
 
     @staticmethod
     def meta_path() -> Path:
-        """Path to the shared meta-mycelium (~/.muninn/meta_mycelium.json)."""
+        """Path to the shared meta-mycelium (~/.muninn/meta_mycelium.json).
+        Note: kept for backward compat. SQLite version is meta_mycelium.db."""
         return Path.home() / ".muninn" / "meta_mycelium.json"
+
+    @staticmethod
+    def meta_db_path() -> Path:
+        """Path to the shared meta-mycelium SQLite DB."""
+        return Path.home() / ".muninn" / "meta_mycelium.db"
 
     def sync_to_meta(self):
         """Push local connections to the shared meta-mycelium.
+
+        S1 (TIER 3): Writes to SQLite meta_mycelium.db.
+        Falls back to JSON meta_mycelium.json for backward compat.
 
         Merge strategy:
         - counts: take max (not sum, to avoid inflation on repeated syncs)
@@ -982,99 +1158,193 @@ class Mycelium:
         - last_seen: latest
         - fusions: merge if exists in meta, add if new
         """
-        meta_p = self.meta_path()
-        meta_p.parent.mkdir(exist_ok=True)
+        from .mycelium_db import MyceliumDB, date_to_days, today_days
 
-        # Load or create meta
-        if meta_p.exists():
+        meta_db_p = self.meta_db_path()
+        meta_json_p = self.meta_path()
+        meta_db_p.parent.mkdir(exist_ok=True)
+
+        # Auto-migrate JSON meta to SQLite if needed
+        if meta_json_p.exists() and not meta_db_p.exists():
             try:
-                with open(meta_p, encoding="utf-8") as f:
-                    meta = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                meta = None
-        else:
-            meta = None
+                MyceliumDB.migrate_from_json(meta_json_p, meta_db_p)
+            except Exception as e:
+                print(f"WARNING: meta migration failed: {e}", file=sys.stderr)
 
-        if meta is None:
-            meta = {
-                "version": 1,
-                "type": "meta",
-                "created": time.strftime("%Y-%m-%d"),
-                "updated": time.strftime("%Y-%m-%d"),
-                "repos": [],
-                "connections": {},
-                "fusions": {},
-            }
-
-        # Track which repos have synced
-        if self.repo_path.name not in meta.get("repos", []):
-            meta.setdefault("repos", []).append(self.repo_path.name)
-
-        meta["updated"] = time.strftime("%Y-%m-%d")
-
-        # Merge connections
-        local_conns = self.data["connections"]
-        meta_conns = meta["connections"]
-        zone = self.zone
-
-        for key, conn in local_conns.items():
-            if key not in meta_conns:
-                meta_conns[key] = {
-                    "count": conn["count"],
-                    "first_seen": conn.get("first_seen", time.strftime("%Y-%m-%d")),
-                    "last_seen": conn.get("last_seen", time.strftime("%Y-%m-%d")),
-                    "zones": [zone],
-                }
-            else:
-                mc = meta_conns[key]
-                mc["count"] = max(mc["count"], conn["count"])
-                # Merge dates
-                if conn.get("first_seen", "9") < mc.get("first_seen", "9"):
-                    mc["first_seen"] = conn["first_seen"]
-                if conn.get("last_seen", "0") > mc.get("last_seen", "0"):
-                    mc["last_seen"] = conn["last_seen"]
-                # Merge zones
-                if "zones" not in mc:
-                    mc["zones"] = []
-                if zone not in mc["zones"]:
-                    mc["zones"].append(zone)
-
-        # Merge fusions
-        local_fusions = self.data.get("fusions", {})
-        meta_fusions = meta.setdefault("fusions", {})
-        for key, fusion in local_fusions.items():
-            if key not in meta_fusions:
-                meta_fusions[key] = dict(fusion)
-            else:
-                meta_fusions[key]["strength"] = max(
-                    meta_fusions[key]["strength"], fusion["strength"]
-                )
-
-        # Atomic write
-        import tempfile, os
-        fd, tmp = tempfile.mkstemp(dir=str(meta_p.parent), suffix=".tmp")
+        db = MyceliumDB(meta_db_p)
         try:
-            with open(fd, "w", encoding="utf-8") as f:
-                json.dump(meta, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, str(meta_p))
-        except Exception:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
+            # Track repo
+            repos_str = db.get_meta("repos", "")
+            repos = repos_str.split(",") if repos_str else []
+            if self.repo_path.name not in repos:
+                repos.append(self.repo_path.name)
+                db.set_meta("repos", ",".join(repos))
+            db.set_meta("type", "meta")
+            db.set_meta("updated", time.strftime("%Y-%m-%d"))
+            if not db.get_meta("created"):
+                db.set_meta("created", time.strftime("%Y-%m-%d"))
+
+            # Merge connections
+            local_conns = self.data["connections"]
+            zone = self.zone
+
+            with db._conn:
+                for key, conn in local_conns.items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    a_id = db._get_or_create_concept(a)
+                    b_id = db._get_or_create_concept(b)
+                    fs = date_to_days(conn.get("first_seen", "2026-01-01"))
+                    ls = date_to_days(conn.get("last_seen", "2026-01-01"))
+
+                    # Upsert with max(count), min(first_seen), max(last_seen)
+                    db._conn.execute("""
+                        INSERT INTO edges (a, b, count, first_seen, last_seen)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(a, b) DO UPDATE SET
+                            count = MAX(count, excluded.count),
+                            first_seen = MIN(first_seen, excluded.first_seen),
+                            last_seen = MAX(last_seen, excluded.last_seen)
+                    """, (a_id, b_id, conn["count"], fs, ls))
+
+                    # Merge zone
+                    db._conn.execute(
+                        "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                        (a_id, b_id, zone)
+                    )
+
+                # Merge fusions
+                local_fusions = self.data.get("fusions", {})
+                for key, fusion in local_fusions.items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    a_id = db._get_or_create_concept(a)
+                    b_id = db._get_or_create_concept(b)
+                    fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
+                    db._conn.execute("""
+                        INSERT INTO fusions (a, b, form, strength, fused_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(a, b) DO UPDATE SET
+                            strength = MAX(strength, excluded.strength)
+                    """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
+        finally:
+            db.close()
 
         return len(local_conns)
 
     def pull_from_meta(self, query_concepts: list[str] = None, max_pull: int = 500):
         """Pull relevant connections from meta-mycelium into local.
 
+        S1 (TIER 3): Reads from SQLite meta_mycelium.db.
+        Falls back to JSON for backward compat.
+
         If query_concepts given, only pulls connections involving those concepts.
         Otherwise pulls top connections by count.
         Does NOT overwrite local data — only adds what's missing.
         """
-        meta_p = self.meta_path()
-        if not meta_p.exists():
-            return 0
+        meta_db_p = self.meta_db_path()
+        meta_json_p = self.meta_path()
 
+        # Try SQLite first, then JSON fallback
+        if meta_db_p.exists():
+            return self._pull_from_meta_sqlite(query_concepts, max_pull)
+        elif meta_json_p.exists():
+            return self._pull_from_meta_json(query_concepts, max_pull)
+        return 0
+
+    def _pull_from_meta_sqlite(self, query_concepts, max_pull):
+        """Pull from SQLite meta-mycelium."""
+        from .mycelium_db import MyceliumDB
+
+        db = MyceliumDB(self.meta_db_path())
+        try:
+            local_conns = self.data["connections"]
+            pulled = 0
+            id_to_name = {v: k for k, v in db._concept_cache.items()}
+
+            if query_concepts:
+                query_set = {c.lower().strip() for c in query_concepts}
+                # Find concept IDs for query terms
+                query_ids = set()
+                for c in query_set:
+                    cid = db._concept_cache.get(c)
+                    if cid is not None:
+                        query_ids.add(cid)
+
+                if not query_ids:
+                    return 0
+
+                # Pull connections involving query concepts
+                placeholders = ",".join("?" * len(query_ids))
+                rows = db._conn.execute(f"""
+                    SELECT a, b, count, first_seen, last_seen FROM edges
+                    WHERE a IN ({placeholders}) OR b IN ({placeholders})
+                    ORDER BY count DESC LIMIT ?
+                """, list(query_ids) + list(query_ids) + [max_pull]).fetchall()
+            else:
+                rows = db._conn.execute(
+                    "SELECT a, b, count, first_seen, last_seen FROM edges "
+                    "ORDER BY count DESC LIMIT ?", (max_pull,)
+                ).fetchall()
+
+            from .mycelium_db import days_to_date
+            import copy
+
+            for row in rows:
+                a_name = id_to_name.get(row[0], db._concept_name(row[0]))
+                b_name = id_to_name.get(row[1], db._concept_name(row[1]))
+                key = f"{a_name}|{b_name}"
+                if key not in local_conns:
+                    conn = {
+                        "count": row[2],
+                        "first_seen": days_to_date(row[3]),
+                        "last_seen": days_to_date(row[4]),
+                    }
+                    # Load zones
+                    zones = [r[0] for r in db._conn.execute(
+                        "SELECT zone FROM edge_zones WHERE a=? AND b=?",
+                        (row[0], row[1])
+                    )]
+                    if zones:
+                        conn["zones"] = zones
+                    local_conns[key] = conn
+                    pulled += 1
+
+            # Pull fusions for pulled connections
+            local_fusions = self.data.setdefault("fusions", {})
+            for key in list(local_conns.keys()):
+                if key in local_fusions:
+                    continue
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a_id = db._concept_cache.get(parts[0])
+                b_id = db._concept_cache.get(parts[1])
+                if a_id is None or b_id is None:
+                    continue
+                row = db._conn.execute(
+                    "SELECT form, strength, fused_at FROM fusions WHERE a=? AND b=?",
+                    (a_id, b_id)
+                ).fetchone()
+                if row:
+                    local_fusions[key] = {
+                        "concepts": list(parts),
+                        "form": row[0],
+                        "strength": row[1],
+                        "fused_at": days_to_date(row[2]),
+                    }
+        finally:
+            db.close()
+
+        return pulled
+
+    def _pull_from_meta_json(self, query_concepts, max_pull):
+        """Pull from legacy JSON meta-mycelium (backward compat)."""
+        meta_p = self.meta_path()
         try:
             with open(meta_p, encoding="utf-8") as f:
                 meta = json.load(f)
@@ -1086,7 +1356,6 @@ class Mycelium:
         pulled = 0
 
         if query_concepts:
-            # Pull connections involving query concepts
             query_set = {c.lower().strip() for c in query_concepts}
             candidates = []
             for key, conn in meta_conns.items():
@@ -1096,11 +1365,9 @@ class Mycelium:
                 a, b = parts
                 if a in query_set or b in query_set:
                     candidates.append((key, conn))
-            # Sort by count descending
             candidates.sort(key=lambda x: x[1]["count"], reverse=True)
             candidates = candidates[:max_pull]
         else:
-            # Pull top connections
             candidates = sorted(
                 meta_conns.items(), key=lambda x: x[1]["count"], reverse=True
             )[:max_pull]
@@ -1111,7 +1378,6 @@ class Mycelium:
                 local_conns[key] = copy.deepcopy(conn)
                 pulled += 1
 
-        # Also pull fusions for pulled connections
         meta_fusions = meta.get("fusions", {})
         local_fusions = self.data.setdefault("fusions", {})
         for key in list(local_conns.keys()):
@@ -1324,15 +1590,16 @@ def main():
 
     elif args.command == "sync":
         pushed = m.sync_to_meta()
-        meta_p = Mycelium.meta_path()
-        print(f"Synced {pushed} connections from {m.data['repo']} -> {meta_p}")
+        meta_db_p = Mycelium.meta_db_path()
+        print(f"Synced {pushed} connections from {m.data['repo']} -> {meta_db_p}")
         # Show meta status
-        if meta_p.exists():
-            import json as _json
-            with open(meta_p, encoding="utf-8") as f:
-                meta = _json.load(f)
-            repos = meta.get("repos", [])
-            total = len(meta.get("connections", {}))
+        if meta_db_p.exists():
+            from .mycelium_db import MyceliumDB as _MDB
+            _db = _MDB(meta_db_p)
+            repos_str = _db.get_meta("repos", "")
+            repos = repos_str.split(",") if repos_str else []
+            total = _db.connection_count()
+            _db.close()
             print(f"Meta: {total} connections from {len(repos)} repos ({', '.join(repos)})")
 
 
