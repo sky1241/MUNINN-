@@ -886,7 +886,7 @@ Sources scientifiques — 22 formules, 28 papiers primaires, 13 papiers echecs:
 |----|---------|---------|----------------|-------------------|
 | V3B | Corbeau | Bayesian ToM | Baker, Saxe, Tenenbaum (2009) Cognition 113:329 | P(goal|actions) = profil utilisateur. Infere le goal depuis les queries |
 | V4B | Dauphin | EWC | Kirkpatrick et al. (2017) PNAS 114:3521 | Fisher importance sur decay: h *= (1+F_i). Noeuds critiques decayent lent |
-| V9A | Planaire | Bioelectric Levin | Shomrat & Levin (2013) J Exp Biol 216:3799; Levin (2012) BioEssays 34:205 | Regeneration par diffusion (dx/dt=-L*x). 80% retention post-decapitation. P4 le plus pur (cos=-0.001) |
+| V9A+ | Planaire | Bioelectric Levin | Shomrat & Levin (2013) J Exp Biol 216:3799; Levin (2012) BioEssays 34:205 | **Fact-level regeneration**: dead branch tagged facts (D>/B>/F>/E>/A>) extracted from .mn and injected into closest survivor via mycelium proximity. Tags also diffuse (original V9A). 12 bornes, zero API. Metric: factual survival rate after prune() |
 | V9B | Planaire | Reed-Solomon | Reed & Solomon (1960) JSIAM 8:300 | Redondance n/k. Survit a perte de (n-k)/2 noeuds. Zero protection actuelle dans Muninn |
 | V11B | Baleine | Boyd-Richerson 3 biases | Boyd & Richerson (1985) Culture & Evolutionary Process, U Chicago Press | Conformiste + prestige + guide. Auto-organisation poids sans superviseur |
 | V3A | Corbeau | Transitive inference | Wynne (1995) J Exp Psych Anim 21:166; Paz-y-Mino et al. (2004) Nature 430:778 | Fermeture transitive A->B->C avec decay beta^distance. Spreading sans ORDRE |
