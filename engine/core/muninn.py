@@ -2967,6 +2967,107 @@ def show_status():
           f"({est_compressed / BUDGET['max_loaded_tokens'] * 100:.1f}%)")
 
 
+def diagnose():
+    """C6: Full health diagnostic — tree + mycelium + anomalies + blind spots."""
+    print("=== MUNINN DIAGNOSE ===\n")
+
+    # 1. Tree health
+    tree = load_tree()
+    nodes = tree["nodes"]
+    branches = {k: v for k, v in nodes.items() if k != "root"}
+    total_lines = sum(n["lines"] for n in nodes.values())
+    overfull = [k for k, v in nodes.items() if v["lines"] > v["max_lines"]]
+    cold = [k for k, v in branches.items()
+            if _ebbinghaus_recall(v) < 0.1]
+    hot = [k for k, v in branches.items()
+           if _ebbinghaus_recall(v) > 0.8]
+
+    print(f"[TREE] {len(nodes)} nodes, {total_lines} lines")
+    print(f"  Hot (recall>0.8): {len(hot)}")
+    print(f"  Cold (recall<0.1): {len(cold)}")
+    if overfull:
+        print(f"  OVERFULL: {', '.join(overfull)}")
+    else:
+        print("  No overfull branches")
+
+    # 2. Mycelium health
+    print()
+    try:
+        from mycelium import Mycelium
+        m = Mycelium(_REPO_PATH or Path(".").resolve())
+        conns = m.data.get("connections", {})
+        fusions = m.data.get("fusions", {})
+        print(f"[MYCELIUM] {len(conns):,} connections, {len(fusions):,} fusions")
+        print(f"  Beta: {m.SATURATION_BETA}, Threshold: {m.SATURATION_THRESHOLD}")
+
+        # A5: Spectral gap
+        if hasattr(m, '_spectral_gap') and m._spectral_gap is not None:
+            print(f"  Spectral gap: {m._spectral_gap:.4f}")
+
+        # B2: Anomalies
+        try:
+            anomalies = m.detect_anomalies()
+            iso = len(anomalies.get("isolated", []))
+            hubs = anomalies.get("hubs", [])
+            weak = anomalies.get("weak_zones", [])
+            print(f"  Isolated nodes: {iso}")
+            if hubs:
+                print(f"  Hub monopolies: {', '.join(h[0] for h in hubs[:5])}")
+            if weak:
+                print(f"  Weak zones: {', '.join(weak[:5])}")
+        except Exception as e:
+            print(f"  Anomaly detection: {e}")
+
+        # B3: Blind spots
+        try:
+            spots = m.detect_blind_spots(top_n=10)
+            if spots:
+                print(f"  Blind spots: {len(spots)}")
+                for a, b, reason in spots[:3]:
+                    print(f"    {a} <-> {b} ({reason})")
+            else:
+                print("  Blind spots: none detected")
+        except Exception as e:
+            print(f"  Blind spots: {e}")
+
+    except Exception as e:
+        print(f"[MYCELIUM] Not available: {e}")
+
+    # 3. Boot feedback
+    print()
+    feedback_path = (_REPO_PATH or Path(".").resolve()) / ".muninn" / "boot_feedback.json"
+    if feedback_path.exists():
+        try:
+            import json as _json
+            history = _json.loads(feedback_path.read_text(encoding="utf-8"))
+            if isinstance(history, list) and history:
+                last = history[-1]
+                print(f"[BOOT FEEDBACK] Last boot: {last.get('timestamp', '?')}")
+                print(f"  Query: {last.get('query', '(none)')}")
+                print(f"  Blind spots covered: {len(last.get('covered', []))}/{last.get('blind_spots_total', '?')}")
+                print(f"  Branches loaded: {len(last.get('branches_loaded', []))}")
+            else:
+                print("[BOOT FEEDBACK] No history yet")
+        except Exception:
+            print("[BOOT FEEDBACK] Error reading feedback")
+    else:
+        print("[BOOT FEEDBACK] No feedback file yet (run boot first)")
+
+    # 4. Sessions
+    print()
+    sessions_dir = (_REPO_PATH or Path(".").resolve()) / ".muninn" / "sessions"
+    if sessions_dir.exists():
+        mn_files = list(sessions_dir.glob("*.mn"))
+        print(f"[SESSIONS] {len(mn_files)} compressed transcripts")
+        if mn_files:
+            newest = max(mn_files, key=lambda p: p.stat().st_mtime)
+            print(f"  Latest: {newest.name}")
+    else:
+        print("[SESSIONS] No sessions directory")
+
+    print("\n=== DIAGNOSE COMPLETE ===")
+
+
 # ── READ (analysis) ──────────────────────────────────────────────
 
 def analyze_file(filepath: Path) -> dict:
@@ -4938,7 +5039,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "upgrade-hooks", "inject",
+        "ingest", "recall", "upgrade-hooks", "inject", "diagnose",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -4971,6 +5072,15 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         show_status()
+        return
+
+    if args.command == "diagnose":
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        diagnose()
         return
 
     if args.command == "scan":
