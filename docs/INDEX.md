@@ -17,6 +17,7 @@
 | TIER2_SUMMARY.md | 03-10 | Resume TIER 2 (5 upgrades, 32 bornes) |
 | TIER3_PLAN.md | 03-11 | Plan TIER 3 (SQLite migration) |
 | PLAN_BATAILLE_TIER1.md | 03-10 | Plan detaille TIER 1 |
+| PLAN_BATAILLE_BIOVECTORS.md | 03-11 | Plan Bio-Vectors (16 formules, 64 bornes, 3 phases) |
 | SHOPPING_LIST.md | 03-08 | Shopping list briques (8 done, 1 impasse, 11 skip) |
 | TIMELINE.md | 03-08 | Timeline complete du projet |
 
@@ -27,6 +28,7 @@
 | LITERATURE.md | 03-11 | References scientifiques |
 | BRIEFING_CELLBIO_22BS.md | 03-10 | 22 blind spots cell bio (origine TIER 1) |
 | RECHERCHE_WEB_PISTES.md | 03-10 | 10 pistes web avec sources |
+| muninn_biovectors_formulas.json | 03-11 | 22 formules bio-inspirees (28 papiers, LaTeX+Python+metriques) |
 
 ## Prompts Ygg
 | Fichier | Date | Contenu |

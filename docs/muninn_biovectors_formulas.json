@@ -1,0 +1,492 @@
+{
+  "meta": {
+    "description": "22 bio-inspired formulas for Muninn memory engine",
+    "date": "2026-03-11",
+    "existing_muninn_formulas": 21,
+    "new_formulas": 13,
+    "variants": 9
+  },
+  "formulas": [
+    {
+      "id": "V1A",
+      "vector": "V1-PIEUVRE",
+      "name": "Coupled oscillator arm control",
+      "equation": "tau_i = J_i * theta_ddot_i + B_i * theta_dot_i + K_i * theta_i + sum_j C_ij * (theta_i - theta_j)",
+      "latex": "\\tau_i = J_i \\ddot{\\theta}_i + B_i \\dot{\\theta}_i + K_i \\theta_i + \\sum_j C_{ij}(\\theta_i - \\theta_j)",
+      "python": "tau[i] = J[i]*theta_ddot[i] + B[i]*theta_dot[i] + K[i]*theta[i] + sum(C[i,j]*(theta[i]-theta[j]) for j in neighbors(i))",
+      "paper": {
+        "title": "Dynamic model of the octopus arm. I. Biomechanics of the octopus reaching movement",
+        "authors": "Yekutieli, Sagiv-Zohar, Aharonov, Engel, Hochner, Flash",
+        "year": 2005,
+        "journal": "Journal of Neurophysiology",
+        "doi": "10.1152/jn.00684.2004"
+      },
+      "scale": "angular error (degrees), trajectory correlation R^2 > 0.9",
+      "failures": "2D model only, fails for unconstrained 3D movements (Hanassy et al. 2015 J Exp Biol)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Each memory branch = arm segment. Local propagation via C_ij coupling through mycelium. No central coordinator needed.",
+      "tier": "B"
+    },
+    {
+      "id": "V1B",
+      "vector": "V1-PIEUVRE",
+      "name": "Consensus protocol on Laplacian",
+      "equation": "dx_i/dt = sum_j a_ij * (x_j - x_i)  =>  dx/dt = -L * x",
+      "latex": "\\frac{dx_i}{dt} = \\sum_{j \\in N(i)} a_{ij}(x_j - x_i) \\quad \\Rightarrow \\quad \\frac{d\\mathbf{x}}{dt} = -L\\mathbf{x}",
+      "python": "dx = -L @ x  # converges to mean if graph connected, rate = 1/lambda_2(L)",
+      "paper": {
+        "title": "Consensus problems in networks of agents with switching topology and communication delays",
+        "authors": "Olfati-Saber, Murray",
+        "year": 2004,
+        "journal": "IEEE Transactions on Automatic Control",
+        "doi": "10.1109/TAC.2004.834113"
+      },
+      "scale": "convergence time = 1/lambda_2(L), steady-state error",
+      "failures": "Diverges if graph disconnected; fragile to Byzantine faults (LeBlanc et al. 2013 IEEE TAC)",
+      "vs_muninn": "VARIANTE Laplacien spectral",
+      "muninn_use": "Temporal dynamics on L instead of spectral decomposition. Recall stabilization = consensus convergence.",
+      "tier": "C"
+    },
+    {
+      "id": "V2A",
+      "vector": "V2-PRIMATE",
+      "name": "Cortical scaling power law",
+      "equation": "N = a * M^alpha",
+      "latex": "N = a \\cdot M^{\\alpha}",
+      "python": "N = a * M**alpha  # primates alpha~1.0, rodents alpha~0.6",
+      "paper": {
+        "title": "The human brain in numbers: a linearly scaled-up primate brain",
+        "authors": "Herculano-Houzel",
+        "year": 2009,
+        "journal": "Frontiers in Human Neuroscience",
+        "doi": "10.3389/neuro.09.031.2009"
+      },
+      "scale": "log-log fit R^2 (typically > 0.99), exponent alpha +/- 95% CI",
+      "failures": "Fails for cetaceans (neurons in cerebellum not cortex, Mortensen et al. 2014 Frontiers)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Monitor graph scaling efficiency. If branches/memory ratio follows alpha~1.0 = primate-efficient. If alpha < 0.8 = rodent-wasteful, prune.",
+      "tier": "C"
+    },
+    {
+      "id": "V2B",
+      "vector": "V2-PRIMATE",
+      "name": "TD-Learning reward prediction error",
+      "equation": "delta_t = r_t + gamma * V(s_{t+1}) - V(s_t);  V(s_t) <- V(s_t) + alpha * delta_t",
+      "latex": "\\delta_t = r_t + \\gamma V(s_{t+1}) - V(s_t) \\quad;\\quad V(s_t) \\leftarrow V(s_t) + \\alpha \\delta_t",
+      "python": "delta = reward + gamma * V[s_next] - V[s]; V[s] += alpha * delta",
+      "paper": {
+        "title": "A neural substrate of prediction and reward",
+        "authors": "Schultz, Dayan, Montague",
+        "year": 1997,
+        "journal": "Science",
+        "doi": "10.1126/science.275.5306.1593"
+      },
+      "scale": "correlation dopamine firing rate vs model delta (R > 0.8), cumulative reward",
+      "failures": "Misses dopamine ramp (Howe et al. 2013 Nature); credit assignment problem for delayed rewards",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "delta modulates mycelium weights. Successful recall (delta > 0) = reinforce path. Useless recall (delta < 0) = accelerate decay. Adaptive Ebbinghaus where h depends on delta.",
+      "tier": "S"
+    },
+    {
+      "id": "V3A",
+      "vector": "V3-CORBEAU",
+      "name": "Transitive inference value transfer",
+      "equation": "V(A) = r(A) + beta * sum_j V(j) * P(A>j);  RT = a - b * log(|rank_i - rank_j|)",
+      "latex": "V(A) = r(A) + \\beta \\sum_j V(j) P(A \\succ j) \\quad;\\quad RT = a - b \\log|rank_i - rank_j|",
+      "python": "V[A] = r[A] + beta * sum(V[j] * P_win[A,j] for j in items); RT = a - b * np.log(abs(rank[i] - rank[j]))",
+      "paper": {
+        "title": "Transitive inference in pigeons is not a simple artifact: Reassessing Couvillon and Bitterman (1992)",
+        "authors": "Wynne",
+        "year": 1995,
+        "journal": "Journal of Experimental Psychology: Animal Behavior Processes",
+        "doi": "10.1037/0097-7403.21.2.166"
+      },
+      "also": {
+        "title": "Transitive inference in social dominance in pinyon jays",
+        "authors": "Paz-y-Mino, Bond, Kamil, Balda",
+        "year": 2004,
+        "journal": "Nature",
+        "doi": "10.1038/nature02723"
+      },
+      "scale": "% correct on untrained BD pair, symbolic distance effect slope",
+      "failures": "Pigeons may use simple association not true reasoning (Vasconcelos 2008 Animal Behaviour)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Transitive closure on mycelium. If A co-occurs with B, B with C, infer A->C with decaying weight beta^distance. Collins & Loftus does spreading but without ORDERED chains.",
+      "tier": "A"
+    },
+    {
+      "id": "V3B",
+      "vector": "V3-CORBEAU",
+      "name": "Bayesian Theory of Mind (BToM)",
+      "equation": "P(goal|actions,state) propto P(actions|goal,state) * P(goal);  P(actions|goal,state) propto exp(-C(actions,goal,state))",
+      "latex": "P(g|a,s) \\propto P(a|g,s) P(g) \\quad;\\quad P(a|g,s) \\propto \\exp(-C(a,g,s))",
+      "python": "P_goal = np.exp(-cost[actions,goal,state]) * prior[goal]; P_goal /= P_goal.sum()",
+      "paper": {
+        "title": "Action understanding as inverse planning",
+        "authors": "Baker, Saxe, Tenenbaum",
+        "year": 2009,
+        "journal": "Cognition",
+        "doi": "10.1016/j.cognition.2009.07.005"
+      },
+      "scale": "correlation model predictions vs human judgments (R^2 ~ 0.95), log-likelihood",
+      "failures": "Computationally intractable for complex scenarios; assumes agent rationality (fails for irrational agents)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "User modeling. Infer user goal from last 3-5 queries as actions. Pre-activate relevant branches. Cost C = edit distance between query pattern and branch content.",
+      "tier": "A"
+    },
+    {
+      "id": "V4A",
+      "vector": "V4-DAUPHIN",
+      "name": "Unihemispheric sleep two-process",
+      "equation": "dS_L/dt = -S_L/tau_d (sleeping); dS_R/dt = +1/tau_r (awake); switch when S > theta_high or S < theta_low",
+      "latex": "\\frac{dS_L}{dt} = -\\frac{S_L}{\\tau_d}, \\quad \\frac{dS_R}{dt} = +\\frac{1}{\\tau_r} \\quad;\\quad \\text{switch at } S > \\theta_h \\text{ or } S < \\theta_l",
+      "python": "if S[L] > theta_high: hemisphere[L] = 'sleep'; if S[L] < theta_low: hemisphere[L] = 'wake'  # alternating",
+      "paper": {
+        "title": "Behavioral, neurophysiological and evolutionary perspectives on unihemispheric sleep",
+        "authors": "Rattenborg, Amlaner, Lima",
+        "year": 2000,
+        "journal": "Neuroscience & Biobehavioral Reviews",
+        "doi": "10.1016/S0149-7634(00)00039-7"
+      },
+      "also": {
+        "title": "A two process model of sleep regulation",
+        "authors": "Borbely",
+        "year": 1982,
+        "journal": "Human Neurobiology"
+      },
+      "scale": "L/R sleep time ratio, switch latency (minutes), EEG delta power asymmetry",
+      "failures": "Inter-hemispheric coupling mechanism still poorly understood (Mascetti 2016 Sleep Medicine Reviews)",
+      "vs_muninn": "VARIANTE Wilson & McNaughton",
+      "muninn_use": "Two subsystems alternate: one serves queries (online) while other consolidates (compaction, branch fusion). Never both on same subgraph.",
+      "tier": "C"
+    },
+    {
+      "id": "V4B",
+      "vector": "V4-DAUPHIN",
+      "name": "Elastic Weight Consolidation (EWC)",
+      "equation": "L(theta) = L_B(theta) + lambda/2 * sum_i F_i * (theta_i - theta_star_A_i)^2",
+      "latex": "\\mathcal{L}(\\theta) = \\mathcal{L}_B(\\theta) + \\frac{\\lambda}{2} \\sum_i F_i (\\theta_i - \\theta^*_{A,i})^2",
+      "python": "loss = loss_task_B + (lam/2) * sum(F[i] * (theta[i] - theta_star_A[i])**2 for i in params)",
+      "paper": {
+        "title": "Overcoming catastrophic forgetting in neural networks",
+        "authors": "Kirkpatrick, Pascanu, Rabinowitz, Veness, Desjardins, Rusu, Milan, Quan, Ramalho, Grabska-Barwinska, Hassabis, Clopath, Kumaran, Hadsell",
+        "year": 2017,
+        "journal": "PNAS",
+        "doi": "10.1073/pnas.1611835114"
+      },
+      "scale": "accuracy on task A after learning task B, average multi-task accuracy",
+      "failures": "Doesn't scale past ~10 sequential tasks; diagonal Fisher is crude approximation (Huszar 2018 arXiv:1801.01423)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Ebbinghaus half-life weighted by Fisher importance: h_node = h_base * (1 + F_i). High-F nodes (critical for past good recalls) decay SLOWER.",
+      "tier": "A"
+    },
+    {
+      "id": "V5A",
+      "vector": "V5-ABEILLE",
+      "name": "Quorum sensing Hill switch",
+      "equation": "dA/dt = k_s * N * A^n / (K^n + A^n) - k_d * A",
+      "latex": "\\frac{dA}{dt} = k_s N \\frac{A^n}{K^n + A^n} - k_d A",
+      "python": "dA_dt = k_s * N * A**n / (K**n + A**n) - k_d * A  # bistable switch",
+      "paper": {
+        "title": "A mathematical model for quorum sensing in Pseudomonas aeruginosa",
+        "authors": "Dockery, Keener",
+        "year": 2001,
+        "journal": "Bulletin of Mathematical Biology",
+        "doi": "10.1006/bulm.2001.0205"
+      },
+      "scale": "threshold concentration (nM), activation time (min), signal/noise ratio of switch",
+      "failures": "Simple model misses inter-species communication (polymicrobial); stochastic noise at low N",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Activate a branch ONLY when enough neighbor nodes are co-activated (quorum). Hill function as gate: f(A) > 0.5 only when A > K. Prevents false positives from single isolated node.",
+      "tier": "B"
+    },
+    {
+      "id": "V5B",
+      "vector": "V5-ABEILLE",
+      "name": "Cross-inhibition winner-take-all",
+      "equation": "dN_A/dt = r_A*(1-N_A/K)*N_A - beta*N_B*N_A;  dN_B/dt = r_B*(1-N_B/K)*N_B - beta*N_A*N_B",
+      "latex": "\\frac{dN_A}{dt} = r_A(1-\\frac{N_A}{K})N_A - \\beta N_B N_A \\quad;\\quad \\frac{dN_B}{dt} = r_B(1-\\frac{N_B}{K})N_B - \\beta N_A N_B",
+      "python": "dNA = r_A*(1-NA/K)*NA - beta*NB*NA; dNB = r_B*(1-NB/K)*NB - beta*NA*NB",
+      "paper": {
+        "title": "Stop signals provide cross inhibition in collective decision-making by honeybee swarms",
+        "authors": "Seeley, Visscher, Schlegel, Hogan, Franks, Marshall",
+        "year": 2012,
+        "journal": "Science",
+        "doi": "10.1126/science.1210361"
+      },
+      "scale": "decision time (hours), % convergence to best site, split-brain ratio",
+      "failures": "Deadlock with > 5 similar-quality options (Pais et al. 2013 Journal of the Royal Society Interface)",
+      "vs_muninn": "VARIANTE Lotka-Volterra",
+      "muninn_use": "When two branches compete for same query (ambiguity), they cross-inhibit. Better branch (higher r) wins. beta controls speed vs caution. Direct upgrade of existing -beta*w^2.",
+      "tier": "S"
+    },
+    {
+      "id": "V6A",
+      "vector": "V6-ELEPHANT",
+      "name": "Emotional tagging modulator",
+      "equation": "w_new = w_old + eta * delta * E(a);  E(a) = 1 + kappa * a^n / (a^n + theta_E^n)",
+      "latex": "w_{new} = w_{old} + \\eta \\delta E(a) \\quad;\\quad E(a) = 1 + \\kappa \\frac{a^n}{a^n + \\theta_E^n}",
+      "python": "E_a = 1 + kappa * a**n / (a**n + theta_E**n); w_new = w_old + eta * delta * E_a",
+      "paper": {
+        "title": "Emotional tagging of memory formation--in the search for neural mechanisms",
+        "authors": "Richter-Levin, Akirav",
+        "year": 2003,
+        "journal": "Brain Research Reviews",
+        "doi": "10.1016/S0165-0173(03)00174-X"
+      },
+      "also": {
+        "title": "Synaptic tagging and long-term potentiation",
+        "authors": "Frey, Morris",
+        "year": 1997,
+        "journal": "Nature",
+        "doi": "10.1038/385533a0"
+      },
+      "scale": "retention at 24h/48h (% recall), emotional vs neutral delta (typically +15-25%)",
+      "failures": "Excessive arousal DEGRADES memory (inverted-U, Yerkes-Dodson); tagging fails for implicit memory (Bergado et al. 2011)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Arousal score a per interaction (prompt length, urgency markers, !!! in text). E(a) multiplies initial mycelium weight. High arousal = stronger initial encoding.",
+      "tier": "S"
+    },
+    {
+      "id": "V6B",
+      "vector": "V6-ELEPHANT",
+      "name": "Valence-modulated Ebbinghaus decay",
+      "equation": "p(t) = 2^(-t / h(v,a));  h(v,a) = h_base * (1 + alpha_v * |v| + alpha_a * a)",
+      "latex": "p(t) = 2^{-t/h(v,a)} \\quad;\\quad h(v,a) = h_0(1 + \\alpha_v|v| + \\alpha_a \\cdot a)",
+      "python": "h = h_base * (1 + alpha_v * abs(valence) + alpha_a * arousal); p = 2**(-t / h)",
+      "paper": {
+        "title": "Enhanced emotional memory: Cognitive and neural mechanisms",
+        "authors": "Talmi",
+        "year": 2013,
+        "journal": "Current Directions in Psychological Science",
+        "doi": "10.1177/0963721413498893"
+      },
+      "also": {
+        "title": "Mechanisms of emotional arousal and lasting declarative memory",
+        "authors": "McGaugh",
+        "year": 2004,
+        "journal": "Trends in Neurosciences",
+        "doi": "10.1016/j.tins.2004.04.004"
+      },
+      "scale": "d' (signal detection), hazard ratio of memory survival curves",
+      "failures": "Positive and negative valence differ: negative retained better short-term, positive long-term (fading affect bias, Walker & Skowronski 2009 Memory & Cognition)",
+      "vs_muninn": "VARIANTE Ebbinghaus",
+      "muninn_use": "Direct upgrade: h becomes dynamic, modulated by valence and arousal. Errors (negative) fade faster than successes (positive) long-term.",
+      "tier": "S"
+    },
+    {
+      "id": "V7A",
+      "vector": "V7-FOURMI",
+      "name": "Response threshold model (stigmergy)",
+      "equation": "P(task_j | stimulus s_j) = s_j^n / (s_j^n + theta_j^n)",
+      "latex": "P(\\text{task}_j | s_j) = \\frac{s_j^n}{s_j^n + \\theta_j^n}",
+      "python": "P_task = s**n / (s**n + theta**n)  # each agent has different theta -> emergent specialization",
+      "paper": {
+        "title": "Response threshold reinforcement and division of labour in insect societies",
+        "authors": "Theraulaz, Bonabeau, Deneubourg",
+        "year": 1998,
+        "journal": "Proceedings of the Royal Society B",
+        "doi": "10.1098/rspb.1998.0299"
+      },
+      "scale": "colony efficiency (tasks/time), specialization entropy, robustness to agent loss",
+      "failures": "Over-predicts rigid specialization; real ants switch more (lazy ants = reserve, Charbonneau et al. 2013 Behavioral Ecology)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Each branch has response threshold theta. Query triggers branch only if relevance > theta. Different branches specialize without central allocation.",
+      "tier": "C"
+    },
+    {
+      "id": "V7B",
+      "vector": "V7-FOURMI",
+      "name": "ACO pheromone update + probability",
+      "equation": "tau_ij(t+1) = (1-rho)*tau_ij(t) + sum_k Delta_tau_ij^k;  p_ij = tau_ij^alpha * eta_ij^beta / sum_l (tau_il^alpha * eta_il^beta)",
+      "latex": "\\tau_{ij}(t+1) = (1-\\rho)\\tau_{ij}(t) + \\sum_k \\Delta\\tau_{ij}^k \\quad;\\quad p_{ij} = \\frac{\\tau_{ij}^\\alpha \\eta_{ij}^\\beta}{\\sum_l \\tau_{il}^\\alpha \\eta_{il}^\\beta}",
+      "python": "tau[i,j] = (1-rho)*tau[i,j] + sum(Q/L[k] for k if used(i,j,k)); p[i,j] = tau[i,j]**a * eta[i,j]**b / sum(tau[i,l]**a * eta[i,l]**b for l in neighbors(i))",
+      "paper": {
+        "title": "Ant system: optimization by a colony of cooperating agents",
+        "authors": "Dorigo, Maniezzo, Colorni",
+        "year": 1996,
+        "journal": "IEEE Transactions on Systems, Man, and Cybernetics, Part B",
+        "doi": "10.1109/3477.484436"
+      },
+      "scale": "gap% vs known optimum (TSP), convergence time, scalability (cities)",
+      "failures": "Premature convergence (stagnation) on large problems; sensitive to rho/alpha/beta tuning (Stutzle & Hoos 2000 Future Generation Computer Systems)",
+      "vs_muninn": "VARIANTE Ebbinghaus",
+      "muninn_use": "Recall = ant seeking path. Evaporation (1-rho) = Ebbinghaus decay. Deposit = reinforcement on use. KEY: p_ij combines tau (history) AND eta (local relevance) -- Muninn should do the same.",
+      "tier": "S"
+    },
+    {
+      "id": "V8A",
+      "vector": "V8-CHAUVE-SOURIS",
+      "name": "Echolocation matched filter + Doppler",
+      "equation": "R = c*dt/2;  v = c*df/(2*f0);  C(tau) = integral s(t)*r(t+tau) dt",
+      "latex": "R = \\frac{c \\Delta t}{2} \\quad;\\quad v = \\frac{c \\Delta f}{2 f_0} \\quad;\\quad C(\\tau) = \\int s(t) r(t+\\tau) dt",
+      "python": "R = c*dt/2; v = c*df/(2*f0); C = np.correlate(signal_emitted, echo_received, mode='full')",
+      "paper": {
+        "title": "A view of the world through the bat's ear: the formation of acoustic images in echolocation",
+        "authors": "Simmons",
+        "year": 1989,
+        "journal": "Cognition",
+        "doi": "10.1016/0010-0277(89)90023-X"
+      },
+      "also": {
+        "title": "Probing the natural scene by echolocation in bats",
+        "authors": "Moss, Surlykke",
+        "year": 2010,
+        "journal": "Frontiers in Behavioral Neuroscience",
+        "doi": "10.3389/fnbeh.2010.00033"
+      },
+      "scale": "spatial resolution (mm), prey capture rate (%), angular precision (degrees)",
+      "failures": "Matched filter can't separate two targets < 2mm apart (resolution limit); cocktail party problem in groups",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Active probing: Muninn emits TF-IDF ping of current context, cross-correlates with all branches, measures which resonate. Pulse rate increases when context changes fast.",
+      "tier": "C"
+    },
+    {
+      "id": "V8B",
+      "vector": "V8-CHAUVE-SOURIS",
+      "name": "Active sensing info-theoretic",
+      "equation": "a* = argmax_a I(X;Y|a) = argmax_a [H(X) - E_Y[H(X|Y,a)]]",
+      "latex": "a^* = \\arg\\max_a I(X;Y|a) = \\arg\\max_a \\left[ H(X) - \\mathbb{E}_Y[H(X|Y,a)] \\right]",
+      "python": "a_star = max(actions, key=lambda a: H_X - expected_H_X_given_Y(a))  # max info gain",
+      "paper": {
+        "title": "Theoretical perspectives on active sensing",
+        "authors": "Yang, Wolpert, Lengyel",
+        "year": 2016,
+        "journal": "Current Opinion in Behavioral Sciences",
+        "doi": "10.1016/j.cobeha.2016.06.009"
+      },
+      "scale": "bits of information gained per action, queries before certainty, cumulative regret",
+      "failures": "Exact computation intractable for large state spaces; greedy 1-step lookahead is suboptimal",
+      "vs_muninn": "VARIANTE Shannon entropy",
+      "muninn_use": "When uncertain, choose the clarification question that maximizes entropy reduction. Not random question -- the BEST question.",
+      "tier": "B"
+    },
+    {
+      "id": "V9A",
+      "vector": "V9-PLANAIRE",
+      "name": "Bioelectric gap junction network (Levin)",
+      "equation": "dV_i/dt = -g_leak*(V_i - E_leak) + sum_j g_gap*(V_j - V_i) + I_ion",
+      "latex": "\\frac{dV_i}{dt} = -g_{leak}(V_i - E_{leak}) + \\sum_j g_{gap}(V_j - V_i) + I_{ion}",
+      "python": "dV[i] = -g_leak*(V[i]-E_leak) + sum(g_gap*(V[j]-V[i]) for j in neighbors(i)) + I_ion[i]",
+      "paper": {
+        "title": "An automated training paradigm reveals long-term memory in planarians and its persistence through head regeneration",
+        "authors": "Shomrat, Levin",
+        "year": 2013,
+        "journal": "Journal of Experimental Biology",
+        "doi": "10.1242/jeb.087809"
+      },
+      "also": {
+        "title": "Molecular bioelectricity in developmental biology: new tools and recent discoveries",
+        "authors": "Levin",
+        "year": 2012,
+        "journal": "BioEssays",
+        "doi": "10.1002/bies.201100136"
+      },
+      "scale": "% retention post-decapitation (planarians ~80%), number of regenerations before loss",
+      "failures": "Controversial -- McConnell 1962 never fully replicated by some labs; exact storage mechanism debated",
+      "vs_muninn": "VARIANTE Laplacien consensus",
+      "muninn_use": "If a node is destroyed, neighbors reconstruct its value by diffusion. Same dx/dt = -L*x structure but for REGENERATION not consensus.",
+      "tier": "A"
+    },
+    {
+      "id": "V9B",
+      "vector": "V9-PLANAIRE",
+      "name": "Reed-Solomon error correction",
+      "equation": "encode: p(x) = sum_{i=0}^{k-1} m_i * x^i evaluated at n points;  corrects t = (n-k)/2 symbol errors;  d_min >= n-k+1",
+      "latex": "p(x) = \\sum_{i=0}^{k-1} m_i x^i \\quad;\\quad t = \\lfloor\\frac{n-k}{2}\\rfloor \\quad;\\quad d_{min} \\geq n-k+1",
+      "python": "# k symbols encoded as n symbols, corrects (n-k)//2 errors. n/k = redundancy ratio",
+      "paper": {
+        "title": "Polynomial codes over certain finite fields",
+        "authors": "Reed, Solomon",
+        "year": 1960,
+        "journal": "Journal of the Society for Industrial and Applied Mathematics",
+        "doi": "10.1137/0108018"
+      },
+      "scale": "correction rate (errors fixed / total), overhead ratio n/k, effective throughput",
+      "failures": "Only corrects symbol errors not timing/burst errors (needs interleaving); decoding complexity O(n^2)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Store critical branches with redundancy n/k > 1. If nodes are corrupted/lost, remaining nodes reconstruct. Example: k=10 concepts encoded in n=15 nodes, survives loss of 2.",
+      "tier": "A"
+    },
+    {
+      "id": "V10A",
+      "vector": "V10-CHIEN",
+      "name": "VADER sentiment scoring",
+      "equation": "compound = sum(s_i * w_i) / sqrt((sum(s_i * w_i))^2 + alpha)",
+      "latex": "\\text{compound} = \\frac{\\sum_i s_i w_i}{\\sqrt{(\\sum_i s_i w_i)^2 + \\alpha}}",
+      "python": "raw = sum(s[i]*w[i] for i in words); compound = raw / math.sqrt(raw**2 + 15)  # alpha=15",
+      "paper": {
+        "title": "VADER: A parsimonious rule-based model for sentiment analysis of social media text",
+        "authors": "Hutto, Gilbert",
+        "year": 2014,
+        "journal": "Proceedings of ICWSM",
+        "url": "https://ojs.aaai.org/index.php/ICWSM/article/view/14550"
+      },
+      "scale": "F1-score vs human annotations (~0.96 on tweets), correlation with human ratings",
+      "failures": "Bad on sarcasm/irony; no context beyond sentence; English-biased",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Tag each interaction with compound score in [-1,+1]. Ultra-fast rule-based, no LLM needed. Feed into V6 emotional tagging.",
+      "tier": "S"
+    },
+    {
+      "id": "V10B",
+      "vector": "V10-CHIEN",
+      "name": "Russell circumplex affect mapping",
+      "equation": "E = (v, a) where v=valence in [-1,+1], a=arousal in [-1,+1];  theta = atan2(a, v);  r = sqrt(v^2 + a^2)",
+      "latex": "\\mathbf{E} = (v, a) \\quad;\\quad \\theta = \\arctan\\frac{a}{v} \\quad;\\quad r = \\sqrt{v^2 + a^2}",
+      "python": "theta = math.atan2(arousal, valence); r = math.sqrt(valence**2 + arousal**2)",
+      "paper": {
+        "title": "A circumplex model of affect",
+        "authors": "Russell",
+        "year": 1980,
+        "journal": "Journal of Personality and Social Psychology",
+        "doi": "10.1037/h0077714"
+      },
+      "scale": "circular correlation with self-report data; stress test: do discrete emotions map to correct angle?",
+      "failures": "Reductive -- nostalgia, pride, guilt don't map cleanly to 2D; culturally biased (Gendron et al. 2014 Psychological Science)",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Each session = point (v,a). Cluster sessions by emotional state. Route queries based on affect: high arousal sessions get emotional tagging + slower decay.",
+      "tier": "B"
+    },
+    {
+      "id": "V11A",
+      "vector": "V11-BALEINE",
+      "name": "Song revolution SI-model",
+      "equation": "dN_new/dt = beta * N_new * (N_total - N_new) / N_total - mu * N_new",
+      "latex": "\\frac{dN_{new}}{dt} = \\beta \\frac{N_{new}(N_{total} - N_{new})}{N_{total}} - \\mu N_{new}",
+      "python": "dN_new = beta * N_new * (N_total - N_new) / N_total - mu * N_new",
+      "paper": {
+        "title": "Dynamic horizontal cultural transmission of humpback whale song at the ocean basin scale",
+        "authors": "Garland, Goldizen, Rekdahl, Constantine, Garrigue, Hauser, Poole, Robbins, Noad",
+        "year": 2011,
+        "journal": "Current Biology",
+        "doi": "10.1016/j.cub.2011.03.019"
+      },
+      "scale": "% population with new song per month, propagation speed (km/year), song type diversity (Shannon H)",
+      "failures": "Doesn't predict WHY some songs spread and others don't; misses partial retention (hybrids)",
+      "vs_muninn": "VARIANTE BARE Wave",
+      "muninn_use": "When a better memory pattern emerges, it replaces old ones by epidemic spread through mycelium. Speed controlled by beta. Same dn/dt structure as BARE Wave but for CULTURAL replacement.",
+      "tier": "C"
+    },
+    {
+      "id": "V11B",
+      "vector": "V11-BALEINE",
+      "name": "Boyd-Richerson cultural transmission (3 biases)",
+      "equation": "conformist: dp = beta*p*(1-p)*(2p-1);  prestige: p' = sum_i w_i*p_i;  guided variation: p' = p + mu*(p_opt - p)",
+      "latex": "\\Delta p = \\beta p(1-p)(2p-1) \\quad;\\quad p' = \\sum_i w_i p_i \\quad;\\quad p' = p + \\mu(p_{opt} - p)",
+      "python": "dp_conform = beta*p*(1-p)*(2*p-1); p_prestige = sum(w[i]*p[i] for i in models); dp_guided = mu*(p_opt - p)",
+      "paper": {
+        "title": "Culture and the Evolutionary Process",
+        "authors": "Boyd, Richerson",
+        "year": 1985,
+        "publisher": "University of Chicago Press",
+        "isbn": "978-0226069333"
+      },
+      "scale": "cultural convergence speed (generations), cultural diversity (F_ST analogs), tradition stability",
+      "failures": "Conformist bias assumes homogeneous mixing (false in structured networks); prestige bias hard to measure quantitatively",
+      "vs_muninn": "NOUVEAU",
+      "muninn_use": "Three signals for node weight: (1) conformist = how many neighbors use it, (2) prestige = history of successful recalls, (3) guided = correction by LLM. Powerful self-organization without supervisor.",
+      "tier": "A"
+    }
+  ]
+}
