@@ -109,6 +109,56 @@ Key: `p = 2^(-delta / h)` where delta = days since last access, h = half-life (d
 | DARPA L2M (2017) | DARPA | Apprentissage continu sans oubli catastrophique | Valide architecture CLS: capture rapide + consolidation lente |
 | DARPA KAIROS (2019) | DARPA | Schemas = templates compresses d'evenements recurrents | Nos L11 rules + fusions = schemas compiles |
 
+### Bio-Vectors — 22 formules, 28 papiers primaires (session 2026-03-11)
+
+Sources pour les 11 vecteurs bio-cognitifs. On cite, on ne vole jamais.
+
+| Vecteur | Papier | Idee cle | Application Muninn |
+|---------|--------|----------|--------------------|
+| V1 Pieuvre | Yekutieli et al. (2005) J Neurophysiol 94:1443 | Coupled oscillator arm control: tau_i = J*theta_ddot + C_ij coupling | Propagation locale sans coordinateur central |
+| V1 Pieuvre | Olfati-Saber & Murray (2004) IEEE TAC 49:1520 | Consensus protocol: dx/dt = -L*x, rate=1/lambda_2 | Variante: Laplacien dynamique pour stabilisation recall |
+| V2 Primate | Herculano-Houzel (2009) Front Hum Neurosci 3:31 | Cortical scaling: N=a*M^alpha (primates alpha~1.0) | Metrique: branches/memoire suit alpha~1.0 = efficient |
+| V2 Primate | Schultz, Dayan, Montague (1997) Science 275:1593 | **TD-Learning: delta=r+gamma*V(s')-V(s)**. Dopamine = reward prediction error | **delta module poids mycelium. Recall reussi = renforce, inutile = accelere decay** |
+| V3 Corbeau | Wynne (1995) J Exp Psych Anim Behav 21:166 | Transitive inference: V(A) = r(A) + beta*sum(V(j)*P(A>j)) | Fermeture transitive sur mycelium avec decay beta^distance |
+| V3 Corbeau | Paz-y-Mino et al. (2004) Nature 430:778 | Transitive inference in pinyon jays social dominance | Confirms: ordered chains in birds, not just association |
+| V3 Corbeau | Baker, Saxe, Tenenbaum (2009) Cognition 113:329 | **Bayesian ToM: P(g|a,s) propto P(a|g,s)*P(g), cost-based** | **Profil utilisateur: infere goal depuis queries** |
+| V4 Dauphin | Rattenborg, Amlaner, Lima (2000) Neurosci Biobehav Rev 24:817 | Unihemispheric sleep: two-process switch at theta_h/theta_l | Variante Wilson & McNaughton: deux sous-systemes alternent |
+| V4 Dauphin | Borbely (1982) Human Neurobiology 1:195 | Two-process model of sleep regulation (S+C) | Fondement theorique du flip-flop sleep/wake |
+| V4 Dauphin | Kirkpatrick et al. (2017) PNAS 114:3521 | **EWC: L(theta)=L_B+lambda/2*sum(F_i*(theta-theta*_A)^2)** | **Fisher importance sur decay: h *= (1+F_i). Noeuds critiques protege** |
+| V5 Abeille | Dockery & Keener (2001) Bull Math Biol 63:95 | Quorum sensing Hill switch: dA/dt = k_s*N*A^n/(K^n+A^n) - k_d*A | Gate: branche active seulement si assez de voisins co-actives |
+| V5 Abeille | Seeley et al. (2012) Science 335:108 | **Cross-inhibition: dN_A/dt = r_A*(1-N_A/K)*N_A - beta*N_B*N_A** | **Upgrade Lotka-Volterra: deux branches en compet, meilleure gagne** |
+| V6 Elephant | Richter-Levin & Akirav (2003) Brain Res Rev 43:247 | **Emotional tagging: w_new = w_old + eta*delta*E(a), E(a)=Hill function** | **Arousal multiplie poids initial encodage mycelium** |
+| V6 Elephant | Frey & Morris (1997) Nature 385:533 | Synaptic tagging and capture (STC) — LTP requires protein synthesis | Fondement biologique du tagging emotionnel |
+| V6 Elephant | Talmi (2013) Curr Dir Psych Sci 22:430 | **Valence-modulated decay: h(v,a) = h_0*(1+alpha_v*|v|+alpha_a*a)** | **Upgrade Ebbinghaus: h dynamique par valence et arousal** |
+| V6 Elephant | McGaugh (2004) Trends Neurosci 27:456 | Emotional arousal modulates declarative memory via amygdala-hippocampus | Pipeline: arousal → amygdala → consolidation renforcee |
+| V7 Fourmi | Theraulaz, Bonabeau, Deneubourg (1998) Proc R Soc B 265:327 | Response threshold: P(task)=s^n/(s^n+theta^n), emergent specialization | Branches specialisent sans allocation centrale (= sigmoid existant) |
+| V7 Fourmi | Dorigo, Maniezzo, Colorni (1996) IEEE Trans SMC-B 26:29 | **ACO: tau=(1-rho)*tau+deposit; p_ij=tau^a*eta^b/sum** | **Combine historique (tau=decay) + pertinence locale (eta=TF-IDF)** |
+| V8 Chauve-souris | Simmons (1989) Cognition 33:155 | Echolocation matched filter: C(tau)=integral(s*r), R=c*dt/2 | Probing actif: cross-correlation contexte vs branches |
+| V8 Chauve-souris | Moss & Surlykke (2010) Front Behav Neurosci 4:33 | Natural scene probing, pulse rate adaptation | Frequence de scan augmente quand contexte change vite |
+| V8 Chauve-souris | Yang, Wolpert, Lengyel (2016) Curr Opin Behav Sci 11:100 | Active sensing: a*=argmax I(X;Y|a), max info gain | Choisir la meilleure question, pas une question random |
+| V9 Planaire | Shomrat & Levin (2013) J Exp Biol 216:3799 | **Bioelectric gap junction: dV/dt=-g_leak*(V-E)+g_gap*sum(V_j-V_i)+I_ion** | **Regeneration: noeuds voisins reconstruisent un noeud detruit par diffusion. 80% retention post-decapitation** |
+| V9 Planaire | Levin (2012) BioEssays 34:205 | Molecular bioelectricity in developmental biology | Fondement theorique: information stockee dans patterns bioelectriques, pas juste ADN |
+| V9 Planaire | Reed & Solomon (1960) JSIAM 8:300 | **Error correction: p(x)=sum(m_i*x^i), corrects (n-k)/2 errors** | **Redondance: k concepts encodes dans n noeuds, survit a la perte de (n-k)/2** |
+| V10 Chien | Hutto & Gilbert (2014) ICWSM-14 | **VADER: compound=raw/sqrt(raw^2+15), rule-based sentiment** | **Capteur sentiment zero-LLM: tag [-1,+1] par interaction. Nourrit V6** |
+| V10 Chien | Russell (1980) J Pers Soc Psych 39:1161 | Circumplex: E=(v,a), theta=atan2(a,v), r=sqrt(v^2+a^2) | Chaque session = point (v,a). Clustering emotionnel |
+| V11 Baleine | Garland et al. (2011) Current Biology 21:687 | Song revolution SI-model: dN/dt=beta*N*(N_tot-N)/N_tot-mu*N | Variante BARE Wave: remplacement epidemique de patterns memoire |
+| V11 Baleine | Boyd & Richerson (1985) Culture & Evolutionary Process, U Chicago Press | **3 biases: conformist dp=beta*p*(1-p)*(2p-1), prestige p'=sum(w_i*p_i), guided p'=p+mu*(p_opt-p)** | **Auto-organisation: conformiste + prestige + correction LLM** |
+
+Echecs connus (13 papiers negatifs — temps economise):
+- Hanassy et al. (2015) J Exp Biol — V1A 2D only, fails 3D
+- LeBlanc et al. (2013) IEEE TAC — V1B Byzantine faults
+- Mortensen et al. (2014) Frontiers — V2A fails cetaceans
+- Howe et al. (2013) Nature — V2B dopamine ramp
+- Vasconcelos (2008) Animal Behaviour — V3A simple association?
+- Huszar (2018) arXiv:1801.01423 — V4B EWC >10 tasks
+- Pais et al. (2013) J R Soc Interface — V5B deadlock >5 options
+- Bergado et al. (2011) — V6A Yerkes-Dodson inverted-U
+- Walker & Skowronski (2009) Mem & Cogn — V6B fading affect bias
+- Charbonneau et al. (2013) Behav Ecol — V7A lazy ants = reserve
+- Stutzle & Hoos (2000) FGCS — V7B ACO premature convergence
+- Gendron et al. (2014) Psych Sci — V10B circumplex culturally biased
+- Mascetti (2016) Sleep Med Rev — V4A unihemispheric coupling unknown
+
 ### Pistes non-implementees identifiees
 
 1. **Endsley Level 3 — Projection** : predire ce qui va etre necessaire AVANT la query
@@ -315,3 +365,33 @@ Detail: docs/FORMULES_ETRANGERES.md (30 eq LaTeX, 60+ vars mappees).
 - Garrido et al.: "A unifying Gamma-Mittag-Leffler kernel for decay processes" (2024), PNAS 121(37)
 - Faber et al.: "First-principles GW calculations for DNA and RNA nucleobases" (2011), arXiv:1101.3738
 - Simserides: "Electron or hole transfer along DNA dimers, trimers and polymers" (2014), arXiv:1402.0654
+
+Bio-Vectors refs (session 2026-03-11):
+- Yekutieli et al.: "Dynamic model of the octopus arm" (2005), J Neurophysiol 94:1443, doi:10.1152/jn.00684.2004
+- Olfati-Saber & Murray: "Consensus problems in networks of agents" (2004), IEEE TAC 49:1520, doi:10.1109/TAC.2004.834113
+- Herculano-Houzel: "The human brain in numbers" (2009), Front Hum Neurosci 3:31, doi:10.3389/neuro.09.031.2009
+- Schultz, Dayan, Montague: "A neural substrate of prediction and reward" (1997), Science 275:1593, doi:10.1126/science.275.5306.1593
+- Wynne: "Transitive inference in pigeons" (1995), J Exp Psych Anim 21:166, doi:10.1037/0097-7403.21.2.166
+- Paz-y-Mino et al.: "Transitive inference in pinyon jays" (2004), Nature 430:778, doi:10.1038/nature02723
+- Baker, Saxe, Tenenbaum: "Action understanding as inverse planning" (2009), Cognition 113:329, doi:10.1016/j.cognition.2009.07.005
+- Rattenborg, Amlaner, Lima: "Unihemispheric sleep" (2000), Neurosci Biobehav Rev 24:817, doi:10.1016/S0149-7634(00)00039-7
+- Borbely: "A two process model of sleep regulation" (1982), Human Neurobiology 1:195
+- Kirkpatrick et al.: "Overcoming catastrophic forgetting" (2017), PNAS 114:3521, doi:10.1073/pnas.1611835114
+- Dockery & Keener: "Mathematical model for quorum sensing" (2001), Bull Math Biol 63:95, doi:10.1006/bulm.2001.0205
+- Seeley et al.: "Stop signals provide cross inhibition" (2012), Science 335:108, doi:10.1126/science.1210361
+- Richter-Levin & Akirav: "Emotional tagging of memory formation" (2003), Brain Res Rev 43:247, doi:10.1016/S0165-0173(03)00174-X
+- Frey & Morris: "Synaptic tagging and long-term potentiation" (1997), Nature 385:533, doi:10.1038/385533a0
+- Talmi: "Enhanced emotional memory" (2013), Curr Dir Psych Sci 22:430, doi:10.1177/0963721413498893
+- McGaugh: "Emotional arousal and lasting declarative memory" (2004), Trends Neurosci 27:456, doi:10.1016/j.tins.2004.04.004
+- Theraulaz, Bonabeau, Deneubourg: "Response threshold reinforcement" (1998), Proc R Soc B 265:327, doi:10.1098/rspb.1998.0299
+- Dorigo, Maniezzo, Colorni: "Ant system: optimization by cooperating agents" (1996), IEEE Trans SMC-B 26:29, doi:10.1109/3477.484436
+- Simmons: "A view of the world through the bat's ear" (1989), Cognition 33:155, doi:10.1016/0010-0277(89)90023-X
+- Moss & Surlykke: "Probing the natural scene by echolocation" (2010), Front Behav Neurosci 4:33, doi:10.3389/fnbeh.2010.00033
+- Yang, Wolpert, Lengyel: "Theoretical perspectives on active sensing" (2016), Curr Opin Behav Sci 11:100, doi:10.1016/j.cobeha.2016.06.009
+- Shomrat & Levin: "Long-term memory in planarians" (2013), J Exp Biol 216:3799, doi:10.1242/jeb.087809
+- Levin: "Molecular bioelectricity in developmental biology" (2012), BioEssays 34:205, doi:10.1002/bies.201100136
+- Reed & Solomon: "Polynomial codes over certain finite fields" (1960), JSIAM 8:300, doi:10.1137/0108018
+- Hutto & Gilbert: "VADER: A parsimonious rule-based model for sentiment analysis" (2014), ICWSM-14
+- Russell: "A circumplex model of affect" (1980), J Pers Soc Psych 39:1161, doi:10.1037/h0077714
+- Garland et al.: "Dynamic horizontal cultural transmission of humpback whale song" (2011), Curr Biol 21:687, doi:10.1016/j.cub.2011.03.019
+- Boyd & Richerson: "Culture and the Evolutionary Process" (1985), University of Chicago Press, ISBN 978-0226069333

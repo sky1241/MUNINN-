@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques vivantes + TIER 1-3 (236 PASS) + HUGINN (3 briques, 24 PASS), CI vert, 1 supprimee (P3), 1 impasse (Meta-Tokens)
+Etat: 56 briques vivantes + TIER 1-3 (236 PASS) + HUGINN (3 briques, 24 PASS) + Bio-Vectors (22 formules, 28 papiers), CI vert, 1 supprimee (P3), 1 impasse (Meta-Tokens)
 Engine: muninn.py 5455 lignes, 91 fonctions + mycelium.py 1983 lignes, 44 fonctions + mycelium_db.py 930 lignes = 8368 total
 Tests: 28 fichiers, 160+ bornes, 0 FAIL
 
@@ -30,7 +30,7 @@ Tests: 28 fichiers, 160+ bornes, 0 FAIL
 | B4 | tree.json | OK | Enrichir: hash, temperature |
 | B5 | *.mn files | OK | Memoire vivante |
 | NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
-| B9 | docs/ | OK | LITERATURE.md enrichi (15+ papiers) |
+| B9 | docs/ | OK | LITERATURE.md enrichi (43+ papiers dont 28 bio-vectors) |
 | B10 | ci.yml | OK | Tests: tree, engine, mycelium, feed |
 | NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd + Stop -> feed + compress |
 | NEW | .muninn/sessions/*.mn | OK | Transcripts compresses (auto-prune 10 derniers) |
@@ -818,6 +818,7 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 **Tests**: 25 fichiers, 126+ bornes, 0 FAIL, 0 SKIP
 
 **Reste a faire**:
+- Bio-Vectors: 22 formules planifiees (TIER S: 6, TIER A: 6, TIER B: 4, TIER C: 6 skip)
 - P21: publier sur PyPI (pyproject.toml pret)
 - P31: full arXiv run (attend WT3)
 - P39: liane Yggdrasil (attend WT3)
@@ -859,6 +860,83 @@ H3: huginn_think() dans muninn.py (~90 lignes)
 - Boot: top 3 insights affiches via _surface_insights_for_boot()
 - Le deuxieme corbeau d'Odin prend vie
 - Commit: 56ef1b3
+
+### Bio-Vectors — Cerveau Biomimetique (session 2026-03-11) [PLANNING]
+
+Recherche: 11 vecteurs bio-cognitifs pour Muninn. Chacun = angle d'optimisation unique.
+Methode: scan Yggdrasil (36 paires, 65K concepts) + JSON 22 formules + scan croise.
+Regle d'or: bat l'existant sur une metrique ou POUBELLE. Pas de deco.
+
+Sources scientifiques — 22 formules, 28 papiers primaires, 13 papiers echecs:
+
+#### TIER S — Implementer en premier (6 formules)
+
+| ID | Vecteur | Formule | Source primaire | Application Muninn |
+|----|---------|---------|----------------|-------------------|
+| V2B | Primate | TD-Learning delta | Schultz, Dayan, Montague (1997) Science 275:1593 | delta module poids mycelium. Recall reussi (delta>0) = renforce. Inutile (delta<0) = accelere decay |
+| V5B | Abeille | Cross-inhibition | Seeley et al. (2012) Science 335:108 | Upgrade -beta*w^2. Deux branches en competition, la meilleure gagne |
+| V6A | Elephant | Emotional tagging E(a) | Richter-Levin & Akirav (2003) Brain Res Rev 43:247; Frey & Morris (1997) Nature 385:533 | Arousal multiplie poids initial encodage. Hill function gate |
+| V6B | Elephant | Valence-modulated decay | Talmi (2013) Curr Dir Psych Sci 22:430; McGaugh (2004) Trends Neurosci 27:456 | h = h_base * (1 + alpha_v*|v| + alpha_a*a). Upgrade direct Ebbinghaus |
+| V10A | Chien | VADER sentiment | Hutto & Gilbert (2014) ICWSM | compound = sum(s_i*w_i)/sqrt(sum^2+15). Rule-based, zero LLM. Capteur pour V6 |
+| V7B | Fourmi | ACO pheromone | Dorigo, Maniezzo, Colorni (1996) IEEE Trans SMC-B 26:29 | p_ij = tau^a * eta^b / sum. Combine historique + pertinence locale (boot les separe, ACO fusionne) |
+
+#### TIER A — Fort potentiel (6 formules)
+
+| ID | Vecteur | Formule | Source primaire | Application Muninn |
+|----|---------|---------|----------------|-------------------|
+| V3B | Corbeau | Bayesian ToM | Baker, Saxe, Tenenbaum (2009) Cognition 113:329 | P(goal|actions) = profil utilisateur. Infere le goal depuis les queries |
+| V4B | Dauphin | EWC | Kirkpatrick et al. (2017) PNAS 114:3521 | Fisher importance sur decay: h *= (1+F_i). Noeuds critiques decayent lent |
+| V9A | Planaire | Bioelectric Levin | Shomrat & Levin (2013) J Exp Biol 216:3799; Levin (2012) BioEssays 34:205 | Regeneration par diffusion (dx/dt=-L*x). 80% retention post-decapitation. P4 le plus pur (cos=-0.001) |
+| V9B | Planaire | Reed-Solomon | Reed & Solomon (1960) JSIAM 8:300 | Redondance n/k. Survit a perte de (n-k)/2 noeuds. Zero protection actuelle dans Muninn |
+| V11B | Baleine | Boyd-Richerson 3 biases | Boyd & Richerson (1985) Culture & Evolutionary Process, U Chicago Press | Conformiste + prestige + guide. Auto-organisation poids sans superviseur |
+| V3A | Corbeau | Transitive inference | Wynne (1995) J Exp Psych Anim 21:166; Paz-y-Mino et al. (2004) Nature 430:778 | Fermeture transitive A->B->C avec decay beta^distance. Spreading sans ORDRE |
+
+#### TIER B — Utile secondaire (4 formules)
+
+| ID | Vecteur | Formule | Source primaire |
+|----|---------|---------|----------------|
+| V5A | Abeille | Quorum Hill switch | Dockery & Keener (2001) Bull Math Biol 63:95 |
+| V8B | Chauve-souris | Active sensing | Yang, Wolpert, Lengyel (2016) Curr Opin Behav Sci 11:100 |
+| V10B | Chien | Russell circumplex | Russell (1980) J Pers Soc Psych 39:1161 |
+| V1A | Pieuvre | Coupled oscillator | Yekutieli et al. (2005) J Neurophysiol 94:1443 |
+
+#### TIER C — Doublons ou metriques (6 formules, pas d'implementation)
+
+V1B Laplacien consensus (Olfati-Saber 2004) = on a deja. V2A Scaling (Herculano-Houzel 2009) = metrique.
+V4A Unihemispheric (Rattenborg 2000) = archi pas formule. V7A Response threshold (Theraulaz 1998) = sigmoid.
+V8A Echolocation (Simmons 1989) = TF-IDF. V11A Song SI (Garland 2011) = BARE Wave.
+
+#### Echecs connus (13 papiers negatifs = temps economise)
+
+| Formule | Echec | Source |
+|---------|-------|--------|
+| V1A octopus | 2D only, fails 3D | Hanassy et al. (2015) J Exp Biol |
+| V1B consensus | Byzantine faults | LeBlanc et al. (2013) IEEE TAC |
+| V2A scaling | Fails cetaceans | Mortensen et al. (2014) Frontiers |
+| V2B TD | Misses dopamine ramp | Howe et al. (2013) Nature |
+| V3A transitive | Simple association? | Vasconcelos (2008) Animal Behaviour |
+| V4B EWC | >10 tasks, Fisher crude | Huszar (2018) arXiv:1801.01423 |
+| V5B cross-inhib | Deadlock >5 options | Pais et al. (2013) J R Soc Interface |
+| V6A emotional tag | Yerkes-Dodson inverted-U | Bergado et al. (2011) |
+| V6B valence decay | Fading affect bias | Walker & Skowronski (2009) Mem & Cogn |
+| V7A threshold | Over-predicts rigidity | Charbonneau et al. (2013) Behav Ecol |
+| V7B ACO | Premature convergence | Stutzle & Hoos (2000) FGCS |
+| V10B circumplex | Culturally biased | Gendron et al. (2014) Psych Sci |
+| V4A unihemispheric | Coupling unknown | Mascetti (2016) Sleep Med Rev |
+
+#### 3 Carmack Moves identifies (ponts que personne n'a faits)
+
+1. **V9 Planaire -> graph repair** (Ygg cos=-0.001, AUCUN pont dans 65K concepts, zero litterature)
+2. **V6 Emotional memory -> graph database** (Ygg cos=-0.015, zero pont)
+3. **V1 Pieuvre -> distributed memory control** (Ygg cos=-0.017, zero pont)
+
+#### Validation Yggdrasil — signaux spectraux
+
+Scan 36 paires de concepts sur 65K OpenAlex:
+- Signaux forts: amygdala×episodic cos=0.695 (V6 confirme), cognition×emotion cos=0.750 (V10 confirme)
+- Signaux moderes: primate×RL cos=0.251 (V2 pont), swarm×ranking cos=0.469 (V5 confirme)
+- P4 purs: planarian×distributed cos=-0.001 (V9), cephalopod×distributed cos=-0.017 (V1)
+- Faux amis: "active learning"=e-learning, "online learning"=e-learning, "error correction"=econometrie
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
