@@ -363,6 +363,7 @@ class Mycelium:
                     parts = key.split("|")
                     if len(parts) == 2 and (parts[0] in clean_set or parts[1] in clean_set):
                         fusion_concepts.append(f"{parts[0]}_{parts[1]}")
+            fusion_concepts = list(dict.fromkeys(fusion_concepts))  # deduplicate, preserve order
             max_fusions = max(1, len(clean) // 3)
             fusion_concepts = fusion_concepts[:max_fusions]
             if fusion_concepts:

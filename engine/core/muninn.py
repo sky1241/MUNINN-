@@ -547,10 +547,16 @@ def compute_temperature(node: dict) -> float:
 
 
 def refresh_tree_metadata(tree: dict):
-    """Recompute hash + temperature for all nodes."""
+    """Recompute hash + line count + temperature for all nodes."""
     for name, node in tree["nodes"].items():
         filepath = TREE_DIR / node["file"]
         node["hash"] = compute_hash(filepath)
+        if filepath.is_file():
+            try:
+                actual_lines = len(filepath.read_text(encoding="utf-8").split("\n"))
+                node["lines"] = actual_lines
+            except (OSError, UnicodeDecodeError):
+                pass
         node["temperature"] = compute_temperature(node)
 
 
@@ -794,6 +800,8 @@ def compress_line(line: str) -> str:
     Layer 6: Mycelium fusion stripping
     Layer 7: Key-value extraction from natural language
     """
+    if not line:
+        return line or ""
     cb = get_codebook()
     result = line
 
@@ -3673,9 +3681,13 @@ def diagnose():
     try:
         from mycelium import Mycelium
         m = Mycelium(_REPO_PATH or Path(".").resolve())
-        conns = m.data.get("connections", {})
-        fusions = m.data.get("fusions", {})
-        print(f"[MYCELIUM] {len(conns):,} connections, {len(fusions):,} fusions")
+        if m._db is not None:
+            n_conns = m._db.connection_count()
+            n_fusions = len(m._db.get_all_fusions())
+        else:
+            n_conns = len(m.data.get("connections", {}))
+            n_fusions = len(m.data.get("fusions", {}))
+        print(f"[MYCELIUM] {n_conns:,} connections, {n_fusions:,} fusions")
         print(f"  Beta: {m.SATURATION_BETA}, Threshold: {m.SATURATION_THRESHOLD}")
 
         # A5: Spectral gap

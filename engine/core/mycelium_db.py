@@ -199,21 +199,41 @@ class MyceliumDB:
         return result
 
     def upsert_connection(self, concept_a: str, concept_b: str,
-                          increment: int = 1, zone: str = None):
-        """Increment a connection count (or create it)."""
+                          increment: int = 1, zone: str = None,
+                          count: int = None, first_seen: str = None,
+                          last_seen: str = None):
+        """Increment a connection count (or create/import it).
+
+        If count is provided, uses import mode (set exact count + dates).
+        Otherwise, uses increment mode (add to existing count).
+        """
         a_key = min(concept_a, concept_b)
         b_key = max(concept_a, concept_b)
         a_id = self._get_or_create_concept(a_key)
         b_id = self._get_or_create_concept(b_key)
         td = today_days()
 
-        self._conn.execute("""
-            INSERT INTO edges (a, b, count, first_seen, last_seen)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(a, b) DO UPDATE SET
-                count = count + ?,
-                last_seen = ?
-        """, (a_id, b_id, increment, td, td, increment, td))
+        if count is not None:
+            # Import mode: set exact count and dates
+            fs = date_to_days(first_seen) if first_seen else td
+            ls = date_to_days(last_seen) if last_seen else td
+            self._conn.execute("""
+                INSERT INTO edges (a, b, count, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(a, b) DO UPDATE SET
+                    count = ?,
+                    first_seen = MIN(edges.first_seen, ?),
+                    last_seen = MAX(edges.last_seen, ?)
+            """, (a_id, b_id, count, fs, ls, count, fs, ls))
+        else:
+            # Increment mode: add to existing count
+            self._conn.execute("""
+                INSERT INTO edges (a, b, count, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(a, b) DO UPDATE SET
+                    count = count + ?,
+                    last_seen = ?
+            """, (a_id, b_id, increment, td, td, increment, td))
 
         if zone:
             self._conn.execute(

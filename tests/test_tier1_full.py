@@ -81,10 +81,15 @@ def run_a2():
         base.update(kw)
         return base
 
-    # A2.1: arithmetic
+    # A2.1: arithmetic (compute expected dynamically to avoid date drift)
+    from datetime import datetime
     n = node(access_history=["2026-03-09", "2026-03-07", "2026-02-08"])
     B = _actr_activation(n)
-    expected = math.log(1.0 + 3**(-0.5) + 30**(-0.5))
+    now = datetime.now()
+    d1 = max(1, (now - datetime(2026, 3, 9)).days)
+    d2 = max(1, (now - datetime(2026, 3, 7)).days)
+    d3 = max(1, (now - datetime(2026, 2, 8)).days)
+    expected = math.log(d1**(-0.5) + d2**(-0.5) + d3**(-0.5))
     check("A2.1 arithmetic", abs(B - expected) < 0.02, f"B={B:.4f}, expected={expected:.4f}")
 
     # A2.2: fallback (no access_history)
