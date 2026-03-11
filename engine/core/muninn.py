@@ -2954,6 +2954,21 @@ def prune(dry_run: bool = True):
         cold_branch_data = [(name, nodes[name]) for name, _ in cold if name in nodes]
         consolidated = _sleep_consolidate(cold_branch_data, nodes)
 
+        # H1: Mode trip — psilocybine exploration during sleep
+        # Create dream connections between distant clusters (BARE Wave model)
+        try:
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+            from mycelium import Mycelium
+            m = Mycelium(_REPO_PATH or Path("."))
+            trip_result = m.trip(intensity=0.5, max_dreams=15)
+            if trip_result["created"] > 0:
+                m.save()
+                print(f"  H1 TRIP: {trip_result['created']} dream connections "
+                      f"(entropy {trip_result['entropy_before']:.2f} -> "
+                      f"{trip_result['entropy_after']:.2f})")
+        except Exception as e:
+            print(f"  H1 trip skipped: {e}", file=sys.stderr)
+
         for name, days in dead:
             if name not in nodes:
                 continue  # may have been consolidated already
@@ -5092,7 +5107,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "upgrade-hooks", "inject", "diagnose",
+        "ingest", "recall", "upgrade-hooks", "inject", "diagnose", "trip",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -5134,6 +5149,33 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         diagnose()
+        return
+
+    if args.command == "trip":
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        repo = _REPO_PATH or Path(".")
+        if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+        from mycelium import Mycelium
+        m = Mycelium(repo)
+        intensity = 0.7 if args.force else 0.5
+        result = m.trip(intensity=intensity, max_dreams=20)
+        if result["created"] > 0:
+            m.save()
+        print(f"=== HUGINN TRIP (H1) ===")
+        print(f"  Intensity: {intensity}")
+        print(f"  Dream connections: {result['created']}")
+        print(f"  Entropy: {result['entropy_before']:.4f} -> {result['entropy_after']:.4f} "
+              f"(delta: {result.get('entropy_delta', 0):+.4f})")
+        if result.get("reason"):
+            print(f"  Note: {result['reason']}")
+        for d in result["dreams"][:10]:
+            print(f"    {d['from']} <-> {d['to']} (zones: {d['zones'][0][:20]}|{d['zones'][1][:20]})")
+        if result["created"] > 10:
+            print(f"    ... and {result['created'] - 10} more")
         return
 
     if args.command == "scan":

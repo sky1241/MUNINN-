@@ -1196,6 +1196,182 @@ class Mycelium:
         unique.sort(key=lambda x: -x[3])
         return [(a, b, reason) for a, b, reason, _ in unique[:top_n]]
 
+    # ── H1: Mode trip — psilocybine du mycelium ──────────────────
+    #
+    # BARE Wave Model (Nature 2025): dn/dt = alpha*n - beta*n*rho
+    # Psilocybin (Carhart-Harris 2014): lower beta → tips explore without fusing
+    # Entropy: H = -sum(p * log(p)) on degree distribution
+
+    def trip(self, intensity: float = 0.5, max_dreams: int = 20) -> dict:
+        """H1: Divergent exploration — create cross-cluster dream connections.
+
+        Like psilocybin dissolving the Default Mode Network, this temporarily
+        lowers the anastomosis rate (beta) so conceptual 'tips' can explore
+        connections between normally isolated clusters.
+
+        Args:
+            intensity: 0.0-1.0, how aggressively to explore (higher = more dreams)
+            max_dreams: cap on dream connections created
+
+        Returns dict with: created, entropy_before, entropy_after, dreams list.
+        Source: BARE Wave (Nature 2025), Carhart-Harris 2014 (entropic brain).
+        """
+        import math
+        import random
+
+        conns = self.data["connections"]
+        if len(conns) < 20:
+            return {"created": 0, "entropy_before": 0, "entropy_after": 0, "dreams": []}
+
+        # 1. Compute entropy BEFORE (degree distribution)
+        degree = {}
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            degree[parts[0]] = degree.get(parts[0], 0) + 1
+            degree[parts[1]] = degree.get(parts[1], 0) + 1
+
+        entropy_before = self._graph_entropy(degree)
+
+        # 2. Detect zones (clusters) — spectral if available, BFS fallback
+        zones = self.detect_zones()
+        if len(zones) < 2:
+            # Fallback: split by connected components (BFS)
+            zones = self._bfs_zones(degree)
+        if len(zones) < 2:
+            return {"created": 0, "entropy_before": entropy_before,
+                    "entropy_after": entropy_before, "dreams": [],
+                    "reason": "fewer than 2 zones"}
+
+        # 3. BARE Wave model: alpha creates tips, beta*rho limits them
+        # alpha = branching rate (intensity-controlled)
+        # beta = anastomosis rate (LOWERED during trip — that's the psilocybin)
+        # rho = local density (connections per concept)
+        alpha = 0.04 * (1 + intensity)  # branching: more intense = more tips
+        beta = 0.02 * (1 - intensity * 0.8)  # anastomosis: intensity reduces fusion
+
+        zone_names = list(zones.keys())
+        zone_concepts = {z: set(concepts) for z, concepts in zones.items()}
+        conn_set = set()
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) == 2:
+                conn_set.add((parts[0], parts[1]))
+                conn_set.add((parts[1], parts[0]))
+
+        # 4. Create dream connections between distant clusters
+        dreams = []
+        attempts = 0
+        max_attempts = max_dreams * 10
+
+        while len(dreams) < max_dreams and attempts < max_attempts:
+            attempts += 1
+
+            # Pick two different zones
+            z1, z2 = random.sample(zone_names, 2)
+            c1_list = list(zone_concepts[z1])
+            c2_list = list(zone_concepts[z2])
+            if not c1_list or not c2_list:
+                continue
+
+            # Pick concepts — prefer mid-degree (not hubs, not isolated)
+            a = random.choice(c1_list)
+            b = random.choice(c2_list)
+
+            # Skip if already connected
+            if (a, b) in conn_set:
+                continue
+
+            # BARE Wave: tip survives if alpha > beta * local_rho
+            rho_local = (degree.get(a, 0) + degree.get(b, 0)) / 2
+            tip_survival = alpha - beta * rho_local
+            if tip_survival < 0 and random.random() > intensity:
+                continue  # tip dies in dense region (unless high intensity)
+
+            # Create dream connection
+            key = f"{a}|{b}" if a < b else f"{b}|{a}"
+            if key not in conns:
+                conns[key] = {
+                    "count": 1,
+                    "first_seen": time.strftime("%Y-%m-%d"),
+                    "last_seen": time.strftime("%Y-%m-%d"),
+                    "type": "dream",  # H1: marked as dream — decays fast
+                }
+                conn_set.add((a, b))
+                conn_set.add((b, a))
+                degree[a] = degree.get(a, 0) + 1
+                degree[b] = degree.get(b, 0) + 1
+                dreams.append({"from": a, "to": b, "zones": [z1, z2],
+                                "tip_survival": round(tip_survival, 4)})
+
+        # 5. Compute entropy AFTER
+        entropy_after = self._graph_entropy(degree)
+
+        return {
+            "created": len(dreams),
+            "entropy_before": round(entropy_before, 4),
+            "entropy_after": round(entropy_after, 4),
+            "entropy_delta": round(entropy_after - entropy_before, 4),
+            "dreams": dreams,
+        }
+
+    def _graph_entropy(self, degree: dict) -> float:
+        """Shannon entropy of degree distribution: H = -sum(p * log2(p))."""
+        import math
+        if not degree:
+            return 0.0
+        total = sum(degree.values())
+        if total == 0:
+            return 0.0
+        entropy = 0.0
+        counts = {}
+        for d in degree.values():
+            counts[d] = counts.get(d, 0) + 1
+        for count in counts.values():
+            p = count / len(degree)
+            if p > 0:
+                entropy -= p * math.log2(p)
+        return entropy
+
+    def _bfs_zones(self, degree: dict) -> dict[str, list[str]]:
+        """Fallback zone detection via connected components (no scipy needed)."""
+        conns = self.data["connections"]
+        adj = {}
+        for key in conns:
+            parts = key.split("|")
+            if len(parts) != 2:
+                continue
+            a, b = parts
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+
+        visited = set()
+        zones = {}
+        zone_id = 0
+        for start in adj:
+            if start in visited:
+                continue
+            # BFS
+            queue = [start]
+            component = []
+            while queue:
+                node = queue.pop(0)
+                if node in visited:
+                    continue
+                visited.add(node)
+                component.append(node)
+                for neighbor in adj.get(node, []):
+                    if neighbor not in visited:
+                        queue.append(neighbor)
+            if len(component) >= 3:
+                top = sorted(component, key=lambda c: -degree.get(c, 0))[:3]
+                name = "/".join(top)
+                zones[name] = component
+                zone_id += 1
+
+        return zones
+
     # ── P20b: Meta-mycelium sync ──────────────────────────────────
 
     @staticmethod
