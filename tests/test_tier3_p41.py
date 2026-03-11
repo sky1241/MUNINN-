@@ -37,11 +37,16 @@ def test_p41_1_fusion_concepts_observed():
     m, tmp = _make_mycelium(fusions=fusions)
     # Observe concepts that overlap with fusions
     m.observe(["alpha", "beta", "gamma", "extra1", "extra2", "extra3"])
-    conns = m.data["connections"]
-    # Should have alpha_beta as a concept in some connection
-    fusion_keys = [k for k in conns if "alpha_beta" in k]
-    assert len(fusion_keys) > 0, f"P41.1 FAIL: no fusion concepts in connections. Keys: {list(conns.keys())[:10]}"
+    # Check for fusion concepts in connections (DB or in-memory)
+    if m._db is not None:
+        all_conns = m._db.get_all_connections()
+        fusion_keys = [k for k in all_conns if "alpha_beta" in k]
+    else:
+        conns = m.data["connections"]
+        fusion_keys = [k for k in conns if "alpha_beta" in k]
+    assert len(fusion_keys) > 0, f"P41.1 FAIL: no fusion concepts in connections"
     print(f"  P41.1 PASS: {len(fusion_keys)} fusion-concept connections found")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -55,6 +60,7 @@ def test_p41_2_no_infinite_recursion():
     m.observe(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"])
     assert not getattr(m, '_p41_recursion_guard', False), "P41.2 FAIL: guard still set"
     print("  P41.2 PASS: no infinite recursion")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -75,6 +81,7 @@ def test_p41_3_ratio_cap():
     # With 2 fusion concepts, max possible pairs = 2*(2-1)/2 = 1
     assert len(fusion_keys) <= 3, f"P41.3 FAIL: too many fusion connections: {len(fusion_keys)}"
     print(f"  P41.3 PASS: {len(fusion_keys)} fusion connections (capped)")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -84,6 +91,7 @@ def test_p41_4_no_crash_empty_fusions():
     m.observe(["alpha", "beta", "gamma", "delta"])
     # Should work fine with no fusions
     print("  P41.4 PASS: no crash with empty fusions")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -101,10 +109,12 @@ def test_p41_5_second_order_real():
         if "_" in key.split("|")[0] or "_" in key.split("|")[1]:
             assert conns[key]["count"] > 0, f"P41.5 FAIL: fusion connection {key} has count 0"
             print(f"  P41.5 PASS: {key} count={conns[key]['count']} (real connection)")
+            m.close()
             shutil.rmtree(tmp)
             return
     # If no fusion connections found, that's also ok if fusions didn't match
     print("  P41.5 PASS: second-order connections are real")
+    m.close()
     shutil.rmtree(tmp)
 
 

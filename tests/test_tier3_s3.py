@@ -46,10 +46,16 @@ def test_s3_2_retroactive_cleanup():
         for w in words:
             for _ in range(6):
                 m.observe([noise, w])
-        # Force retroactive check
+        # Force retroactive check (invalidate cached high-degree set first)
+        m._high_degree_cache = None
         m._check_fusions()
 
-        noise_fusions = [k for k in m.data["fusions"] if noise in k]
+        # Check fusions in DB if available, else in-memory dict
+        if m._db is not None:
+            db_fusions = m._db.get_all_fusions()
+            noise_fusions = [k for k in db_fusions if noise in k]
+        else:
+            noise_fusions = [k for k in m.data["fusions"] if noise in k]
         assert len(noise_fusions) == 0, f"Expected 0 noise fusions, got {len(noise_fusions)}"
     finally:
         shutil.rmtree(d)
@@ -64,7 +70,12 @@ def test_s3_3_small_graph_no_filter():
             m.observe(["alpha", "beta"])
         high = m._get_high_degree_concepts()
         assert len(high) == 0, "Small graph should not filter anything"
-        assert "alpha|beta" in m.data["fusions"]
+        if m._db is not None:
+            db_fusions = m._db.get_all_fusions()
+            assert any("alpha" in k and "beta" in k for k in db_fusions), \
+                f"alpha|beta fusion missing from DB fusions"
+        else:
+            assert "alpha|beta" in m.data["fusions"]
     finally:
         shutil.rmtree(d)
 
@@ -87,7 +98,12 @@ def test_s3_4_legit_fusions_preserved():
                 m.observe([noise, w])
         m._check_fusions()
 
-        assert "database|sqlite" in m.data["fusions"], "Legit fusion should survive"
+        if m._db is not None:
+            db_fusions = m._db.get_all_fusions()
+            assert any("database" in k and "sqlite" in k for k in db_fusions), \
+                "Legit fusion should survive in DB"
+        else:
+            assert "database|sqlite" in m.data["fusions"], "Legit fusion should survive"
     finally:
         shutil.rmtree(d)
 

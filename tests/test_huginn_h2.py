@@ -61,6 +61,7 @@ def test_h2_1_returns_list():
         for key in ["type", "concepts", "score", "text"]:
             assert key in ins, f"H2.1 FAIL: missing key {key} in {ins}"
     print(f"  H2.1 PASS: {len(result)} insights, all valid dicts")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -74,6 +75,7 @@ def test_h2_2_strong_pairs():
     found = any("alpha" in i["concepts"] and "beta" in i["concepts"] for i in strong)
     assert found, f"H2.2 FAIL: alpha-beta not found in strong pairs"
     print(f"  H2.2 PASS: {len(strong)} strong pairs, alpha-beta found")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -86,6 +88,7 @@ def test_h2_3_absences():
     found = any("hub1" in i["concepts"] and "hub2" in i["concepts"] for i in absences)
     assert found, f"H2.3 FAIL: hub1-hub2 absence not detected. Found: {[i['concepts'] for i in absences[:5]]}"
     print(f"  H2.3 PASS: {len(absences)} absences, hub1-hub2 found")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -97,6 +100,7 @@ def test_h2_4_health_metric():
     assert len(health) == 1, f"H2.4 FAIL: expected 1 health, got {len(health)}"
     assert 0 <= health[0]["score"] <= 1, f"H2.4 FAIL: health score out of range: {health[0]['score']}"
     print(f"  H2.4 PASS: health={health[0]['score']:.2%}")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -113,6 +117,7 @@ def test_h2_5_empty_no_crash():
     result = m.dream()
     assert result == [], f"H2.5 FAIL: expected [], got {result}"
     print("  H2.5 PASS: empty mycelium, 0 insights, no crash")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -127,6 +132,7 @@ def test_h2_6_saves_insights():
     assert len(data) > 0, "H2.6 FAIL: empty insights.json"
     assert "timestamp" in data[0], "H2.6 FAIL: no timestamp"
     print(f"  H2.6 PASS: insights.json with {len(data)} entries")
+    m.close()
     shutil.rmtree(tmp)
 
 

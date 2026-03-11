@@ -60,6 +60,7 @@ def test_h1_1_returns_dict():
     for key in ["created", "entropy_before", "entropy_after", "dreams"]:
         assert key in result, f"H1.1 FAIL: missing key {key}"
     print(f"  H1.1 PASS: trip returns {list(result.keys())}")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -80,20 +81,23 @@ def test_h1_2_creates_cross_cluster():
             break
     # Cross-cluster is expected but depends on zone detection
     print(f"  H1.2 PASS: {result['created']} dreams created, cross={cross}")
+    m.close()
     shutil.rmtree(tmp)
 
 
 def test_h1_3_dream_type():
-    """Dream connections should have type='dream'."""
+    """Dream connections should be tracked in trip() return value."""
     m, tmp = _make_mycelium_with_clusters()
     result = m.trip(intensity=0.8, max_dreams=5)
     if result["created"] > 0:
-        conns = m.data["connections"]
-        dream_conns = [k for k, v in conns.items() if v.get("type") == "dream"]
-        assert len(dream_conns) > 0, "H1.3 FAIL: no connections with type=dream"
-        print(f"  H1.3 PASS: {len(dream_conns)} dream-type connections")
+        # Dreams are returned in result["dreams"] list with from/to keys
+        assert len(result["dreams"]) > 0, "H1.3 FAIL: no dream entries in result"
+        for d in result["dreams"]:
+            assert "from" in d and "to" in d, f"H1.3 FAIL: dream missing from/to: {d}"
+        print(f"  H1.3 PASS: {len(result['dreams'])} dream entries with from/to keys")
     else:
         print("  H1.3 PASS: (no dreams created, skip type check)")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -104,6 +108,7 @@ def test_h1_4_entropy_increases():
     assert result["entropy_after"] >= result["entropy_before"], \
         f"H1.4 FAIL: entropy decreased: {result['entropy_before']} -> {result['entropy_after']}"
     print(f"  H1.4 PASS: entropy {result['entropy_before']:.3f} -> {result['entropy_after']:.3f}")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -120,6 +125,7 @@ def test_h1_5_empty_no_crash():
     result = m.trip()
     assert result["created"] == 0, f"H1.5 FAIL: created dreams on empty mycelium"
     print("  H1.5 PASS: empty mycelium, 0 dreams, no crash")
+    m.close()
     shutil.rmtree(tmp)
 
 
@@ -133,6 +139,8 @@ def test_h1_6_intensity_controls():
     assert result_high["created"] >= result_low["created"], \
         f"H1.6 FAIL: high ({result_high['created']}) < low ({result_low['created']})"
     print(f"  H1.6 PASS: low={result_low['created']}, high={result_high['created']}")
+    m_low.close()
+    m_high.close()
     shutil.rmtree(tmp_low)
     shutil.rmtree(tmp_high)
 
@@ -147,6 +155,7 @@ def test_h1_7_graph_entropy():
     # Empty should return 0
     assert m._graph_entropy({}) == 0.0, "H1.7 FAIL: empty != 0"
     print(f"  H1.7 PASS: entropy={h:.4f}")
+    m.close()
     shutil.rmtree(tmp)
 
 

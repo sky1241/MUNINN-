@@ -67,6 +67,7 @@ class Mycelium:
         self._sigmoid_k = 10  # A3: sigmoid steepness for spread_activation (0=disabled)
         self._spectral_gap = None  # A5: computed by detect_zones()
         self._db = None  # Persistent DB handle (lazy mode)
+        self._high_degree_cache = None  # Cached high-degree concepts (reset on save)
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -333,23 +334,29 @@ class Mycelium:
                     conns[key]["count"] += e_a
                     conns[key]["last_seen"] = time.strftime("%Y-%m-%d")
 
-        # Check for new fusions
-        self._check_fusions()
+        # Check for new fusions (only observed pairs in lazy mode)
+        observed_pairs = [(clean[i], clean[j])
+                          for i in range(len(clean)) for j in range(i + 1, len(clean))]
+        self._check_fusions(observed_pairs=observed_pairs)
 
         # P41: Self-referential growth — observe fusions as second-order co-occurrences
         if clean and not getattr(self, '_p41_recursion_guard', False):
             fusion_concepts = []
             clean_set = set(clean)
             if self._db is not None:
-                for row in self._db._conn.execute("SELECT a, b FROM fusions"):
-                    a_name = self._db._concept_cache.get(row[0]) or ""
-                    b_name = self._db._concept_cache.get(row[1]) or ""
-                    # Reverse lookup
+                # Only check fusions involving observed concepts (not ALL 269K)
+                for concept in clean_set:
+                    cid = self._db._concept_cache.get(concept)
+                    if cid is None:
+                        continue
                     id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-                    a_name = id_to_name.get(row[0], "")
-                    b_name = id_to_name.get(row[1], "")
-                    if a_name in clean_set or b_name in clean_set:
-                        fusion_concepts.append(f"{a_name}_{b_name}")
+                    for row in self._db._conn.execute(
+                        "SELECT a, b FROM fusions WHERE a=? OR b=?", (cid, cid)
+                    ):
+                        a_name = id_to_name.get(row[0], "")
+                        b_name = id_to_name.get(row[1], "")
+                        if a_name and b_name:
+                            fusion_concepts.append(f"{a_name}_{b_name}")
             else:
                 fusions = self.data.get("fusions", {})
                 for key in fusions:
@@ -483,41 +490,62 @@ class Mycelium:
             if len(found) >= 2:
                 self.observe(found)
 
-    def _check_fusions(self):
+    def _check_fusions(self, observed_pairs: list[tuple[str, str]] = None):
         """Check if any connections crossed the fusion threshold.
 
         S3 (TIER 3): Blocks fusions for high-degree concepts (universal stopwords).
+        Lazy mode: only checks the pairs from the current observe() call,
+        not ALL edges. Full scan only runs on save() or explicit call.
         """
-        high_degree_concepts = self._get_high_degree_concepts()
+        # Cache high-degree concepts — computed ONCE per session (~3s on 2.7M edges)
+        if self._high_degree_cache is None:
+            self._high_degree_cache = self._get_high_degree_concepts()
+        high_degree_concepts = self._high_degree_cache
 
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-
-            # S3: Retroactively remove fusions involving high-degree stopwords
-            if high_degree_concepts:
-                hd_ids = {self._db._concept_cache.get(c) for c in high_degree_concepts}
-                hd_ids.discard(None)
-                if hd_ids:
-                    for row in self._db._conn.execute("SELECT a, b FROM fusions").fetchall():
-                        if row[0] in hd_ids or row[1] in hd_ids:
-                            self._db._conn.execute(
-                                "DELETE FROM fusions WHERE a=? AND b=?", (row[0], row[1]))
-
-            # Check edges above fusion threshold
-            for row in self._db._conn.execute(
-                    "SELECT a, b, count FROM edges WHERE count >= ?",
-                    (self.FUSION_THRESHOLD,)):
-                a_id, b_id, count = row
-                a_name = id_to_name.get(a_id, "")
-                b_name = id_to_name.get(b_id, "")
-                if a_name in high_degree_concepts or b_name in high_degree_concepts:
-                    continue
-                self._db._conn.execute("""
-                    INSERT INTO fusions (a, b, form, strength, fused_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(a, b) DO UPDATE SET strength = ?
-                """, (a_id, b_id, f"{a_name}+{b_name}", count, today_days(), count))
-            self._db._conn.commit()
+            # Lazy mode: only check observed pairs, not all edges
+            if observed_pairs:
+                for a, b in observed_pairs:
+                    if a in high_degree_concepts or b in high_degree_concepts:
+                        continue
+                    conn = self._db.get_connection(a, b)
+                    if conn and conn["count"] >= self.FUSION_THRESHOLD:
+                        a_key, b_key = min(a, b), max(a, b)
+                        a_id = self._db._concept_cache.get(a_key)
+                        b_id = self._db._concept_cache.get(b_key)
+                        if a_id is not None and b_id is not None:
+                            self._db._conn.execute("""
+                                INSERT INTO fusions (a, b, form, strength, fused_at)
+                                VALUES (?, ?, ?, ?, ?)
+                                ON CONFLICT(a, b) DO UPDATE SET strength = ?
+                            """, (a_id, b_id, f"{a_key}+{b_key}",
+                                  conn["count"], today_days(), conn["count"]))
+                self._db._conn.commit()
+            else:
+                # Full scan — only on explicit call (save, etc.)
+                id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                if high_degree_concepts:
+                    hd_ids = {self._db._concept_cache.get(c) for c in high_degree_concepts}
+                    hd_ids.discard(None)
+                    if hd_ids:
+                        for row in self._db._conn.execute("SELECT a, b FROM fusions").fetchall():
+                            if row[0] in hd_ids or row[1] in hd_ids:
+                                self._db._conn.execute(
+                                    "DELETE FROM fusions WHERE a=? AND b=?", (row[0], row[1]))
+                for row in self._db._conn.execute(
+                        "SELECT a, b, count FROM edges WHERE count >= ?",
+                        (self.FUSION_THRESHOLD,)):
+                    a_id, b_id, count = row
+                    a_name = id_to_name.get(a_id, "")
+                    b_name = id_to_name.get(b_id, "")
+                    if a_name in high_degree_concepts or b_name in high_degree_concepts:
+                        continue
+                    self._db._conn.execute("""
+                        INSERT INTO fusions (a, b, form, strength, fused_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(a, b) DO UPDATE SET strength = ?
+                    """, (a_id, b_id, f"{a_name}+{b_name}", count, today_days(), count))
+                self._db._conn.commit()
         else:
             # Fallback: in-memory dict
             conns = self.data["connections"]
@@ -545,13 +573,47 @@ class Mycelium:
     def _get_high_degree_concepts(self) -> set:
         """S3: Identify concepts with too many connections (universal stopwords).
 
-        Uses SQL COUNT for lazy mode — no RAM needed.
+        Lazy mode: 2 SQL queries (count distinct + filter by threshold).
+        No full scan of 2.7M edges needed.
         """
         if self._db is not None:
             n = self._db.connection_count()
             if n < 50:
                 return set()
-            degree = self._db.all_degrees()
+            # SQL-native 2-step: find threshold, then filter
+            n_concepts = self._db._conn.execute(
+                "SELECT COUNT(*) FROM concepts").fetchone()[0]
+            if n_concepts < 20:
+                return set()
+            cutoff = max(1, int(n_concepts * self.DEGREE_FILTER_PERCENTILE))
+
+            # Step 1: threshold = degree at the cutoff position
+            row = self._db._conn.execute("""
+                SELECT degree FROM (
+                    SELECT SUM(cnt) as degree FROM (
+                        SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
+                        UNION ALL
+                        SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
+                    ) GROUP BY concept_id
+                    ORDER BY degree DESC
+                ) LIMIT 1 OFFSET ?
+            """, (cutoff,)).fetchone()
+            threshold = max(row[0] if row else 20, 20)
+
+            # Step 2: only fetch concepts above threshold (HAVING = fast)
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            result = set()
+            for row in self._db._conn.execute("""
+                SELECT concept_id, SUM(cnt) as degree FROM (
+                    SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
+                    UNION ALL
+                    SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
+                ) GROUP BY concept_id
+                HAVING degree >= ?
+            """, (threshold,)):
+                name = id_to_name.get(row[0], self._db._concept_name(row[0]))
+                result.add(name)
+            return result
         else:
             conns = self.data["connections"]
             if len(conns) < 50:
@@ -565,15 +627,15 @@ class Mycelium:
                 degree[a] = degree.get(a, 0) + 1
                 degree[b] = degree.get(b, 0) + 1
 
-        if not degree:
-            return set()
+            if not degree:
+                return set()
 
-        sorted_degrees = sorted(degree.values(), reverse=True)
-        cutoff_idx = max(1, int(len(sorted_degrees) * self.DEGREE_FILTER_PERCENTILE))
-        threshold = sorted_degrees[min(cutoff_idx, len(sorted_degrees) - 1)]
-        threshold = max(threshold, 20)
+            sorted_degrees = sorted(degree.values(), reverse=True)
+            cutoff_idx = max(1, int(len(sorted_degrees) * self.DEGREE_FILTER_PERCENTILE))
+            threshold = sorted_degrees[min(cutoff_idx, len(sorted_degrees) - 1)]
+            threshold = max(threshold, 20)
 
-        return {c for c, d in degree.items() if d >= threshold}
+            return {c for c, d in degree.items() if d >= threshold}
 
     def _prune_weakest(self):
         """Remove weakest connections to stay under MAX_CONNECTIONS."""

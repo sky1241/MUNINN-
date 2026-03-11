@@ -62,6 +62,9 @@ def test_v6a_3_mycelium_weight():
         m1.zone = "default"
         m1.MIN_CONCEPT_LEN = 3
         m1._db = None
+        m1._high_degree_cache = None
+        m1.FUSION_THRESHOLD = 5
+        m1.MAX_CONNECTIONS = 0
 
         m2 = Mycelium.__new__(Mycelium)
         m2.data = {"connections": {}, "fusions": {}, "fillers": [], "stats": {}}
@@ -70,6 +73,9 @@ def test_v6a_3_mycelium_weight():
         m2.zone = "default"
         m2.MIN_CONCEPT_LEN = 3
         m2._db = None
+        m2._high_degree_cache = None
+        m2.FUSION_THRESHOLD = 5
+        m2.MAX_CONNECTIONS = 0
 
         concepts = ["compression", "memory", "tokens"]
 
@@ -106,6 +112,9 @@ def test_v6a_5_backward_compat():
     m.zone = "default"
     m.MIN_CONCEPT_LEN = 3
     m._db = None
+    m._high_degree_cache = None
+    m.FUSION_THRESHOLD = 5
+    m.MAX_CONNECTIONS = 0
 
     m.observe(["alpha", "beta", "gamma"], arousal=0.0)
     counts = [c["count"] for c in m.data["connections"].values()]
