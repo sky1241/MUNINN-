@@ -39,7 +39,7 @@ class Mycelium:
     MAX_CONNECTIONS = 0        # 0 = no limit (adapts to available RAM)
     MIN_CONCEPT_LEN = 3       # ignore tiny words
     IMMORTAL_ZONE_THRESHOLD = 3  # connection in N+ zones = skip decay
-    SATURATION_BETA = 0.0         # A4: Lotka-Volterra saturation (0=disabled, 0.001=moderate)
+    SATURATION_BETA = 0.001       # A4: Lotka-Volterra saturation (0=disabled, 0.001=moderate)
     SATURATION_THRESHOLD = 50     # A4: only apply saturation to connections with count > this
     DEGREE_FILTER_PERCENTILE = 0.05  # S3: top 5% degree concepts = stopwords, no fusion
 

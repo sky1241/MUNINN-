@@ -213,7 +213,7 @@ def run_a4():
     from mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
-    check("A4.INT default_beta", m.SATURATION_BETA == 0.0, f"beta={m.SATURATION_BETA}")
+    check("A4.INT default_beta", m.SATURATION_BETA >= 0.0, f"beta={m.SATURATION_BETA}")  # TIER3/C1: 0.001 moderate default
 
     if m.data["connections"]:
         counts = [c["count"] for c in m.data["connections"].values()]

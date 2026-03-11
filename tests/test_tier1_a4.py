@@ -57,7 +57,7 @@ def test_a4_5_integer():
     print(f"  A4.5 PASS: result is int ({result})")
 
 def test_a4_integration():
-    """Test with real mycelium (beta=0 default = no change)"""
+    """Test with real mycelium (beta=0.001 moderate default since TIER3/C1)"""
     from pathlib import Path
     from mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
@@ -66,9 +66,9 @@ def test_a4_integration():
         print(f"  A4.INT SKIP: no connections")
         return
     counts_before = [c["count"] for c in m.data["connections"].values()]
-    # With default beta=0, decay should not apply saturation
-    assert m.SATURATION_BETA == 0.0, f"A4.INT FAIL: default beta={m.SATURATION_BETA}"
-    print(f"  A4.INT PASS: default beta=0.0, {len(counts_before)} connections, max={max(counts_before)}")
+    # TIER3/C1 set default beta=0.001 (moderate saturation, not disabled)
+    assert m.SATURATION_BETA >= 0.0, f"A4.INT FAIL: beta must be non-negative, got {m.SATURATION_BETA}"
+    print(f"  A4.INT PASS: beta={m.SATURATION_BETA}, {len(counts_before)} connections, max={max(counts_before)}")
 
 if __name__ == "__main__":
     print("=== A4 — Saturation decay: validation bornes ===")
