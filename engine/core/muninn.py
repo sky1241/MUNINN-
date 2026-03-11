@@ -2361,6 +2361,37 @@ def boot(query: str = "") -> str:
             _guided_delta = _mu * (_mean_usefulness - usefulness)
             total += 0.02 * _guided_delta  # nudge toward mean (can be negative)
 
+            # V5A: Quorum sensing Hill switch (Waters & Bassler 2005)
+            # Activate ONLY when enough neighbors are co-activated (quorum)
+            # f(A) = A^n / (K^n + A^n), activated = number of activated co-occurring tags
+            _node_tags_set = set(node.get("tags", []))
+            if _node_tags_set and activation_scores:
+                # Count how many activated concepts overlap with this branch's tags
+                _activated_count = sum(1 for t in _node_tags_set
+                                       if t in {c for c, _ in
+                                                 (list(activation_scores.items())[:50] if activation_scores else [])})
+                _K_quorum = 2.0  # threshold: need at least ~2 activated neighbors
+                _n_hill = 3      # Hill coefficient (steepness)
+                if _activated_count > 0:
+                    _quorum = (_activated_count ** _n_hill) / (
+                        _K_quorum ** _n_hill + _activated_count ** _n_hill)
+                    total += 0.03 * _quorum  # max +0.03
+
+            # V1A: Coupled oscillator (Yekutieli et al. 2005)
+            # Temperature coupling: branches connected via mycelium push toward each other
+            # tau_coupling = sum_j C_ij * (temp_j - temp_i)
+            _my_temp = node.get("temperature", 0.5)
+            _coupling_sum = 0.0
+            for _t in list(_node_tags_set)[:3]:  # top 3 tags for coupling
+                for _sname, _snode in nodes.items():
+                    if _sname == name or _sname == "root":
+                        continue
+                    if _t in set(_snode.get("tags", [])):
+                        _other_temp = _snode.get("temperature", 0.5)
+                        _coupling_sum += 0.1 * (_other_temp - _my_temp)
+                        break  # one coupling per tag
+            total += 0.01 * max(-0.05, min(0.05, _coupling_sum))  # bounded
+
             if total > 0.01:
                 scored.append((name, total))
 
@@ -2578,6 +2609,36 @@ def boot(query: str = "") -> str:
         if huginn_output:
             output.append("\n" + huginn_output)
 
+    # V8B: Active sensing — info-theoretic disambiguation (Yang et al. 2016)
+    # a* = argmax_a I(X;Y|a) — when uncertain, identify the concept that
+    # would best disambiguate the top candidate branches.
+    # Only triggered when top 3 scores are within 10% of each other.
+    _v8b_hint = ""
+    try:
+        if query and len(scored) >= 3:
+            _top3 = scored[:3]
+            _spread = _top3[0][1] - _top3[2][1]
+            if _spread < 0.10 * _top3[0][1] and _top3[0][1] > 0.01:
+                # High uncertainty — find the most discriminative concept
+                import math as _math
+                _concept_dist = {}  # concept -> set of branches containing it (among top 3)
+                for _sn, _ in _top3:
+                    for _tag in nodes.get(_sn, {}).get("tags", []):
+                        _concept_dist.setdefault(_tag, set()).add(_sn)
+                # Best concept = one that splits top 3 most evenly (max entropy)
+                _best_concept, _best_entropy = "", 0.0
+                for _c, _branches_with in _concept_dist.items():
+                    _p = len(_branches_with) / 3.0
+                    if 0 < _p < 1:
+                        _h = -_p * _math.log2(_p) - (1 - _p) * _math.log2(1 - _p)
+                        if _h > _best_entropy:
+                            _best_entropy = _h
+                            _best_concept = _c
+                if _best_concept:
+                    _v8b_hint = _best_concept
+    except Exception:
+        pass
+
     # P36: Save boot manifest for feedback loop
     if _REPO_PATH:
         try:
@@ -2586,6 +2647,8 @@ def boot(query: str = "") -> str:
                 "query": query or "",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
+            if _v8b_hint:
+                boot_manifest["v8b_clarify"] = _v8b_hint
             manifest_path = _REPO_PATH / ".muninn" / "last_boot.json"
             manifest_path.write_text(json.dumps(boot_manifest), encoding="utf-8")
         except OSError:

@@ -104,3 +104,51 @@ def score_session(messages: list[str]) -> dict:
         "n_neutral": n_neu,
         "scores": [round(c, 4) for c in compounds],
     }
+
+
+def circumplex_map(valence: float, arousal: float) -> dict:
+    """V10B: Russell circumplex affect mapping (Russell 1980).
+
+    Maps (valence, arousal) to polar coordinates in the affect space.
+    theta = angle (emotion category), r = intensity.
+
+    Quadrants:
+      Q1 (+v, +a): excited, happy, alert
+      Q2 (-v, +a): tense, angry, distressed
+      Q3 (-v, -a): sad, depressed, bored
+      Q4 (+v, -a): calm, relaxed, serene
+
+    Args:
+        valence: [-1, +1]
+        arousal: [0, 1] (or [-1, +1] for signed arousal)
+
+    Returns:
+        {'theta': float (radians), 'r': float (intensity 0-1),
+         'quadrant': str, 'label': str}
+    """
+    import math
+    v = max(-1.0, min(1.0, float(valence)))
+    a = max(-1.0, min(1.0, float(arousal)))
+    theta = math.atan2(a, v)
+    r = min(1.0, math.sqrt(v ** 2 + a ** 2))
+
+    # Determine quadrant and label
+    if v >= 0 and a >= 0:
+        quadrant = "Q1"
+        label = "excited" if r > 0.5 else "content"
+    elif v < 0 and a >= 0:
+        quadrant = "Q2"
+        label = "tense" if r > 0.5 else "alert"
+    elif v < 0 and a < 0:
+        quadrant = "Q3"
+        label = "sad" if r > 0.5 else "bored"
+    else:
+        quadrant = "Q4"
+        label = "calm" if r > 0.5 else "relaxed"
+
+    return {
+        "theta": round(theta, 4),
+        "r": round(r, 4),
+        "quadrant": quadrant,
+        "label": label,
+    }
