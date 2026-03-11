@@ -16,7 +16,6 @@ def _setup_temp_repo(tmpdir):
     from pathlib import Path
     repo = Path(tmpdir)
     (repo / ".muninn" / "tree").mkdir(parents=True)
-    (repo / "memory" / "branches").mkdir(parents=True)
     # Minimal tree.json at .muninn/tree/tree.json (where code expects it)
     tree = {
         "nodes": {
@@ -41,7 +40,7 @@ def test_b7_1_creates_branch():
         muninn._refresh_tree_paths()
         result = muninn.inject_memory("compression ratio x4.5 on real transcripts", repo)
         assert result is not None, "B7.1 FAIL: inject returned None"
-        mn_path = repo / "memory" / "branches" / f"{result}.mn"
+        mn_path = repo / ".muninn" / "tree" / f"{result}.mn"
         assert mn_path.exists(), f"B7.1 FAIL: branch file {mn_path} not created"
         content = mn_path.read_text(encoding="utf-8")
         assert "x4.5" in content, f"B7.1 FAIL: fact not in branch content"
@@ -58,7 +57,7 @@ def test_b7_2_appends():
         r1 = muninn.inject_memory("fact one: compression works", repo)
         r2 = muninn.inject_memory("fact two: benchmark 37/40", repo)
         assert r1 == r2, f"B7.2 FAIL: different branches {r1} vs {r2}"
-        mn_path = repo / "memory" / "branches" / f"{r1}.mn"
+        mn_path = repo / ".muninn" / "tree" / f"{r1}.mn"
         content = mn_path.read_text(encoding="utf-8")
         assert "fact one" in content, "B7.2 FAIL: fact one missing"
         assert "fact two" in content, "B7.2 FAIL: fact two missing"
@@ -76,7 +75,7 @@ def test_b7_3_retrievable():
         muninn._refresh_tree_paths()
         fact = "Ebbinghaus recall p=2^(-delta/h) validated"
         r = muninn.inject_memory(fact, repo)
-        mn_path = repo / "memory" / "branches" / f"{r}.mn"
+        mn_path = repo / ".muninn" / "tree" / f"{r}.mn"
         content = mn_path.read_text(encoding="utf-8")
         assert fact in content, "B7.3 FAIL: fact not retrievable"
     print(f"  B7.3 PASS: fact retrievable from branch {r}")

@@ -1106,7 +1106,7 @@ def compress_section(header: str, lines: list[str]) -> str:
         "PRÊT": "◉", "READY": "◉",
         "FAILED": "✗", "ECHOUE": "✗", "ECHOUÉ": "✗",
     }
-    for pattern, code in state_words.items():
+    for pattern, code in sorted(state_words.items(), key=lambda x: len(x[0]), reverse=True):
         if pattern in header.upper():
             state = code
             header = re.sub(
@@ -2329,6 +2329,8 @@ def boot(query: str = "") -> str:
         _mean_usefulness = sum(_all_usefulness) / _n_branches if _all_usefulness else 0.5
         # Normalize tag frequencies to [0,1]
         _max_tag_freq = max(_tag_freq.values()) if _tag_freq else 1
+        # Pre-cache tag sets for V1A coupling (avoids 13M set() constructions)
+        _tag_sets_cache = {n: set(nd.get("tags", [])) for n, nd in nodes.items() if n != "root"}
 
         # Generative Agents scoring: recency + importance + relevance + activation
         scored = []
@@ -4006,14 +4008,20 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
 
     # Top mycelium concepts
     top_concepts = []
-    conns = mycelium.data.get("connections", {})
-    concept_count = Counter()
-    for key, conn in conns.items():
-        parts = key.split("|")
-        if len(parts) == 2:
-            for p in parts:
-                concept_count[p] += conn["count"]
-    top_concepts = [c for c, _ in concept_count.most_common(10)]
+    if mycelium._db is not None:
+        degree = mycelium._db.all_degrees()
+        top_concepts = [c for c, _ in sorted(degree.items(), key=lambda x: -x[1])[:10]]
+        n_conns = mycelium._db.connection_count()
+    else:
+        conns = mycelium.data.get("connections", {})
+        n_conns = len(conns)
+        concept_count = Counter()
+        for key, conn in conns.items():
+            parts = key.split("|")
+            if len(parts) == 2:
+                for p in parts:
+                    concept_count[p] += conn["count"]
+        top_concepts = [c for c, _ in concept_count.most_common(10)]
 
     # Recent commits
     recent = []
@@ -4031,11 +4039,14 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
         pass
 
     # Build root.mn
-    fusions = len(mycelium.data.get("fusions", {}))
+    if mycelium._db is not None:
+        n_fusions = len(mycelium._db.get_all_fusions())
+    else:
+        n_fusions = len(mycelium.data.get("fusions", {}))
     lines = [
         f"P:{name}|{main_lang}|{total_lines}L|{file_count}files",
         f"E:{entry}",
-        f"S:bootstrap|{time.strftime('%Y-%m-%d')}|mycelium:{len(conns)}conn,{fusions}fusions",
+        f"S:bootstrap|{time.strftime('%Y-%m-%d')}|mycelium:{n_conns}conn,{n_fusions}fusions",
         "",
         "F:",
     ]

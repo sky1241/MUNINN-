@@ -171,6 +171,8 @@ class Mycelium:
         """
         self.mycelium_dir.mkdir(exist_ok=True)
         self.data["updated"] = time.strftime("%Y-%m-%d")
+        # Invalidate caches (degree distribution may have changed via decay)
+        self._high_degree_cache = None
 
         # S4: Flush pending translations before save
         try:
@@ -271,6 +273,8 @@ class Mycelium:
         S4 (TIER 3): Non-English concepts auto-translated via tokenizer + Haiku.
         """
         # Filter and normalize
+        if not concepts:
+            return
         clean = []
         for c in concepts:
             c = c.lower().strip()
@@ -393,6 +397,8 @@ class Mycelium:
         V6A: arousal param passed to observe() for emotional tagging.
         """
         # Split into chunks (paragraphs / double-newline blocks)
+        if not text:
+            return
         chunks = re.split(r'\n\s*\n', text)
 
         # For small texts (<50 concepts total), treat as single chunk
@@ -869,7 +875,8 @@ class Mycelium:
         """
         concept = concept.lower().strip()
         if self._db is not None:
-            neighbors = self._db.neighbors(concept)
+            # Fetch more than needed to allow zone reordering, but cap to avoid full scan
+            neighbors = self._db.neighbors(concept, top_n=max(50, top_n * 10))
             related = []
             for name, count in neighbors:
                 if self.federated:
