@@ -38,6 +38,11 @@ if sys.stdout.encoding != "utf-8":
 MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
 from tokenizer import count_tokens, token_count
+try:
+    from sentiment import score_sentiment, score_session
+    _HAS_SENTIMENT = True
+except ImportError:
+    _HAS_SENTIMENT = False
 
 
 # ── COMPRESSION RULES LOADER ────────────────────────────────────
@@ -4279,13 +4284,19 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     # P18: Extract error/fix pairs for auto-surfacing
     _extract_error_fixes(repo_path, result)
 
+    # V10A: Score sentiment on RAW messages (before compression strips emotional cues)
+    session_sentiment = None
+    if _HAS_SENTIMENT:
+        session_sentiment = score_session(texts)
+
     # P22: Update session index for future retrieval
-    _update_session_index(repo_path, mn_path, result, ratio)
+    _update_session_index(repo_path, mn_path, result, ratio, session_sentiment)
 
     return mn_path
 
 
-def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio: float):
+def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio: float,
+                          session_sentiment: dict = None):
     """P22: Add session entry to .muninn/session_index.json for boot search."""
     index_path = repo_path / ".muninn" / "session_index.json"
     try:
@@ -4322,6 +4333,18 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
         "concepts": top_concepts,
         "tagged": tagged[:15],  # max 15 tagged lines per session
     }
+
+    # V10A: VADER sentiment (scored on RAW messages in compress_transcript)
+    if session_sentiment is not None:
+        entry["sentiment"] = {
+            "mean_valence": session_sentiment["mean_valence"],
+            "mean_arousal": session_sentiment["mean_arousal"],
+            "peak_valence": session_sentiment["peak_valence"],
+            "peak_arousal": session_sentiment["peak_arousal"],
+            "n_positive": session_sentiment["n_positive"],
+            "n_negative": session_sentiment["n_negative"],
+            "n_neutral": session_sentiment["n_neutral"],
+        }
 
     # Dedup by filename
     index = [e for e in index if e.get("file") != mn_path.name]
