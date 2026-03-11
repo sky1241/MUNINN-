@@ -1022,10 +1022,12 @@ def extract_facts(text: str) -> list[str]:
     for m in re.finditer(r'\b(\d{4}[-/]\d{2}[-/]\d{2})\b', text):
         facts.append(m.group(1))
 
-    # Version numbers (v0.9.1, Python 3.13)
+    # Version numbers (v0.9.1, Python 3.13) — skip if preceded by $ (dollar amount)
     for m in re.finditer(r'\bv?(\d+\.\d+(?:\.\d+)?)\b', text):
         val = m.group(1)
         if val not in [f.rstrip('%') for f in facts]:  # avoid dupes with percentages
+            if m.start() > 0 and text[m.start() - 1] == '$':
+                continue  # skip dollar amounts — captured below
             facts.append(f"v{val}" if text[m.start()] == 'v' else val)
 
     # Dollar costs ($0.21, $1.50)
@@ -1133,7 +1135,7 @@ def compress_section(header: str, lines: list[str]) -> str:
     header = re.sub(r"^#+\s*", "", header).strip()
 
     for pattern in sorted(text_rules.keys(), key=len, reverse=True):
-        header = header.replace(pattern, text_rules[pattern])
+        header = re.sub(rf'\b{re.escape(pattern)}\b', text_rules[pattern], header)
 
     compressed_header = f"{state}{header}{session}"
 
@@ -2257,37 +2259,38 @@ def boot(query: str = "") -> str:
         # P(goal|actions) ~ exp(-cost) * prior
         # actions = last 3-5 session queries, goal = branch topic alignment
         btom_scores = {}  # branch_name -> goal alignment score
-        try:
-            import math
-            index_path = _REPO_PATH / ".muninn" / "session_index.json"
-            if index_path.exists():
-                idx = json.loads(index_path.read_text(encoding="utf-8"))
-                if isinstance(idx, list) and len(idx) >= 2:
-                    # Collect concepts from last 5 sessions (actions)
-                    recent = idx[-5:]
-                    action_concepts = {}  # concept -> frequency across recent sessions
-                    for sess in recent:
-                        for c in sess.get("concepts", []):
-                            action_concepts[c] = action_concepts.get(c, 0) + 1
-                    if action_concepts:
-                        # Normalize to probabilities
-                        total_freq = sum(action_concepts.values())
-                        action_probs = {c: f / total_freq for c, f in action_concepts.items()}
-                        # Score each branch by goal alignment
-                        for bname, bcontent in branch_contents.items():
-                            try:
-                                bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
-                                overlap = bwords & set(action_probs.keys())
-                                if overlap:
-                                    alignment = sum(action_probs[w] for w in overlap)
-                                    prior = nodes[bname].get("usefulness", 0.5)
-                                    # V3B fix: sigmoid instead of exp(-1/x) which kills signal
-                                    posterior = (alignment / (alignment + 1.0)) * prior
-                                    btom_scores[bname] = min(1.0, posterior)
-                            except (KeyError, TypeError):
-                                continue
-        except Exception as e:
-            print(f"  [warn] V3B BToM: {e}", file=sys.stderr)
+        if _REPO_PATH:
+            try:
+                import math
+                index_path = _REPO_PATH / ".muninn" / "session_index.json"
+                if index_path.exists():
+                    idx = json.loads(index_path.read_text(encoding="utf-8"))
+                    if isinstance(idx, list) and len(idx) >= 2:
+                        # Collect concepts from last 5 sessions (actions)
+                        recent = idx[-5:]
+                        action_concepts = {}  # concept -> frequency across recent sessions
+                        for sess in recent:
+                            for c in sess.get("concepts", []):
+                                action_concepts[c] = action_concepts.get(c, 0) + 1
+                        if action_concepts:
+                            # Normalize to probabilities
+                            total_freq = sum(action_concepts.values())
+                            action_probs = {c: f / total_freq for c, f in action_concepts.items()}
+                            # Score each branch by goal alignment
+                            for bname, bcontent in branch_contents.items():
+                                try:
+                                    bwords = set(re.findall(r'[a-z0-9_]+', bcontent.lower()))
+                                    overlap = bwords & set(action_probs.keys())
+                                    if overlap:
+                                        alignment = sum(action_probs[w] for w in overlap)
+                                        prior = nodes[bname].get("usefulness") or 0.5
+                                        # V3B fix: sigmoid instead of exp(-1/x) which kills signal
+                                        posterior = (alignment / (alignment + 1.0)) * prior
+                                        btom_scores[bname] = min(1.0, posterior)
+                                except (KeyError, TypeError):
+                                    continue
+            except Exception as e:
+                print(f"  [warn] V3B BToM: {e}", file=sys.stderr)
 
         # B6: Adjust scoring weights by session type
         w_recall = 0.15
