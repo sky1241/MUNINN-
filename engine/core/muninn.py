@@ -919,8 +919,10 @@ def compress_line(line: str) -> str:
     result = re.sub(r"\d{1,3}(?:,\d{3})+", shorten_number, result)
 
     # L5: Apply text rules (longest first to avoid partial matches)
+    # Use word-boundary regex to prevent substring corruption
+    # (e.g. "completed" must NOT become "doneed" from rule "complete"->"done")
     for pattern in sorted(cb["text_rules"].keys(), key=len, reverse=True):
-        result = result.replace(pattern, cb["text_rules"][pattern])
+        result = re.sub(rf'\b{re.escape(pattern)}\b', cb["text_rules"][pattern], result)
 
     # L6: Mycelium-aware compression: strong fusions = predictable pairs.
     # Only drop shorter concept if it appears exactly once AND near the other.
@@ -1203,10 +1205,17 @@ def _resolve_contradictions(text: str) -> str:
         if skel in skeleton_last:
             old_text, old_idx = skeleton_last[skel]
             if old_text != line:
-                # Same structure, different numbers = contradiction
-                if skel not in contradictions:
-                    contradictions[skel] = set()
-                contradictions[skel].add(old_idx)
+                # Guard: numbered list items (1. X, 2. X) are NOT contradictions.
+                # Detect: skeleton starts with _NUM_ + list marker, lines are near-consecutive.
+                is_numbered_list = (
+                    re.match(r'^_num_[\.\)]\s', skel)
+                    and abs(i - old_idx) <= 3  # within 3 lines of each other
+                )
+                if not is_numbered_list:
+                    # Same structure, different numbers = contradiction
+                    if skel not in contradictions:
+                        contradictions[skel] = set()
+                    contradictions[skel].add(old_idx)
         skeleton_last[skel] = (line, i)
 
     if not contradictions:
@@ -1323,6 +1332,11 @@ def _novelty_score(line: str) -> float:
     # Long text without any numbers or identifiers = likely generic
     if len(s) > 100 and not re.search(r'\d', s):
         score = min(score, 0.15)
+
+    # Floor: lines with dates, commits, or ratios are ALWAYS novel (factual data).
+    # Prevents these from being mangled by _generate_cue() below threshold.
+    if re.search(r'\d{4}[-/]\d{2}[-/]\d{2}|[a-f0-9]{7,40}|x\d+\.?\d*', s):
+        score = max(score, 0.35)
 
     return max(0.0, min(1.0, score))
 
