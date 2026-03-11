@@ -440,7 +440,8 @@ def compute_hash(filepath: Path) -> str:
     return hashlib.sha256(content).hexdigest()[:8]
 
 
-def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5) -> float:
+def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5,
+                       _alpha_v: float = 0.3, _alpha_a: float = 0.2) -> float:
     """Spaced repetition recall probability (Settles & Meeder 2016).
 
     p = 2^(-delta / h)
@@ -453,11 +454,23 @@ def _ebbinghaus_recall(node: dict, _h_beta: float = 0.5) -> float:
     h = 7 * 2^reviews * usefulness^beta
     When usefulness=1.0 (default), behavior is identical to pre-A1.
     Sources: GARCH (Bollerslev 1986), PLOS Bio 2018 (antibody half-lives), BS-6.
+
+    V6B upgrade: h is further modulated by valence and arousal (Talmi 2013).
+    h(v,a) = h_base * (1 + alpha_v * |v| + alpha_a * a)
+    Emotional memories (high |valence| or arousal) decay SLOWER.
+    When valence=0 and arousal=0 (default), behavior is identical to pre-V6B.
+    Sources: Talmi 2013 (Curr Dir Psychol Sci), McGaugh 2004 (Trends Neurosci).
     """
     delta = _days_since(node.get("last_access", "2026-01-01"))
     reviews = node.get("access_count", 0)
     usefulness = max(0.1, node.get("usefulness", 1.0))  # clamp [0.1, 1.0] — A1.7 safety
     half_life = 7.0 * (2 ** min(reviews, 10)) * (usefulness ** _h_beta)
+
+    # V6B: Valence-modulated decay (Talmi 2013)
+    valence = node.get("valence", 0.0)
+    arousal = max(0.0, node.get("arousal", 0.0))  # clamp: arousal is always >= 0
+    half_life *= (1.0 + _alpha_v * abs(valence) + _alpha_a * arousal)
+
     if half_life <= 0:
         return 0.0
     return 2.0 ** (-delta / half_life)
@@ -1730,12 +1743,13 @@ def build_tree(filepath: Path):
 
 # ── AUTO-SEGMENTATION (Brique 3) ─────────────────────────────────
 
-def grow_branches_from_session(mn_path: Path):
+def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
     """Auto-segment a compressed .mn file into tree branches.
 
     Splits the session by ## headers (already created by compress_transcript).
     Each section becomes a branch with auto-extracted tags.
     Merges into existing branch if >50% tag overlap (avoids duplication).
+    V6B: Propagates session valence/arousal to branch nodes for decay modulation.
     """
     if not mn_path.exists():
         return 0
@@ -1836,6 +1850,15 @@ def grow_branches_from_session(mn_path: Path):
                     filepath.write_text(merged_text, encoding="utf-8")
                     node["lines"] = len(new_lines)
                     node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
+                    # V6B: Update sentiment (weighted average old + new)
+                    if session_sentiment is not None:
+                        old_v = node.get("valence", 0.0)
+                        old_a = node.get("arousal", 0.0)
+                        new_v = session_sentiment.get("mean_valence", 0.0)
+                        new_a = session_sentiment.get("mean_arousal", 0.0)
+                        # EMA: 70% old + 30% new (recent sessions influence more gradually)
+                        node["valence"] = round(0.7 * old_v + 0.3 * new_v, 4)
+                        node["arousal"] = round(0.7 * old_a + 0.3 * new_a, 4)
                     merged = True
                     break
 
@@ -1847,7 +1870,7 @@ def grow_branches_from_session(mn_path: Path):
             lines = body.split("\n")
             branch_path.write_text(body, encoding="utf-8")
 
-            nodes[branch_name] = {
+            new_node = {
                 "type": "branch",
                 "file": branch_file,
                 "lines": len(lines),
@@ -1859,6 +1882,11 @@ def grow_branches_from_session(mn_path: Path):
                 "hash": "00000000",
                 "temperature": 0.1,
             }
+            # V6B: Propagate session sentiment to branch for valence-modulated decay
+            if session_sentiment is not None:
+                new_node["valence"] = session_sentiment.get("mean_valence", 0.0)
+                new_node["arousal"] = session_sentiment.get("mean_arousal", 0.0)
+            nodes[branch_name] = new_node
             # Add to root's children
             if branch_name not in nodes.get("root", {}).get("children", []):
                 nodes.setdefault("root", {}).setdefault("children", []).append(branch_name)
@@ -4122,7 +4150,7 @@ def _semantic_rle(texts: list[str]) -> list[str]:
     return result
 
 
-def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
+def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
     """Compress a transcript JSONL into a dense .mn session file.
 
     Extracts user+assistant messages, compresses each with the 7-layer
@@ -4131,7 +4159,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     """
     texts = parse_transcript(jsonl_path)
     if not texts:
-        return None
+        return None, None
 
     # Strip secrets before compression
     for i, text in enumerate(texts):
@@ -4292,7 +4320,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> Path:
     # P22: Update session index for future retrieval
     _update_session_index(repo_path, mn_path, result, ratio, session_sentiment)
 
-    return mn_path
+    return mn_path, session_sentiment
 
 
 def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio: float,
@@ -4689,11 +4717,12 @@ def feed_from_hook(repo_path: Path):
         print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
         # 2. Compress transcript into a .mn session file
-        mn_path = compress_transcript(jsonl_path, repo_path)
+        mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path)
 
         # 3. Auto-segment into tree branches (Brique 3)
+        # V6B: Pass session sentiment to branches for valence-modulated decay
         if mn_path:
-            grow_branches_from_session(mn_path)
+            grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
 
         # 4. Refresh tree temperatures
         tree = load_tree()
@@ -4805,11 +4834,11 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
     print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
     # 2. Compress transcript
-    mn_path = compress_transcript(jsonl_path, repo_path)
+    mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path)
 
     # 3. Auto-segment into branches
     if mn_path:
-        grow_branches_from_session(mn_path)
+        grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
 
     # 4. Refresh tree
     tree = load_tree()
@@ -4945,9 +4974,9 @@ def feed_history(repo_path: Path):
             mn_marker = sessions_dir / f"{jsonl_file.stem}.mn"
             if mn_marker.exists():
                 continue
-            mn_path = compress_transcript(jsonl_file, repo_path)
+            mn_path, _sent = compress_transcript(jsonl_file, repo_path)
             if mn_path:
-                created = grow_branches_from_session(mn_path)
+                created = grow_branches_from_session(mn_path, session_sentiment=_sent)
                 if created > 0:
                     print(f"  {jsonl_file.name}: {created} branches created")
 
@@ -5028,11 +5057,11 @@ def feed_watch(repo_path: Path):
                 print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
 
                 # Compress transcript
-                mn_path = compress_transcript(jsonl_path, repo_path)
+                mn_path, _sent = compress_transcript(jsonl_path, repo_path)
 
                 # Auto-segment into branches
                 if mn_path:
-                    grow_branches_from_session(mn_path)
+                    grow_branches_from_session(mn_path, session_sentiment=_sent)
                 fed_count += 1
             except Exception as e:
                 print(f"  WATCH error on {jsonl_path.name}: {e}", file=sys.stderr)
@@ -5367,7 +5396,7 @@ def main():
             # Direct file mode: feed from a specific transcript
             count = feed_from_transcript(Path(args.file), repo)
             print(f"MUNINN FEED: {count} messages -> mycelium ({repo.name})")
-            compress_transcript(Path(args.file), repo)
+            _mn, _sent = compress_transcript(Path(args.file), repo)
         elif args.trigger == "stop":
             # P32: Stop hook — debounced feed
             feed_from_stop_hook(repo)
