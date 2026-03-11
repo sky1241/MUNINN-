@@ -2,7 +2,7 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: CROISSANCE — le tronc est trouve, on fait pousser
-Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5 upgrades, 32 PASS) + TIER 3 (10 upgrades, 121 PASS), 0 en roadmap, 3 supprimees (P3), 78 bugs corriges
+Etat: 56 briques vivantes + TIER 1 (6 upgrades, 36 PASS) + TIER 2 (5 upgrades, 32 PASS) + TIER 3 (11 upgrades, 126 PASS), 0 en roadmap, 3 supprimees (P3), 78 bugs corriges
 Engine: muninn.py 4632 lignes, 73 fonctions + mycelium.py 1134 lignes + watchdog.py 55 lignes
 
 ## Anatomie
@@ -763,13 +763,14 @@ Backward compat: all defaults reproduce pre-TIER1 behavior exactly.
 Commits: 6d1a685..7e5e287 (5 commits). Tests: tests/test_tier2_*.py.
 All 5 upgrades wired into boot() pipeline.
 
-### Plan de Bataille TIER 3 — Mycelium Storage Revolution (session 2026-03-11) [EN COURS]
+### Plan de Bataille TIER 3 — Mycelium Storage Revolution (session 2026-03-11) [DONE]
 C1: Saturation beta active (Lotka-Volterra beta=0.001, freine les connexions monopoles >50 count). 5 bornes.
 C2: Boot feedback log — .muninn/boot_feedback.json, tracks blind spots covered/uncovered, last 20 boots. 5 bornes.
 C6: CLI diagnose — `muninn.py diagnose` full health: tree/mycelium/anomalies/blind spots/sessions. 5 bornes.
 P41: Mycelium auto-referentiel — observe fusions as 2nd-order co-occurrences (1/3 ratio cap). 5 bornes.
 C3: Auto-preload predictions — top 3 B4 predictions (score>=0.3) pre-chargees dans boot(). 5 bornes.
 C4: Real-time k adaptation — adapt_k() in recall()+inject_memory(), sigmoid k adjusts mid-session. 5 bornes.
+C7: Contradiction resolution in B1 — _resolve_contradictions() before L10+L11 in reconsolidation. 5 bornes.
 FIX: SQLite PermissionError on Windows — conn.close() before unlink, try/except on locked .db files.
 Probleme: mycelium.json explose (376 Mo Muninn, 173 Mo Ygg, 946 Mo meta = 1.5 Go total).
 4 jours, 103 sessions chez Ygg = 716K connections, 479K fusions. JSON pretty-print = 16M lignes.
