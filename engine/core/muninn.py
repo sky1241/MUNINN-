@@ -323,30 +323,6 @@ BUDGET = {
     "compression_ratio": 4.6,
 }
 
-# Biological ratios: compression varies by temperature (COCOM 2025)
-# Hot nodes get more space (detail), cold nodes get compressed harder
-COMPRESSION_BY_TEMP = {
-    "hot":  1.5,   # t >= 0.5 — light compression, keep detail
-    "warm": 3.0,   # 0.2 <= t < 0.5 — moderate compression
-    "cold": 6.0,   # t < 0.2 — heavy compression, summary only
-}
-
-
-def effective_budget(node: dict) -> int:
-    """Dynamic budget: hot nodes get more lines, cold nodes fewer.
-
-    Instead of fixed max_lines, scale by temperature.
-    Hot nodes: max_lines * 1.5 (more room)
-    Cold nodes: max_lines * 0.5 (compress harder)
-    """
-    base = node.get("max_lines", 150)
-    temp = node.get("temperature", 0.3)
-    if temp >= 0.5:
-        return int(base * 1.3)  # hot: 30% more room
-    elif temp < 0.2:
-        return int(base * 0.6)  # cold: 40% less room
-    return base  # warm: standard
-
 # ── TREE STRUCTURE ────────────────────────────────────────────────
 
 def _get_tree_dir():
@@ -2135,8 +2111,8 @@ def boot(query: str = "") -> str:
         try:
             session_mode = detect_session_mode()
             m._sigmoid_k = session_mode["suggested_k"]  # type: ignore[possibly-undefined]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] B5 session mode: {e}", file=sys.stderr)
 
         # Spreading Activation (Collins & Loftus 1975) — semantic boost
         # Propagates activation through mycelium to find branches that
@@ -2156,8 +2132,8 @@ def boot(query: str = "") -> str:
                         act_score = sum(activated_set[w] for w in overlap)
                         # Cap at 1.0 (don't penalize broad connections)
                         activation_scores[bname] = min(1.0, act_score)
-        except Exception:
-            pass  # mycelium not available or no connections
+        except Exception as e:
+            print(f"  [warn] spreading activation: {e}", file=sys.stderr)
 
         # V3A: Transitive inference (Wynne 1995, Paz-y-Mino 2004)
         # Ordered chain reasoning: A->B->C infers A->C with decaying strength.
@@ -2176,8 +2152,8 @@ def boot(query: str = "") -> str:
                             t_norm = min(1.0, t_score / max(len(overlap), 1))
                             transitive_scores[bname] = max(
                                 transitive_scores.get(bname, 0), t_norm)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] V3A transitive: {e}", file=sys.stderr)
 
         # B3: Detect blind spots — boost branches that fill structural holes
         blind_spot_concepts = set()
@@ -2187,16 +2163,16 @@ def boot(query: str = "") -> str:
             for a, b, _ in blind_spots:
                 blind_spot_concepts.add(a)
                 blind_spot_concepts.add(b)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] B3 blind spots: {e}", file=sys.stderr)
 
         # B4: Predict next branches — get prediction scores
         prediction_scores = {}
         try:
             predictions = predict_next(current_concepts=query_words, top_n=20)
             prediction_scores = {name: score for name, score in predictions}
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] B4 predictions: {e}", file=sys.stderr)
 
         # V3B: Bayesian Theory of Mind — infer user goal from recent queries
         # (Baker, Saxe, Tenenbaum 2009, Cognition)
@@ -2232,8 +2208,8 @@ def boot(query: str = "") -> str:
                                     btom_scores[bname] = min(1.0, posterior)
                             except (KeyError, TypeError):
                                 continue
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] V3B BToM: {e}", file=sys.stderr)
 
         # B6: Adjust scoring weights by session type
         w_recall = 0.15
@@ -2259,8 +2235,8 @@ def boot(query: str = "") -> str:
                 w_rehearsal = 0.25
                 w_relevance = 0.35
                 w_recall = 0.10
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] B6 classify_session: {e}", file=sys.stderr)
 
         # V11B: Boyd-Richerson cultural transmission pre-compute (Boyd & Richerson 1985)
         # (1) Conformist bias: tag frequency across all branches (popular = boosted)
@@ -2528,8 +2504,8 @@ def boot(query: str = "") -> str:
             history.append(feedback)
             history = history[-20:]  # keep last 20 boots
             feedback_path.write_text(_json.dumps(history, indent=1, ensure_ascii=False), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [warn] boot feedback: {e}", file=sys.stderr)
 
     # P19: Dedup branches — skip if NCD similarity > 0.6 (too similar)
     deduped = []
@@ -2634,8 +2610,8 @@ def boot(query: str = "") -> str:
                             _best_concept = _c
                 if _best_concept:
                     _v8b_hint = _best_concept
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [warn] V8B active sensing: {e}", file=sys.stderr)
 
     # P36: Save boot manifest for feedback loop
     if _REPO_PATH:
