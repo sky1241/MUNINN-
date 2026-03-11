@@ -179,14 +179,23 @@ jobs:
               assert "MUNINN SESSION" in r.stdout, f"session compression missing: {r.stdout}"
               print(f"feed from file: OK — {r.stdout.strip()}")
 
-              # Verify mycelium was actually fed
-              mycelium_path = os.path.join(".muninn", "mycelium.json")
-              assert os.path.exists(mycelium_path), "mycelium.json not created"
-              with open(mycelium_path, encoding="utf-8") as mf:
-                  data = json.load(mf)
-              assert len(data["connections"]) > 0, "No connections created"
-              assert "fusions" in data, "Fusions field missing"
-              print(f"  mycelium: {len(data['connections'])} connections, {len(data['fusions'])} fusions")
+              # Verify mycelium was actually fed (S1: now uses SQLite)
+              mycelium_db = os.path.join(".muninn", "mycelium.db")
+              mycelium_json = os.path.join(".muninn", "mycelium.json")
+              assert os.path.exists(mycelium_db) or os.path.exists(mycelium_json), \
+                  "Neither mycelium.db nor mycelium.json created"
+              if os.path.exists(mycelium_db):
+                  import sqlite3
+                  conn = sqlite3.connect(mycelium_db)
+                  edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+                  conn.close()
+                  assert edge_count > 0, "No connections created in SQLite"
+                  print(f"  mycelium: {edge_count} connections (SQLite)")
+              else:
+                  with open(mycelium_json, encoding="utf-8") as mf:
+                      data = json.load(mf)
+                  assert len(data["connections"]) > 0, "No connections created"
+                  print(f"  mycelium: {len(data['connections'])} connections (JSON)")
 
               # Verify session .mn was created
               sessions_dir = os.path.join(".muninn", "sessions")
