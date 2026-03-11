@@ -2227,7 +2227,8 @@ def boot(query: str = "") -> str:
                                 if overlap:
                                     alignment = sum(action_probs[w] for w in overlap)
                                     prior = nodes[bname].get("usefulness", 0.5)
-                                    posterior = math.exp(-1.0 / max(0.01, alignment)) * prior
+                                    # V3B fix: sigmoid instead of exp(-1/x) which kills signal
+                                    posterior = (alignment / (alignment + 1.0)) * prior
                                     btom_scores[bname] = min(1.0, posterior)
                             except (KeyError, TypeError):
                                 continue
@@ -2329,7 +2330,7 @@ def boot(query: str = "") -> str:
             # V3A: Transitive inference bonus — branches reachable via ordered chains
             t_score = transitive_scores.get(name, 0.0)
             if t_score > 0:
-                total += 0.05 * t_score  # max +0.05
+                total += 0.10 * t_score  # V3A: max +0.10 (was 0.05, cosmetic)
 
             # B4: Prediction bonus — predicted branches get +0.03 * prediction_score
             pred_score = prediction_scores.get(name, 0.0)
@@ -2349,18 +2350,18 @@ def boot(query: str = "") -> str:
                 _p = sum(_tag_freq.get(t, 0) for t in _node_tags) / (_max_tag_freq * max(1, len(_node_tags)))
                 _p = max(0.01, min(0.99, _p))
                 _conform_dp = 0.3 * _p * (1.0 - _p) * (2.0 * _p - 1.0)  # beta=0.3
-                total += 0.02 * _conform_dp  # scaled contribution
+                total += 0.15 * _conform_dp  # V11B fix: was 0.02 (cosmetic)
 
             # (2) Prestige bias: p' = sum(w_i * p_i) — td_value as prestige
             _td_value = node.get("td_value", 0.5)
             _prestige = _td_value * usefulness  # prestige = success * usefulness
-            total += 0.02 * _prestige  # max +0.02
+            total += 0.06 * _prestige  # V11B fix: was 0.02 (cosmetic)
 
             # (3) Guided variation: delta = mu*(p_opt - p)
             #     Pushes score toward population mean usefulness (convergence)
             _mu = 0.1
             _guided_delta = _mu * (_mean_usefulness - usefulness)
-            total += 0.02 * _guided_delta  # nudge toward mean (can be negative)
+            total += 0.06 * _guided_delta  # V11B fix: was 0.02 (cosmetic)
 
             # V5A: Quorum sensing Hill switch (Waters & Bassler 2005)
             # Activate ONLY when enough neighbors are co-activated (quorum)
@@ -2374,7 +2375,7 @@ def boot(query: str = "") -> str:
                 if _activated_count > 0:
                     _quorum = (_activated_count ** _n_hill) / (
                         _K_quorum ** _n_hill + _activated_count ** _n_hill)
-                    total += 0.03 * _quorum  # max +0.03
+                    total += 0.08 * _quorum  # V5A: max +0.08 (was 0.03, cosmetic)
 
             # V1A: Coupled oscillator (Yekutieli et al. 2005)
             # Temperature coupling: branches connected via mycelium push toward each other
@@ -2389,7 +2390,7 @@ def boot(query: str = "") -> str:
                         _other_temp = _snode.get("temperature", 0.5)
                         _coupling_sum += 0.1 * (_other_temp - _my_temp)
                         break  # one coupling per tag
-            total += 0.01 * max(-0.05, min(0.05, _coupling_sum))  # bounded
+            total += max(-0.05, min(0.05, _coupling_sum))  # V1A: direct coupling, no extra damper
 
             if total > 0.01:
                 scored.append((name, total))
