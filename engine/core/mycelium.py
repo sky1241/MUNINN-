@@ -77,11 +77,21 @@ class Mycelium:
                     return self._load_from_sqlite()
                 else:
                     # Partial migration: delete corrupt DB and retry
-                    self.db_path.unlink()
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    try:
+                        self.db_path.unlink()
+                    except PermissionError:
+                        pass  # Windows: file locked, skip cleanup
             except Exception:
                 if not self.mycelium_path.exists():
                     return self._load_from_sqlite()
-                self.db_path.unlink(missing_ok=True)
+                try:
+                    self.db_path.unlink(missing_ok=True)
+                except PermissionError:
+                    pass  # Windows: file locked, skip cleanup
 
         # Case 2: JSON exists — migrate to SQLite, then load
         if self.mycelium_path.exists():

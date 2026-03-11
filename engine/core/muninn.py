@@ -2507,6 +2507,9 @@ def recall(query: str) -> str:
         if len(output) >= 12:  # max 10 results + header
             break
 
+    # C4: Real-time k adaptation based on recall concepts
+    adapt_k(list(query_words))
+
     return "\n".join(output)
 
 
@@ -2640,6 +2643,25 @@ def detect_session_mode(concepts: list[str] = None) -> dict:
         "suggested_k": suggested_k,
         "concept_count": unique,
     }
+
+
+def adapt_k(concepts: list[str] = None):
+    """C4: Real-time sigmoid k adaptation.
+
+    Recalculates session mode from current concepts and updates the
+    mycelium's sigmoid_k. Called mid-session by recall() and inject_memory().
+    """
+    try:
+        mode = detect_session_mode(concepts)
+        repo = _REPO_PATH or Path(".")
+        from mycelium import Mycelium
+        m = Mycelium(repo)
+        old_k = m._sigmoid_k
+        m._sigmoid_k = mode["suggested_k"]
+        return {"old_k": old_k, "new_k": mode["suggested_k"], "mode": mode["mode"],
+                "diversity": mode["diversity"]}
+    except Exception:
+        return {"old_k": 10, "new_k": 10, "mode": "balanced", "diversity": 0.5}
 
 
 # ── B6: Klein RPD session-type classification ────────────────────
@@ -5046,6 +5068,12 @@ def inject_memory(fact: str, repo_path: Path = None):
 
     lines = new_content.count("\n")
     print(f"MUNINN INJECT: '{fact[:60]}' -> {live_name} ({lines} lines)")
+
+    # C4: Real-time k adaptation after injection
+    fact_concepts = re.findall(r'[A-Za-z]{4,}', fact.lower())
+    if fact_concepts:
+        adapt_k(fact_concepts)
+
     return live_name
 
 
