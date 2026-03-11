@@ -9,15 +9,22 @@ Tests:
   A2.7  Regression: boot loads same branches as baseline
 """
 import sys, os, math
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _actr_activation, _ebbinghaus_recall
+
+def _days_ago(n):
+    """Return date string n days ago from today."""
+    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
+
+_today = _days_ago(0)
 
 TOLERANCE = 0.02
 
 def make_node(**kwargs):
     base = {
         "access_count": 3,
-        "last_access": "2026-03-10",
+        "last_access": _today,
         "usefulness": 1.0,
         "lines": 50,
         "max_lines": 150,
@@ -29,7 +36,7 @@ def test_a2_1_arithmetic():
     """B = ln(1^-0.5 + 3^-0.5 + 30^-0.5) = ln(1 + 0.577 + 0.183) = 0.564"""
     # Create node with known access_history
     # 1 day ago, 3 days ago, 30 days ago from "today"
-    node = make_node(access_history=["2026-03-09", "2026-03-07", "2026-02-08"])
+    node = make_node(access_history=[_days_ago(1), _days_ago(3), _days_ago(30)])
     B = _actr_activation(node)
     # t_j = 1, 3, 30 days
     # sum = 1^-0.5 + 3^-0.5 + 30^-0.5 = 1.0 + 0.577 + 0.183 = 1.760
@@ -49,8 +56,8 @@ def test_a2_2_fallback_no_crash():
 
 def test_a2_3_fallback_coherent():
     """Synthetic timestamps should produce reasonable activation"""
-    node_recent = make_node(access_count=5, last_access="2026-03-10")
-    node_old = make_node(access_count=5, last_access="2025-06-01")
+    node_recent = make_node(access_count=5, last_access=_today)
+    node_old = make_node(access_count=5, last_access=_days_ago(280))
     B_recent = _actr_activation(node_recent)
     B_old = _actr_activation(node_old)
     assert B_recent > B_old, f"A2.3 FAIL: B_recent={B_recent:.4f} <= B_old={B_old:.4f}"
@@ -59,9 +66,9 @@ def test_a2_3_fallback_coherent():
 def test_a2_4_ordering():
     """Spread accesses (1x/month for 3 months) > clustered (3x in 1 day)"""
     # Clustered: all 3 accesses on same day (1 day ago)
-    node_clustered = make_node(access_history=["2026-03-09", "2026-03-09", "2026-03-09"])
+    node_clustered = make_node(access_history=[_days_ago(1), _days_ago(1), _days_ago(1)])
     # Spread: 1 access per month
-    node_spread = make_node(access_history=["2026-03-09", "2026-02-09", "2026-01-09"])
+    node_spread = make_node(access_history=[_days_ago(1), _days_ago(30), _days_ago(60)])
     B_clustered = _actr_activation(node_clustered)
     B_spread = _actr_activation(node_spread)
     # ACT-R: spread should have LOWER activation (older accesses contribute less)
@@ -75,7 +82,7 @@ def test_a2_4_ordering():
 
 def test_a2_5_cap():
     """access_history capped at 10"""
-    history = [f"2026-03-{i:02d}" for i in range(1, 16)]  # 15 entries
+    history = [_days_ago(i) for i in range(15, 0, -1)]  # 15 entries
     node = make_node(access_history=history[-10:])  # simulates what read_node does
     assert len(node["access_history"]) <= 10, f"A2.5 FAIL: len={len(node['access_history'])}"
     B = _actr_activation(node)
@@ -84,8 +91,8 @@ def test_a2_5_cap():
 
 def test_a2_ebbinghaus_unchanged():
     """Ebbinghaus recall is NOT affected by access_history (separate function)"""
-    node_with = make_node(access_count=5, last_access="2026-03-10", access_history=["2026-03-10"])
-    node_without = make_node(access_count=5, last_access="2026-03-10")
+    node_with = make_node(access_count=5, last_access=_today, access_history=[_today])
+    node_without = make_node(access_count=5, last_access=_today)
     r_with = _ebbinghaus_recall(node_with)
     r_without = _ebbinghaus_recall(node_without)
     assert abs(r_with - r_without) < 0.001, f"FAIL: Ebbinghaus changed! {r_with} vs {r_without}"
