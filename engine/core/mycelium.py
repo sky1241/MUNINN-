@@ -66,6 +66,7 @@ class Mycelium:
         self.zone = zone or self.repo_path.name  # P20.2: default zone = repo name
         self._sigmoid_k = 10  # A3: sigmoid steepness for spread_activation (0=disabled)
         self._spectral_gap = None  # A5: computed by detect_zones()
+        self._db = None  # Persistent DB handle (lazy mode)
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -135,20 +136,23 @@ class Mycelium:
         }
 
     def _load_from_sqlite(self) -> dict:
-        """Load mycelium data from SQLite database into memory dict."""
-        db = MyceliumDB(self.db_path)
-        try:
-            data = {
-                "version": int(db.get_meta("version", "1")),
-                "repo": db.get_meta("repo", self.repo_path.name),
-                "created": db.get_meta("created", time.strftime("%Y-%m-%d")),
-                "updated": db.get_meta("updated", time.strftime("%Y-%m-%d")),
-                "session_count": int(db.get_meta("session_count", "0")),
-                "connections": db.get_all_connections(),
-                "fusions": db.get_all_fusions(),
-            }
-        finally:
-            db.close()
+        """Load mycelium meta from SQLite. Connections stay on disk (lazy mode).
+
+        TIER 3 Phase 2: No more loading millions of connections into RAM.
+        self._db stays open for direct SQL queries throughout the session.
+        self.data["connections"] and self.data["fusions"] are empty dicts
+        (backward compat stubs — all real access goes through self._db).
+        """
+        self._db = MyceliumDB(self.db_path)
+        data = {
+            "version": int(self._db.get_meta("version", "1")),
+            "repo": self._db.get_meta("repo", self.repo_path.name),
+            "created": self._db.get_meta("created", time.strftime("%Y-%m-%d")),
+            "updated": self._db.get_meta("updated", time.strftime("%Y-%m-%d")),
+            "session_count": int(self._db.get_meta("session_count", "0")),
+            "connections": {},  # Empty — queries go through self._db
+            "fusions": {},      # Empty — queries go through self._db
+        }
         return data
 
     def _migrate_json_to_sqlite(self):
@@ -161,9 +165,8 @@ class Mycelium:
     def save(self):
         """Persist mycelium to disk (SQLite with WAL mode).
 
-        S1 (TIER 3): Writes to SQLite instead of JSON.
-        S4 (TIER 3): Flushes pending translations before save.
-        No temp files, no pretty-print explosion, crash-safe WAL.
+        TIER 3 Phase 2: In lazy mode, data is already on disk.
+        save() just commits pending writes and updates meta.
         """
         self.mycelium_dir.mkdir(exist_ok=True)
         self.data["updated"] = time.strftime("%Y-%m-%d")
@@ -176,68 +179,82 @@ class Mycelium:
         except Exception:
             pass
 
-        db = MyceliumDB(self.db_path)
-        try:
-            # Sync connections: write all from self.data to DB
-            # Everything in one transaction for atomicity (crash-safe)
-            conns = self.data.get("connections", {})
-            fusions = self.data.get("fusions", {})
-
-            with db._conn:
-                # Update meta inside transaction
-                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                 ("version", str(self.data.get("version", 1))))
-                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                 ("repo", str(self.data.get("repo", self.repo_path.name))))
-                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                 ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
-                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                 ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
-                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                 ("session_count", str(self.data.get("session_count", 0))))
-                db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                 ("migration_complete", "1"))
-                # Clear and rewrite (simpler than diffing for Phase 1)
-                db._conn.execute("DELETE FROM edges")
-                db._conn.execute("DELETE FROM fusions")
-                db._conn.execute("DELETE FROM edge_zones")
-
-                td = today_days()
-                for key, conn in conns.items():
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    a_id = db._get_or_create_concept(a)
-                    b_id = db._get_or_create_concept(b)
-                    fs = date_to_days(conn.get("first_seen", "2026-01-01"))
-                    ls = date_to_days(conn.get("last_seen", "2026-01-01"))
-                    db._conn.execute(
-                        "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (a_id, b_id, conn.get("count", 1), fs, ls)
-                    )
-                    for zone in conn.get("zones", []):
+        if self._db is not None:
+            # Lazy mode: data is already in SQLite, just update meta + commit
+            with self._db._conn:
+                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                       ("version", str(self.data.get("version", 1))))
+                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                       ("repo", str(self.data.get("repo", self.repo_path.name))))
+                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                       ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
+                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                       ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
+                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                       ("session_count", str(self.data.get("session_count", 0))))
+                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                       ("migration_complete", "1"))
+        else:
+            # Fallback: no DB yet (fresh install), create and write everything
+            db = MyceliumDB(self.db_path)
+            try:
+                conns = self.data.get("connections", {})
+                fusions = self.data.get("fusions", {})
+                with db._conn:
+                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                     ("version", str(self.data.get("version", 1))))
+                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                     ("repo", str(self.data.get("repo", self.repo_path.name))))
+                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                     ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
+                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                     ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
+                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                     ("session_count", str(self.data.get("session_count", 0))))
+                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                     ("migration_complete", "1"))
+                    td = today_days()
+                    for key, conn in conns.items():
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        a_id = db._get_or_create_concept(a)
+                        b_id = db._get_or_create_concept(b)
+                        fs = date_to_days(conn.get("first_seen", "2026-01-01"))
+                        ls = date_to_days(conn.get("last_seen", "2026-01-01"))
                         db._conn.execute(
-                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                            (a_id, b_id, zone)
-                        )
+                            "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
+                            "VALUES (?, ?, ?, ?, ?)",
+                            (a_id, b_id, conn.get("count", 1), fs, ls))
+                        for zone in conn.get("zones", []):
+                            db._conn.execute(
+                                "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                                (a_id, b_id, zone))
+                    for key, fusion in fusions.items():
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        a_id = db._get_or_create_concept(a)
+                        b_id = db._get_or_create_concept(b)
+                        fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
+                        db._conn.execute(
+                            "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
+                            "VALUES (?, ?, ?, ?, ?)",
+                            (a_id, b_id, fusion.get("form", f"{a}+{b}"), fusion.get("strength", 1), fa))
+            finally:
+                db.close()
+                self._db = MyceliumDB(self.db_path)  # Open persistent handle
 
-                for key, fusion in fusions.items():
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    a_id = db._get_or_create_concept(a)
-                    b_id = db._get_or_create_concept(b)
-                    fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
-                    db._conn.execute(
-                        "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (a_id, b_id, fusion.get("form", f"{a}+{b}"), fusion.get("strength", 1), fa)
-                    )
-        finally:
-            db.close()
+    def close(self):
+        """Close the persistent DB handle (for cleanup / tests)."""
+        if self._db is not None:
+            try:
+                self._db.close()
+            except Exception:
+                pass
+            self._db = None
 
     def _key(self, a: str, b: str) -> str:
         """Canonical key for a pair (alphabetical order)."""
@@ -269,11 +286,7 @@ class Mycelium:
 
         clean = list(set(clean))  # deduplicate
 
-        conns = self.data["connections"]
-
         # V6A: Emotional tagging — Hill function boost (Richter-Levin 2003)
-        # E(a) = 1 + kappa * a^n / (a^n + theta^n)
-        # kappa=1.0, n=3, theta=0.5 (Hill switch: sharp activation around theta)
         _kappa = 1.0
         _hill_n = 3
         _hill_theta = 0.5
@@ -281,62 +294,85 @@ class Mycelium:
         if a > 0.0:
             e_a = 1.0 + _kappa * (a ** _hill_n) / (a ** _hill_n + _hill_theta ** _hill_n)
         else:
-            e_a = 1.0  # no boost
+            e_a = 1.0
 
-        # Record all pairs
-        for i in range(len(clean)):
-            for j in range(i + 1, len(clean)):
-                key = self._key(clean[i], clean[j])
-                if key not in conns:
-                    conns[key] = {
-                        "count": 0,
-                        "first_seen": time.strftime("%Y-%m-%d"),
-                        "last_seen": time.strftime("%Y-%m-%d"),
-                    }
-                    if self.federated:
-                        conns[key]["zones"] = []
-                conns[key]["count"] += e_a
-                conns[key]["last_seen"] = time.strftime("%Y-%m-%d")
-                # P20.2: track which zones this connection appears in
-                if self.federated:
-                    if "zones" not in conns[key]:
-                        conns[key]["zones"] = []
-                    if self.zone not in conns[key]["zones"]:
-                        conns[key]["zones"].append(self.zone)
+        # Record all pairs — direct SQL upsert (lazy mode)
+        if self._db is not None:
+            pairs = []
+            for i in range(len(clean)):
+                for j in range(i + 1, len(clean)):
+                    pairs.append((clean[i], clean[j]))
+            if pairs:
+                td = today_days()
+                with self._db._conn:
+                    for ca, cb in pairs:
+                        a_key = min(ca, cb)
+                        b_key = max(ca, cb)
+                        a_id = self._db._get_or_create_concept(a_key)
+                        b_id = self._db._get_or_create_concept(b_key)
+                        self._db._conn.execute("""
+                            INSERT INTO edges (a, b, count, first_seen, last_seen)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                count = count + ?,
+                                last_seen = ?
+                        """, (a_id, b_id, e_a, td, td, e_a, td))
+                        if self.federated:
+                            self._db._conn.execute(
+                                "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                                (a_id, b_id, self.zone))
+        else:
+            # Fallback: in-memory dict (fresh install before first save)
+            conns = self.data["connections"]
+            for i in range(len(clean)):
+                for j in range(i + 1, len(clean)):
+                    key = self._key(clean[i], clean[j])
+                    if key not in conns:
+                        conns[key] = {"count": 0, "first_seen": time.strftime("%Y-%m-%d"),
+                                      "last_seen": time.strftime("%Y-%m-%d")}
+                    conns[key]["count"] += e_a
+                    conns[key]["last_seen"] = time.strftime("%Y-%m-%d")
 
         # Check for new fusions
         self._check_fusions()
 
         # P41: Self-referential growth — observe fusions as second-order co-occurrences
-        # Ratio: max 1/3 of original concept count (prevents feedback loop convergence)
         if clean and not getattr(self, '_p41_recursion_guard', False):
-            fusions = self.data.get("fusions", {})
-            if fusions:
-                # Extract fusion concept pairs that overlap with current concepts
-                fusion_concepts = []
-                clean_set = set(clean)
-                for key, fdata in fusions.items():
+            fusion_concepts = []
+            clean_set = set(clean)
+            if self._db is not None:
+                for row in self._db._conn.execute("SELECT a, b FROM fusions"):
+                    a_name = self._db._concept_cache.get(row[0]) or ""
+                    b_name = self._db._concept_cache.get(row[1]) or ""
+                    # Reverse lookup
+                    id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                    a_name = id_to_name.get(row[0], "")
+                    b_name = id_to_name.get(row[1], "")
+                    if a_name in clean_set or b_name in clean_set:
+                        fusion_concepts.append(f"{a_name}_{b_name}")
+            else:
+                fusions = self.data.get("fusions", {})
+                for key in fusions:
                     parts = key.split("|")
                     if len(parts) == 2 and (parts[0] in clean_set or parts[1] in clean_set):
                         fusion_concepts.append(f"{parts[0]}_{parts[1]}")
-                # Cap at 1/3 of original to prevent convergence
-                max_fusions = max(1, len(clean) // 3)
-                fusion_concepts = fusion_concepts[:max_fusions]
-                if fusion_concepts:
-                    self._p41_recursion_guard = True
-                    try:
-                        self.observe(fusion_concepts)  # V6A: no arousal for fusions (structural, not emotional)
-                    finally:
-                        self._p41_recursion_guard = False
+            max_fusions = max(1, len(clean) // 3)
+            fusion_concepts = fusion_concepts[:max_fusions]
+            if fusion_concepts:
+                self._p41_recursion_guard = True
+                try:
+                    self.observe(fusion_concepts)
+                finally:
+                    self._p41_recursion_guard = False
 
         if self.federated:
             self._invalidate_zone_cache()
 
         # Prune only if limit is set, or if memory pressure
-        if self.MAX_CONNECTIONS > 0 and len(conns) > self.MAX_CONNECTIONS:
+        n_conns = self._db.connection_count() if self._db else len(self.data.get("connections", {}))
+        if self.MAX_CONNECTIONS > 0 and n_conns > self.MAX_CONNECTIONS:
             self._prune_weakest()
-        elif len(conns) > 10000:
-            # Safety: check RAM only when network gets very large
+        elif n_conns > 10000:
             self._prune_if_memory_pressure()
 
     def observe_text(self, text: str, arousal: float = 0.0):
@@ -451,88 +487,115 @@ class Mycelium:
         """Check if any connections crossed the fusion threshold.
 
         S3 (TIER 3): Blocks fusions for high-degree concepts (universal stopwords).
-        A concept connected to >top 5% of all concepts is noise in any language.
         """
-        conns = self.data["connections"]
-        fusions = self.data["fusions"]
-
-        # S3: Build degree map and compute threshold
         high_degree_concepts = self._get_high_degree_concepts()
 
-        # S3: Retroactively remove fusions involving high-degree stopwords
-        if high_degree_concepts:
-            to_remove = [k for k in fusions
-                         if any(c in high_degree_concepts
-                                for c in fusions[k].get("concepts", []))]
-            for k in to_remove:
-                del fusions[k]
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
 
-        for key, conn in conns.items():
-            if conn["count"] >= self.FUSION_THRESHOLD:
-                if key not in fusions:
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    # S3: Block fusion if either concept is a high-degree stopword
-                    if a in high_degree_concepts or b in high_degree_concepts:
-                        continue
-                    fused_form = f"{a}+{b}"
-                    fusions[key] = {
-                        "concepts": [a, b],
-                        "form": fused_form,
-                        "strength": conn["count"],
-                        "fused_at": time.strftime("%Y-%m-%d"),
-                    }
-                else:
-                    # Update strength to match current count
-                    fusions[key]["strength"] = conn["count"]
+            # S3: Retroactively remove fusions involving high-degree stopwords
+            if high_degree_concepts:
+                hd_ids = {self._db._concept_cache.get(c) for c in high_degree_concepts}
+                hd_ids.discard(None)
+                if hd_ids:
+                    for row in self._db._conn.execute("SELECT a, b FROM fusions").fetchall():
+                        if row[0] in hd_ids or row[1] in hd_ids:
+                            self._db._conn.execute(
+                                "DELETE FROM fusions WHERE a=? AND b=?", (row[0], row[1]))
+
+            # Check edges above fusion threshold
+            for row in self._db._conn.execute(
+                    "SELECT a, b, count FROM edges WHERE count >= ?",
+                    (self.FUSION_THRESHOLD,)):
+                a_id, b_id, count = row
+                a_name = id_to_name.get(a_id, "")
+                b_name = id_to_name.get(b_id, "")
+                if a_name in high_degree_concepts or b_name in high_degree_concepts:
+                    continue
+                self._db._conn.execute("""
+                    INSERT INTO fusions (a, b, form, strength, fused_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(a, b) DO UPDATE SET strength = ?
+                """, (a_id, b_id, f"{a_name}+{b_name}", count, today_days(), count))
+            self._db._conn.commit()
+        else:
+            # Fallback: in-memory dict
+            conns = self.data["connections"]
+            fusions = self.data["fusions"]
+            if high_degree_concepts:
+                to_remove = [k for k in fusions
+                             if any(c in high_degree_concepts
+                                    for c in fusions[k].get("concepts", []))]
+                for k in to_remove:
+                    del fusions[k]
+            for key, conn in conns.items():
+                if conn["count"] >= self.FUSION_THRESHOLD:
+                    if key not in fusions:
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        if a in high_degree_concepts or b in high_degree_concepts:
+                            continue
+                        fusions[key] = {"concepts": [a, b], "form": f"{a}+{b}",
+                                        "strength": conn["count"], "fused_at": time.strftime("%Y-%m-%d")}
+                    else:
+                        fusions[key]["strength"] = conn["count"]
 
     def _get_high_degree_concepts(self) -> set:
         """S3: Identify concepts with too many connections (universal stopwords).
 
-        A concept in the top DEGREE_FILTER_PERCENTILE by degree is noise.
-        This works for any language — no dictionary needed.
+        Uses SQL COUNT for lazy mode — no RAM needed.
         """
-        conns = self.data["connections"]
-        if len(conns) < 50:
-            return set()  # Too small for statistical filtering
-
-        # Count degree per concept
-        degree = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            degree[a] = degree.get(a, 0) + 1
-            degree[b] = degree.get(b, 0) + 1
+        if self._db is not None:
+            n = self._db.connection_count()
+            if n < 50:
+                return set()
+            degree = self._db.all_degrees()
+        else:
+            conns = self.data["connections"]
+            if len(conns) < 50:
+                return set()
+            degree = {}
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                degree[a] = degree.get(a, 0) + 1
+                degree[b] = degree.get(b, 0) + 1
 
         if not degree:
             return set()
 
-        # Find the threshold: top X% by degree
         sorted_degrees = sorted(degree.values(), reverse=True)
         cutoff_idx = max(1, int(len(sorted_degrees) * self.DEGREE_FILTER_PERCENTILE))
         threshold = sorted_degrees[min(cutoff_idx, len(sorted_degrees) - 1)]
-
-        # Must be at least degree 20 to be considered a stopword
         threshold = max(threshold, 20)
 
         return {c for c, d in degree.items() if d >= threshold}
 
     def _prune_weakest(self):
         """Remove weakest connections to stay under MAX_CONNECTIONS."""
-        conns = self.data["connections"]
-        fusions = self.data["fusions"]
-        # Sort all non-fused connections by strength ascending
-        prunable = sorted(
-            (k for k in conns if k not in fusions),
-            key=lambda k: conns[k]["count"]
-        )
-        to_remove = len(conns) - self.MAX_CONNECTIONS
-        for key in prunable[:to_remove]:
-            del conns[key]
+        if self._db is not None:
+            n = self._db.connection_count()
+            to_remove = n - self.MAX_CONNECTIONS
+            if to_remove <= 0:
+                return
+            weakest = self._db.weakest_non_fused(to_remove)
+            for key, _ in weakest:
+                parts = key.split("|")
+                if len(parts) == 2:
+                    self._db.delete_connection(parts[0], parts[1])
+            self._db.commit()
+        else:
+            conns = self.data["connections"]
+            fusions = self.data["fusions"]
+            prunable = sorted((k for k in conns if k not in fusions),
+                              key=lambda k: conns[k]["count"])
+            to_remove = len(conns) - self.MAX_CONNECTIONS
+            for key in prunable[:to_remove]:
+                del conns[key]
 
     def _prune_if_memory_pressure(self):
         """Prune only if system RAM is running low (< 500MB free)."""
@@ -558,7 +621,8 @@ class Mycelium:
                     return  # API failed, don't prune
                 free = stat.ullAvailPhys
             if free < 500 * 1024 * 1024:  # < 500MB free
-                target = len(self.data["connections"]) // 2
+                n_conns = self._db.connection_count() if self._db else len(self.data["connections"])
+                target = n_conns // 2
                 self.MAX_CONNECTIONS = target
                 self._prune_weakest()
                 self.MAX_CONNECTIONS = 0
@@ -576,69 +640,116 @@ class Mycelium:
         if days <= 0:
             return 0
 
-        today = time.strftime("%Y-%m-%d")
-        conns = self.data["connections"]
-        dead = []
+        if self._db is not None:
+            # SQL-native decay: process in batches via cursor
+            td = today_days()
+            cutoff = td - days
+            dead_ids = []
 
-        for key, conn in conns.items():
-            # P20.4: immortal connections (in 3+ zones) skip decay
-            if self.federated and "zones" in conn:
-                if len(conn["zones"]) >= self.IMMORTAL_ZONE_THRESHOLD:
-                    continue
+            for row in self._db._conn.execute(
+                    "SELECT a, b, count, last_seen FROM edges WHERE last_seen < ?",
+                    (cutoff,)).fetchall():
+                a_id, b_id, count, last_seen = row
+                age_days = td - last_seen
 
-            try:
-                from datetime import datetime
-                last = datetime.strptime(conn["last_seen"], "%Y-%m-%d")
-                now = datetime.strptime(today, "%Y-%m-%d")
-                age_days = (now - last).days
-            except (ValueError, KeyError):
-                age_days = 0
+                # P20.4: immortal connections (3+ zones) skip decay
+                if self.federated:
+                    nz = self._db._conn.execute(
+                        "SELECT COUNT(*) FROM edge_zones WHERE a=? AND b=?",
+                        (a_id, b_id)).fetchone()[0]
+                    if nz >= self.IMMORTAL_ZONE_THRESHOLD:
+                        continue
 
-            if age_days > days:
-                # Halve the count for each half-life period passed
                 periods = age_days // days
-                new_count = conn["count"] / (2 ** periods)  # V6A-safe: works with float counts
+                new_count = count / (2 ** periods)
 
-                # A4: Lotka-Volterra saturation — dw -= beta * w^2
-                # Only for large connections (w > threshold). Prevents unbounded growth.
-                # Source: nlin/0009025 (Lotka-Volterra carrying capacity)
-                if (self.SATURATION_BETA > 0 and
-                        new_count > self.SATURATION_THRESHOLD):
+                if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
                     saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
                     new_count = max(1, new_count - saturation_loss)
 
                 if new_count <= 0:
-                    dead.append(key)
+                    dead_ids.append((a_id, b_id))
                 else:
-                    conn["count"] = new_count
+                    self._db._conn.execute(
+                        "UPDATE edges SET count=? WHERE a=? AND b=?",
+                        (new_count, a_id, b_id))
 
-        # Remove dead connections and their fusions
-        for key in dead:
-            del conns[key]
-            if key in self.data["fusions"]:
-                del self.data["fusions"][key]
+            for a_id, b_id in dead_ids:
+                self._db._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
+                self._db._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
+                self._db._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
+            self._db._conn.commit()
+            return len(dead_ids)
+        else:
+            # Fallback: in-memory dict
+            today = time.strftime("%Y-%m-%d")
+            conns = self.data["connections"]
+            dead = []
+            for key, conn in conns.items():
+                if self.federated and "zones" in conn:
+                    if len(conn["zones"]) >= self.IMMORTAL_ZONE_THRESHOLD:
+                        continue
+                try:
+                    from datetime import datetime
+                    last = datetime.strptime(conn["last_seen"], "%Y-%m-%d")
+                    now = datetime.strptime(today, "%Y-%m-%d")
+                    age_days = (now - last).days
+                except (ValueError, KeyError):
+                    age_days = 0
+                if age_days > days:
+                    periods = age_days // days
+                    new_count = conn["count"] / (2 ** periods)
+                    if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
+                        saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
+                        new_count = max(1, new_count - saturation_loss)
+                    if new_count <= 0:
+                        dead.append(key)
+                    else:
+                        conn["count"] = new_count
+            for key in dead:
+                del conns[key]
+                if key in self.data["fusions"]:
+                    del self.data["fusions"][key]
+            return len(dead)
 
-        return len(dead)
-
-    def effective_weight(self, key: str) -> float:
+    def effective_weight(self, key: str, count: float = None) -> float:
         """P20.3: TF-IDF inverse — rare across zones = important, ubiquitous = small.
 
         weight = count * log(1 + total_zones / zones_present)
         If not federated, returns raw count.
         """
-        conn = self.data["connections"].get(key)
-        if not conn:
-            return 0
-        count = conn["count"]
-        if not self.federated or "zones" not in conn:
-            return float(count)
-        import math
-        total_zones = self._count_total_zones()
-        zones_present = max(1, len(conn["zones"]))
-        return count * math.log(1 + total_zones / zones_present)
+        if self._db is not None:
+            parts = key.split("|")
+            if len(parts) != 2:
+                return 0
+            conn = self._db.get_connection(parts[0], parts[1])
+            if not conn:
+                return 0
+            raw_count = count if count is not None else conn["count"]
+            if not self.federated:
+                return float(raw_count)
+            import math
+            total_zones = self._count_total_zones()
+            zones_present = max(1, len(conn.get("zones", [])))
+            return raw_count * math.log(1 + total_zones / zones_present)
+        else:
+            conn = self.data["connections"].get(key)
+            if not conn:
+                return 0
+            raw_count = count if count is not None else conn["count"]
+            if not self.federated or "zones" not in conn:
+                return float(raw_count)
+            import math
+            total_zones = self._count_total_zones()
+            zones_present = max(1, len(conn["zones"]))
+            return raw_count * math.log(1 + total_zones / zones_present)
 
     def _count_total_zones(self) -> int:
         """Count distinct zones across all connections."""
+        if self._db is not None:
+            if not hasattr(self, '_zone_cache_count'):
+                self._zone_cache_count = self._db.count_total_zones()
+            return self._zone_cache_count
         if not hasattr(self, '_zone_cache_count'):
             all_zones = set()
             for conn in self.data["connections"].values():
@@ -656,9 +767,9 @@ class Mycelium:
         """Get all fused concept blocks.
 
         Returns dict of {key: {concepts, form, strength}}.
-        These are concept pairs that co-occur so often they should
-        be compressed as a single unit.
         """
+        if self._db is not None:
+            return self._db.get_all_fusions()
         return self.data.get("fusions", {})
 
     def get_compression_rules(self) -> dict:
@@ -694,24 +805,39 @@ class Mycelium:
         In federated mode, prioritizes connections from the current zone.
         """
         concept = concept.lower().strip()
-        conns = self.data["connections"]
-        related = []
-        for key, val in conns.items():
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            if concept in parts:
-                other = parts[1] if parts[0] == concept else parts[0]
+        if self._db is not None:
+            neighbors = self._db.neighbors(concept)
+            related = []
+            for name, count in neighbors:
                 if self.federated:
-                    weight = self.effective_weight(key)
-                    # P20.7: boost connections from current zone
-                    if "zones" in val and self.zone in val["zones"]:
+                    key = self._key(concept, name)
+                    weight = self.effective_weight(key, count)
+                    zones = self._db.get_zones_for_edge(concept, name)
+                    if self.zone in zones:
                         weight *= 2.0
                 else:
-                    weight = float(val["count"])
-                related.append((other, weight))
-        related.sort(key=lambda x: x[1], reverse=True)
-        return related[:top_n]
+                    weight = float(count)
+                related.append((name, weight))
+            related.sort(key=lambda x: x[1], reverse=True)
+            return related[:top_n]
+        else:
+            conns = self.data["connections"]
+            related = []
+            for key, val in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                if concept in parts:
+                    other = parts[1] if parts[0] == concept else parts[0]
+                    if self.federated:
+                        weight = self.effective_weight(key)
+                        if "zones" in val and self.zone in val["zones"]:
+                            weight *= 2.0
+                    else:
+                        weight = float(val["count"])
+                    related.append((other, weight))
+            related.sort(key=lambda x: x[1], reverse=True)
+            return related[:top_n]
 
     def spread_activation(self, seeds: list[str], hops: int = 2,
                           decay: float = 0.5, top_n: int = 20) -> list[tuple[str, float]]:
@@ -731,20 +857,32 @@ class Mycelium:
             list of (concept, activation) sorted by activation descending.
             Seeds themselves are excluded from results.
         """
-        conns = self.data["connections"]
-        if not conns:
-            return []
-
         # Build adjacency index for fast lookup
         adj = {}  # concept -> [(neighbor, weight)]
-        for key, val in conns.items():
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            w = float(val["count"])
-            adj.setdefault(a, []).append((b, w))
-            adj.setdefault(b, []).append((a, w))
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if not a_name or not b_name:
+                    continue
+                w = float(row[2])
+                adj.setdefault(a_name, []).append((b_name, w))
+                adj.setdefault(b_name, []).append((a_name, w))
+        else:
+            conns = self.data["connections"]
+            if not conns:
+                return []
+            for key, val in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                w = float(val["count"])
+                adj.setdefault(a, []).append((b, w))
+                adj.setdefault(b, []).append((a, w))
+        if not adj:
+            return []
 
         # Normalize weights per node (so high-degree nodes don't dominate)
         for concept in adj:
@@ -817,25 +955,37 @@ class Mycelium:
         Returns:
             list of (concept, inferred_strength) sorted descending.
         """
-        conns = self.data["connections"]
-        if not conns:
-            return []
-
         concept = concept.lower().strip()
 
         # Build adjacency with raw weights (no normalization — chain product)
         adj = {}  # concept -> [(neighbor, weight)]
         max_weight = 0.0
-        for key, val in conns.items():
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            w = float(val["count"])
-            if w > max_weight:
-                max_weight = w
-            adj.setdefault(a, []).append((b, w))
-            adj.setdefault(b, []).append((a, w))
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if not a_name or not b_name:
+                    continue
+                w = float(row[2])
+                if w > max_weight:
+                    max_weight = w
+                adj.setdefault(a_name, []).append((b_name, w))
+                adj.setdefault(b_name, []).append((a_name, w))
+        else:
+            conns = self.data["connections"]
+            if not conns:
+                return []
+            for key, val in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                w = float(val["count"])
+                if w > max_weight:
+                    max_weight = w
+                adj.setdefault(a, []).append((b, w))
+                adj.setdefault(b, []).append((a, w))
 
         if concept not in adj or max_weight == 0:
             return []
@@ -879,38 +1029,37 @@ class Mycelium:
         """Identify filler words from the mycelium.
 
         A filler = a word that appears in MANY connections but NEVER fuses.
-        High connectivity + zero fusion = noise word, carries no information.
-        These are candidates for L2 (filler word removal).
         """
-        conns = self.data["connections"]
-        fusions = self.data["fusions"]
-
-        if not conns:
-            return []
-
-        # Count how many connections each concept participates in
-        concept_conn_count = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            concept_conn_count[a] = concept_conn_count.get(a, 0) + 1
-            concept_conn_count[b] = concept_conn_count.get(b, 0) + 1
-
-        # Concepts that appear in fusions
-        fused_concepts = set()
-        for key, fusion in fusions.items():
-            for c in fusion["concepts"]:
-                fused_concepts.add(c)
-
-        # Fillers: in 10+ connections but never fused = noise
-        fillers = []
-        for concept, count in concept_conn_count.items():
-            if count >= 10 and concept not in fused_concepts:
-                fillers.append(concept)
-
-        return sorted(fillers)
+        if self._db is not None:
+            degree = self._db.all_degrees()
+            if not degree:
+                return []
+            fused_concepts = set()
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b FROM fusions"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                fused_concepts.add(a_name)
+                fused_concepts.add(b_name)
+            return sorted(c for c, d in degree.items() if d >= 10 and c not in fused_concepts)
+        else:
+            conns = self.data["connections"]
+            fusions = self.data["fusions"]
+            if not conns:
+                return []
+            concept_conn_count = {}
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                concept_conn_count[a] = concept_conn_count.get(a, 0) + 1
+                concept_conn_count[b] = concept_conn_count.get(b, 0) + 1
+            fused_concepts = set()
+            for key, fusion in fusions.items():
+                for c in fusion["concepts"]:
+                    fused_concepts.add(c)
+            return sorted(c for c, d in concept_conn_count.items() if d >= 10 and c not in fused_concepts)
 
     def get_learned_abbreviations(self) -> dict:
         """Generate abbreviation rules from strong fusions.
@@ -921,7 +1070,7 @@ class Mycelium:
 
         Returns dict {long_form: short_form}.
         """
-        fusions = self.data["fusions"]
+        fusions = self.get_fusions()
         if not fusions:
             return {}
 
@@ -950,8 +1099,11 @@ class Mycelium:
         Returns {zone_name: [concept1, concept2, ...]}.
         Requires numpy + scipy + sklearn. Graceful fallback if not installed.
         """
-        conns = self.data["connections"]
-        if len(conns) < 10:
+        if self._db is not None:
+            n_conns = self._db.connection_count()
+        else:
+            n_conns = len(self.data["connections"])
+        if n_conns < 10:
             return {}
 
         try:
@@ -966,31 +1118,55 @@ class Mycelium:
 
         # 1. Build concept index and sparse matrix
         concepts = set()
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            concepts.add(parts[0])
-            concepts.add(parts[1])
-        concepts = sorted(concepts)
-        idx = {c: i for i, c in enumerate(concepts)}
-        N = len(concepts)
-
-        if N < 6:
-            return {}
-
-        # Build sparse adjacency
         rows, cols, vals = [], [], []
-        for key, conn in conns.items():
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            i, j = idx[a], idx[b]
-            w = conn["count"]
-            rows.extend([i, j])
-            cols.extend([j, i])
-            vals.extend([w, w])
+
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if not a_name or not b_name:
+                    continue
+                concepts.add(a_name)
+                concepts.add(b_name)
+            concepts = sorted(concepts)
+            idx = {c: i for i, c in enumerate(concepts)}
+            N = len(concepts)
+            if N < 6:
+                return {}
+            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if not a_name or not b_name:
+                    continue
+                i, j = idx[a_name], idx[b_name]
+                w = row[2]
+                rows.extend([i, j])
+                cols.extend([j, i])
+                vals.extend([w, w])
+        else:
+            conns = self.data["connections"]
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                concepts.add(parts[0])
+                concepts.add(parts[1])
+            concepts = sorted(concepts)
+            idx = {c: i for i, c in enumerate(concepts)}
+            N = len(concepts)
+            if N < 6:
+                return {}
+            for key, conn in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                i, j = idx[a], idx[b]
+                w = conn["count"]
+                rows.extend([i, j])
+                cols.extend([j, i])
+                vals.extend([w, w])
 
         W = sparse.csr_matrix((vals, (rows, cols)), shape=(N, N))
 
@@ -1069,28 +1245,48 @@ class Mycelium:
                 concept_to_zone[concept] = zone_name
 
         # Tag connections: zone = zone of concept_a (or shared if both same zone)
-        conns = self.data["connections"]
         tagged = 0
-        for key, conn in conns.items():
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            zone_a = concept_to_zone.get(a)
-            zone_b = concept_to_zone.get(b)
-            if "zones" not in conn:
-                conn["zones"] = []
-            if zone_a and zone_a not in conn["zones"]:
-                conn["zones"].append(zone_a)
-                tagged += 1
-            if zone_b and zone_b != zone_a and zone_b not in conn["zones"]:
-                conn["zones"].append(zone_b)
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if not a_name or not b_name:
+                    continue
+                zone_a = concept_to_zone.get(a_name)
+                zone_b = concept_to_zone.get(b_name)
+                if zone_a:
+                    self._db.add_zone_to_edge(a_name, b_name, zone_a)
+                    tagged += 1
+                if zone_b and zone_b != zone_a:
+                    self._db.add_zone_to_edge(a_name, b_name, zone_b)
+        else:
+            conns = self.data["connections"]
+            for key, conn in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                zone_a = concept_to_zone.get(a)
+                zone_b = concept_to_zone.get(b)
+                if "zones" not in conn:
+                    conn["zones"] = []
+                if zone_a and zone_a not in conn["zones"]:
+                    conn["zones"].append(zone_a)
+                    tagged += 1
+                if zone_b and zone_b != zone_a and zone_b not in conn["zones"]:
+                    conn["zones"].append(zone_b)
 
         self._invalidate_zone_cache()
         return zones
 
     def get_zones(self) -> dict[str, int]:
         """P20.8: Get all zones and their connection counts."""
+        if self._db is not None:
+            zone_counts = {}
+            for row in self._db._conn.execute("SELECT zone, COUNT(*) FROM edge_zones GROUP BY zone"):
+                zone_counts[row[0]] = row[1]
+            return dict(sorted(zone_counts.items(), key=lambda x: x[1], reverse=True))
         zone_counts = {}
         for conn in self.data["connections"].values():
             if "zones" in conn:
@@ -1099,19 +1295,36 @@ class Mycelium:
         return dict(sorted(zone_counts.items(), key=lambda x: x[1], reverse=True))
 
     def get_bridges(self) -> list[tuple[str, str, str, float]]:
-        """P20.8: Get inter-zone bridges (connections that span 2+ zones).
-
-        Returns list of (concept_a, concept_b, zones, effective_weight).
-        """
+        """P20.8: Get inter-zone bridges (connections that span 2+ zones)."""
         bridges = []
-        for key, conn in self.data["connections"].items():
-            if "zones" in conn and len(conn["zones"]) >= 2:
-                parts = key.split("|")
-                if len(parts) != 2:
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            rows = self._db._conn.execute("""
+                SELECT a, b, COUNT(zone) as nz FROM edge_zones
+                GROUP BY a, b HAVING nz >= 2
+            """).fetchall()
+            for a_id, b_id, nz in rows:
+                a_name = id_to_name.get(a_id, "")
+                b_name = id_to_name.get(b_id, "")
+                if not a_name or not b_name:
                     continue
-                a, b = parts
-                weight = self.effective_weight(key)
-                bridges.append((a, b, conn["zones"], weight))
+                zones = [r[0] for r in self._db._conn.execute(
+                    "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))]
+                count_row = self._db._conn.execute(
+                    "SELECT count FROM edges WHERE a=? AND b=?", (a_id, b_id)).fetchone()
+                count = count_row[0] if count_row else 1
+                key = self._key(a_name, b_name)
+                weight = self.effective_weight(key, count)
+                bridges.append((a_name, b_name, zones, weight))
+        else:
+            for key, conn in self.data["connections"].items():
+                if "zones" in conn and len(conn["zones"]) >= 2:
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    weight = self.effective_weight(key)
+                    bridges.append((a, b, conn["zones"], weight))
         bridges.sort(key=lambda x: x[3], reverse=True)
         return bridges
 
@@ -1126,19 +1339,20 @@ class Mycelium:
           - "weak_zones": zone names where mean connection count < 2
         Source: LITERATURE #16 (graph anomalies), BS-1 Cell Bio briefing
         """
-        conns = self.data["connections"]
-        if not conns:
-            return {"isolated": [], "hubs": [], "weak_zones": []}
-
-        # Build degree map
-        degree = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            degree[a] = degree.get(a, 0) + 1
-            degree[b] = degree.get(b, 0) + 1
+        if self._db is not None:
+            degree = self._db.all_degrees()
+        else:
+            conns = self.data["connections"]
+            if not conns:
+                return {"isolated": [], "hubs": [], "weak_zones": []}
+            degree = {}
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                degree[a] = degree.get(a, 0) + 1
+                degree[b] = degree.get(b, 0) + 1
 
         if not degree:
             return {"isolated": [], "hubs": [], "weak_zones": []}
@@ -1159,14 +1373,24 @@ class Mycelium:
         weak_zones = []
         zones = self.get_zones()
         if zones:
-            for zone_name, count in zones.items():
-                # Get connections in this zone
-                zone_counts = []
-                for key, conn in conns.items():
-                    if "zones" in conn and zone_name in conn["zones"]:
-                        zone_counts.append(conn["count"])
-                if zone_counts and sum(zone_counts) / len(zone_counts) < 2:
-                    weak_zones.append(zone_name)
+            if self._db is not None:
+                for zone_name in zones:
+                    row = self._db._conn.execute("""
+                        SELECT AVG(e.count) FROM edges e
+                        JOIN edge_zones ez ON e.a=ez.a AND e.b=ez.b
+                        WHERE ez.zone=?
+                    """, (zone_name,)).fetchone()
+                    if row and row[0] is not None and row[0] < 2:
+                        weak_zones.append(zone_name)
+            else:
+                conns = self.data.get("connections", {})
+                for zone_name, count in zones.items():
+                    zone_counts = []
+                    for key, conn in conns.items():
+                        if "zones" in conn and zone_name in conn["zones"]:
+                            zone_counts.append(conn["count"])
+                    if zone_counts and sum(zone_counts) / len(zone_counts) < 2:
+                        weak_zones.append(zone_name)
 
         return {"isolated": isolated, "hubs": hubs, "weak_zones": weak_zones}
 
@@ -1185,28 +1409,26 @@ class Mycelium:
         importance (product of degrees).
         Source: Burt 1992 (structural holes), BS-4 Hodge Laplacien
         """
-        conns = self.data["connections"]
-        if len(conns) < 10:
+        if self._db is not None:
+            n_conns = self._db.connection_count()
+            degree = self._db.all_degrees()
+        else:
+            conns = self.data["connections"]
+            n_conns = len(conns)
+            degree = {}
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                degree[a] = degree.get(a, 0) + 1
+                degree[b] = degree.get(b, 0) + 1
+
+        if n_conns < 10 or not degree:
             return []
 
-        # Build degree map (lightweight — only counts)
-        degree = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            degree[a] = degree.get(a, 0) + 1
-            degree[b] = degree.get(b, 0) + 1
-
-        if not degree:
-            return []
-
-        # For large graphs (>100K connections), only analyze mid-range concepts
-        # Top concepts are always connected; blind spots live in the middle tier
         max_concepts = 500
         if len(degree) > max_concepts:
-            # Take concepts with degree in [10, 90th percentile] — the "interesting" range
             sorted_by_deg = sorted(degree.items(), key=lambda x: -x[1])
             p90 = sorted_by_deg[len(sorted_by_deg) // 10][1] if len(sorted_by_deg) > 10 else 999999
             mid_range = [(c, d) for c, d in sorted_by_deg if 10 <= d <= p90]
@@ -1218,17 +1440,31 @@ class Mycelium:
         # Build connection set and adjacency ONLY for top concepts
         conn_set = set()
         adj = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            if a in top_concepts_set or b in top_concepts_set:
-                conn_set.add((a, b))
-                conn_set.add((b, a))
-            if a in top_concepts_set and b in top_concepts_set:
-                adj.setdefault(a, set()).add(b)
-                adj.setdefault(b, set()).add(a)
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+                a = id_to_name.get(row[0], "")
+                b = id_to_name.get(row[1], "")
+                if not a or not b:
+                    continue
+                if a in top_concepts_set or b in top_concepts_set:
+                    conn_set.add((a, b))
+                    conn_set.add((b, a))
+                if a in top_concepts_set and b in top_concepts_set:
+                    adj.setdefault(a, set()).add(b)
+                    adj.setdefault(b, set()).add(a)
+        else:
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                if a in top_concepts_set or b in top_concepts_set:
+                    conn_set.add((a, b))
+                    conn_set.add((b, a))
+                if a in top_concepts_set and b in top_concepts_set:
+                    adj.setdefault(a, set()).add(b)
+                    adj.setdefault(b, set()).add(a)
 
         blind_spots = []
 
@@ -1313,25 +1549,29 @@ class Mycelium:
         import math
         import random
 
-        conns = self.data["connections"]
-        if len(conns) < 20:
+        if self._db is not None:
+            n_conns = self._db.connection_count()
+            degree = self._db.all_degrees()
+        else:
+            conns = self.data["connections"]
+            n_conns = len(conns)
+            degree = {}
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                degree[parts[0]] = degree.get(parts[0], 0) + 1
+                degree[parts[1]] = degree.get(parts[1], 0) + 1
+
+        if n_conns < 20:
             return {"created": 0, "entropy_before": 0, "entropy_after": 0, "dreams": []}
 
         # 1. Compute entropy BEFORE (degree distribution)
-        degree = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            degree[parts[0]] = degree.get(parts[0], 0) + 1
-            degree[parts[1]] = degree.get(parts[1], 0) + 1
-
         entropy_before = self._graph_entropy(degree)
 
         # 2. Detect zones (clusters) — spectral if available, BFS fallback
         zones = self.detect_zones()
         if len(zones) < 2:
-            # Fallback: split by connected components (BFS)
             zones = self._bfs_zones(degree)
         if len(zones) < 2:
             return {"created": 0, "entropy_before": entropy_before,
@@ -1339,20 +1579,28 @@ class Mycelium:
                     "reason": "fewer than 2 zones"}
 
         # 3. BARE Wave model: alpha creates tips, beta*rho limits them
-        # alpha = branching rate (intensity-controlled)
-        # beta = anastomosis rate (LOWERED during trip — that's the psilocybin)
-        # rho = local density (connections per concept)
-        alpha = 0.04 * (1 + intensity)  # branching: more intense = more tips
-        beta = 0.02 * (1 - intensity * 0.8)  # anastomosis: intensity reduces fusion
+        alpha = 0.04 * (1 + intensity)
+        beta = 0.02 * (1 - intensity * 0.8)
 
         zone_names = list(zones.keys())
         zone_concepts = {z: set(concepts) for z, concepts in zones.items()}
+
+        # Build conn_set for fast lookup
         conn_set = set()
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) == 2:
-                conn_set.add((parts[0], parts[1]))
-                conn_set.add((parts[1], parts[0]))
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if a_name and b_name:
+                    conn_set.add((a_name, b_name))
+                    conn_set.add((b_name, a_name))
+        else:
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) == 2:
+                    conn_set.add((parts[0], parts[1]))
+                    conn_set.add((parts[1], parts[0]))
 
         # 4. Create dream connections between distant clusters
         dreams = []
@@ -1362,36 +1610,38 @@ class Mycelium:
         while len(dreams) < max_dreams and attempts < max_attempts:
             attempts += 1
 
-            # Pick two different zones
             z1, z2 = random.sample(zone_names, 2)
             c1_list = list(zone_concepts[z1])
             c2_list = list(zone_concepts[z2])
             if not c1_list or not c2_list:
                 continue
 
-            # Pick concepts — prefer mid-degree (not hubs, not isolated)
             a = random.choice(c1_list)
             b = random.choice(c2_list)
 
-            # Skip if already connected
             if (a, b) in conn_set:
                 continue
 
-            # BARE Wave: tip survives if alpha > beta * local_rho
             rho_local = (degree.get(a, 0) + degree.get(b, 0)) / 2
             tip_survival = alpha - beta * rho_local
             if tip_survival < 0 and random.random() > intensity:
-                continue  # tip dies in dense region (unless high intensity)
+                continue
 
             # Create dream connection
             key = f"{a}|{b}" if a < b else f"{b}|{a}"
-            if key not in conns:
-                conns[key] = {
-                    "count": 1,
-                    "first_seen": time.strftime("%Y-%m-%d"),
-                    "last_seen": time.strftime("%Y-%m-%d"),
-                    "type": "dream",  # H1: marked as dream — decays fast
-                }
+            if (a, b) not in conn_set and (b, a) not in conn_set:
+                if self._db is not None:
+                    self._db.upsert_connection(
+                        key.split("|")[0], key.split("|")[1],
+                        increment=1,
+                    )
+                else:
+                    conns[key] = {
+                        "count": 1,
+                        "first_seen": time.strftime("%Y-%m-%d"),
+                        "last_seen": time.strftime("%Y-%m-%d"),
+                        "type": "dream",
+                    }
                 conn_set.add((a, b))
                 conn_set.add((b, a))
                 degree[a] = degree.get(a, 0) + 1
@@ -1430,15 +1680,25 @@ class Mycelium:
 
     def _bfs_zones(self, degree: dict) -> dict[str, list[str]]:
         """Fallback zone detection via connected components (no scipy needed)."""
-        conns = self.data["connections"]
         adj = {}
-        for key in conns:
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            adj.setdefault(a, set()).add(b)
-            adj.setdefault(b, set()).add(a)
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+                a = id_to_name.get(row[0], "")
+                b = id_to_name.get(row[1], "")
+                if not a or not b:
+                    continue
+                adj.setdefault(a, set()).add(b)
+                adj.setdefault(b, set()).add(a)
+        else:
+            conns = self.data["connections"]
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                adj.setdefault(a, set()).add(b)
+                adj.setdefault(b, set()).add(a)
 
         visited = set()
         zones = {}
@@ -1486,8 +1746,11 @@ class Mycelium:
         """
         import math
 
-        conns = self.data["connections"]
-        if len(conns) < 10:
+        if self._db is not None:
+            n_conns = self._db.connection_count()
+        else:
+            n_conns = len(self.data["connections"])
+        if n_conns < 10:
             return []
 
         insights = []
@@ -1495,32 +1758,58 @@ class Mycelium:
         # Build degree + adjacency
         degree = {}
         adj = {}
-        for key, conn in conns.items():
-            parts = key.split("|")
-            if len(parts) != 2:
-                continue
-            a, b = parts
-            degree[a] = degree.get(a, 0) + 1
-            degree[b] = degree.get(b, 0) + 1
-            adj.setdefault(a, set()).add(b)
-            adj.setdefault(b, set()).add(a)
+        avg_count_sum = 0.0
+        avg_count_n = 0
+
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            strong_pairs = []
+            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+                a = id_to_name.get(row[0], "")
+                b = id_to_name.get(row[1], "")
+                if not a or not b:
+                    continue
+                cnt = row[2]
+                degree[a] = degree.get(a, 0) + 1
+                degree[b] = degree.get(b, 0) + 1
+                adj.setdefault(a, set()).add(b)
+                adj.setdefault(b, set()).add(a)
+                avg_count_sum += cnt
+                avg_count_n += 1
+                if cnt >= 10:
+                    strong_pairs.append((a, b, cnt))
+        else:
+            conns = self.data["connections"]
+            strong_pairs = []
+            for key, conn in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                cnt = conn.get("count", 1)
+                degree[a] = degree.get(a, 0) + 1
+                degree[b] = degree.get(b, 0) + 1
+                adj.setdefault(a, set()).add(b)
+                adj.setdefault(b, set()).add(a)
+                avg_count_sum += cnt
+                avg_count_n += 1
+                if cnt >= 10:
+                    strong_pairs.append((a, b, cnt))
 
         if not degree:
             return []
 
         # 1. Strong pairs: concepts with unusually high co-occurrence
-        avg_count = sum(c.get("count", 1) for c in conns.values()) / max(len(conns), 1)
-        for key, conn in conns.items():
-            if conn.get("count", 0) > avg_count * 5 and conn.get("count", 0) >= 10:
-                parts = key.split("|")
-                if len(parts) == 2:
-                    insights.append({
-                        "type": "strong_pair",
-                        "concepts": parts,
-                        "score": round(conn["count"] / avg_count, 2),
-                        "text": f"{parts[0]} and {parts[1]} are inseparable "
-                                f"(x{conn['count'] / avg_count:.1f} avg strength)",
-                    })
+        avg_count = avg_count_sum / max(avg_count_n, 1)
+        for a, b, cnt in strong_pairs:
+            if cnt > avg_count * 5:
+                insights.append({
+                    "type": "strong_pair",
+                    "concepts": [a, b],
+                    "score": round(cnt / avg_count, 2),
+                    "text": f"{a} and {b} are inseparable "
+                            f"(x{cnt / avg_count:.1f} avg strength)",
+                })
 
         # 2. Absences: high-degree concepts with no direct connection
         sorted_concepts = sorted(degree.items(), key=lambda x: -x[1])
@@ -1528,7 +1817,6 @@ class Mycelium:
         for i, a in enumerate(top_concepts):
             for b in top_concepts[i+1:]:
                 if b not in adj.get(a, set()):
-                    # High-degree concepts not connected = surprising absence
                     score = (degree[a] + degree[b]) / 2
                     if score >= 5:
                         insights.append({
@@ -1539,18 +1827,20 @@ class Mycelium:
                                     f"never co-occur — blind spot?",
                         })
 
-        # 3. Validated dreams: dream connections that got reinforced (count > 1)
-        for key, conn in conns.items():
-            if conn.get("type") == "dream" and conn.get("count", 0) > 1:
-                parts = key.split("|")
-                if len(parts) == 2:
-                    insights.append({
-                        "type": "validated_dream",
-                        "concepts": parts,
-                        "score": conn["count"],
-                        "text": f"Dream connection {parts[0]}-{parts[1]} confirmed "
-                                f"by real usage (count={conn['count']})",
-                    })
+        # 3. Validated dreams — only available in dict mode (DB doesn't store type)
+        if self._db is None:
+            conns = self.data["connections"]
+            for key, conn in conns.items():
+                if conn.get("type") == "dream" and conn.get("count", 0) > 1:
+                    parts = key.split("|")
+                    if len(parts) == 2:
+                        insights.append({
+                            "type": "validated_dream",
+                            "concepts": parts,
+                            "score": conn["count"],
+                            "text": f"Dream connection {parts[0]}-{parts[1]} confirmed "
+                                    f"by real usage (count={conn['count']})",
+                        })
 
         # 4. Cluster imbalance: detect if one zone has >60% of connections
         zones = self.detect_zones()
@@ -1661,56 +1951,98 @@ class Mycelium:
                 db.set_meta("created", time.strftime("%Y-%m-%d"))
 
             # Merge connections
-            local_conns = self.data["connections"]
             zone = self.zone
 
             with db._conn:
-                for key, conn in local_conns.items():
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    a_id = db._get_or_create_concept(a)
-                    b_id = db._get_or_create_concept(b)
-                    fs = date_to_days(conn.get("first_seen", "2026-01-01"))
-                    ls = date_to_days(conn.get("last_seen", "2026-01-01"))
+                if self._db is not None:
+                    # Lazy mode: stream from local SQLite
+                    local_id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                    n_synced = 0
+                    for row in self._db._conn.execute(
+                        "SELECT a, b, count, first_seen, last_seen FROM edges"
+                    ):
+                        a_name = local_id_to_name.get(row[0], "")
+                        b_name = local_id_to_name.get(row[1], "")
+                        if not a_name or not b_name:
+                            continue
+                        a_id = db._get_or_create_concept(a_name)
+                        b_id = db._get_or_create_concept(b_name)
+                        db._conn.execute("""
+                            INSERT INTO edges (a, b, count, first_seen, last_seen)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                count = MAX(count, excluded.count),
+                                first_seen = MIN(first_seen, excluded.first_seen),
+                                last_seen = MAX(last_seen, excluded.last_seen)
+                        """, (a_id, b_id, row[2], row[3], row[4]))
+                        db._conn.execute(
+                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                            (a_id, b_id, zone)
+                        )
+                        n_synced += 1
 
-                    # Upsert with max(count), min(first_seen), max(last_seen)
-                    db._conn.execute("""
-                        INSERT INTO edges (a, b, count, first_seen, last_seen)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(a, b) DO UPDATE SET
-                            count = MAX(count, excluded.count),
-                            first_seen = MIN(first_seen, excluded.first_seen),
-                            last_seen = MAX(last_seen, excluded.last_seen)
-                    """, (a_id, b_id, conn["count"], fs, ls))
+                    # Merge fusions from local DB
+                    for row in self._db._conn.execute(
+                        "SELECT a, b, form, strength, fused_at FROM fusions"
+                    ):
+                        a_name = local_id_to_name.get(row[0], "")
+                        b_name = local_id_to_name.get(row[1], "")
+                        if not a_name or not b_name:
+                            continue
+                        a_id = db._get_or_create_concept(a_name)
+                        b_id = db._get_or_create_concept(b_name)
+                        db._conn.execute("""
+                            INSERT INTO fusions (a, b, form, strength, fused_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                strength = MAX(strength, excluded.strength)
+                        """, (a_id, b_id, row[2], row[3], row[4]))
+                else:
+                    # Dict mode: iterate self.data
+                    local_conns = self.data["connections"]
+                    n_synced = len(local_conns)
+                    for key, conn in local_conns.items():
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        a_id = db._get_or_create_concept(a)
+                        b_id = db._get_or_create_concept(b)
+                        fs = date_to_days(conn.get("first_seen", "2026-01-01"))
+                        ls = date_to_days(conn.get("last_seen", "2026-01-01"))
+                        db._conn.execute("""
+                            INSERT INTO edges (a, b, count, first_seen, last_seen)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                count = MAX(count, excluded.count),
+                                first_seen = MIN(first_seen, excluded.first_seen),
+                                last_seen = MAX(last_seen, excluded.last_seen)
+                        """, (a_id, b_id, conn["count"], fs, ls))
+                        db._conn.execute(
+                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                            (a_id, b_id, zone)
+                        )
 
-                    # Merge zone
-                    db._conn.execute(
-                        "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                        (a_id, b_id, zone)
-                    )
-
-                # Merge fusions
-                local_fusions = self.data.get("fusions", {})
-                for key, fusion in local_fusions.items():
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    a_id = db._get_or_create_concept(a)
-                    b_id = db._get_or_create_concept(b)
-                    fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
-                    db._conn.execute("""
-                        INSERT INTO fusions (a, b, form, strength, fused_at)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(a, b) DO UPDATE SET
-                            strength = MAX(strength, excluded.strength)
-                    """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
+                    # Merge fusions
+                    local_fusions = self.data.get("fusions", {})
+                    for key, fusion in local_fusions.items():
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        a_id = db._get_or_create_concept(a)
+                        b_id = db._get_or_create_concept(b)
+                        fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
+                        db._conn.execute("""
+                            INSERT INTO fusions (a, b, form, strength, fused_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                strength = MAX(strength, excluded.strength)
+                        """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
         finally:
             db.close()
 
-        return len(local_conns)
+        return n_synced
 
     def pull_from_meta(self, query_concepts: list[str] = None, max_pull: int = 500):
         """Pull relevant connections from meta-mycelium into local.
@@ -1736,23 +2068,18 @@ class Mycelium:
         """Pull from SQLite meta-mycelium."""
         db = MyceliumDB(self.meta_db_path())
         try:
-            local_conns = self.data["connections"]
             pulled = 0
             id_to_name = {v: k for k, v in db._concept_cache.items()}
 
             if query_concepts:
                 query_set = {c.lower().strip() for c in query_concepts}
-                # Find concept IDs for query terms
                 query_ids = set()
                 for c in query_set:
                     cid = db._concept_cache.get(c)
                     if cid is not None:
                         query_ids.add(cid)
-
                 if not query_ids:
                     return 0
-
-                # Pull connections involving query concepts
                 placeholders = ",".join("?" * len(query_ids))
                 rows = db._conn.execute(f"""
                     SELECT a, b, count, first_seen, last_seen FROM edges
@@ -1768,46 +2095,79 @@ class Mycelium:
             for row in rows:
                 a_name = id_to_name.get(row[0], db._concept_name(row[0]))
                 b_name = id_to_name.get(row[1], db._concept_name(row[1]))
-                key = f"{a_name}|{b_name}"
-                if key not in local_conns:
-                    conn = {
-                        "count": row[2],
-                        "first_seen": days_to_date(row[3]),
-                        "last_seen": days_to_date(row[4]),
-                    }
-                    # Load zones
-                    zones = [r[0] for r in db._conn.execute(
-                        "SELECT zone FROM edge_zones WHERE a=? AND b=?",
-                        (row[0], row[1])
-                    )]
-                    if zones:
-                        conn["zones"] = zones
-                    local_conns[key] = conn
-                    pulled += 1
 
-            # Pull fusions for pulled connections
-            local_fusions = self.data.setdefault("fusions", {})
-            for key in list(local_conns.keys()):
-                if key in local_fusions:
-                    continue
-                parts = key.split("|")
-                if len(parts) != 2:
-                    continue
-                a_id = db._concept_cache.get(parts[0])
-                b_id = db._concept_cache.get(parts[1])
-                if a_id is None or b_id is None:
-                    continue
-                row = db._conn.execute(
-                    "SELECT form, strength, fused_at FROM fusions WHERE a=? AND b=?",
-                    (a_id, b_id)
-                ).fetchone()
-                if row:
-                    local_fusions[key] = {
-                        "concepts": list(parts),
-                        "form": row[0],
-                        "strength": row[1],
-                        "fused_at": days_to_date(row[2]),
-                    }
+                if self._db is not None:
+                    # Lazy mode: upsert directly into local DB
+                    if not self._db.has_connection(a_name, b_name):
+                        self._db.upsert_connection(
+                            a_name, b_name,
+                            count=row[2],
+                            first_seen=days_to_date(row[3]),
+                            last_seen=days_to_date(row[4]),
+                        )
+                        # Pull zones
+                        for zr in db._conn.execute(
+                            "SELECT zone FROM edge_zones WHERE a=? AND b=?",
+                            (row[0], row[1])
+                        ):
+                            self._db.add_zone_to_edge(a_name, b_name, zr[0])
+                        pulled += 1
+                else:
+                    # Dict mode
+                    key = f"{a_name}|{b_name}"
+                    local_conns = self.data["connections"]
+                    if key not in local_conns:
+                        conn = {
+                            "count": row[2],
+                            "first_seen": days_to_date(row[3]),
+                            "last_seen": days_to_date(row[4]),
+                        }
+                        zones = [r[0] for r in db._conn.execute(
+                            "SELECT zone FROM edge_zones WHERE a=? AND b=?",
+                            (row[0], row[1])
+                        )]
+                        if zones:
+                            conn["zones"] = zones
+                        local_conns[key] = conn
+                        pulled += 1
+
+            # Pull fusions
+            if self._db is not None:
+                for frow in db._conn.execute(
+                    "SELECT a, b, form, strength, fused_at FROM fusions"
+                ):
+                    a_name = id_to_name.get(frow[0], db._concept_name(frow[0]))
+                    b_name = id_to_name.get(frow[1], db._concept_name(frow[1]))
+                    if not self._db.has_fusion(a_name, b_name):
+                        self._db.upsert_fusion(
+                            a_name, b_name,
+                            form=frow[2], strength=frow[3],
+                            fused_at=days_to_date(frow[4]),
+                        )
+            else:
+                local_conns = self.data["connections"]
+                local_fusions = self.data.setdefault("fusions", {})
+                for key in list(local_conns.keys()):
+                    if key in local_fusions:
+                        continue
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a_id = db._concept_cache.get(parts[0])
+                    b_id = db._concept_cache.get(parts[1])
+                    if a_id is None or b_id is None:
+                        continue
+                    frow = db._conn.execute(
+                        "SELECT form, strength, fused_at FROM fusions WHERE a=? AND b=?",
+                        (a_id, b_id)
+                    ).fetchone()
+                    if frow:
+                        local_fusions[key] = {
+                            "concepts": list(parts),
+                            "form": frow[0],
+                            "strength": frow[1],
+                            "fused_at": days_to_date(frow[2]),
+                        }
         finally:
             db.close()
 
@@ -1823,7 +2183,6 @@ class Mycelium:
             return 0
 
         meta_conns = meta.get("connections", {})
-        local_conns = self.data["connections"]
         pulled = 0
 
         if query_concepts:
@@ -1843,33 +2202,72 @@ class Mycelium:
                 meta_conns.items(), key=lambda x: x[1]["count"], reverse=True
             )[:max_pull]
 
-        import copy
-        for key, conn in candidates:
-            if key not in local_conns:
-                local_conns[key] = copy.deepcopy(conn)
-                pulled += 1
+        if self._db is not None:
+            # Lazy mode: write directly to local DB
+            for key, conn in candidates:
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                if not self._db.has_connection(a, b):
+                    self._db.upsert_connection(
+                        a, b,
+                        count=conn.get("count", 1),
+                        first_seen=conn.get("first_seen", "2026-01-01"),
+                        last_seen=conn.get("last_seen", "2026-01-01"),
+                    )
+                    pulled += 1
 
-        meta_fusions = meta.get("fusions", {})
-        local_fusions = self.data.setdefault("fusions", {})
-        for key in list(local_conns.keys()):
-            if key in meta_fusions and key not in local_fusions:
-                local_fusions[key] = copy.deepcopy(meta_fusions[key])
+            meta_fusions = meta.get("fusions", {})
+            for key, fusion in meta_fusions.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                if not self._db.has_fusion(a, b):
+                    self._db.upsert_fusion(
+                        a, b,
+                        form=fusion.get("form", f"{a}+{b}"),
+                        strength=fusion.get("strength", 1),
+                        fused_at=fusion.get("fused_at", "2026-01-01"),
+                    )
+        else:
+            # Dict mode
+            import copy
+            local_conns = self.data["connections"]
+            for key, conn in candidates:
+                if key not in local_conns:
+                    local_conns[key] = copy.deepcopy(conn)
+                    pulled += 1
+
+            meta_fusions = meta.get("fusions", {})
+            local_fusions = self.data.setdefault("fusions", {})
+            for key in list(local_conns.keys()):
+                if key in meta_fusions and key not in local_fusions:
+                    local_fusions[key] = copy.deepcopy(meta_fusions[key])
 
         return pulled
 
     def status(self) -> str:
         """Print mycelium status."""
-        conns = self.data["connections"]
-        fusions = self.data["fusions"]
         sessions = self.data.get("session_count", 0)
+
+        if self._db is not None:
+            n_conns = self._db.connection_count()
+            n_fusions = self._db.fusion_count()
+            mode_str = "LAZY SQLite"
+        else:
+            n_conns = len(self.data["connections"])
+            n_fusions = len(self.data["fusions"])
+            mode_str = "dict"
 
         lines = [
             f"=== MUNINN MYCELIUM: {self.data['repo']} ===",
-            f"  Mode: {'FEDERATED' if self.federated else 'local'}",
+            f"  Mode: {'FEDERATED' if self.federated else 'local'} ({mode_str})",
             f"  Zone: {self.zone}",
             f"  Sessions: {sessions}",
-            f"  Connections: {len(conns)}",
-            f"  Fusions: {len(fusions)}",
+            f"  Connections: {n_conns}",
+            f"  Fusions: {n_fusions}",
             f"  Updated: {self.data.get('updated', '?')}",
         ]
 
@@ -1886,32 +2284,56 @@ class Mycelium:
                 for a, b, z, w in bridges[:10]:
                     lines.append(f"    {a}|{b}: zones={z} weight={w:.1f}")
 
-        if conns:
-            # Top 10 strongest connections (use effective weight in federated mode)
-            if self.federated:
-                top = sorted(conns.items(),
-                           key=lambda x: self.effective_weight(x[0]),
-                           reverse=True)[:10]
-            else:
-                top = sorted(conns.items(),
-                           key=lambda x: x[1]["count"], reverse=True)[:10]
-            lines.append(f"\n  Top connections:")
-            for key, conn in top:
-                fused = " [FUSED]" if key in fusions else ""
-                if self.federated:
-                    w = self.effective_weight(key)
-                    zones_str = f" zones={conn.get('zones', [])}"
-                    lines.append(f"    {key}: {conn['count']}x (eff={w:.1f}){zones_str}{fused}")
-                else:
-                    lines.append(f"    {key}: {conn['count']}x{fused}")
+        # Top 10 strongest connections
+        if self._db is not None:
+            top = self._db.top_connections(10)
+            if top:
+                lines.append(f"\n  Top connections:")
+                for key, conn in top:
+                    is_fused = self._db.has_fusion(
+                        key.split("|")[0], key.split("|")[1]
+                    ) if "|" in key else False
+                    fused = " [FUSED]" if is_fused else ""
+                    if self.federated:
+                        w = self.effective_weight(key)
+                        lines.append(f"    {key}: {conn['count']}x (eff={w:.1f}){fused}")
+                    else:
+                        lines.append(f"    {key}: {conn['count']}x{fused}")
 
-        if fusions:
-            lines.append(f"\n  Fusions ({len(fusions)}):")
-            for key, fusion in sorted(fusions.items(),
-                                       key=lambda x: x[1]["strength"],
-                                       reverse=True)[:10]:
-                lines.append(f"    {fusion['concepts']} -> {fusion['form']} "
-                           f"(strength={fusion['strength']})")
+            top_f = self._db.top_fusions(10)
+            if top_f:
+                lines.append(f"\n  Fusions ({n_fusions}):")
+                for key, fusion in top_f:
+                    lines.append(f"    {fusion['concepts']} -> {fusion['form']} "
+                               f"(strength={fusion['strength']})")
+        else:
+            conns = self.data["connections"]
+            fusions = self.data["fusions"]
+            if conns:
+                if self.federated:
+                    top = sorted(conns.items(),
+                               key=lambda x: self.effective_weight(x[0]),
+                               reverse=True)[:10]
+                else:
+                    top = sorted(conns.items(),
+                               key=lambda x: x[1]["count"], reverse=True)[:10]
+                lines.append(f"\n  Top connections:")
+                for key, conn in top:
+                    fused = " [FUSED]" if key in fusions else ""
+                    if self.federated:
+                        w = self.effective_weight(key)
+                        zones_str = f" zones={conn.get('zones', [])}"
+                        lines.append(f"    {key}: {conn['count']}x (eff={w:.1f}){zones_str}{fused}")
+                    else:
+                        lines.append(f"    {key}: {conn['count']}x{fused}")
+
+            if fusions:
+                lines.append(f"\n  Fusions ({len(fusions)}):")
+                for key, fusion in sorted(fusions.items(),
+                                           key=lambda x: x[1]["strength"],
+                                           reverse=True)[:10]:
+                    lines.append(f"    {fusion['concepts']} -> {fusion['form']} "
+                               f"(strength={fusion['strength']})")
 
         return "\n".join(lines)
 

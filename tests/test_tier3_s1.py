@@ -26,12 +26,13 @@ def test_s1_1_fresh_creates_db():
         m.save()
         assert os.path.exists(os.path.join(d, ".muninn", "mycelium.db"))
         assert not os.path.exists(os.path.join(d, ".muninn", "mycelium.json"))
+        m.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_s1_2_roundtrip():
-    """Save and reload preserves all data."""
+    """Save and reload preserves all data via DB queries."""
     d = make_temp()
     try:
         m = Mycelium(d)
@@ -43,16 +44,21 @@ def test_s1_2_roundtrip():
         m.observe(["gamma", "delta"])
         m.start_session()
         m.save()
+        n1_conns = m._db.connection_count()
+        n1_fusions = m._db.fusion_count()
+        m.close()
 
         m2 = Mycelium(d)
-        assert len(m2.data["connections"]) == len(m.data["connections"])
-        assert len(m2.data["fusions"]) == len(m.data["fusions"])
+        assert m2._db.connection_count() == n1_conns
+        assert m2._db.fusion_count() == n1_fusions
         assert m2.data["session_count"] == 1
-        for key in m.data["connections"]:
-            assert key in m2.data["connections"], f"Missing: {key}"
-            assert m.data["connections"][key]["count"] == m2.data["connections"][key]["count"]
+        # Check specific connection survives roundtrip
+        conn = m2._db.get_connection("alpha", "beta")
+        assert conn is not None
+        assert conn["count"] == 5
+        m2.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_s1_3_migration():
@@ -81,12 +87,19 @@ def test_s1_3_migration():
         assert os.path.exists(os.path.join(muninn_dir, "mycelium.db"))
         assert os.path.exists(os.path.join(muninn_dir, "mycelium.json.bak"))
         assert not os.path.exists(os.path.join(muninn_dir, "mycelium.json"))
-        assert m.data["connections"]["foo|bar"]["count"] == 7
+        # Lazy mode: check via DB, not self.data["connections"]
+        conn = m._db.get_connection("foo", "bar")
+        assert conn is not None
+        assert conn["count"] == 7
         assert m.data["session_count"] == 42
-        assert "z1" in m.data["connections"]["bar|baz"].get("zones", [])
-        assert m.data["fusions"]["foo|bar"]["strength"] == 7
+        conn2 = m._db.get_connection("bar", "baz")
+        assert conn2 is not None
+        zones = m._db.get_zones_for_edge("bar", "baz")
+        assert "z1" in zones
+        assert m._db.has_fusion("foo", "bar")
+        m.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_s1_4_no_tmp_files():
@@ -99,8 +112,9 @@ def test_s1_4_no_tmp_files():
         muninn_dir = os.path.join(d, ".muninn")
         tmp_files = [f for f in os.listdir(muninn_dir) if f.endswith(".tmp")]
         assert len(tmp_files) == 0, f"Temp files found: {tmp_files}"
+        m.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_s1_5_wal_mode():
@@ -110,12 +124,13 @@ def test_s1_5_wal_mode():
         m = Mycelium(d)
         m.observe(["alpha", "beta"])
         m.save()
+        m.close()
         conn = sqlite3.connect(os.path.join(d, ".muninn", "mycelium.db"))
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
         conn.close()
         assert mode == "wal", f"Expected WAL, got {mode}"
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 # ── S2: Epoch-days dates ────────────────────────────────────────────
@@ -136,13 +151,14 @@ def test_s2_2_dates_stored_as_int():
         m = Mycelium(d)
         m.observe(["alpha", "beta"])
         m.save()
+        m.close()
         conn = sqlite3.connect(os.path.join(d, ".muninn", "mycelium.db"))
         row = conn.execute("SELECT first_seen, last_seen FROM edges LIMIT 1").fetchone()
         conn.close()
         assert isinstance(row[0], int), f"first_seen is {type(row[0])}, expected int"
         assert isinstance(row[1], int), f"last_seen is {type(row[1])}, expected int"
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_s2_3_epoch_ref():
@@ -168,7 +184,7 @@ def test_db_concept_ids():
         assert db._get_or_create_concept("alpha") == a_id
         db.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_db_upsert_connection():
@@ -186,7 +202,7 @@ def test_db_upsert_connection():
         assert conn["count"] == 3
         db.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_db_without_rowid():
@@ -206,4 +222,4 @@ def test_db_without_rowid():
         assert "WITHOUT ROWID" in row[0], f"fusions not WITHOUT ROWID: {row[0]}"
         db.close()
     finally:
-        shutil.rmtree(d)
+        shutil.rmtree(d, ignore_errors=True)

@@ -650,7 +650,7 @@ class MyceliumDB:
                     parts = key.split("|")
                     if len(parts) != 2:
                         continue
-                    a, b = parts
+                    a, b = min(parts[0], parts[1]), max(parts[0], parts[1])
                     a_id = db._get_or_create_concept(a)
                     b_id = db._get_or_create_concept(b)
                     fs = date_to_days(conn.get("first_seen", "2026-01-01"))
@@ -658,7 +658,7 @@ class MyceliumDB:
                     db._conn.execute(
                         "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
                         "VALUES (?, ?, ?, ?, ?)",
-                        (a_id, b_id, conn["count"], fs, ls)
+                        (a_id, b_id, conn.get("count", 1), fs, ls)
                     )
                     # Zones
                     for zone in conn.get("zones", []):
@@ -677,14 +677,15 @@ class MyceliumDB:
                 parts = key.split("|")
                 if len(parts) != 2:
                     continue
-                a, b = parts
+                a, b = min(parts[0], parts[1]), max(parts[0], parts[1])
                 a_id = db._get_or_create_concept(a)
                 b_id = db._get_or_create_concept(b)
                 fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
                 db._conn.execute(
                     "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (a_id, b_id, fusion["form"], fusion["strength"], fa)
+                    (a_id, b_id, fusion.get("form", f"{a}+{b}"),
+                     fusion.get("strength", 1), fa)
                 )
 
         db._conn.commit()
