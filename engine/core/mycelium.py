@@ -1187,15 +1187,27 @@ class Mycelium:
             return {}
 
         # 1. Build concept index and sparse matrix
+        # Cap concepts to avoid eigsh hanging on massive matrices (>2000 concepts)
+        MAX_ZONE_CONCEPTS = 2000
         concepts = set()
         rows, cols, vals = [], [], []
 
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            # Pre-filter: if too many concepts, keep only top by degree
+            top_concepts = None
+            total_concepts = len(self._db._concept_cache)
+            if total_concepts > MAX_ZONE_CONCEPTS:
+                degree = self._db.all_degrees()
+                sorted_deg = sorted(degree.items(), key=lambda x: -x[1])
+                top_concepts = set(c for c, _ in sorted_deg[:MAX_ZONE_CONCEPTS])
+
             for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
                 a_name = id_to_name.get(row[0], "")
                 b_name = id_to_name.get(row[1], "")
                 if not a_name or not b_name:
+                    continue
+                if top_concepts and (a_name not in top_concepts or b_name not in top_concepts):
                     continue
                 concepts.add(a_name)
                 concepts.add(b_name)
@@ -1209,7 +1221,11 @@ class Mycelium:
                 b_name = id_to_name.get(row[1], "")
                 if not a_name or not b_name:
                     continue
-                i, j = idx[a_name], idx[b_name]
+                if top_concepts and (a_name not in top_concepts or b_name not in top_concepts):
+                    continue
+                i, j = idx.get(a_name), idx.get(b_name)
+                if i is None or j is None:
+                    continue
                 w = row[2]
                 rows.extend([i, j])
                 cols.extend([j, i])
@@ -2201,11 +2217,13 @@ class Mycelium:
                         local_conns[key] = conn
                         pulled += 1
 
-            # Pull fusions
-            if self._db is not None:
-                for frow in db._conn.execute(
-                    "SELECT a, b, form, strength, fused_at FROM fusions"
-                ):
+            # Pull fusions — only for query-related concepts (not all)
+            if self._db is not None and query_ids:
+                placeholders_f = ",".join("?" * len(query_ids))
+                for frow in db._conn.execute(f"""
+                    SELECT a, b, form, strength, fused_at FROM fusions
+                    WHERE a IN ({placeholders_f}) OR b IN ({placeholders_f})
+                """, list(query_ids) + list(query_ids)):
                     a_name = id_to_name.get(frow[0], db._concept_name(frow[0]))
                     b_name = id_to_name.get(frow[1], db._concept_name(frow[1]))
                     if not self._db.has_fusion(a_name, b_name):

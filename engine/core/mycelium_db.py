@@ -27,7 +27,7 @@ def date_to_days(d: str) -> int:
         parts = d.split("-")
         dt = date(int(parts[0]), int(parts[1]), int(parts[2]))
         return (dt - _EPOCH_REF).days
-    except (ValueError, IndexError):
+    except (ValueError, IndexError, AttributeError):
         return (date.today() - _EPOCH_REF).days
 
 

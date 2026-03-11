@@ -385,8 +385,16 @@ def load_tree():
     try:
         with open(TREE_META, encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, ValueError):
-        print("WARNING: tree.json corrupted, re-initializing", file=sys.stderr)
+    except (json.JSONDecodeError, ValueError) as e:
+        # SAFETY: backup corrupted file before re-initializing.
+        # Prevents data loss from disk errors or power loss mid-write.
+        import shutil
+        backup = TREE_META.with_suffix(f".corrupted.{int(time.time())}.json")
+        try:
+            shutil.copy2(str(TREE_META), str(backup))
+            print(f"WARNING: tree.json corrupted ({e}), backed up to {backup.name}", file=sys.stderr)
+        except Exception:
+            print(f"WARNING: tree.json corrupted ({e}), backup failed", file=sys.stderr)
         return init_tree()
 
 
@@ -802,6 +810,9 @@ def compress_line(line: str) -> str:
     """
     if not line:
         return line or ""
+    # P14/P25: tagged lines (D>/B>/F>/E>/A>) are already classified — skip compression
+    if len(line) >= 2 and line[:2] in ("B>", "E>", "F>", "D>", "A>"):
+        return line
     cb = get_codebook()
     result = line
 
@@ -835,8 +846,8 @@ def compress_line(line: str) -> str:
 
     # L2: Filler word removal — these carry zero information in memory notes
     _FILLER = [
-        # Articles & determiners
-        r"\bthe\b", r"\ba\b", r"\ban\b",
+        # Articles & determiners (case-insensitive safe ones)
+        r"\bthe\b",
         r"\ble\b", r"\bla\b", r"\bles\b", r"\bun\b", r"\bune\b", r"\bdes\b",
         # Connectors & filler verbs
         r"\bwas\b", r"\bwere\b", r"\bis\b", r"\bare\b", r"\bbeen\b",
@@ -855,6 +866,9 @@ def compress_line(line: str) -> str:
     ]
     for filler in _FILLER:
         result = re.sub(filler, "", result, flags=re.IGNORECASE)
+    # "a"/"an": case-sensitive only — uppercase "A" can be a label (version A, option A)
+    result = re.sub(r"\ba\b", "", result)
+    result = re.sub(r"\ban\b", "", result)
 
     # L2b: Learned fillers from mycelium (words in 10+ connections, never fused)
     for filler_word in cb.get("learned_fillers", []):
@@ -969,6 +983,8 @@ def extract_facts(text: str) -> list[str]:
     Pulls out: numbers+units, percentages, key=value pairs, commits,
     dates, filenames, technical terms. Drops narrative filler.
     """
+    if not text:
+        return []
     facts = []
 
     # Numbers with units (45ms, 2.3 TB, 4096 samples, etc.)
@@ -997,6 +1013,24 @@ def extract_facts(text: str) -> list[str]:
             continue
         if len(key) <= 20 and key not in ("the", "a", "an", "to", "in", "on"):
             facts.append(f"{key}={val}")
+
+    # x-ratios (x4.1, x9.6, x143)
+    for m in re.finditer(r'\bx(\d+\.?\d*)\b', text):
+        facts.append(f"x{m.group(1)}")
+
+    # Dates (2026-03-11, 2025/12/01)
+    for m in re.finditer(r'\b(\d{4}[-/]\d{2}[-/]\d{2})\b', text):
+        facts.append(m.group(1))
+
+    # Version numbers (v0.9.1, Python 3.13)
+    for m in re.finditer(r'\bv?(\d+\.\d+(?:\.\d+)?)\b', text):
+        val = m.group(1)
+        if val not in [f.rstrip('%') for f in facts]:  # avoid dupes with percentages
+            facts.append(f"v{val}" if text[m.start()] == 'v' else val)
+
+    # Dollar costs ($0.21, $1.50)
+    for m in re.finditer(r'\$(\d+\.?\d*)', text):
+        facts.append(f"${m.group(1)}")
 
     # Commit hashes
     for m in re.finditer(r'\b([a-f0-9]{7,12})\b', text):
@@ -1048,8 +1082,10 @@ _TAG_PATTERNS = [
 
 def tag_memory_type(line: str) -> str:
     """Classify a compressed line by memory type. Returns tagged line or original."""
+    if not line:
+        return line or ""
     # Don't double-tag
-    if line and len(line) >= 2 and line[:2] in ("B>", "E>", "F>", "D>", "A>"):
+    if len(line) >= 2 and line[:2] in ("B>", "E>", "F>", "D>", "A>"):
         return line
     for tag, pattern in _TAG_PATTERNS:
         if pattern.search(line):
@@ -1183,6 +1219,8 @@ def _resolve_contradictions(text: str) -> str:
 
     Example: "ratio x7.4" then later "ratio x4.1" → keeps only "ratio x4.1"
     """
+    if not text:
+        return text or ""
     lines = text.split("\n")
     # Strategy: two lines "contradict" if they are identical EXCEPT for the numbers.
     # Replace all numbers with a placeholder, then group by this "skeleton".
@@ -1283,6 +1321,8 @@ def _novelty_score(line: str) -> float:
     High novelty: project-specific numbers, dates, commits, decisions.
     Low novelty: framework docs, standard patterns, API descriptions.
     """
+    if not line:
+        return 0.0
     s = line.strip()
     if not s:
         return 0.0
@@ -1408,6 +1448,8 @@ def _cue_distill(text: str, threshold: float = 0.35) -> str:
     Theory: Predictive Coding (Rao & Ballard 1999) — only store prediction errors.
     The LLM's parametric memory already contains generic knowledge.
     """
+    if not text:
+        return text or ""
     lines = text.split("\n")
     result = []
     cued = 0
@@ -1455,6 +1497,8 @@ def _extract_rules(text: str) -> str:
       battery_drain: 9min screen | 1% GPS | 5% BT | 15% WiFi
       -> battery_drain: screen=9min GPS=1% BT=5% WiFi=15%
     """
+    if not text:
+        return text or ""
     lines = text.split("\n")
     result = []
     factorized = 0
@@ -2393,7 +2437,7 @@ def boot(query: str = "") -> str:
                 for _sname, _snode in nodes.items():
                     if _sname == name or _sname == "root":
                         continue
-                    if _t in set(_snode.get("tags", [])):
+                    if _t in _tag_sets_cache.get(_sname, set()):
                         _other_temp = _snode.get("temperature", 0.5)
                         _coupling_sum += 0.02 * (_other_temp - _my_temp)
                         break  # one coupling per tag
@@ -5795,10 +5839,13 @@ def inject_memory(fact: str, repo_path: Path = None):
             live_name = name
             break
 
+    # Use the correct tree directory (TREE_DIR, not memory/branches/)
+    tree_dir = _get_tree_dir()
+    tree_dir.mkdir(parents=True, exist_ok=True)
+
     if live_name:
         # Append to existing live branch
-        branch_dir = repo / "memory" / "branches"
-        mn_path = branch_dir / f"{live_name}.mn"
+        mn_path = tree_dir / nodes[live_name]["file"]
         existing = ""
         if mn_path.exists():
             existing = mn_path.read_text(encoding="utf-8")
@@ -5810,28 +5857,28 @@ def inject_memory(fact: str, repo_path: Path = None):
         live_name = f"b{next_id:04d}"
         new_content = f"## Live Injection\nD> {fact.strip()}\n"
 
-        branch_dir = repo / "memory" / "branches"
-        branch_dir.mkdir(parents=True, exist_ok=True)
-
         import time
         nodes[live_name] = {
             "type": "branch",
+            "file": f"{live_name}.mn",
+            "lines": 0,
+            "max_lines": 150,
+            "children": [],
             "parent": "root",
             "tags": ["live_inject", "injection"],
             "access_count": 1,
             "last_access": time.strftime("%Y-%m-%d"),
             "usefulness": 1.0,
+            "temperature": 0.8,
         }
 
-    # Write branch file
-    branch_dir = repo / "memory" / "branches"
-    branch_dir.mkdir(parents=True, exist_ok=True)
-    mn_path = branch_dir / f"{live_name}.mn"
+    # Write branch file to tree directory
+    mn_path = tree_dir / nodes[live_name]["file"]
     mn_path.write_text(new_content, encoding="utf-8")
 
-    # Update hash
+    # Update metadata
     nodes[live_name]["hash"] = compute_hash(mn_path)
-    nodes[live_name]["size"] = len(new_content)
+    nodes[live_name]["lines"] = len(new_content.split("\n"))
 
     save_tree(tree)
 
