@@ -587,7 +587,8 @@ def read_node(name: str, _tree: dict | None = None) -> str:
     if recall < 0.3 and days_ago > 7 and text.count("\n") > 3 and name != "root":
         try:
             original_len = len(text)
-            reconsolidated = _cue_distill(text)
+            reconsolidated = _resolve_contradictions(text)  # C7: resolve stale numbers
+            reconsolidated = _cue_distill(reconsolidated)
             reconsolidated = _extract_rules(reconsolidated)
             # B1.1: only save if it got smaller (never inflate)
             if len(reconsolidated) < original_len:
