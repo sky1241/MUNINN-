@@ -40,24 +40,29 @@ def log(test_id, status, details, elapsed):
 # ═══════════════════════════════════════════
 t0 = time.time()
 try:
-    # Create transcript JSONL with tool_results
+    # Create transcript JSONL in Claude Code format
     lines_jsonl = []
+    def _cc_msg(typ, text):
+        """Build a Claude Code JSONL entry."""
+        return json.dumps({"type": typ, "message": {"content": [{"type": "text", "text": text}]}})
+    def _cc_tool_result(text):
+        return json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_result", "content": text}]}})
     # 15 user messages with facts
     for i in range(15):
-        lines_jsonl.append(json.dumps({"role": "user", "content": f"User message {i}. accuracy=94.2% and latency=15ms. decided to use Redis."}))
+        lines_jsonl.append(_cc_msg("user", f"User message {i}. accuracy=94.2% and latency=15ms. decided to use Redis."))
     # 15 assistant messages
     for i in range(15):
-        lines_jsonl.append(json.dumps({"role": "assistant", "content": f"Assistant response {i} with some analysis."}))
+        lines_jsonl.append(_cc_msg("assistant", f"Assistant response {i} with some analysis and detailed explanation here."))
     # 15 tool_results of 200+ lines each
     for i in range(15):
         big_output = "\n".join([f"line {j}: some code output var_{j} = {j*100}" for j in range(210)])
-        lines_jsonl.append(json.dumps({"role": "tool_result", "content": big_output}))
+        lines_jsonl.append(_cc_tool_result(big_output))
     # 5 more user/assistant to reach 50
     for i in range(5):
-        lines_jsonl.append(json.dumps({"role": "user", "content": f"Extra user {i}"}))
+        lines_jsonl.append(_cc_msg("user", f"Extra user message number {i} with enough length to pass the 20 char filter"))
 
     # Tool result with important fact inside
-    lines_jsonl.append(json.dumps({"role": "tool_result", "content": "D> decided to switch to PostgreSQL\nsome other output line\nmore output"}))
+    lines_jsonl.append(_cc_tool_result("D> decided to switch to PostgreSQL\nsome other output line\nmore output"))
 
     jsonl_path = TEMP_REPO / "test_transcript.jsonl"
     jsonl_path.write_text("\n".join(lines_jsonl), encoding="utf-8")
@@ -66,9 +71,9 @@ try:
     texts = muninn.parse_transcript(jsonl_path)
     original_text = "\n".join(lines_jsonl)
 
-    from tokenizer import count_tokens
-    tok_before = count_tokens(original_text)
-    tok_after = count_tokens("\n".join(texts))
+    from tokenizer import token_count
+    tok_before = token_count(original_text)
+    tok_after = token_count("\n".join(texts))
     ratio = tok_before / max(1, tok_after)
 
     details = []
