@@ -326,7 +326,7 @@ try:
         "other stuff",
         "latency=50ms at peak",
         "more content",
-        "accuracy=97% on val set after fine-tuning",
+        "accuracy=97% on val set",
         "throughput=1200 req/s",
         "1. Install Python",
         "2. Run tests",
