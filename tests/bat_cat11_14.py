@@ -62,10 +62,15 @@ def init_tree():
     return tree
 
 def make_jsonl(messages, path):
-    """Write a list of (role, content) tuples as JSONL."""
+    """Write a list of (role, content) tuples as Claude Code format JSONL."""
     with open(path, "w", encoding="utf-8") as f:
         for role, content in messages:
-            entry = {"role": role, "content": content}
+            if role == "tool_result":
+                entry = {"type": "assistant", "message": {"content": [{"type": "tool_result", "content": content}]}}
+            else:
+                # "human" -> "user", keep "assistant" as-is
+                typ = "user" if role == "human" else role
+                entry = {"type": typ, "message": {"content": [{"type": "text", "text": content}]}}
             f.write(json.dumps(entry) + "\n")
 
 # ═══════════════════════════════════════════
