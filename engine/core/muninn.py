@@ -1121,7 +1121,8 @@ _TAG_PATTERNS = [
     )),
     ("F>", re.compile(
         r"(?i)(x\d+\.?\d*|ratio|benchmark|token|percent|%|\d+\.\d+[sx]|"
-        r"mesur[eé]|metric|gain|score|accuracy|retention|cost\s*[:=])"
+        r"mesur[eé]|metric|gain|score|accuracy|retention|cost\s*[:=]|"
+        r"latency|throughput|p\d{2,3}|req/s|\d+ms|\d+s\b|perf)"
     )),
     ("D>", re.compile(
         r"(?i)(decid|decision|chose|pivot|switch|adopt|drop|keep|use instead|"
