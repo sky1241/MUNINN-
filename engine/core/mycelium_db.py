@@ -117,10 +117,12 @@ class MyceliumDB:
         c.commit()
 
     def _load_concept_cache(self):
-        """Load concept name->id mapping into memory (small: ~50KB for 10K concepts)."""
+        """Load concept name->id and id->name mappings into memory (~100KB for 10K concepts)."""
         self._concept_cache = {}
+        self._id_to_name = {}
         for row in self._conn.execute("SELECT id, name FROM concepts"):
             self._concept_cache[row[1]] = row[0]
+            self._id_to_name[row[0]] = row[1]
 
     def _get_or_create_concept(self, name: str) -> int:
         """Get concept ID, creating it if needed."""
@@ -135,6 +137,7 @@ class MyceliumDB:
             ).fetchone()
             if row:
                 self._concept_cache[name] = row[0]
+                self._id_to_name[row[0]] = name
                 return row[0]
         except sqlite3.Error:
             pass
@@ -144,21 +147,23 @@ class MyceliumDB:
         ).fetchone()
         if row:
             self._concept_cache[name] = row[0]
+            self._id_to_name[row[0]] = name
             return row[0]
         raise ValueError(f"Failed to get/create concept: {name}")
 
     def _concept_name(self, cid: int) -> str:
-        """Get concept name from ID."""
-        # Reverse lookup from cache
-        for name, id_ in self._concept_cache.items():
-            if id_ == cid:
-                return name
-        # Fallback: query DB
+        """Get concept name from ID. O(1) via reverse cache."""
+        # Use reverse cache (built alongside _concept_cache)
+        name = self._id_to_name.get(cid)
+        if name is not None:
+            return name
+        # Fallback: query DB (rare — only for IDs added after cache load)
         row = self._conn.execute(
             "SELECT name FROM concepts WHERE id = ?", (cid,)
         ).fetchone()
         if row:
             self._concept_cache[row[0]] = cid
+            self._id_to_name[cid] = row[0]
             return row[0]
         return f"?{cid}"
 
@@ -258,12 +263,10 @@ class MyceliumDB:
         WARNING: This loads everything into RAM. Use only for migration/export.
         """
         result = {}
-        # Build reverse id->name map
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
 
         for row in self._conn.execute("SELECT a, b, count, first_seen, last_seen FROM edges"):
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             result[key] = {
                 "count": row[2],
@@ -273,8 +276,8 @@ class MyceliumDB:
 
         # Load zones in batch
         for row in self._conn.execute("SELECT a, b, zone FROM edge_zones"):
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             if key in result:
                 result[key].setdefault("zones", []).append(row[2])
@@ -287,11 +290,10 @@ class MyceliumDB:
         Returns {key: {concepts, form, strength, fused_at}} like the JSON format.
         """
         result = {}
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
 
         for row in self._conn.execute("SELECT a, b, form, strength, fused_at FROM fusions"):
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             result[key] = {
                 "concepts": [a_name, b_name],
@@ -389,13 +391,12 @@ class MyceliumDB:
 
         Yields tuples for memory-efficient processing.
         """
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         cursor = self._conn.execute(
             "SELECT a, b, count, first_seen, last_seen FROM edges"
         )
         for row in cursor:
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             yield key, {
                 "count": row[2],
@@ -414,13 +415,12 @@ class MyceliumDB:
 
     def iter_fusions(self):
         """Iterate over all fusions as (key, {concepts, form, strength, fused_at})."""
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         cursor = self._conn.execute(
             "SELECT a, b, form, strength, fused_at FROM fusions"
         )
         for row in cursor:
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             yield key, {
                 "concepts": [a_name, b_name],
@@ -478,15 +478,14 @@ class MyceliumDB:
 
     def top_connections(self, n: int = 10) -> list[tuple[str, dict]]:
         """Get top N connections by count."""
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         rows = self._conn.execute(
             "SELECT a, b, count, first_seen, last_seen FROM edges ORDER BY count DESC LIMIT ?",
             (n,)
         ).fetchall()
         result = []
         for row in rows:
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             result.append((key, {
                 "count": row[2],
@@ -497,15 +496,14 @@ class MyceliumDB:
 
     def top_fusions(self, n: int = 10) -> list[tuple[str, dict]]:
         """Get top N fusions by strength."""
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         rows = self._conn.execute(
             "SELECT a, b, form, strength, fused_at FROM fusions ORDER BY strength DESC LIMIT ?",
             (n,)
         ).fetchall()
         result = []
         for row in rows:
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             result.append((key, {
                 "concepts": [a_name, b_name],
@@ -517,7 +515,6 @@ class MyceliumDB:
 
     def weakest_non_fused(self, n: int = 100) -> list[tuple[str, int]]:
         """Get weakest non-fused connections (for pruning)."""
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         rows = self._conn.execute("""
             SELECT e.a, e.b, e.count FROM edges e
             LEFT JOIN fusions f ON e.a = f.a AND e.b = f.b
@@ -527,23 +524,22 @@ class MyceliumDB:
         """, (n,)).fetchall()
         result = []
         for row in rows:
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             result.append((f"{a_name}|{b_name}", row[2]))
         return result
 
     def connections_older_than(self, days_threshold: int) -> list[tuple[str, dict]]:
         """Get connections whose last_seen is older than threshold days ago."""
         cutoff = today_days() - days_threshold
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
         rows = self._conn.execute(
             "SELECT a, b, count, first_seen, last_seen FROM edges WHERE last_seen < ?",
             (cutoff,)
         ).fetchall()
         result = []
         for row in rows:
-            a_name = id_to_name.get(row[0], self._concept_name(row[0]))
-            b_name = id_to_name.get(row[1], self._concept_name(row[1]))
+            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
             key = f"{a_name}|{b_name}"
             result.append((key, {
                 "count": row[2],
@@ -586,8 +582,6 @@ class MyceliumDB:
         cid = self._concept_cache.get(concept)
         if cid is None:
             return []
-        id_to_name = {v: k for k, v in self._concept_cache.items()}
-
         query = """
             SELECT CASE WHEN a=? THEN b ELSE a END as neighbor, count
             FROM edges WHERE a=? OR b=?
@@ -600,7 +594,7 @@ class MyceliumDB:
 
         result = []
         for row in self._conn.execute(query, params):
-            name = id_to_name.get(row[0], self._concept_name(row[0]))
+            name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
             result.append((name, row[1]))
         return result
 

@@ -489,13 +489,15 @@ class Mycelium:
         else:
             chunks = re.split(r'\n\s*\n', text)
 
+        # Pre-compile regex patterns for all concepts (avoid recompilation per chunk)
+        concept_patterns = {c: re.compile(r'\b' + re.escape(c) + r'\b') for c in concept_set}
         for chunk in chunks:
             chunk_lower = chunk.lower()
             if len(chunk_lower) < 20:
                 continue
             # Find which known concepts appear in this chunk (word boundaries)
             found = [c for c in concept_set
-                     if re.search(r'\b' + re.escape(c) + r'\b', chunk_lower)]
+                     if concept_patterns[c].search(chunk_lower)]
             if len(found) >= 2:
                 self.observe(found)
 
@@ -662,7 +664,7 @@ class Mycelium:
                 ) GROUP BY concept_id
                 HAVING degree >= ?
             """, (threshold,)):
-                name = id_to_name.get(row[0], self._db._concept_name(row[0]))
+                name = self._db._id_to_name.get(row[0]) or self._db._concept_name(row[0])
                 result.add(name)
             return result
         else:
@@ -2177,8 +2179,8 @@ class Mycelium:
                 ).fetchall()
 
             for row in rows:
-                a_name = id_to_name.get(row[0], db._concept_name(row[0]))
-                b_name = id_to_name.get(row[1], db._concept_name(row[1]))
+                a_name = db._id_to_name.get(row[0]) or db._concept_name(row[0])
+                b_name = db._id_to_name.get(row[1]) or db._concept_name(row[1])
 
                 if self._db is not None:
                     # Lazy mode: upsert directly into local DB
@@ -2222,8 +2224,8 @@ class Mycelium:
                     SELECT a, b, form, strength, fused_at FROM fusions
                     WHERE a IN ({placeholders_f}) OR b IN ({placeholders_f})
                 """, list(query_ids) + list(query_ids)):
-                    a_name = id_to_name.get(frow[0], db._concept_name(frow[0]))
-                    b_name = id_to_name.get(frow[1], db._concept_name(frow[1]))
+                    a_name = db._id_to_name.get(frow[0]) or db._concept_name(frow[0])
+                    b_name = db._id_to_name.get(frow[1]) or db._concept_name(frow[1])
                     if not self._db.has_fusion(a_name, b_name):
                         self._db.upsert_fusion(
                             a_name, b_name,

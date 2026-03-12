@@ -931,10 +931,12 @@ def compress_line(line: str) -> str:
         result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
     # L3b: Learned abbreviations from mycelium (strong fusions -> shorter form)
+    _result_lower = result.lower()
     for long_form, short_form in cb.get("learned_abbreviations", {}).items():
-        if long_form in result.lower():
+        if long_form in _result_lower:
             result = re.sub(rf"\b{re.escape(long_form)}\b", short_form, result,
                           count=1, flags=re.IGNORECASE)
+            _result_lower = result.lower()
 
     # L4: Compress large numbers
     def shorten_number(m):
@@ -957,9 +959,9 @@ def compress_line(line: str) -> str:
     # Only drop shorter concept if it appears exactly once AND near the other.
     strong_fusions = {k: v for k, v in cb["mycelium_rules"].items()
                       if v["strength"] >= 10}
+    result_lower = result.lower()
     for key, rule in strong_fusions.items():
         a, b = rule["concepts"]
-        result_lower = result.lower()
         if a in result_lower and b in result_lower:
             drop = b if len(b) <= len(a) else a
             keep = a if drop == b else b
@@ -971,6 +973,7 @@ def compress_line(line: str) -> str:
                 if re.search(pattern, result_lower):
                     result = re.sub(rf'\s+\b{re.escape(drop)}\b', '', result,
                                   count=1, flags=re.IGNORECASE)
+                    result_lower = result.lower()
 
     # L7: Extract key=value patterns from natural language
     # "accuracy: 94.2%" -> "acc=94.2%"
@@ -4892,7 +4895,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
         kept_indices = set()
         running_tokens = 0
         for orig_idx, (prio, pline) in by_priority:
-            line_tokens = max(1, token_count(pline))
+            line_tokens = max(1, len(pline) // 4)  # estimate, avoid per-line tiktoken
             if running_tokens + line_tokens <= max_session_tokens:
                 kept_indices.add(orig_idx)
                 running_tokens += line_tokens
