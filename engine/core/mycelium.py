@@ -68,6 +68,8 @@ class Mycelium:
         self._spectral_gap = None  # A5: computed by detect_zones()
         self._db = None  # Persistent DB handle (lazy mode)
         self._high_degree_cache = None  # Cached high-degree concepts (reset on save)
+        self._adj_cache = None  # Cached adjacency list {concept: [(neighbor, weight)]}
+        self._adj_cache_max_weight = 0.0  # max edge weight for normalization
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -584,6 +586,41 @@ class Mycelium:
                     else:
                         fusions[key]["strength"] = conn["count"]
 
+    def _build_adj_cache(self) -> dict:
+        """Build and cache adjacency list from all edges. Called once per session.
+        Returns {concept: [(neighbor, raw_weight)]}. Also stores max_weight."""
+        if self._adj_cache is not None:
+            return self._adj_cache
+        adj = {}
+        max_w = 0.0
+        if self._db is not None:
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+                a_name = id_to_name.get(row[0], "")
+                b_name = id_to_name.get(row[1], "")
+                if not a_name or not b_name:
+                    continue
+                w = float(row[2])
+                if w > max_w:
+                    max_w = w
+                adj.setdefault(a_name, []).append((b_name, w))
+                adj.setdefault(b_name, []).append((a_name, w))
+        else:
+            conns = self.data.get("connections", {})
+            for key, val in conns.items():
+                parts = key.split("|")
+                if len(parts) != 2:
+                    continue
+                a, b = parts
+                w = float(val["count"])
+                if w > max_w:
+                    max_w = w
+                adj.setdefault(a, []).append((b, w))
+                adj.setdefault(b, []).append((a, w))
+        self._adj_cache = adj
+        self._adj_cache_max_weight = max_w
+        return adj
+
     def _get_high_degree_concepts(self) -> set:
         """S3: Identify concepts with too many connections (universal stopwords).
 
@@ -934,46 +971,26 @@ class Mycelium:
             list of (concept, activation) sorted by activation descending.
             Seeds themselves are excluded from results.
         """
-        # Build adjacency index for fast lookup
-        # S3: Penalize high-degree hub concepts (top 5%) during propagation.
-        # Hub nodes connect to everything — without penalty, all queries converge
-        # to the same top-N results. Penalty: edges touching hubs get weight / 10.
+        # Use cached adjacency (built once, reused by transitive_inference too).
+        # S3: Penalize hub concepts at query time (not in cache — seed-dependent).
+        raw_adj = self._build_adj_cache()
+        if not raw_adj:
+            return []
         if self._high_degree_cache is None:
             self._high_degree_cache = self._get_high_degree_concepts()
         hub_concepts = self._high_degree_cache
         seed_lower = {s.lower().strip() for s in seeds}
-        adj = {}  # concept -> [(neighbor, weight)]
-        if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                if not a_name or not b_name:
-                    continue
-                w = float(row[2])
-                # Penalize edges through hub concepts (unless they are seeds)
-                if (a_name in hub_concepts and a_name not in seed_lower) or \
-                   (b_name in hub_concepts and b_name not in seed_lower):
-                    w *= 0.1
-                adj.setdefault(a_name, []).append((b_name, w))
-                adj.setdefault(b_name, []).append((a_name, w))
-        else:
-            conns = self.data["connections"]
-            if not conns:
-                return []
-            for key, val in conns.items():
-                parts = key.split("|")
-                if len(parts) != 2:
-                    continue
-                a, b = parts
-                w = float(val["count"])
-                if (a in hub_concepts and a not in seed_lower) or \
-                   (b in hub_concepts and b not in seed_lower):
-                    w *= 0.1
-                adj.setdefault(a, []).append((b, w))
-                adj.setdefault(b, []).append((a, w))
-        if not adj:
-            return []
+        # Apply hub penalty on a copy (hub penalty depends on seeds)
+        adj = {}
+        for concept, neighbors in raw_adj.items():
+            is_hub = concept in hub_concepts and concept not in seed_lower
+            new_neighbors = []
+            for n, w in neighbors:
+                pw = w
+                if is_hub or (n in hub_concepts and n not in seed_lower):
+                    pw = w * 0.1
+                new_neighbors.append((n, pw))
+            adj[concept] = new_neighbors
 
         # Normalize weights per node (so high-degree nodes don't dominate)
         for concept in adj:
@@ -1012,16 +1029,19 @@ class Mycelium:
 
         # Remove seeds, sort by activation
         results = [(c, a) for c, a in activation.items() if c not in seed_set]
-        # A3: Sigmoid filter — suppress noise, preserve strong signals
-        # sigma(x) = 1 / (1 + e^(-k*(x - x0)))
-        # k=10 (steepness), x0=median activation (adaptive threshold)
-        # Source: cond-mat/0202047 (quasispecies sigmoid), Goldbeter-Koshland
-        if results and self._sigmoid_k > 0:
-            import math
+        # A3: Normalize activations to [0, 1] via min-max scaling.
+        # Previous sigmoid (k=10, x0=median) squashed all values to ~0.50 ± 0.003
+        # because normalized edge weights produce tiny raw activations (~0.002).
+        # Min-max preserves the relative ordering that Collins & Loftus intended.
+        if results:
             activations = [a for _, a in results]
-            x0 = sorted(activations)[len(activations) // 2]  # median as threshold
-            results = [(c, 1.0 / (1.0 + math.exp(-self._sigmoid_k * (a - x0))))
-                       for c, a in results]
+            max_a = max(activations)
+            min_a = min(activations)
+            spread = max_a - min_a
+            if spread > 0:
+                results = [(c, (a - min_a) / spread) for c, a in results]
+            else:
+                results = [(c, 0.5) for c, a in results]
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:top_n]
 
@@ -1048,43 +1068,15 @@ class Mycelium:
         """
         concept = concept.lower().strip()
 
-        # Build adjacency with raw weights (no normalization — chain product)
-        adj = {}  # concept -> [(neighbor, weight)]
-        max_weight = 0.0
-        if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                if not a_name or not b_name:
-                    continue
-                w = float(row[2])
-                if w > max_weight:
-                    max_weight = w
-                adj.setdefault(a_name, []).append((b_name, w))
-                adj.setdefault(b_name, []).append((a_name, w))
-        else:
-            conns = self.data["connections"]
-            if not conns:
-                return []
-            for key, val in conns.items():
-                parts = key.split("|")
-                if len(parts) != 2:
-                    continue
-                a, b = parts
-                w = float(val["count"])
-                if w > max_weight:
-                    max_weight = w
-                adj.setdefault(a, []).append((b, w))
-                adj.setdefault(b, []).append((a, w))
+        # Use cached adjacency (shared with spread_activation)
+        adj = self._build_adj_cache()
+        max_weight = self._adj_cache_max_weight
 
         if concept not in adj or max_weight == 0:
             return []
 
-        # Normalize weights to [0,1] for meaningful products
+        # Normalize weights to [0,1] for meaningful chain products
         inv_max = 1.0 / max_weight
-        for c in adj:
-            adj[c] = [(n, w * inv_max) for n, w in adj[c]]
 
         # BFS with multiplicative path strength + relaxation
         # Unlike spreading activation, we track path products and allow
@@ -1100,14 +1092,14 @@ class Mycelium:
                 for neighbor, edge_w in adj.get(node, []):
                     if neighbor == seed:
                         continue  # never return to seed
-                    chain_strength = path_strength * edge_w * decay
+                    chain_strength = path_strength * (edge_w * inv_max) * decay
                     if chain_strength < min_strength:
                         continue
                     # Update inferred if this path is stronger
                     if neighbor not in inferred or chain_strength > inferred[neighbor]:
                         inferred[neighbor] = chain_strength
                     # Dedup frontier: keep best path_strength per node
-                    raw_path = path_strength * edge_w
+                    raw_path = path_strength * (edge_w * inv_max)
                     if neighbor not in next_frontier or raw_path > next_frontier[neighbor]:
                         next_frontier[neighbor] = raw_path
             frontier = list(next_frontier.items())

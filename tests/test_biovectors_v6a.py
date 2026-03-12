@@ -63,6 +63,8 @@ def test_v6a_3_mycelium_weight():
         m1.MIN_CONCEPT_LEN = 3
         m1._db = None
         m1._high_degree_cache = None
+        m1._adj_cache = None
+        m1._adj_cache_max_weight = 0.0
         m1.FUSION_THRESHOLD = 5
         m1.MAX_CONNECTIONS = 0
 
@@ -74,6 +76,8 @@ def test_v6a_3_mycelium_weight():
         m2.MIN_CONCEPT_LEN = 3
         m2._db = None
         m2._high_degree_cache = None
+        m2._adj_cache = None
+        m2._adj_cache_max_weight = 0.0
         m2.FUSION_THRESHOLD = 5
         m2.MAX_CONNECTIONS = 0
 
@@ -113,6 +117,8 @@ def test_v6a_5_backward_compat():
     m.MIN_CONCEPT_LEN = 3
     m._db = None
     m._high_degree_cache = None
+    m._adj_cache = None
+    m._adj_cache_max_weight = 0.0
     m.FUSION_THRESHOLD = 5
     m.MAX_CONNECTIONS = 0
 

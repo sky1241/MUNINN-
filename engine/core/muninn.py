@@ -683,8 +683,17 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
 
     Preserves structural lines (headers, separators) and high-density facts.
     Based on: KIComp (Expert Systems 2025) — information density scoring.
+    V6 fix: uses per-line token estimates instead of re-encoding entire text
+    per dropped line (was 35s / 1116 calls, now O(n) single pass).
     """
+    total_tokens = token_count(text)
+    if total_tokens <= max_tokens:
+        return text
+
     lines = text.split("\n")
+    # Estimate tokens per line using len//4 (BPE average). Fast, avoids O(n²) tiktoken.
+    line_tokens = [max(1, len(line) // 4) for line in lines]
+
     scored = [(i, line, _line_density(line)) for i, line in enumerate(lines)]
 
     # Sort by density ascending (lowest first = first to drop)
@@ -692,16 +701,18 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
                  if d < 0.9 and not line.strip().startswith("===") and not line.startswith("#")]
     droppable.sort(key=lambda x: x[2])
 
-    # Progressively drop lowest-density lines until under budget
+    # Drop lowest-density lines until estimated tokens fit budget
     dropped = set()
-    current = text
-    drop_idx = 0
-    while token_count(current) > max_tokens and drop_idx < len(droppable):
-        idx, _, _ = droppable[drop_idx]
+    running_tokens = total_tokens
+    for idx, _, _ in droppable:
+        if running_tokens <= max_tokens:
+            break
         dropped.add(idx)
-        current = "\n".join(line for i, line in enumerate(lines) if i not in dropped)
-        drop_idx += 1
+        running_tokens -= line_tokens[idx]
 
+    current = "\n".join(line for i, line in enumerate(lines) if i not in dropped)
+
+    # One final accurate count
     final_tokens = token_count(current)
     if dropped:
         print(f"  KIComp: dropped {len(dropped)} low-density lines "
@@ -722,6 +733,10 @@ def _ncd(a: str, b: str) -> float:
     Returns 0.0 (identical) to 1.0 (completely different).
     Based on: Cilibrasi & Vitanyi 2005.
     """
+    if a == b:
+        return 0.0
+    if not a or not b:
+        return 1.0
     import zlib
     ab = a.encode("utf-8")
     bb = b.encode("utf-8")
@@ -1894,7 +1909,8 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
                 filepath = TREE_DIR / node["file"]
                 if not filepath.exists():
                     print(f"  WARNING: branch file missing: {filepath}", file=sys.stderr)
-                    break  # Don't create duplicate, just skip this segment
+                    merged = True  # Skip this segment (don't create duplicate)
+                    break
                 old = filepath.read_text(encoding="utf-8")
                 # Combine old + new content
                 merged_text = old + "\n" + header + "\n" + body
@@ -1991,15 +2007,20 @@ def extract_tags(text: str) -> list[str]:
                 tags.add(concept)
 
     # Extract high-frequency capitalized words as tags (entity detection)
-    entities = re.findall(r'\b[A-Z][a-z]{2,}\b', text)
+    # Match both "Capitalized" and "SQLite" (mixed-case technical terms)
+    entities = re.findall(r'\b[A-Z][A-Za-z]{2,}\b', text)
+    # Adaptive threshold: count >= 2 for long texts, >= 1 for short texts
+    _ent_thresh = 2 if len(text) > 500 else 1
     for entity, count in Counter(entities).most_common(5):
-        if count >= 2:
+        if count >= _ent_thresh:
             tags.add(entity.lower())
 
     # Extract technical keywords generically
     tech_words = re.findall(r'\b[a-z]{4,}\b', text_lower)
+    # Adaptive threshold: count >= 3 for long texts, >= 2 for short texts
+    _kw_thresh = 3 if len(text) > 500 else 2
     for word, count in Counter(tech_words).most_common(10):
-        if count >= 3 and word not in ("this", "that", "with", "from", "have",
+        if count >= _kw_thresh and word not in ("this", "that", "with", "from", "have",
                                         "been", "will", "pour", "dans", "avec",
                                         "sont", "dans", "plus", "tout", "mais"):
             tags.add(word)
@@ -2255,7 +2276,7 @@ def boot(query: str = "") -> str:
         # B4: Predict next branches — get prediction scores
         prediction_scores = {}
         try:
-            predictions = predict_next(current_concepts=query_words, top_n=20)
+            predictions = predict_next(current_concepts=query_words, top_n=20, _mycelium=m)
             prediction_scores = {name: score for name, score in predictions}
         except Exception as e:
             print(f"  [warn] B4 predictions: {e}", file=sys.stderr)
@@ -2343,6 +2364,13 @@ def boot(query: str = "") -> str:
         _max_tag_freq = max(_tag_freq.values()) if _tag_freq else 1
         # Pre-cache tag sets for V1A coupling (avoids 13M set() constructions)
         _tag_sets_cache = {n: set(nd.get("tags", [])) for n, nd in nodes.items() if n != "root"}
+        # V1A: Build tag -> [branches] index for O(1) coupling lookup (was O(n) per tag)
+        _tag_to_branches = {}
+        for _n, _nd in nodes.items():
+            if _n == "root":
+                continue
+            for _t in _nd.get("tags", []):
+                _tag_to_branches.setdefault(_t, []).append(_n)
 
         # Generative Agents scoring: recency + importance + relevance + activation
         scored = []
@@ -2445,16 +2473,16 @@ def boot(query: str = "") -> str:
             # V1A: Coupled oscillator (Yekutieli et al. 2005)
             # Temperature coupling: branches connected via mycelium push toward each other
             # tau_coupling = sum_j C_ij * (temp_j - temp_i)
+            # Uses _tag_to_branches index (O(1) lookup) instead of O(n) brute-force.
             _my_temp = node.get("temperature", 0.5)
             _coupling_sum = 0.0
             for _t in list(_node_tags_set)[:3]:  # top 3 tags for coupling
-                for _sname, _snode in nodes.items():
-                    if _sname == name or _sname == "root":
+                for _sname in _tag_to_branches.get(_t, []):
+                    if _sname == name:
                         continue
-                    if _t in _tag_sets_cache.get(_sname, set()):
-                        _other_temp = _snode.get("temperature", 0.5)
-                        _coupling_sum += 0.02 * (_other_temp - _my_temp)
-                        break  # one coupling per tag
+                    _other_temp = nodes[_sname].get("temperature", 0.5)
+                    _coupling_sum += 0.02 * (_other_temp - _my_temp)
+                    break  # one coupling per tag
             total += max(-0.02, min(0.02, _coupling_sum))  # V1A: tuned by retrieval benchmark
 
             if total > 0.01:
@@ -2847,7 +2875,8 @@ def recall(query: str) -> str:
 
 # ── B4: Endsley L3 Prediction ────────────────────────────────────
 
-def predict_next(current_concepts: list[str] = None, top_n: int = 5) -> list[tuple[str, float]]:
+def predict_next(current_concepts: list[str] = None, top_n: int = 5,
+                  _mycelium=None) -> list[tuple[str, float]]:
     """B4: Predict which branches will be needed next.
 
     Uses spreading activation from current session concepts to find
@@ -2878,12 +2907,15 @@ def predict_next(current_concepts: list[str] = None, top_n: int = 5) -> list[tup
         if not current_concepts:
             return []
 
-    # Spread activation through mycelium
+    # Spread activation through mycelium (reuse instance if provided by boot)
     try:
-        if _CORE_DIR not in sys.path:
-            sys.path.insert(0, _CORE_DIR)
-        from mycelium import Mycelium
-        m = Mycelium(repo)
+        if _mycelium is not None:
+            m = _mycelium
+        else:
+            if _CORE_DIR not in sys.path:
+                sys.path.insert(0, _CORE_DIR)
+            from mycelium import Mycelium
+            m = Mycelium(repo)
         activated = m.spread_activation(current_concepts, hops=2, top_n=50)
     except Exception:
         activated = []
@@ -3367,32 +3399,35 @@ def prune(dry_run: bool = True):
     _branch_recalls = {}
     for bname, bnode in branches.items():
         _branch_recalls[bname] = _ebbinghaus_recall(bnode)
-    # Read branch content for NCD (only if enough branches to make suppression useful)
-    _branch_content = {}
-    if len(branches) >= 2:
-        for bname, bnode in branches.items():
+    # I2: Only apply competitive suppression to non-hot branches (recall < 0.4).
+    # Hot branches won't be pruned anyway — O(n²) NCD on all branches is catastrophic
+    # (486s on 2106 branches = 4.4M zlib calls). Pre-filter to at-risk branches only.
+    _suppression = {b: 0.0 for b in branches}
+    _atrisk = [b for b in branches if _branch_recalls[b] < 0.4]
+    if 2 <= len(_atrisk) <= 500:  # skip if too few or too many (safety cap)
+        _branch_content = {}
+        for bname in _atrisk:
+            bnode = branches[bname]
             fpath = TREE_DIR / bnode.get("file", "")
             if fpath.is_file():
                 try:
                     _branch_content[bname] = fpath.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     _branch_content[bname] = ""
-            else:
-                _branch_content[bname] = ""
-    # Compute suppression
-    _suppression = {b: 0.0 for b in branches}
-    for bi in branches:
-        if bi not in _branch_content:
-            continue
-        for bj in branches:
-            if bi == bj or bj not in _branch_content:
+        _atrisk_names = list(_branch_content.keys())
+        for i in range(len(_atrisk_names)):
+            bi = _atrisk_names[i]
+            if not _branch_content.get(bi):
                 continue
-            if not _branch_content[bi] or not _branch_content[bj]:
-                continue
-            ncd = _ncd(_branch_content[bi], _branch_content[bj])
-            if ncd < 0.4:  # very similar
-                sim = 1.0 - ncd
-                _suppression[bi] += sim * _branch_recalls.get(bj, 0)
+            for j in range(i + 1, len(_atrisk_names)):
+                bj = _atrisk_names[j]
+                if not _branch_content.get(bj):
+                    continue
+                ncd = _ncd(_branch_content[bi], _branch_content[bj])
+                if ncd < 0.4:  # very similar
+                    sim = 1.0 - ncd
+                    _suppression[bi] += sim * _branch_recalls.get(bj, 0)
+                    _suppression[bj] += sim * _branch_recalls.get(bi, 0)
     # Apply suppression to effective recall
     _effective_recall = {}
     for bname in branches:
@@ -3438,7 +3473,7 @@ def prune(dry_run: bool = True):
             if _med_facts > 0:
                 dist += abs(fr - _med_facts) / max(_med_facts, 0.01)
             elif fr == 0:
-                dist += 1.0  # zero facts when median is also zero = not anomalous
+                pass  # zero facts when median is also zero = not anomalous
             if dist > 2.0:
                 _i3_anomalies.add(bname)
 
@@ -4692,7 +4727,7 @@ def _semantic_rle(texts: list[str]) -> list[str]:
 
             loop_len = j - loop_start
 
-            if loop_len >= 3 and len(loop_errors) >= 2:
+            if loop_len >= 3 and (len(loop_errors) >= 2 or len(loop_retries) >= 2):
                 # Collapse: keep first error, count, and the resolution
                 first_err = loop_errors[0][:120]
                 last_err = loop_errors[-1][:120]
@@ -5090,8 +5125,17 @@ def _append_session_log(repo_path: Path, compressed: str, ratio: float):
         parts = root_text.split("\nR:\n", 1)
         r_section = parts[1].split("\n\n", 1)  # R: entries end at blank line or EOF
         existing_lines = [l for l in r_section[0].split("\n") if l.strip()]
-        existing_lines.append(log_line)
-        existing_lines = existing_lines[-5:]  # keep last 5
+        # Dedup: don't append if this exact line already exists
+        if log_line not in existing_lines:
+            existing_lines.append(log_line)
+        # Also dedup any historical duplicates
+        seen = set()
+        deduped = []
+        for el in existing_lines:
+            if el not in seen:
+                seen.add(el)
+                deduped.append(el)
+        existing_lines = deduped[-5:]  # keep last 5
         rest = r_section[1] if len(r_section) > 1 else ""
         new_text = parts[0] + "\nR:\n" + "\n".join(existing_lines) + "\n"
         if rest:
@@ -5302,6 +5346,10 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
 
 class _MuninnLock:
     """Simple file lock using mkdir atomicity. Prevents concurrent hook execution."""
+    # Stale threshold must be MUCH longer than any reasonable wait timeout.
+    # A hook can legitimately hold the lock for several minutes (large transcripts).
+    STALE_SECONDS = 600  # 10 minutes — only break locks clearly abandoned
+
     def __init__(self, repo_path: Path, name: str = "hook", timeout: int = 120):
         self.lock_dir = repo_path / ".muninn" / f"{name}.lock"
         self.timeout = timeout
@@ -5313,10 +5361,12 @@ class _MuninnLock:
                 self.lock_dir.mkdir(parents=True, exist_ok=False)
                 return self
             except FileExistsError:
-                # Check if lock is stale (older than timeout)
+                # Only break locks that are clearly abandoned (10+ minutes old).
+                # Previously used self.timeout which caused race: waiting thread
+                # would consider the lock "stale" at exactly its own timeout.
                 try:
                     age = time.time() - self.lock_dir.stat().st_mtime
-                    if age > self.timeout:
+                    if age > self.STALE_SECONDS:
                         import shutil
                         shutil.rmtree(self.lock_dir, ignore_errors=True)
                         continue

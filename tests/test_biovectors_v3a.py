@@ -48,6 +48,9 @@ def _make_mycelium(connections):
     m.MIN_CONCEPT_LEN = 3
     m._db = None
     m._sigmoid_k = 0  # disable sigmoid for testing
+    m._high_degree_cache = None
+    m._adj_cache = None
+    m._adj_cache_max_weight = 0.0
     return m
 
 
