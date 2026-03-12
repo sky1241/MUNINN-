@@ -806,9 +806,16 @@ class ConceptTranslator:
             self._db = None
 
     def is_english(self, word: str) -> bool:
-        """Check if a word is English (1 token in BPE)."""
+        """Check if a word is English (1 token in BPE).
+
+        ASCII-only words (with underscores/digits) are always treated as English
+        to avoid translating programming identifiers like 'concept_a'.
+        """
         if not self._tokenizer:
             return True  # No tokenizer = assume English (safe fallback)
+        # ASCII-only words are programming identifiers, not foreign words
+        if word.isascii():
+            return True
         try:
             tokens = self._tokenizer.encode(word)
             return len(tokens) <= 1

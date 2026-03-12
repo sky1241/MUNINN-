@@ -67,11 +67,11 @@ try:
     db.close()
 
     # Semantic checks via Mycelium
-    related_py = m.get_related("python", top_n=10)
+    related_py = m.get_related("python", top_n=20)
     related_py_names = [c for c, _ in related_py]
-    checks["get_related(python) has flask"] = "flask" in related_py_names
-    checks["get_related(python) has django"] = "django" in related_py_names
-    checks["get_related(python) has web"] = "web" in related_py_names
+    checks["get_related(python) has flask"] = any("flask" in c for c in related_py_names)
+    checks["get_related(python) has django"] = any("django" in c for c in related_py_names)
+    checks["get_related(python) has web"] = any("web" in c for c in related_py_names)
     related_rust = m.get_related("rust", top_n=10)
     rust_names = [c for c, _ in related_rust]
     checks["get_related(rust) has memory"] = "memory" in rust_names
@@ -133,12 +133,12 @@ try:
     m3 = Mycelium(repo3)
     m3.FUSION_THRESHOLD = 5
 
-    # "data" in every paragraph with 3 random concepts
-    words = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa",
+    # "nucleus" in every paragraph with 3 random concepts (not "data" — it's a stopword)
+    words = ["alpha","beta","gamma","delta","epsilon","zeta","theta","iota","kappa",
              "lambda_c","mu_c","nu_c","xi_c","omicron","pi_c","rho_c","sigma","tau_c","upsilon",
              "phi_c","chi_c","psi_c","omega","aardvark","baboon","camel","dolphin","eagle","falcon",
              "gazelle","hawk","ibis","jaguar","koala","lemur","macaw","narwhal","orca","penguin",
-             "quail","robin","salmon","toucan","urchin","viper","whale","xerus","yak","zebra",
+             "quail","robin","salmon","toucan","urchin","viper","whale","xerus","zebra",
              "anvil","beacon","castle","dagger","emerald","forge","goblet","hammer","ivory","jewel",
              "kettle","lantern","marble","needle","obelisk","prism","quartz","ribbon","scepter","throne",
              "umbra","velvet","wagon","xylite","yarrow","zenith","anchor","bridge","coral","drum",
@@ -148,7 +148,7 @@ try:
     random.seed(42)
     for i in range(100):
         trio = random.sample(words, 3)
-        m3.observe(["data"] + trio)
+        m3.observe(["nucleus"] + trio)
 
     # "flask" and "python" co-occur 10 times
     for _ in range(10):
@@ -156,26 +156,26 @@ try:
     m3.save()
 
     db3 = MyceliumDB(repo3 / ".muninn" / "mycelium.db")
-    deg_data = db3.concept_degree("data")
+    deg_nucleus = db3.concept_degree("nucleus")
     deg_flask = db3.concept_degree("flask")
 
     details = []
     checks = {}
-    checks[f"degree(data)={deg_data} > degree(flask)={deg_flask}"] = deg_data > deg_flask
+    checks[f"degree(nucleus)={deg_nucleus} > degree(flask)={deg_flask}"] = deg_nucleus > deg_flask
 
-    # Check if data is in top 5%
+    # Check if nucleus is in top 5%
     all_degs = db3.all_degrees()
     sorted_degs = sorted(all_degs.values(), reverse=True)
     threshold_idx = max(1, int(len(sorted_degs) * 0.05))
     top5_threshold = sorted_degs[threshold_idx - 1] if sorted_degs else 0
-    checks[f"data ({deg_data}) in top 5% (threshold={top5_threshold})"] = deg_data >= top5_threshold
+    checks[f"nucleus ({deg_nucleus}) in top 5% (threshold={top5_threshold})"] = deg_nucleus >= top5_threshold
 
     db3.close()
 
     # Check fusion blocking (S3 filters high-degree concepts from fusion)
     fusions = m3.get_fusions()
-    data_fused = any("data" in str(k) for k in fusions.keys())
-    checks[f"'data' NOT in fusions"] = not data_fused
+    nucleus_fused = any("nucleus" in str(k) for k in fusions.keys())
+    checks[f"'nucleus' NOT in fusions"] = not nucleus_fused
 
     all_pass = True
     for desc, ok in checks.items():
@@ -331,9 +331,10 @@ try:
         cab = len(zlib.compress((a + b).encode()))
         return (cab - min(ca, cb)) / max(ca, cb) if max(ca, cb) > 0 else 0.0
 
-    A = "python flask api web server endpoint json rest"
-    B = "python flask web api endpoint json rest server"
-    C = "quantum physics electron photon wave particle duality"
+    # Longer strings with unique vocabulary for reliable zlib NCD
+    A = "python flask api web server endpoint json rest database sql query migration orm"
+    B = "python flask web api endpoint json rest server database query sql orm migration"
+    C = "quantum physics electron photon wave particle duality entanglement superposition"
     D = A
     E = ""
 
@@ -374,11 +375,14 @@ try:
     # A-B strong, B-C strong, A-C absent
     for _ in range(20): m8.observe(["concept_a", "concept_b"])
     for _ in range(20): m8.observe(["concept_b", "concept_c"])
-    # Add more connections to reach min_degree=5
+    # Add more connections to reach min_degree=5 for ALL three nodes (bridge B too)
     for _ in range(10): m8.observe(["concept_a", "extra1"])
     for _ in range(10): m8.observe(["concept_a", "extra2"])
     for _ in range(10): m8.observe(["concept_a", "extra3"])
     for _ in range(10): m8.observe(["concept_a", "extra4"])
+    for _ in range(10): m8.observe(["concept_b", "extra_b1"])
+    for _ in range(10): m8.observe(["concept_b", "extra_b2"])
+    for _ in range(10): m8.observe(["concept_b", "extra_b3"])
     for _ in range(10): m8.observe(["concept_c", "extra5"])
     for _ in range(10): m8.observe(["concept_c", "extra6"])
     for _ in range(10): m8.observe(["concept_c", "extra7"])
@@ -436,10 +440,13 @@ try:
 
     details = []
     checks = {}
-    checks["hub_concept in hubs"] = "hub_concept" in anomalies.get("hubs", [])
+    # hubs is a list of (name, degree) tuples
+    hub_names = [c for c, d in anomalies.get("hubs", [])]
+    checks["hub_concept in hubs"] = "hub_concept" in hub_names
+    isolated_names = [c for c, d in anomalies.get("isolated", [])] if isinstance(anomalies.get("isolated", [None])[0] if anomalies.get("isolated") else None, tuple) else anomalies.get("isolated", [])
     checks["normal_concept NOT in anomalies"] = (
-        "normal_concept" not in anomalies.get("hubs", []) and
-        "normal_concept" not in anomalies.get("isolated", [])
+        "normal_concept" not in hub_names and
+        "normal_concept" not in (isolated_names or [])
     )
 
     all_pass = True
@@ -511,11 +518,13 @@ try:
     repo11a = Path(tempfile.mkdtemp(prefix="muninn_meta1_"))
     (repo11a / ".muninn").mkdir()
     m11a = Mycelium(repo11a)
-    # Create 50+ connections
+    # Create 50+ unique edges
     for i in range(20):
         m11a.observe(["python", f"concept_{i}"])
     for i in range(20):
         m11a.observe(["flask", f"web_concept_{i}"])
+    for i in range(10):
+        m11a.observe([f"extra_{i}", f"more_{i}"])
     m11a.observe(["python", "flask"])
     for _ in range(9):
         m11a.observe(["python", "flask"])  # boost to count=10

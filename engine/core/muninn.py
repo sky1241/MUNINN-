@@ -726,7 +726,8 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
         remaining_scored = []
         for i, line in remaining:
             d = _line_density(line)
-            if d < 0.98 and not line.strip().startswith("===") and not line.startswith("#"):
+            tag = line.strip()[:2]
+            if d < 0.98 and tag not in ("D>", "B>", "F>", "E>", "A>") and not line.strip().startswith("===") and not line.startswith("#"):
                 remaining_scored.append((i, line, d, token_count(line)))
         remaining_scored.sort(key=lambda x: x[2])  # lowest density first
         for idx, _, _, ltok in remaining_scored:
@@ -927,6 +928,10 @@ def compress_line(line: str) -> str:
 
     # L3: Common phrase collapsing
     _PHRASES = [
+        (r"take\s+into\s+account", "consider"),
+        (r"take\s+account", "consider"),
+        (r"in\s+order\s+to", "to"),
+        (r"as\s+a\s+result\s+of", "from"),
         (r"not properly closing", "not closing"),
         (r"was not", "!"),
         (r"instead of growing unboundedly", "stable"),
@@ -2242,7 +2247,7 @@ def boot(query: str = "") -> str:
                 continue
             filepath = TREE_DIR / node["file"]
             if filepath.exists():
-                branch_contents[name] = filepath.read_text(encoding="utf-8")
+                branch_contents[name] = filepath.read_text(encoding="utf-8", errors="ignore")
             else:
                 # Fallback: use tags as content
                 branch_contents[name] = " ".join(node.get("tags", []))
@@ -4537,13 +4542,16 @@ def _detect_transcript_format(filepath: Path) -> str:
     first_line = first_text.split("\n")[0].strip()
     if first_line.startswith("{"):
         try:
-            json.loads(first_line)
+            obj = json.loads(first_line)
             # Check if it's a single JSON file (not JSONL)
             # JSONL = multiple lines starting with {
             lines = first_text.split("\n")
             json_lines = sum(1 for l in lines[:5] if l.strip().startswith("{"))
             if json_lines >= 2:
                 return "jsonl"
+            # Single-line JSON with messages key = json format
+            if isinstance(obj, dict) and "messages" in obj:
+                return "json"
         except json.JSONDecodeError:
             pass
 
@@ -4552,8 +4560,8 @@ def _detect_transcript_format(filepath: Path) -> str:
     if first_text.startswith("["):
         return "json"
 
-    # Markdown: contains ## Human or ## Assistant headers
-    if re.search(r'^##\s*(Human|Assistant|User|Claude)', first_text, re.MULTILINE | re.IGNORECASE):
+    # Markdown: contains ## headers (Human/Assistant or any section)
+    if re.search(r'^#{1,3}\s+\S', first_text, re.MULTILINE):
         return "markdown"
 
     return "unknown"
@@ -4637,7 +4645,7 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                             if m:
                                 # Keep the rest of the line after the tic
                                 remainder = stripped[m.end():].strip().lstrip(".,;:!").strip()
-                                if len(remainder) >= 25:
+                                if len(remainder) >= 10:
                                     filtered_lines.append(remainder)
                                 # else: pure tic sentence, drop entirely
                             else:
@@ -4656,7 +4664,10 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
                         # P27: mark previous reads of same file for removal
                         if fpath in file_reads:
                             old_idx = file_reads[fpath]
-                            texts[old_idx] = None  # mark for removal
+                            texts[old_idx] = None  # mark tool_use for removal
+                            # Also mark the tool_result that follows (-> ...)
+                            if old_idx + 1 < len(texts) and texts[old_idx + 1] and texts[old_idx + 1].startswith("->"):
+                                texts[old_idx + 1] = None
                         file_reads[fpath] = len(texts)
                     elif name in ("Edit", "edit"):
                         summary = f"[edit {inp.get('file_path', '?')}]"

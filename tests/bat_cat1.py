@@ -308,7 +308,7 @@ try:
     m = Mycelium(TEMP_REPO)
     # Need to create strong fusion: observe "machine" and "learning" together many times
     for _ in range(12):
-        m.observe(["machine", "learning", "model"])
+        m.observe(["machine", "learning"])
     m.save()
 
     # Reload codebook
@@ -396,7 +396,8 @@ try:
     checks = {}
 
     # Generic lines should be reduced
-    checks["generic reduced (< 10 output lines for generic part)"] = len(out_lines) < len(generic_lines) + len(specific_lines)
+    # L10 replaces lines with shorter cues, not fewer lines — check char reduction instead
+    checks["generic reduced (chars shrunk)"] = len(out) < len(full_text)
 
     # Check cue ratio
     for i, gl in enumerate(generic_lines):

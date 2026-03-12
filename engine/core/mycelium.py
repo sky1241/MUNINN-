@@ -175,6 +175,9 @@ class Mycelium:
         self.data["updated"] = time.strftime("%Y-%m-%d")
         # Invalidate caches (degree distribution may have changed via decay)
         self._high_degree_cache = None
+        # Full fusion scan: clean up high-degree fusions that were created before
+        # the degree distribution stabilized
+        self._check_fusions()
 
         # S4: Flush pending translations before save
         try:
@@ -339,6 +342,11 @@ class Mycelium:
                                       "last_seen": time.strftime("%Y-%m-%d")}
                     conns[key]["count"] += e_a
                     conns[key]["last_seen"] = time.strftime("%Y-%m-%d")
+                    # Track zone for federated mode
+                    if self.federated and self.zone:
+                        zones = conns[key].setdefault("zones", [])
+                        if self.zone not in zones:
+                            zones.append(self.zone)
 
         # Check for new fusions (only observed pairs in lazy mode)
         observed_pairs = [(clean[i], clean[j])
@@ -404,17 +412,17 @@ class Mycelium:
         chunks = re.split(r'\n\s*\n', text)
 
         # For small texts (<50 concepts total), treat as single chunk
-        all_words = re.findall(r'[A-Za-zÀ-ÿ_]{4,}', text)
+        all_words = re.findall(r'[A-Za-zÀ-ÿ_]{3,}', text)
         all_counts = Counter(w.lower() for w in all_words)
         total_unique = sum(1 for w in all_counts if w not in _STOPWORDS)
 
         if total_unique <= 80:
             # Small text — single observation (original behavior)
             concepts = [w for w in all_counts if w not in _STOPWORDS]
-            entities = re.findall(r'[A-Z][a-z]{3,}(?:\s+[A-Z][a-z]+)*', text)
+            entities = re.findall(r'[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*', text)
             for entity in entities:
                 e = entity.lower()
-                if e not in _STOPWORDS and len(e) >= 4:
+                if e not in _STOPWORDS and len(e) >= 3:
                     concepts.append(e)
             concepts = list(set(concepts))
             if len(concepts) >= 2:
