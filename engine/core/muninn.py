@@ -3414,7 +3414,7 @@ def prune(dry_run: bool = True):
     nodes = tree["nodes"]
     refresh_tree_metadata(tree)
 
-    branches = {n: d for n, d in nodes.items() if d["type"] == "branch"}
+    branches = {n: d for n, d in nodes.items() if n != "root"}
     if not branches:
         print("  No branches to prune.")
         return
