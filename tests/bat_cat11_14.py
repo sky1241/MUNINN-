@@ -834,10 +834,10 @@ try:
 
     tree["nodes"]["eligible"] = {
         "file": "eligible_branch.mn", "tags": ["redis", "cache"],
-        "access_count": 2, "last_access": old_date,
-        "access_history": [older_date, old_date],
+        "access_count": 1, "last_access": old_date,
+        "access_history": [old_date],
         "lines": lines_before, "hash": muninn.compute_hash(eligible_mn),
-        "usefulness": 0.3, "temperature": 0.2
+        "usefulness": 0.1, "temperature": 0.2
     }
 
     # Fresh branch (recall > 0.3): should NOT be reconsolidated
@@ -880,6 +880,8 @@ try:
             pass
 
     lines_after = text_after.count("\n") + 1 if text_after else 0
+    chars_after = len(text_after) if text_after else 0
+    chars_before = len(content_eligible)
 
     # Read fresh and short (should NOT be reconsolidated)
     fresh_before = fresh_mn.read_text(encoding="utf-8")
@@ -909,7 +911,8 @@ try:
             pass
 
     checks = {}
-    checks[f"eligible: lines_after({lines_after}) < lines_before({lines_before})"] = lines_after < lines_before
+    # B1 reconsolidation compresses chars (L10 cue distill), not line count
+    checks[f"eligible: chars_after({chars_after}) < chars_before({chars_before})"] = chars_after < chars_before
 
     # Tagged lines preserved
     for tag_line in ["Redis", "15ms", "4287", "PostgreSQL", "94.2", "v3.1", "x4.5"]:

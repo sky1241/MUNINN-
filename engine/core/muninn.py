@@ -591,23 +591,24 @@ def read_node(name: str, _tree: dict | None = None) -> str:
             print(f"WARNING: {name} hash mismatch (stored={stored_hash}, actual={actual_hash}), skipping", file=sys.stderr)
             return ""  # Empty = will be skipped by boot (no content)
 
-    node["access_count"] = node.get("access_count", 0) + 1
-    node["last_access"] = time.strftime("%Y-%m-%d")
-    # A2: append to access_history (cap at 10 most recent)
-    history = node.get("access_history", [])
-    history.append(time.strftime("%Y-%m-%d"))
-    node["access_history"] = history[-10:]  # keep last 10
-
     text = filepath.read_text(encoding="utf-8")
 
     # B1: Reconsolidation — re-compress cold branches at read time
     # Nader 2000: recalled memory is unstable, must be re-stored.
     # Only triggers if: recall < 0.3 AND last_access > 7 days ago AND text > 3 lines
     # Uses L10 (cue distillation) + L11 (rule extraction) — zero API calls.
+    # MUST check BEFORE updating access (otherwise recall jumps to ~1.0)
     recall = _ebbinghaus_recall(node)
-    days_ago = _days_since(node.get("access_history", [time.strftime("%Y-%m-%d")])[-2]
-                           if len(node.get("access_history", [])) >= 2
+    days_ago = _days_since(node.get("access_history", [time.strftime("%Y-%m-%d")])[-1]
+                           if node.get("access_history")
                            else node.get("last_access", time.strftime("%Y-%m-%d")))
+
+    node["access_count"] = node.get("access_count", 0) + 1
+    node["last_access"] = time.strftime("%Y-%m-%d")
+    # A2: append to access_history (cap at 10 most recent)
+    history = node.get("access_history", [])
+    history.append(time.strftime("%Y-%m-%d"))
+    node["access_history"] = history[-10:]  # keep last 10
     if recall < 0.3 and days_ago > 7 and text.count("\n") > 3 and name != "root":
         try:
             original_len = len(text)

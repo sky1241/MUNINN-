@@ -414,18 +414,21 @@ try:
     checks["'a3f7b2d' present"] = "a3f7b2d" in out
     checks["'x4.5' present"] = "x4.5" in out
 
-    # Ratio
-    total_in = len(generic_lines) + len(specific_lines)
-    total_out = len(out_lines)
-    ratio = total_out / max(1, total_in)
-    checks[f"ratio {ratio:.2f} < 0.7"] = ratio < 0.7 or total_out < total_in
+    # Ratio — L10 replaces lines with shorter cues, not fewer lines
+    # So measure character reduction, not line count reduction
+    chars_in = len(full_text)
+    chars_out = len(out)
+    char_ratio = chars_out / max(1, chars_in)
+    checks[f"char ratio {char_ratio:.2f} < 0.7"] = char_ratio < 0.7
 
     all_pass = True
     for desc, ok in checks.items():
         details.append(f"- {desc}: {'PASS' if ok else 'FAIL'}")
         if not ok: all_pass = False
 
-    details.append(f"- Lines in: {total_in}, out: {total_out}")
+    total_in = len(generic_lines) + len(specific_lines)
+    total_out = len(out_lines)
+    details.append(f"- Lines in: {total_in}, out: {total_out}, chars: {chars_in}->{chars_out}")
     log("T1.9 — L10 Cue Distillation", "PASS" if all_pass else "FAIL", "\n".join(details), time.time() - t0)
 except Exception as e:
     log("T1.9 — L10 Cue Distillation", "FAIL", f"- EXCEPTION: {e}", time.time() - t0)
