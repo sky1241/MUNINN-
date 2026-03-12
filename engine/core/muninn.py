@@ -903,6 +903,9 @@ def compress_line(line: str) -> str:
         r"\bcorresponds to\b", r"\binstead of\b",
         r"\bbased on\b", r"\bin order to\b",
         r"\bnow\b", r"\balso\b", r"\bjust\b", r"\bstill\b",
+        # Common verbal tics
+        r"\bbasically\b", r"\bactually\b", r"\bessentially\b",
+        r"\bobviously\b", r"\bsimply\b", r"\breally\b", r"\bprobably\b",
         # French fillers
         r"\best\b", r"\bqui\b", r"\bque\b", r"\bdans\b", r"\bavec\b",
         r"\bpour\b", r"\bplus\b", r"\btout\b", r"\bmais\b",
