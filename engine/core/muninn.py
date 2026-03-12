@@ -53,7 +53,7 @@ except ImportError:
 # Universal compression: state words -> short English (BPE-native)
 UNIVERSAL_RULES = {
     # French -> English compact (1 token each)
-    "COMPLET": "done", "COMPLETE": "done", "complet": "done",
+    "COMPLET": "done", "COMPLETE": "done", "COMPLETED": "done", "completed": "done", "complet": "done",
     "VALIDE": "done", "VALIDÉ": "done", "FIXE": "done", "FIXÉ": "done",
     "EN COURS": "wip", "en cours": "wip",
     "ECHOUE": "fail", "ECHOUÉ": "fail", "FAILED": "fail",
