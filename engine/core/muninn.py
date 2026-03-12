@@ -691,8 +691,9 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
         return text
 
     lines = text.split("\n")
-    # Estimate tokens per line using len//4 (BPE average). Fast, avoids O(n²) tiktoken.
-    line_tokens = [max(1, len(line) // 4) for line in lines]
+    # Estimate tokens per line using len//3 (compressed text has shorter words,
+    # so BPE produces more tokens per char than the usual len//4 estimate).
+    line_tokens = [max(1, len(line) // 3) for line in lines]
 
     scored = [(i, line, _line_density(line)) for i, line in enumerate(lines)]
 
@@ -702,24 +703,51 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
     droppable.sort(key=lambda x: x[2])
 
     # Drop lowest-density lines until estimated tokens fit budget
+    # Use 95% target to compensate for len//4 underestimation
+    target = int(max_tokens * 0.95)
     dropped = set()
     running_tokens = total_tokens
     for idx, _, _ in droppable:
-        if running_tokens <= max_tokens:
+        if running_tokens <= target:
             break
         dropped.add(idx)
         running_tokens -= line_tokens[idx]
 
-    current = "\n".join(line for i, line in enumerate(lines) if i not in dropped)
+    remaining = [(i, line) for i, line in enumerate(lines) if i not in dropped]
+    current = "\n".join(line for _, line in remaining)
 
     # One final accurate count
     final_tokens = token_count(current)
+
+    # Second pass with accurate per-line token counts if still over budget
+    # Raise density threshold to 0.98 — willing to drop more to respect budget
+    if final_tokens > max_tokens and remaining:
+        remaining_scored = []
+        for i, line in remaining:
+            d = _line_density(line)
+            if d < 0.98 and not line.strip().startswith("===") and not line.startswith("#"):
+                remaining_scored.append((i, line, d, token_count(line)))
+        remaining_scored.sort(key=lambda x: x[2])  # lowest density first
+        for idx, _, _, ltok in remaining_scored:
+            if final_tokens <= max_tokens:
+                break
+            dropped.add(idx)
+            final_tokens -= ltok
+        current = "\n".join(line for i, line in enumerate(lines) if i not in dropped)
+        final_tokens = token_count(current)
+
+    # Final pass: if still over, trim lines from the end (least important position)
+    if final_tokens > max_tokens:
+        final_lines = current.split("\n")
+        while final_lines and final_tokens > max_tokens:
+            removed = final_lines.pop()
+            final_tokens -= token_count(removed)
+        current = "\n".join(final_lines)
+        final_tokens = token_count(current)
+
     if dropped:
         print(f"  KIComp: dropped {len(dropped)} low-density lines "
               f"(budget: {max_tokens} tokens, final: {final_tokens} tokens)", file=sys.stderr)
-    if final_tokens > max_tokens:
-        print(f"  KIComp WARNING: still over budget ({final_tokens}/{max_tokens} tokens) "
-              f"- all droppable lines exhausted", file=sys.stderr)
 
     return current
 
@@ -3053,17 +3081,17 @@ def classify_session(concepts: list[str] = None, tagged_lines: list[str] = None)
     repo = _REPO_PATH or Path(".")
 
     # Get data from parameters or session index
-    if not concepts or not tagged_lines:
+    # Only fall back to index when BOTH are missing — if concepts are provided
+    # explicitly, don't load tagged_lines from index (they would dominate scoring)
+    if not concepts and not tagged_lines:
         index_path = repo / ".muninn" / "session_index.json"
         if index_path.exists():
             try:
                 index = json.loads(index_path.read_text(encoding="utf-8"))
                 if isinstance(index, list) and index:
                     entry = index[-1]
-                    if not concepts:
-                        concepts = entry.get("concepts", [])
-                    if not tagged_lines:
-                        tagged_lines = entry.get("tagged", [])
+                    concepts = entry.get("concepts", [])
+                    tagged_lines = entry.get("tagged", [])
             except (json.JSONDecodeError, OSError):
                 pass
 
@@ -3084,13 +3112,27 @@ def classify_session(concepts: list[str] = None, tagged_lines: list[str] = None)
     mode_info = detect_session_mode(concepts)
     diversity = mode_info["diversity"]
 
-    # Classify by dominant signal
+    # Concept keyword signals (B6: concepts themselves hint at session type)
+    concept_lower = {c.lower() for c in (concepts or [])}
+    debug_words = {"bug", "crash", "fix", "error", "traceback", "exception", "fail", "broken"}
+    feature_words = {"feature", "add", "new", "implement", "create", "build"}
+    explore_words = {"explore", "search", "find", "investigate", "scan", "discover"}
+    refactor_words = {"refactor", "clean", "rename", "move", "reorganize", "simplify"}
+    review_words = {"review", "audit", "benchmark", "test", "verify", "check"}
+
+    concept_debug = len(concept_lower & debug_words)
+    concept_feature = len(concept_lower & feature_words)
+    concept_explore = len(concept_lower & explore_words)
+    concept_refactor = len(concept_lower & refactor_words)
+    concept_review = len(concept_lower & review_words)
+
+    # Classify by dominant signal (tags + concept keywords + diversity)
     scores = {
-        "debug": tag_counts["E"] * 3 + (1.0 - diversity) * 2,
-        "feature": tag_counts["D"] * 2 + diversity * 2,
-        "explore": diversity * 5 + mode_info["concept_count"] * 0.1,
-        "refactor": (1.0 - diversity) * 3 + (tag_counts["A"] * 2 if tag_counts["A"] else 0),
-        "review": tag_counts["B"] * 3 + tag_counts["F"] * 2,
+        "debug": tag_counts["E"] * 3 + (1.0 - diversity) * 2 + concept_debug * 3,
+        "feature": tag_counts["D"] * 2 + diversity * 2 + concept_feature * 3,
+        "explore": diversity * 5 + mode_info["concept_count"] * 0.1 + concept_explore * 3,
+        "refactor": (1.0 - diversity) * 3 + (tag_counts["A"] * 2 if tag_counts["A"] else 0) + concept_refactor * 3,
+        "review": tag_counts["B"] * 3 + tag_counts["F"] * 2 + concept_review * 3,
     }
 
     best_type = max(scores, key=scores.get)
