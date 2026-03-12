@@ -5255,10 +5255,11 @@ def _surface_known_errors(repo_path: Path, query: str) -> str:
     hints = []
     for entry in errors:
         # Check if query words overlap with error text
-        error_words = set(entry["error"].lower().split())
-        query_words = set(query_lower.split())
+        # Strip punctuation for matching (e.g. "TypeError:" should match "TypeError")
+        error_words = set(re.findall(r'[a-z0-9_]+', entry["error"].lower()))
+        query_words = set(re.findall(r'[a-z0-9_]+', query_lower))
         overlap = error_words & query_words
-        if len(overlap) >= 2:  # at least 2 words match
+        if len(overlap) >= 1:  # at least 1 word match
             hints.append(f"KNOWN: {entry['error']} -> FIX: {entry['fix']}")
     return "\n".join(hints[:3])  # max 3 hints
 
