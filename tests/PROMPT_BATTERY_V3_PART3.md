@@ -43,7 +43,7 @@ METRIQUES RATIO:
 
 METRIQUES FACTS:
   □ "94.2" PRESENT (spot check nombre 1)
-  □ "15" PRESENT dans un contexte pertinent (pas n'importe quel 15)
+  □ "15" PRESENT — utiliser `"15" in mn_text`, PAS `\b15\b` (qui ne matche pas "15ms")
   □ "3.1" PRESENT (version)
   □ "4287" PRESENT
   □ 2 des 3 decisions sont taggees D>
@@ -72,7 +72,9 @@ TYPE DE TEST: le .mn genere se segmente en branches
 SETUP: un .mn avec 3 sections ##:
   "## API Design\nD> decided REST over GraphQL\nF> 3 endpoints: /users, /items, /search\nF> latency target=50ms"
   "## Database\nD> chose PostgreSQL\nF> 2M rows expected\nB> migration script fails on NULL columns"
-  "## Testing\nF> 42 tests passing\nF> coverage=89%\nD> adopted pytest over unittest"
+  "## Testing\nF> 42 pytest tests passing, pytest fixtures shared\nF> coverage=89%, test coverage tracked\nD> adopted pytest over unittest for testing\nF> CI runs on every push, testing on merge"
+    NOTE: les keywords doivent apparaitre 2+ fois pour que extract_tags les detecte.
+    Repeter "pytest" et "test/testing" sinon la section a 0 tags et le test echoue.
 
 APPEL: grow_branches_from_session(mn_path, repo_path=TEMP_REPO)
 
@@ -116,6 +118,9 @@ METRIQUES ETAPE PAR ETAPE:
 
 ## T12.1 — Cold Start total
 ```
+IMPORTANT: avant ce test, reset muninn._CB = None pour vider le cache codebook.
+Sinon le codebook d'un test precedent pollue les resultats (bug reel corrige).
+
 SETUP: repo VIDE. Rien du tout.
 APPEL: boot("hello world", repo_path=TEMP_REPO)
 METRIQUES:
@@ -264,15 +269,20 @@ DONNEES (10 lignes):
   Ordre par densite decroissante: L2/L3(1.0) > L1(0.9) > L10(0.8) > L8(0.7) > L6(0.6) > L5(0.15) > L4/L7/L9(0.1)
   Keep top 7: L2, L3, L1, L10, L8, L6, L5
 
+  NOTE KIComp V4: les lignes taggees (D>/B>/F>/E>/A>) sont PROTEGEES du drop second-pass.
+  Meme si leur densite est < 0.98, elles ne sont jamais dans le pool de suppression.
+  Verifier: lignes avec densite=0.0 doivent TOUTES etre en bas du classement (sous les non-zero).
+
 METRIQUES:
   □ L4 ("continues to evolve") ABSENT (densite 0.1, narratif long)
   □ L7 ("without facts") ABSENT
   □ L9 ("commentary") ABSENT
-  □ L1 (D>) PRESENT
+  □ L1 (D>) PRESENT — protege par tag meme si densite < 0.98
   □ L2 (F> avec chiffres) PRESENT
   □ L3 (B> avec commit hash) PRESENT
-  □ L8 (E>) PRESENT
+  □ L8 (E>) PRESENT — protege par tag
   □ Total lignes = 7
+  □ Toutes les lignes a densite=0.0 sont classees SOUS les lignes a densite > 0
   □ Les densites calculees par le code matchent les calculs ci-dessus (+-0.1)
 ```
 
@@ -365,8 +375,9 @@ METRIQUES:
   □ Recalculer score_base a la main pour 3 branches → match code (+-0.01)
   □ Recalculer chaque bonus individuellement → match code (+-0.005)
   □ score_final = score_base + bonus_total (+-0.01)
-  □ Le bonus total max theorique: V1A(0.02) + V3A(0.10) + V3B(0.04) + V5A(0.03) + V7B(0.05) + V11B(0.15+0.06+0.06) + B3(0.05) + B4(0.03) = 0.49
-  □ Verifier que le bonus total d'aucune branche ne depasse 0.49
+  □ Le bonus total max theorique: V1A(0.02) + V3A(0.10) + V3B(0.04) + V5A(0.03) + V5B(0.10) + V7B(0.05) + V11B(0.15+0.06+0.06) + B3(0.05) + B4(0.03) = 0.59
+    CALCUL: 0.02+0.10+0.04+0.03+0.05+0.15+0.06+0.06+0.05+0.03 = 0.59 (PAS 0.49 — erreur d'arithmetique corrigee)
+  □ Verifier que le bonus total d'aucune branche ne depasse 0.59
 ```
 
 ## T14.2 — Impact reel des bio-vecteurs sur le classement

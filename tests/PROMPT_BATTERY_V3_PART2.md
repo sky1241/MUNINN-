@@ -469,7 +469,8 @@ TYPE DE TEST: scoring d'arousal par message
 
 DONNEES:
   A: "CRITICAL BUG: the entire production database is DOWN!! Users can't login!! FIX NOW!!"
-  B: "The test suite passed. All 42 tests green. No issues."
+  B: "The feature works well in staging."
+    ATTENTION: PAS "No issues" — VADER score le mot "issues" comme negatif meme dans "No issues".
   C: "I wonder if we should maybe consider possibly looking into the logging"
 
 APPEL: emotional scoring sur chaque

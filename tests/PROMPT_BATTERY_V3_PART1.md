@@ -298,8 +298,10 @@ METRIQUES:
 TYPE DE TEST: fusion conditionnelle (avec/sans mycelium = controle)
 
 SETUP: creer Mycelium(TEMP_REPO).
-  Injecter une fusion: ("machine", "learning") avec strength >= 5
+  Observer ("machine", "learning") ensemble 12+ fois pour creer la fusion
   (FUSION_THRESHOLD = 5, mycelium.py ligne 51)
+  ATTENTION: observer SEULEMENT ["machine", "learning"] — pas 3 concepts,
+  sinon 3 fusions se creent et le test devient imprevisible.
 
 DONNEE: "the machine learning model is ready"
 
@@ -360,7 +362,8 @@ DONNEE SPECIFIQUE (3 lignes — novelty_score >= 0.35 car chiffres/dates):
 APPEL: _cue_distill(texte_complet)
 
 METRIQUES:
-  □ Les 10 lignes generiques → reduites (total lignes sortie < 10 pour cette partie)
+  □ Les 10 lignes generiques → reduites en CHARS (len(output) < len(input) pour le bloc generique)
+    NOTE: L10 reduit les CARACTERES, pas forcement le nombre de lignes. Verifier len(out) < len(full_text).
   □ Chaque cue est < 70% de la ligne originale (cue_length_ratio=0.7, ligne 1528)
   □ Le mot "gradient" apparait encore (comme cue de rappel)
   □ L'explication COMPLETE n'est PLUS la (pas 10 lignes de gradient descent)
@@ -681,14 +684,15 @@ TYPE DE TEST: les concepts trop connectes sont bloques de la fusion
 PARAMETRES: DEGREE_FILTER_PERCENTILE = 0.05 (mycelium.py ligne 58)
 
 SETUP: observer 100 paragraphes. Dans CHAQUE paragraphe:
-  - "data" apparait (sera dans le top 5%)
+  - "nucleus" apparait (sera dans le top 5%)
+    ATTENTION: PAS "data" — c'est un stopword (_STOPWORDS dans mycelium.py), il serait ignore.
   - 3 concepts random differents a chaque fois
   Puis observer 10 paragraphes ou "flask" et "python" co-occurrent.
 
 METRIQUES:
-  □ degre("data") > degre("flask") (beaucoup plus connecte)
-  □ "data" est dans le top 5% par degre
-  □ Tenter de forcer une fusion "data"+"analysis" (count artificiellement eleve)
+  □ degre("nucleus") > degre("flask") (beaucoup plus connecte)
+  □ "nucleus" est dans le top 5% par degre
+  □ Tenter de forcer une fusion "nucleus"+"analysis" (count artificiellement eleve)
     → la fusion est BLOQUEE (S3 protege)
   □ "flask"+"python" PEUT fusionner si count >= 5 (pas dans top 5%)
 ```
@@ -798,10 +802,10 @@ TYPE DE TEST: distance semantique par compression
 Formule: NCD(a,b) = (C(ab) - min(C(a),C(b))) / max(C(a),C(b))
   C(x) = len(zlib.compress(x.encode()))
 
-DONNEES:
-  A = "python flask api web server endpoint json rest"
-  B = "python flask web api endpoint json rest server"
-  C = "quantum physics electron photon wave particle duality"
+DONNEES (strings LONGUES avec vocabulaire unique — zlib NCD est unreliable sur des strings courtes):
+  A = "python flask api web server endpoint json rest database sql query migration orm"
+  B = "python flask web api endpoint json rest server database query sql orm migration"
+  C = "quantum physics electron photon wave particle duality entanglement superposition"
   D = A (copie exacte)
   E = "" (vide)
 
@@ -829,9 +833,11 @@ La logique (mycelium.py lignes 1485-1613):
   min_degree = 5
 
 SETUP: mycelium ou:
-  A ↔ B (count=20, degree(A)=10, degree(B)=15)
-  B ↔ C (count=20, degree(C)=8)
+  A ↔ B (count=20, degree(A)>=5, degree(B)>=5)
+  B ↔ C (count=20, degree(C)>=5)
   A ↔ C ABSENT (trou structurel)
+  IMPORTANT: TOUS les 3 noeuds (A, B, C) doivent avoir degree >= 5 (min_degree du code).
+  Ajouter des edges supplementaires a B si besoin (ex: B↔extra_b1, B↔extra_b2, B↔extra_b3).
   D ↔ E (count=20, degree(D)=3, degree(E)=2) — degree trop faible pour detection
 
 APPEL: m.detect_blind_spots(top_n=20)
@@ -859,9 +865,10 @@ SETUP: mycelium avec:
   - "normal_concept": 5 connexions
 
 METRIQUES:
-  □ "isolated" dans anomalies["isolated"] (ou equivalent)
-  □ "hub_concept" dans anomalies["hubs"]
-  □ "normal_concept" PAS dans les anomalies
+  □ detect_anomalies() retourne des TUPLES (name, degree), pas des strings.
+    Extraire les noms: hub_names = [c for c, d in anomalies["hubs"]]
+  □ "hub_concept" dans hub_names
+  □ "normal_concept" PAS dans les anomalies (ni hubs ni isolated)
   □ Les hubs ont degree > mean + 2*std (verifier le calcul)
 ```
 
@@ -890,7 +897,8 @@ TYPE DE TEST: round-trip cross-repo
 ATTENTION: monkey-patch vers TEMP_META, pas ~/.muninn/
 
 SETUP:
-  m1 = Mycelium(TEMP_REPO) avec 50 connexions dont (python, flask, count=10)
+  m1 = Mycelium(TEMP_REPO) avec 50+ edges UNIQUES dont (python, flask, count=10)
+    ATTENTION: observer N concepts cree N*(N-1)/2 edges. Verifier db.connection_count() >= 50.
   Appel: m1.sync_to_meta()
 
   Creer TEMP_REPO_2. m2 = Mycelium(TEMP_REPO_2) (vide)
