@@ -2829,7 +2829,7 @@ def recall(query: str) -> str:
     if sessions_dir.exists():
         for mn_file in sorted(sessions_dir.glob("*.mn"), reverse=True)[:10]:
             try:
-                text = mn_file.read_text(encoding="utf-8")
+                text = mn_file.read_text(encoding="utf-8", errors="ignore")
                 for line in text.split("\n"):
                     stripped = line.strip()
                     if not stripped or stripped.startswith("#"):
@@ -2849,7 +2849,7 @@ def recall(query: str) -> str:
             if mn_file.name == "root.mn":
                 continue
             try:
-                text = mn_file.read_text(encoding="utf-8")
+                text = mn_file.read_text(encoding="utf-8", errors="ignore")
                 for line in text.split("\n"):
                     stripped = line.strip()
                     if not stripped or stripped.startswith("#"):
