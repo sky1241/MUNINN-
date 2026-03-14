@@ -15,10 +15,15 @@ from muninn import _ebbinghaus_recall, compute_temperature
 
 TOLERANCE = 0.01
 
-def make_node(access_count=5, last_access="2026-03-10", usefulness=1.0):
+def _today():
+    """Use today's date so delta=0 tests don't drift over time."""
+    import time
+    return time.strftime("%Y-%m-%d")
+
+def make_node(access_count=5, last_access=None, usefulness=1.0):
     return {
         "access_count": access_count,
-        "last_access": last_access,
+        "last_access": last_access or _today(),
         "usefulness": usefulness,
         "lines": 50,
         "max_lines": 150,
@@ -26,7 +31,7 @@ def make_node(access_count=5, last_access="2026-03-10", usefulness=1.0):
 
 def test_a1_1_arithmetic_default():
     """usefulness=1.0 => h = 7 * 2^5 = 224.0 (same as pre-A1)"""
-    node = make_node(access_count=5, usefulness=1.0, last_access="2026-03-10")
+    node = make_node(access_count=5, usefulness=1.0)  # last_access=today => delta=0
     recall = _ebbinghaus_recall(node)
     # delta=0 => recall = 2^0 = 1.0
     assert abs(recall - 1.0) < TOLERANCE, f"A1.1 FAIL: recall={recall}, expected 1.0"
