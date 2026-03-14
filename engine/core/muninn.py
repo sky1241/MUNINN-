@@ -138,6 +138,7 @@ _SECRET_PATTERNS = [
     r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
     r'token[=:]\s*\S{20,}',         # Generic tokens
     r'password[=:]\s*\S+',          # Passwords
+    r'xox[bpsar]-[A-Za-z0-9\-]{10,}',  # B16: Slack tokens (xoxb-, xoxp-, xoxs-, xoxa-, xoxr-)
 ]
 
 
