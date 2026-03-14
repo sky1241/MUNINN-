@@ -1680,7 +1680,7 @@ def _llm_compress(text: str, context: str = "") -> str:
             # Fallback: if no ## headers found, split by line count
             if len(chunks) < 2:
                 lines = text.split("\n")
-                chunk_size = max(1, len(lines) // max(1, len(text) // 6000))
+                chunk_size = max(1, len(lines) // max(2, len(text) // 6000))  # M3 fix: at least 2 chunks
                 chunks = []
                 for i in range(0, len(lines), chunk_size):
                     chunk = "\n".join(lines[i:i + chunk_size])
