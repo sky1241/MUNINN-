@@ -131,8 +131,8 @@ _CORE_DIR = str(Path(__file__).resolve().parent)
 
 # Secret patterns — applied in compress_file and compress_transcript
 _SECRET_PATTERNS = [
-    r'ghp_[A-Za-z0-9]{36,}',       # GitHub tokens
-    r'sk-[A-Za-z0-9]{20,}',         # API keys
+    r'ghp_[A-Za-z0-9]{20,}',       # GitHub tokens (classic PAT)
+    r'sk-[A-Za-z0-9\-._]{20,}',    # API keys (may contain dashes like sk-ant-api03-...)
     r'AKIA[A-Z0-9]{16}',            # AWS access keys
     r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # Private keys
     r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
@@ -4563,9 +4563,13 @@ def _detect_transcript_format(filepath: Path) -> str:
             json_lines = sum(1 for l in lines[:5] if l.strip().startswith("{"))
             if json_lines >= 2:
                 return "jsonl"
-            # Single-line JSON with messages key = json format
-            if isinstance(obj, dict) and "messages" in obj:
-                return "json"
+            # Single JSON object with known keys = could be JSONL (1 msg) or json conversation
+            if isinstance(obj, dict):
+                if any(k in obj for k in ("messages", "chat_messages", "conversation", "content")):
+                    return "json"
+                # Single JSONL line (e.g. {"type": "user", ...})
+                if "type" in obj or "role" in obj:
+                    return "jsonl"
         except json.JSONDecodeError:
             pass
 

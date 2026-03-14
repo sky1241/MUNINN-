@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9 + V9B: 41 bugs fixes (4 HIGH, 19 MEDIUM, 18 LOW).
-Engine: muninn.py 6324 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 9927 total
-Tests: Battery V4 — 50 PASS, 0 FAIL, 0 SKIP (3 anciens SKIP convertis en vrais tests) + L9 API valide
+Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9 + V9B + V9C: 44 bugs fixes.
+Engine: muninn.py 6328 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 9931 total
+Tests: Battery V4 (50) + Senior Battery (40) = 90 PASS, 0 FAIL, 0 SKIP
 
 ## Anatomie
 
@@ -1118,6 +1118,27 @@ Battery V4 finale: 50 PASS, 0 FAIL, 0 SKIP.
 #### LOW (2)
 - B6: \ba\b filler strip mangeait "a" dans math/code (a+b) -> strip seulement comme article anglais
 - B7: double conn.close() dans mycelium.py init -> supprime
+
+### Senior Dev Battery V9C (session 2026-03-14) [DONE]
+
+40 tests mode cassage de gueule couvrant toutes les fonctions non testees.
+3 vrais bugs trouves + corriges pendant l'ecriture des tests.
+Total: 90 tests (50 Battery V4 + 40 Senior), tous PASS.
+
+#### Tests (40, 8 categories)
+- S1-S5: extract_facts, compress_line edge cases (vide, 10K chars, CJK, Arabic, emoji, math)
+- S6-S10: semantic_rle, malformed JSONL, format detection, JSON/MD parsers
+- S11-S15: build_tree (petit/gros), generate_root_mn, scan_repo, verify_compression
+- S16-S20: boot stress (vide, corrompu, state leak, 50 branches, auto-continue P23)
+- S21-S25: prune (0 branches, tout chaud, tout froid, consolidation, ingest)
+- S26-S30: mycelium stress (500 concepts, decay, batch ops, date roundtrip, fusions)
+- S31-S35: securite (6 patterns secrets), unicode E2E, tree.json corrompu, .mn binaire
+- S36-S40: pipeline E2E complet, cue_distill+extract_rules, inject, recall, decode roundtrip
+
+#### Bugs trouves et corriges (3)
+- B8: secret pattern ghp_ trop strict (36+ -> 20+) laissait passer tokens courts
+- B9: secret pattern sk- ne matchait pas tirets (sk-ant-api03-...) -> [A-Za-z0-9\-._]
+- B10: _detect_transcript_format ne reconnaissait pas JSONL 1 ligne ni JSON chat_messages
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
