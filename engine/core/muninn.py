@@ -3591,6 +3591,23 @@ def prune(dry_run: bool = True):
         else:
             print(f"  OK   {name}: R={recall:.2f} t={temp:.2f} acc={acc}")
 
+    # B14: Dust branch cleanup — branches with <= 3 lines are noise
+    # (minimum viable content = 4+ lines, below that no useful information)
+    dust = []
+    for name, node in list(branches.items()):
+        if name in dict(dead):
+            continue  # already dead, will be handled below
+        lines = node.get("lines", 0)
+        if lines <= 3 and node.get("temperature", 0) < 0.3:
+            dust.append(name)
+    if dust:
+        for name in dust:
+            # Move from cold/hot to dead
+            dead.append((name, _days_since(nodes[name].get("last_access", time.strftime("%Y-%m-%d")))))
+            # Remove from cold list if present
+            cold[:] = [(n, d) for n, d in cold if n != name]
+        print(f"  B14 DUST: {len(dust)} branches <= 3 lines -> dead ({', '.join(dust[:10])})")
+
     recompressed = 0
     if not dry_run:
         # Optimal Forgetting: re-compress cold branches with L9
