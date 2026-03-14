@@ -4892,10 +4892,14 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
             sections.append((f"## {header_text}", chunk))
 
     # Compress each section (tags applied AFTER L9, not here)
+    # B12: Emit ## headers so grow_branches_from_session() can segment by topic
     output = ["# MUNINN|session_compressed"]
     for header, lines in sections:
         compressed = compress_section(header, lines)
         if compressed and len(compressed) > 5:
+            # Preserve ## header for grow_branches segmentation
+            if header.startswith("## "):
+                output.append(header)
             output.append(compressed)
 
     # Add facts summary at the end
