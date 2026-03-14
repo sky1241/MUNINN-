@@ -1909,7 +1909,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             chunk = lines[j:j + chunk_size]
             header = f"## {chunk[0][:60].strip()}"
             body = "\n".join(chunk)
-            if body.count("\n") >= 4:
+            if body.count("\n") >= 1:  # M4 fix: don't drop small last chunks (was >= 4)
                 segments.append((header, body))
 
     if not segments:
