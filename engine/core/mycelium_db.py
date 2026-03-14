@@ -64,6 +64,7 @@ class MyceliumDB:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path), timeout=10)
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")  # M14 fix: enforce FK constraints
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA mmap_size=100000000")
         self._conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
@@ -139,8 +140,8 @@ class MyceliumDB:
                 self._concept_cache[name] = row[0]
                 self._id_to_name[row[0]] = name
                 return row[0]
-        except sqlite3.Error:
-            pass
+        except sqlite3.IntegrityError:
+            pass  # M13 fix: only catch duplicate key, not disk-full/corruption
         # Fallback: fetch existing
         row = self._conn.execute(
             "SELECT id FROM concepts WHERE name = ?", (name,)
