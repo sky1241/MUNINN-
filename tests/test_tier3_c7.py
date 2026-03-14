@@ -55,7 +55,8 @@ def test_c7_5_wired_in_reconsolidation():
     src = Path(muninn.__file__).read_text(encoding="utf-8")
     # Find reconsolidation section in read_node
     reconsolidation_start = src.find("B1: Reconsolidation")
-    reconsolidation_section = src[reconsolidation_start:reconsolidation_start+800]
+    assert reconsolidation_start != -1, "C7.5 FAIL: B1 reconsolidation not found in source"
+    reconsolidation_section = src[reconsolidation_start:reconsolidation_start+1500]
     assert "_resolve_contradictions" in reconsolidation_section, \
         "C7.5 FAIL: contradiction resolution not wired in B1"
     assert "C7" in reconsolidation_section, \
