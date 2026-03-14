@@ -359,11 +359,12 @@ class Mycelium:
             clean_set = set(clean)
             if self._db is not None:
                 # Only check fusions involving observed concepts (not ALL 269K)
+                # H2 fix: build id_to_name ONCE before the loop (was O(N*M) inside)
+                id_to_name = {v: k for k, v in self._db._concept_cache.items()}
                 for concept in clean_set:
                     cid = self._db._concept_cache.get(concept)
                     if cid is None:
                         continue
-                    id_to_name = {v: k for k, v in self._db._concept_cache.items()}
                     for row in self._db._conn.execute(
                         "SELECT a, b FROM fusions WHERE a=? OR b=?", (cid, cid)
                     ):
