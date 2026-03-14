@@ -674,7 +674,7 @@ def _line_density(line: str) -> float:
 
     # Long lines without numbers = probably narrative filler
     if len(s) > 120 and num_count == 0:
-        score = max(score, 0.1)
+        score = min(score, 0.1)  # M1 fix: CAP (not floor) long narrative
 
     return min(1.0, score)
 
