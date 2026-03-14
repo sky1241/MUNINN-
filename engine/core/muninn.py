@@ -3442,6 +3442,50 @@ def _surface_insights_for_boot(query: str = "") -> str:
 
 # ── PRUNE (R4) ───────────────────────────────────────────────────
 
+def _light_prune():
+    """B15: Fast auto-prune for hooks — kills dead + dust only.
+
+    No L9 recompression, no sleep consolidation, no H1/H2 dreams.
+    Just Ebbinghaus recall check + B14 dust removal + file cleanup.
+    Runs in < 1s even on 2000+ branches.
+    """
+    tree = load_tree()
+    nodes = tree["nodes"]
+    refresh_tree_metadata(tree)
+
+    branches = {n: d for n, d in nodes.items() if n != "root"}
+    if not branches:
+        return 0
+
+    removed = 0
+    for name in list(branches.keys()):
+        node = branches[name]
+        recall = _ebbinghaus_recall(node)
+        lines = node.get("lines", 0)
+        temp = node.get("temperature", 0)
+
+        # Dead: forgotten (R < 0.05) OR dust (<=3 lines and cold)
+        is_dead = recall < 0.05
+        is_dust = lines <= 3 and temp < 0.3
+
+        if is_dead or is_dust:
+            # Delete file
+            branch_file = TREE_DIR / node.get("file", "")
+            if branch_file.exists():
+                branch_file.unlink()
+            # Remove from tree
+            del nodes[name]
+            root_children = nodes.get("root", {}).get("children", [])
+            if name in root_children:
+                root_children.remove(name)
+            removed += 1
+
+    if removed > 0:
+        save_tree(tree)
+        print(f"  LIGHT PRUNE: removed {removed} dead/dust branches ({len(nodes)-1} remaining)", file=sys.stderr)
+    return removed
+
+
 def prune(dry_run: bool = True):
     """R4: promote hot, demote cold, kill dead. Uses temperature score."""
     tree = load_tree()
@@ -5573,6 +5617,13 @@ def feed_from_hook(repo_path: Path):
         tree = load_tree()
         refresh_tree_metadata(tree)
         save_tree(tree)
+
+        # B15: Auto-prune when branches exceed cap
+        # Light prune: kills dead + dust only (no L9, no consolidation)
+        branch_count = len([n for n in tree["nodes"] if n != "root"])
+        if branch_count > 150:
+            print(f"MUNINN AUTO-PRUNE: {branch_count} branches > 150, running light prune", file=sys.stderr)
+            _light_prune()
 
         # 5. P20b: Sync to meta-mycelium (cross-repo memory)
         try:
