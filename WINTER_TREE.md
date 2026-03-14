@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9 + V9B + V9C: 44 bugs fixes.
-Engine: muninn.py 6328 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 9931 total
-Tests: Battery V4 (50) + Senior Battery (40) = 90 PASS, 0 FAIL, 0 SKIP
+Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9-V9D: 49 bugs fixes.
+Engine: muninn.py 6420 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 10023 total
+Tests: Battery V4 (50) + Senior (40) + Tree Fixes (12) = 102 PASS, 0 FAIL, 0 SKIP
 
 ## Anatomie
 
@@ -1139,6 +1139,64 @@ Total: 90 tests (50 Battery V4 + 40 Senior), tous PASS.
 - B8: secret pattern ghp_ trop strict (36+ -> 20+) laissait passer tokens courts
 - B9: secret pattern sk- ne matchait pas tirets (sk-ant-api03-...) -> [A-Za-z0-9\-._]
 - B10: _detect_transcript_format ne reconnaissait pas JSONL 1 ligne ni JSON chat_messages
+
+### AUDIT V9D — Tree Architecture Fix (session 2026-03-14) [DONE]
+
+5 bugs architecturaux dans le cycle pousse/taille de l'arbre.
+L'arbre avait explose a 2176 branches de bruit (median 13 lignes, 501 branches <= 5 lignes).
+Root cause: `compress_section()` strippait les `## headers`, `grow_branches()` les attendait,
+le fallback creait des branches arbitraires sans seuil minimum, et `prune()` n'etait jamais
+appele automatiquement. Rebuild one-shot: 2176 → 10 branches propres.
+Total: 102 tests (50 V4 + 40 Senior + 12 Tree Fixes), tous PASS.
+
+#### Bugs (5)
+- B11: fallback seuil `>=1` au lieu de `>=4` — creait des branches de 2-3 lignes (poussiere)
+- B12: compress_transcript n'emettait pas de `## headers` — grow_branches tombait toujours dans le fallback
+- B13: pas de cap sur les branches — 2176 branches sans limite
+- B14: prune() ne nettoyait pas les branches <= 3 lignes (minimum viable = 4 lignes)
+- B15: prune() jamais appele automatiquement — l'arbre poussait sans etre taille
+
+#### Fixes
+- B11: restore `>=4` dans grow_branches fallback (commit 341e59e)
+- B12: compress_transcript emet `## header` avant chaque section compressee (commit 162cc8a)
+- B13: cap a 200 branches dans grow_branches, coldest removed (commit 0753f0b)
+- B14: prune() classifie branches <= 3 lignes cold comme dead (commit f10e9ad)
+- B15: `_light_prune()` — prune leger (50ms, zero API) appele dans feed_from_hook quand branches > 150 (commit a1d394a)
+
+#### Tree rebuild (one-shot)
+2176 branches (fallback garbage) → backup → re-grow depuis 10 sessions .mn → 10 branches propres.
+Merge NCD correct: 8/10 sessions ont merge dans les branches existantes (contenu similaire).
+
+#### Tests (12, fichier tests/run_tree_fixes.py)
+- T1-T3: B11 — pas de branche < 5 lignes, edge cases 4/5 lignes
+- T4-T6: B12 — ## headers survivent compression + P26 dedup + L10/L11
+- T7-T9: B13 — cap 250→200, hottest survivent, pas de fichiers orphelins sur disque
+- T10-T12: B14 — dust cold meurt, dust hot survit, empty tree no crash
+
+#### Analyse comparative SOTA (sources internet 2024-2026)
+
+Ce que Muninn fait qui est valide par la recherche:
+- Sleep consolidation (prune) → valide par LightMem (ICLR 2026, arxiv 2510.18866)
+- Pipeline Storage→Reflection→Experience (L0→L1-L7→L10/L11) → valide par survey "From Storage to Experience" (Preprints.org Jan 2026)
+- L10 Cue Distillation basee sur connaissance parametrique LLM → unique, personne d'autre ne fait ca
+- NCD dedup → similaire au threshold 0.85 de Mem0 (arxiv 2504.19413) et CrewAI
+- Spreading Activation retrieval → Collins & Loftus, utilise par plusieurs systemes 2025
+- Structured tree memory → valide par StructMemEval (arxiv 2602.11243, Feb 2026) et A-MEM (NeurIPS 2025)
+
+Ce que Muninn fait que personne d'autre ne fait:
+- Compression regex pure (zero LLM cost, instantane) — tous les autres utilisent LLM summarization
+- Living mycelium codebook (abbreviations apprises par co-occurrence)
+- Federated cross-repo memory sharing (meta-mycelium)
+
+Ce que la recherche suggere pour plus tard (non implemente):
+- Multi-granularite adaptive (MemGAS 2025): router query vers root OU branches selon le niveau de detail necessaire
+- Zettelkasten linking (A-MEM, NeurIPS 2025, arxiv 2502.12110): liens bidirectionnels entre branches
+- Graph memory (Mem0[g]): relations explicites entre memories (le mycelium fait les connexions mais pas entre branches)
+
+Verdict: Muninn est aligne avec le SOTA sur l'architecture (hierarchique, consolidation, retrieval multi-signal).
+L'avantage unique = regex compression (x143 sur transcripts, 10s vs 17min, $0.00 vs $0.35).
+Le LLM builder moyen fait du summarization API. Sky fait du regex. C'est 1000x moins cher et plus rapide.
+Les features manquantes (multi-granularite, Zettelkasten) sont des optimisations de retrieval, pas des bugs.
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
