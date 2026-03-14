@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9 COMPLETE: 34 bugs fixes (4 HIGH, 14 MEDIUM, 16 LOW).
-Engine: muninn.py 6315 lignes + mycelium.py 2608 lignes + mycelium_db.py 985 lignes = 9908 total
-Tests: Battery V4 — 81 PASS, 0 FAIL, 3 SKIP (permanents) + 11 tests dedies bug-fixes + L9 API valide
+Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9 + V9B: 41 bugs fixes (4 HIGH, 19 MEDIUM, 18 LOW).
+Engine: muninn.py 6324 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 9927 total
+Tests: Battery V4 — 50 PASS, 0 FAIL, 0 SKIP (3 anciens SKIP convertis en vrais tests) + L9 API valide
 
 ## Anatomie
 
@@ -1071,7 +1071,7 @@ Commits: 1f1f86f, daf6845, 0cea991, 26b42f6, cf43e8f
 
 Audit profond mode senior dev: 34 bugs trouves (4 HIGH, 14 MEDIUM, 16 LOW).
 Tous corriges + 11 tests battery corriges + L9 API valide.
-Battery V4 finale: 81 PASS, 0 FAIL, 3 SKIP (permanents).
+Battery V4 post-V9: 81 PASS, 0 FAIL, 3 SKIP.
 
 #### HIGH (4) — crashes et data loss
 - H1: prune() KeyError apres sleep_consolidate (guard `if name not in nodes`)
@@ -1097,6 +1097,27 @@ Battery V4 finale: 81 PASS, 0 FAIL, 3 SKIP (permanents).
 T1.1 format JSONL, T1.7 fusion API, T1.10 pipe format, T2.1 code block size,
 T3.2 skeleton match, T4.2 import names, T4.4 sigmoid check, T4.9 isolated format,
 T4.11 edge threshold, T4.12 get_fusions API, T12.2 corrupted .mn tolerance
+
+### AUDIT V9B — SKIP->PASS + Deep Bug Scan (session 2026-03-14) [DONE]
+
+3 SKIP convertis en vrais tests + 7 bugs trouves par scan profond, tous corriges.
+Battery V4 finale: 50 PASS, 0 FAIL, 0 SKIP.
+
+#### Tests SKIP -> PASS (3)
+- T13.3: P20c Virtual Branches — cree 2 repos temp, registre remote, boot verifie branch virtuelle chargee
+- T13.4: V8B Active Sensing — 3 branches similaires, verifie v8b_clarify dans last_boot.json
+- T13.7: C4 Real-Time k Adaptation — teste detect_session_mode + adapt_k (divergent/convergent/balanced)
+
+#### MEDIUM (5) — logique incorrecte et data loss silencieux
+- B1: pull_from_meta SQLite sans query = 0 fusions tirees (dict vide stub) -> tire top par strength
+- B2: meta sync MAX(count) empechait decay de se propager -> last-writer-wins
+- B3: batch_delete_connections commit mid-transaction (perte atomicite) -> inline DELETE
+- B4: sleep_consolidate NCD grouping transitif (A~B+A~C fusionnes meme si B!~C) -> verif ALL members
+- B5: _append_session_log split R: sur \n\n corrompait root.mn -> split sur ## header
+
+#### LOW (2)
+- B6: \ba\b filler strip mangeait "a" dans math/code (a+b) -> strip seulement comme article anglais
+- B7: double conn.close() dans mycelium.py init -> supprime
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)

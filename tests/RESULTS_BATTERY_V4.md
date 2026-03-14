@@ -11672,7 +11672,8 @@ Database uses connection pooling
 - french_accents: OK -> 'systeme done, donnees validees succes...'
 - null_byte: OK -> 'data more data here numbers 123...'
 - mixed_endings: OK -> 'line1 line2
-line3line4...'
+line3
+line4...'
 - arabic: OK -> 'benchmark: 95.2% acc=test set...'
 - long_unicode: OK -> 'Result: x4.5 compression achieved...'
 - crashes: 0/7
@@ -11908,4 +11909,4203 @@ Database uses connection pooling
 - Redis preserved: True
 - output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
 - TIME: 5.103s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.263s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 72
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.032s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 860 chars (ratio: 5.2x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 4.139s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.235s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.009s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.300s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.041s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.015s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.015s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 4.409s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.017s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.054s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.040s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.030s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:39:58
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=943B, ratio=x38.0
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.294s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.033s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.072s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.041s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0x8c in position 1: invalid start byte)
+- prune: OK
+- TIME: 0.022s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.3s
+- result length: 3907 chars
+- estimated loaded tokens: 31936
+- TIME: 1.494s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.003s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.003s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.023s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.000s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.025s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.052s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: caching, redis
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.020s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.074s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.057s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.074s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.224s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.268s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 72
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.002s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.022s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 864 chars (ratio: 5.2x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 3.773s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.258s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.010s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.250s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.040s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.014s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.014s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.084s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.016s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.055s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.044s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.032s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:40:13
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=969B, ratio=x37.0
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.291s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.031s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.069s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.034s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0x8b in position 4: invalid start byte)
+- prune: OK
+- TIME: 0.020s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.3s
+- result length: 3907 chars
+- estimated loaded tokens: 32000
+- TIME: 1.409s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.003s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.003s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.023s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.001s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.022s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.052s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: redis, caching
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.018s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.078s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.057s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.074s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.184s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.260s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 72
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.021s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 870 chars (ratio: 5.1x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 3.848s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.283s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.010s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.302s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.042s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.017s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.016s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.388s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.016s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.043s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.042s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.030s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:41:08
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=788B, ratio=x45.5
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.325s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.030s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.067s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.046s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0x80 in position 0: invalid start byte)
+- prune: OK
+- TIME: 0.021s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.3s
+- result length: 3767 chars
+- estimated loaded tokens: 32000
+- TIME: 1.557s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.003s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.003s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.025s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.001s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.025s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.054s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: redis, caching
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.020s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.082s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.002s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.060s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.086s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.238s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.277s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 72
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.023s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 864 chars (ratio: 5.2x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 3.981s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.263s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.010s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.294s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.045s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.015s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.015s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.236s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.017s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.053s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.040s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.028s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:41:52
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=1053B, ratio=x34.1
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.322s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.031s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.070s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.036s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0xfc in position 0: invalid start byte)
+- prune: OK
+- TIME: 0.021s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.4s
+- result length: 4047 chars
+- estimated loaded tokens: 32000
+- TIME: 1.557s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.003s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.003s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.024s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.001s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.023s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.051s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: redis, caching
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.020s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.074s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.057s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.081s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.183s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.260s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 72
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.021s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 864 chars (ratio: 5.2x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 3.720s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.244s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.008s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.266s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.043s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.017s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.016s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.135s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.016s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.086s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.035s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.029s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:42:32
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=913B, ratio=x39.3
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.289s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.029s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.070s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.036s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0xcd in position 0: invalid continuation byte)
+- prune: OK
+- TIME: 0.020s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.3s
+- result length: 4044 chars
+- estimated loaded tokens: 32000
+- TIME: 1.421s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.003s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.008s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.023s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.000s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.024s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.051s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: caching, redis
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.019s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.073s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.055s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.080s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.184s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.256s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 72
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.023s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 885 chars (ratio: 5.1x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 3.760s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.233s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.008s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.239s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.048s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.018s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.015s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.067s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.018s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.046s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.041s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.032s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:43:06
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=798B, ratio=x45.0
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.297s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.032s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.077s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.035s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0xf1 in position 3: invalid continuation byte)
+- prune: OK
+- TIME: 0.028s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.3s
+- result length: 3915 chars
+- estimated loaded tokens: 32000
+- TIME: 1.496s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.004s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.003s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.023s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.000s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.021s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.050s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: redis, caching
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.018s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.074s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.055s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.073s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.183s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.285s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 74
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses a > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build a fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.022s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 860 chars (ratio: 5.2x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 4.280s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.006s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.244s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.008s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.269s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.051s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.016s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.017s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.103s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.019s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.048s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.041s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.031s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:43:52
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=1067B, ratio=x33.6
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.321s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.034s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.079s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.037s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0x82 in position 1: invalid start byte)
+- prune: OK
+- TIME: 0.021s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.4s
+- result length: 3913 chars
+- estimated loaded tokens: 31936
+- TIME: 1.592s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3
+line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.005s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.005s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.036s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.001s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.037s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.059s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: caching, redis
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.026s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.087s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.063s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.084s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.206s
+
+
+# CATEGORIE 1 - COMPRESSION (L0-L11)
+
+## T1.1 - L0 Tool Output Strip
+- STATUS: PASS
+- ratio=199.6x (before=27739, after=139)
+- ratio >= 2.0: True
+- 94.2 present: True
+- 15 present: True
+- Redis present: True
+- PIEGE PostgreSQL from tool_result: LOST (L0 strips tool_result content)
+- TIME: 0.287s
+
+## T1.2 - L1 Markdown Strip
+- STATUS: PASS
+- len: 91 -> 74
+- ## absent: True
+- ** absent: True
+- backtick absent: True
+- Architecture present: True
+- Critical present: True
+- API present: True
+- 99.9 present: True
+- shorter: True
+- output: 'Architecture Decision\nCritical: API uses a > 99.9% SLA\npoint one\npoint two'
+- TIME: 0.000s
+
+## T1.3 - L2 Filler Words + P24 Causal
+- STATUS: PASS
+- A basically absent: True
+- A actually absent: True
+- A essentially absent: True
+- A implementation present: True
+- A output: 'I think implementation working correctly'
+- B factually present (word boundary): True
+- B output: 'factually accurate report groundbreaking'
+- C because present (P24): True
+- D since present (P24): True
+- E Therefore present (P24): True
+- F no doneMENT: True, output: 'COMPLETEMENT fini'
+- TIME: 0.002s
+
+## T1.4 - L3 Phrase Compression
+- STATUS: PASS
+- A: ratio=0.74 (<0.75: True), out='order achieve desired outcome'
+- B: ratio=0.70 (<0.75: True), out='we need consider all factors'
+- C: ratio=0.46 (<0.75: True), out='end day result good'
+- D: ratio=0.74 (<0.75: True), out='as matter fact test passed'
+- CTRL: ratio=0.75, out='server responded status 200'
+- TIME: 0.001s
+
+## T1.5 - L4 Number Compression
+- STATUS: PASS
+- A 1M or equiv: True, out='file has 1000000 lines'
+- B 2.5M or equiv: True, out='It weighs 2500000 bytes'
+- C 2.0.1 preserved: True, out='Version 2.0.1 released yesterday'
+- D 0.9423 preserved: True, out='acc=0.9423'
+- E 1500+150: True, out='1500ms down 150ms'
+- F a1b2c3d+4287: True, out='Commit a1b2c3d fixes issue #4287'
+- TIME: 0.001s
+
+## T1.6 - L5 Universal Rules
+- STATUS: PASS
+- A done+no COMPLETED: True, out='Status: done'
+- B wip+no EN COURS: True, out='processus wip'
+- C fail+no ECHOUE: True, out='build a fail hier'
+- D no doneMENT: True, out='PARTIELLEMENT termine'
+- E no doneMENT: True, out='COMPLETEMENT fini'
+- TIME: 0.001s
+
+## T1.7 - L6 Mycelium Fusion Strip
+- STATUS: PASS
+- fusion exists: True (form=learning+machine)
+- compress_line output: 'machine learning model ready'
+- model preserved: True
+- ready preserved: True
+- TIME: 0.023s
+
+## T1.8 - L7 Key-Value Extraction
+- STATUS: PASS
+- 94.2 present: True
+- 0.031 present: True
+- 50 present: True
+- ratio=0.67 (<0.7: True)
+- output: 'acc=94.2% loss decreased 0.031 after 50 epochs'
+- TIME: 0.000s
+
+## T1.9 - L10 Cue Distillation
+- STATUS: PASS
+- chars: 858 -> 300 (shorter: True)
+- gradient cue: True
+- 0.003 present: True
+- 2026 date: True
+- Adam/SGD: True
+- $47: True
+- a3f7b2d commit: True
+- x4.5 metric: True
+- TIME: 0.001s
+
+## T1.10 - L11 Rule Extraction
+- STATUS: PASS
+- lines: 4 -> 4
+- REST intact: True
+- JWT intact: True
+- pooling intact: True
+- values preserved: True
+- output:
+(min) battery_drain=screen=9min, GPS=1, BT=5, WiFi=15, cellular=20
+The API handles REST requests
+Users authenticate via JWT tokens
+Database uses connection pooling
+- TIME: 0.000s
+
+## T1.11 - L9 LLM Compress
+- STATUS: PASS
+- input: 4471 chars
+- output: 864 chars (ratio: 5.2x)
+- shorter: True
+- accuracy preserved: True
+- latency preserved: True
+- Redis preserved: True
+- output: '## Backend & API\nPython Flask REST API | gunicorn workers\n\n## Model Performance\naccuracy=94.2% (validation set post fine-tuning)\n\n## Latency\np99=15ms (normal load)\n\n## Caching\nRedis | hit rate=97% (30'
+- TIME: 3.852s
+
+
+# CATEGORIE 2 - FILTRES TRANSCRIPT
+
+## T2.1 - P17 Code Block Compression
+- STATUS: PASS
+- lines: 10 -> 3 (compressed: True)
+- 'fix' context present: True
+- 'marche' context present: True
+- output: "Voici fix:\npython\ndef calculate_score(branch): recall = compute_recall(branch) relevance = get_relevance(branch) temperature = branch.get('temperature', 0.5) activation = recall * relevance return act"
+- _compress_code_blocks code lines between ```: 2
+- _compress_code_blocks output: 'Voici le fix:\n```python\ndef calculate_score(branch):\n  ...\n```\nCa marche maintenant.'
+- TIME: 0.007s
+
+## T2.2 - P25 Priority Survival + KIComp
+- STATUS: PASS
+- Density scores:
+-   1.00: F> metric=42% improvement confirmed
+-   0.90: D> decided to use Redis for caching
+-   0.80: B> bug: auth crashes on empty token
+-   0.00: The implementation continues to progress nicely and everythi
+- D> density=0.90 (>=0.8: True)
+- B> density=0.80 (>=0.7: True)
+- F> density=1.00 (>=0.7: True)
+- narrative density=0.00 (<0.3: True)
+- tagged > narrative: True
+- TIME: 0.001s
+
+## T2.3 - P26 Line Dedup
+- STATUS: PASS
+- input: 5 lines
+- deduped: 4 lines
+-   kept: F> accuracy=94.2% on test set
+-   kept: F> accuracy=94.2% on the test set
+-   kept: F> latency=15ms on production
+-   kept: D> decided to use Redis
+- exact dedup (<=4 lines): True
+- latency kept: True
+- Redis kept: True
+- TIME: 0.000s
+
+## T2.4 - P27 Last Read Only
+- STATUS: PASS
+- CONFIG_V3 or config ref present: True
+- CONFIG_V1 absent: True
+- CONFIG_V2 absent: True
+- mn_text sample: '# MUNINN|session_compressed\n?Session context:\nLet\n  read config file you\nChange\nOK I\nOne\n  config file one more time\n  [read config.py]\n  -> CONFIG_V3 = True\n?FACTS:config.py'
+- TIME: 0.270s
+
+## T2.5 - P28 Claude Verbal Tics
+- STATUS: PASS
+- tic1 absent: True
+- tic2 absent: True
+- tic3 absent: True
+- 3 endpoints present: True
+- foo present: True
+- 42 present: True
+- line 73 present: True
+- auth.py present: True
+- parsed text: "this for you. The API has 3 endpoints.\nat the code. Function foo() returns 42.\nthe bug is in line 73.\nI'd be happy to help with that. The fix requires changing auth.py."
+- TIME: 0.002s
+
+## T2.6 - P38 Multi-Format Detection
+- STATUS: PASS
+- A (JSONL): jsonl (expected jsonl: True)
+- B (JSON): json (expected json: True)
+- C (MD): markdown (expected markdown: True)
+- D (empty): unknown (no crash: True)
+- TIME: 0.010s
+
+
+# CATEGORIE 3 - TAGGING
+
+## T3.1 - P14 Memory Type Tags
+- STATUS: PASS
+- A (decision): starts D>: True, got: 'D>We decided to use PostgreSQL instead of MySQL'
+- B (bug): starts B>: True, got: 'B>Bug: the auth middleware crashes on empty tokens'
+- C (fact): starts F>: True, got: 'F>The API handles 10K requests per second at p99=15ms'
+- D (error): starts E>: True, got: 'E>Error: connection timeout after 30s on host db-prod-3'
+- E (arch): starts A>: True, got: 'A>The system uses a microservice architecture with 12 svc'
+- F (neutral): 'The meeting went well today'
+- G (empty): no crash: True, got: ''
+- H (multi-match priority): 'B>decided to fix the architecture bug'
+- TIME: 0.000s
+
+## T3.2 - C7 Contradiction Resolution
+- STATUS: PASS
+- accuracy=92% absent (stale): True
+- accuracy=97% present (latest): True
+- latency=50ms present: True
+- throughput=1200 present: True
+- '1. Install Python' present (guard): True
+- '2. Run tests' present (guard): True
+- lines removed: 1 (expected 1)
+- TIME: 0.000s
+
+
+# CATEGORIE 4 - MYCELIUM CORE
+
+## T4.1 - S1 SQLite Storage + Observe
+- STATUS: PASS
+- DB exists+non-empty: True
+- edges: 63 (>0: True)
+- python-flask: True
+- python-web: True
+- python-django: True
+- python-rust absent: True
+- rust-memory: True
+- flask-django absent: True
+- get_related(python) has flask: True
+- get_related(python) has django: True
+- get_related(python) has web: True
+- get_related(python) no rust: True
+- TIME: 0.285s
+
+## T4.2 - S2 Epoch-Days
+- STATUS: PASS
+- 2020-01-01: expected=0, got=0, ok=True
+- 2020-01-02: expected=1, got=1, ok=True
+- 2020-12-31: expected=365, got=365, ok=True
+- 2024-02-29: expected=1520, got=1520, ok=True
+- 2026-03-12: expected=2262, got=2262, ok=True
+- round-trip 2020-01-01: True (got 2020-01-01)
+- round-trip 2020-01-02: True (got 2020-01-02)
+- round-trip 2020-12-31: True (got 2020-12-31)
+- round-trip 2024-02-29: True (got 2024-02-29)
+- round-trip 2026-03-12: True (got 2026-03-12)
+- TIME: 0.000s
+
+## T4.3 - S3 Degree Filter
+- STATUS: PASS
+- degree(nucleus)=42, degree(flask)=1, nucleus>flask: True
+- nucleus in top 5% (threshold=19): True
+- nucleus fusion blocked by S3: True
+- TIME: 0.048s
+
+## T4.4 - Spreading Activation
+- STATUS: PASS
+- flask activated: True (score=1.0)
+- jinja in results: True (score=0.0)
+- flask >= jinja: True
+- quantum NOT activated: True
+- physics NOT activated: True
+- total activated: 2
+- TIME: 0.016s
+
+## T4.5 - A3 Sigmoid Post-Filter
+- STATUS: PASS
+- sigmoid(0.1)=0.0180 (expected 0.018, delta=0.0000, ok=True)
+- sigmoid(0.3)=0.1192 (expected 0.119, delta=0.0002, ok=True)
+- sigmoid(0.5)=0.5000 (expected 0.500, delta=0.0000, ok=True)
+- sigmoid(0.7)=0.8808 (expected 0.881, delta=0.0002, ok=True)
+- sigmoid(0.9)=0.9820 (expected 0.982, delta=0.0000, ok=True)
+- order preserved: True
+- NOTE: sigmoid applied in spread_activation (mycelium.py line 1034)
+- TIME: 0.000s
+
+## T4.6 - V3A Transitive Inference
+- STATUS: PASS
+- B found: True (score=0.5)
+- C found: True (score=0.1875)
+- D found: True (score=0.046875)
+- E NOT found (hop 4): True
+- order B>C>D: True
+- max_hops=1: only B found: True
+- TIME: 0.016s
+
+## T4.7 - NCD Similarity
+- STATUS: PASS
+- NCD(A,B)=0.306 (<0.4 similar: True)
+- NCD(A,C)=0.653 (>0.6 different: True)
+- NCD(A,D)=0.069 (<0.1 identical: True)
+- NCD(E,E) no crash: True (value=0.0)
+- TIME: 0.000s
+
+## T4.8 - B3 Blind Spot Detection
+- STATUS: PASS
+- (A,C) found as blind spot: True
+- (A,B) NOT a blind spot: True
+- has results: True (1 spots)
+- first spot: ('node_a', 'node_c', 'zone_gap:node_b/node_a/node_c')
+- TIME: 3.222s
+
+## T4.9 - B2 Graph Anomaly Detection
+- STATUS: PASS
+- hub_concept in hubs: True
+- normal_concept not in anomalies: True
+- hubs: ['hub_concept']
+- isolated: ['isolated_concept', 'norm_target_0', 'norm_target_1', 'norm_target_2', 'norm_target_3']
+- anomalies returns tuples: True
+- TIME: 0.015s
+
+## T4.10 - P20 Federated Zones + Immortality
+- STATUS: PASS
+- python-web zones: ['repo_A', 'repo_B', 'repo_C'] (>=3: True)
+- python-web immortal (>=3 zones): True
+- flask-web zones: ['repo_A'] (<=1: True)
+- TIME: 0.050s
+
+## T4.11 - P20b Meta-Mycelium Sync + Pull
+- STATUS: PASS
+- m1 edges: 36
+- sync_to_meta: 36 (>=30: True)
+- meta DB exists: True
+- pull_from_meta: 3 (>0: True)
+- m2 get_related(python) has flask: True
+- n_pulled <= 200: True
+- TIME: 0.038s
+
+## T4.12 - P41 Self-Referential Growth
+- STATUS: PASS
+- ML fusion exists: True (form=learning+machine)
+- second-order connection (learning+machine-deep/neural): True
+- no timeout/recursion: True
+- TIME: 0.043s
+
+
+---
+
+# Muninn Test Battery V4 — Results (Categories 11-14)
+- Date: 2026-03-14 18:44:25
+- Engine: muninn.py v0.9.1
+- Tests: 19 total (19 PASS, 0 FAIL, 0 SKIP, 0 SLOW)
+
+## T11.1
+- STATUS: PASS
+- original=35874B, mn=785B, ratio=x45.7
+- key numbers found: 5/5
+- secret filtered: YES
+- verbal tics remaining: 0
+- TIME: 0.307s
+
+## T11.2
+- STATUS: PASS
+- grow_branches returned: 3
+- branches created: 3
+- branch names: ['b00', 'b01', 'b02']
+-   b00: tags=['api', 'database', 'design', 'json', 'rest']
+-   b01: tags=['database', 'postgresql', 'testing']
+-   b02: tags=['testing']
+- TIME: 0.032s
+
+## T11.3
+- STATUS: PASS
+- compress_transcript: 0.0s, mn_path=OK
+- grow_branches: 0.0s, result=1
+- feed_from_transcript: 0.0s, result=20
+- total pipeline: 0.1s
+- TIME: 0.077s
+
+## T12.1
+- STATUS: PASS
+- boot returned: 36 chars
+- no crash: YES
+- TIME: 0.036s
+
+## T12.2
+- STATUS: PASS
+- boot: expected UnicodeDecodeError on binary .mn ('utf-8' codec can't decode byte 0xcc in position 1: invalid continuation byte)
+- prune: OK
+- TIME: 0.025s
+
+## T12.3
+- STATUS: PASS
+- get_related: OK: []
+- spread_activation: OK: []
+- transitive_inference: OK: []
+- detect_blind_spots: OK: 0 spots
+- detect_anomalies: OK: ['isolated', 'hubs', 'weak_zones']
+- trip: OK: ['created', 'entropy_before', 'entropy_after', 'dreams']
+- crashes: 0/6
+- TIME: 0.002s
+
+## T12.4
+- STATUS: PASS
+- created 500 branches
+- boot time: 0.4s
+- result length: 3913 chars
+- estimated loaded tokens: 31936
+- TIME: 1.592s
+
+## T12.5
+- STATUS: PASS
+- emoji: OK -> 'Performance great! lat=dropped 42ms...'
+- chinese: OK -> 'compression ratio=3.5, performance improved...'
+- french_accents: OK -> 'systeme done, donnees validees succes...'
+- null_byte: OK -> 'data more data here numbers 123...'
+- mixed_endings: OK -> 'line1 line2
+line3line4...'
+- arabic: OK -> 'benchmark: 95.2% acc=test set...'
+- long_unicode: OK -> 'Result: x4.5 compression achieved...'
+- crashes: 0/7
+- TIME: 0.004s
+
+## T12.6
+- STATUS: PASS
+- lock file created
+- compress with lock: OK (result=False)
+- lock cleaned up
+- TIME: 0.004s
+
+## T13.1
+- STATUS: PASS
+- old_branch: lines_before=25, lines_after=4
+- reconsolidated: True
+- tagged lines preserved: 2
+- recent_branch changed: False
+- B1 triggered: YES
+- TIME: 0.026s
+
+## T13.2
+- STATUS: PASS
+- header: density=1.000
+- tagged_benchmark: density=1.000
+- tagged_decision: density=0.900
+- numbers_dense: density=0.500
+- key_value: density=0.700
+- tagged_fact: density=1.000
+- narrative: density=0.000
+- filler: density=0.000
+- generic: density=0.000
+- empty_ish: density=0.000
+- avg tagged=0.975, narrative=0.000, filler=0.000
+- ordering correct: True
+- budget cut 7 survivors densities: ['1.00', '1.00', '1.00', '0.90', '0.70', '0.50', '0.00']
+- TIME: 0.001s
+
+## T13.3
+- STATUS: PASS
+- boot result length: 240 chars
+- virtual branch loaded: True
+- contains 'entanglement': True
+- contains '42 qubits': True
+- TIME: 0.025s
+
+## T13.4
+- STATUS: PASS
+- v8b_clarify: 'canary'
+- manifest branches: ['deploy_alpha', 'MUNINN-::b73']
+- hint is discriminative: True
+- TIME: 0.055s
+
+## T13.5
+- STATUS: PASS
+- recall result length: 240 chars
+- contains 'redis' or 'Redis': True
+- first 200 chars: RECALL: 'redis caching' — 3 matches (warmed 1 branches)
+  [2026-03-10] [session 2026-03-10_1200.mn] concepts: caching, redis
+  [2026-03-] B> Redis session caching latency=0.5ms hit_rate=0.97
+  [cachin
+- TIME: 0.019s
+
+## T13.6
+- STATUS: PASS
+- boot('TypeError crash'): surfaced=True
+- known_fixes section present
+- result contains fix hint: True
+- boot('docker deploy'): TypeError surfaced=False
+- TIME: 0.078s
+
+## T13.7
+- STATUS: PASS
+- divergent: mode=divergent, k=5, diversity=1.0
+- convergent: mode=convergent, k=20, diversity=0.3
+- adapt_k: old_k=10, new_k=5, mode=divergent
+- balanced: mode=balanced, k=10, diversity=0.5
+- TIME: 0.001s
+
+## T14.1
+- STATUS: PASS
+- base weights sum: 1.0
+- weights: recall=0.15, relevance=0.4, activation=0.2, usefulness=0.1, rehearsal=0.15
+- sum == 1.0: True
+- max theoretical bonus: +0.59
+- max total score: 1.59
+- boot with scoring: 3497 chars returned
+- TIME: 0.058s
+
+## T14.2
+- STATUS: PASS
+- boot result: 2560 chars
+- branches loaded (access_count > 3): 10
+- loaded branches: ['bio_branch_0', 'bio_branch_1', 'bio_branch_2', 'bio_branch_3', 'bio_branch_4', 'bio_branch_5', 'bio_branch_6', 'bio_branch_7', 'bio_branch_8', 'bio_branch_9']
+- bio-vectors functional: YES (scoring completed)
+- TIME: 0.077s
+
+## T14.3
+- STATUS: PASS
+- step1 compress: OK
+- step1 grow: 2 branches
+- step2 boot: 1019 chars
+- step2 contains PostgreSQL content: True
+- step3 compress: OK
+- step3 grow: 1 branches
+- step4 aged all branches to 60 days old
+- step5 prune dry_run: OK (branches_before=3)
+- step5 prune force: branches 3 -> 3
+- step6 boot: 1294 chars
+- total cycle: 0.2s
+- TIME: 0.201s
 

@@ -96,10 +96,6 @@ class Mycelium:
                 else:
                     # Partial migration: delete corrupt DB and retry
                     try:
-                        conn.close()
-                    except Exception:
-                        pass
-                    try:
                         self.db_path.unlink()
                     except PermissionError:
                         pass  # Windows: file locked, skip cleanup
@@ -2071,7 +2067,7 @@ class Mycelium:
                             INSERT INTO edges (a, b, count, first_seen, last_seen)
                             VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(a, b) DO UPDATE SET
-                                count = MAX(count, excluded.count),
+                                count = excluded.count,
                                 first_seen = MIN(first_seen, excluded.first_seen),
                                 last_seen = MAX(last_seen, excluded.last_seen)
                         """, (a_id, b_id, row[2], row[3], row[4]))
@@ -2114,7 +2110,7 @@ class Mycelium:
                             INSERT INTO edges (a, b, count, first_seen, last_seen)
                             VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(a, b) DO UPDATE SET
-                                count = MAX(count, excluded.count),
+                                count = excluded.count,
                                 first_seen = MIN(first_seen, excluded.first_seen),
                                 last_seen = MAX(last_seen, excluded.last_seen)
                         """, (a_id, b_id, conn["count"], fs, ls))
@@ -2232,13 +2228,19 @@ class Mycelium:
                         local_conns[key] = conn
                         pulled += 1
 
-            # Pull fusions — only for query-related concepts (not all)
-            if self._db is not None and query_ids:
-                placeholders_f = ",".join("?" * len(query_ids))
-                for frow in db._conn.execute(f"""
-                    SELECT a, b, form, strength, fused_at FROM fusions
-                    WHERE a IN ({placeholders_f}) OR b IN ({placeholders_f})
-                """, list(query_ids) + list(query_ids)):
+            # Pull fusions — query-related if query, otherwise top by strength
+            if self._db is not None:
+                if query_ids:
+                    placeholders_f = ",".join("?" * len(query_ids))
+                    fquery = f"""
+                        SELECT a, b, form, strength, fused_at FROM fusions
+                        WHERE a IN ({placeholders_f}) OR b IN ({placeholders_f})
+                    """
+                    fparams = list(query_ids) + list(query_ids)
+                else:
+                    fquery = "SELECT a, b, form, strength, fused_at FROM fusions ORDER BY strength DESC LIMIT ?"
+                    fparams = [max_pull]
+                for frow in db._conn.execute(fquery, fparams):
                     a_name = db._id_to_name.get(frow[0]) or db._concept_name(frow[0])
                     b_name = db._id_to_name.get(frow[1]) or db._concept_name(frow[1])
                     if not self._db.has_fusion(a_name, b_name):

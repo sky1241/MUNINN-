@@ -914,9 +914,9 @@ def compress_line(line: str) -> str:
     ]
     for filler in _FILLER:
         result = re.sub(filler, "", result, flags=re.IGNORECASE)
-    # "a"/"an": case-sensitive only — uppercase "A" can be a label (version A, option A)
-    result = re.sub(r"\ba\b", "", result)
-    result = re.sub(r"\ban\b", "", result)
+    # "a"/"an": case-sensitive, only as English articles (before a word, not standalone "a" in math/code)
+    result = re.sub(r"\ba (?=[a-z])", "", result)
+    result = re.sub(r"\ban (?=[a-z])", "", result)
 
     # L2b: Learned fillers from mycelium (words in 10+ connections, never fused)
     for filler_word in cb.get("learned_fillers", []):
@@ -3217,8 +3217,12 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
         for j in range(i + 1, len(names)):
             if names[j] in merged_into:
                 continue
-            dist = _ncd(contents[names[i]], contents[names[j]])
-            if dist < ncd_threshold:
+            # Check similarity against ALL existing group members, not just leader
+            all_similar = all(
+                _ncd(contents[m], contents[names[j]]) < ncd_threshold
+                for m in groups[leader]
+            )
+            if all_similar:
                 groups[leader].append(names[j])
                 merged_into[names[j]] = leader
 
@@ -5194,7 +5198,12 @@ def _append_session_log(repo_path: Path, compressed: str, ratio: float):
     if "\nR:\n" in root_text:
         # Insert after R: header, keep only last 5 entries
         parts = root_text.split("\nR:\n", 1)
-        r_section = parts[1].split("\n\n", 1)  # R: entries end at blank line or EOF
+        # R: section ends at next ## header or EOF (not \n\n which can appear inside entries)
+        r_rest_match = re.search(r'\n(?=##\s)', parts[1])
+        if r_rest_match:
+            r_section = [parts[1][:r_rest_match.start()], parts[1][r_rest_match.start():]]
+        else:
+            r_section = [parts[1]]
         existing_lines = [l for l in r_section[0].split("\n") if l.strip()]
         # Dedup: don't append if this exact line already exists
         if log_line not in existing_lines:

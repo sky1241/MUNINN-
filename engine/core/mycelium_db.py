@@ -631,13 +631,21 @@ class MyceliumDB:
                     )
 
     def batch_delete_connections(self, keys: list[str]):
-        """Batch delete connections by key strings."""
+        """Batch delete connections by key strings (atomic)."""
         with self._conn:
             for key in keys:
                 parts = key.split("|")
                 if len(parts) != 2:
                     continue
-                self.delete_connection(parts[0], parts[1])
+                a_key = min(parts[0], parts[1])
+                b_key = max(parts[0], parts[1])
+                a_id = self._concept_cache.get(a_key)
+                b_id = self._concept_cache.get(b_key)
+                if a_id is None or b_id is None:
+                    continue
+                self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
+                self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
+                self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
 
     def commit(self):
         """Explicit commit."""
