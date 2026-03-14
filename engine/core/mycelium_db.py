@@ -255,6 +255,7 @@ class MyceliumDB:
                 "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                 (a_id, b_id, zone)
             )
+        self._conn.commit()  # H3 fix: persist writes immediately
 
     def get_all_connections(self) -> dict:
         """Get all connections as a dict (for compatibility with existing code).
@@ -359,6 +360,7 @@ class MyceliumDB:
                 strength = ?,
                 form = ?
         """, (a_id, b_id, form, strength, fused_at, strength, form))
+        self._conn.commit()  # H3 fix: persist writes immediately
 
     def delete_connection(self, concept_a: str, concept_b: str):
         """Delete a connection and its fusion if any."""
@@ -371,6 +373,7 @@ class MyceliumDB:
         self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
         self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
         self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
+        self._conn.commit()  # H4 fix: persist deletes immediately
 
     def update_connection_count(self, concept_a: str, concept_b: str, new_count: int):
         """Update a connection's count directly."""
@@ -383,6 +386,7 @@ class MyceliumDB:
         self._conn.execute(
             "UPDATE edges SET count=? WHERE a=? AND b=?", (new_count, a_id, b_id)
         )
+        self._conn.commit()  # M11 fix: persist count update
 
     # ── Iteration helpers (cursor-based, low RAM) ────────────────────
 
@@ -473,6 +477,7 @@ class MyceliumDB:
             "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
             (a_id, b_id, zone)
         )
+        self._conn.commit()  # M12 fix: persist zone addition
 
     # ── Top/sorted queries ───────────────────────────────────────────
 
