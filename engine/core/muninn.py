@@ -1914,8 +1914,12 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             chunk = lines[j:j + chunk_size]
             header = f"## {chunk[0][:60].strip()}"
             body = "\n".join(chunk)
-            if body.count("\n") >= 4:  # B11 fix: restore min 5 lines (M4 broke this to >= 1, created dust branches)
+            if body.count("\n") >= 4:  # B11 fix: min 5 lines to avoid dust branches
                 segments.append((header, body))
+            elif segments:
+                # B17: small tail chunk -> merge into previous segment instead of dropping
+                prev_header, prev_body = segments[-1]
+                segments[-1] = (prev_header, prev_body + "\n" + body)
 
     if not segments:
         return 0

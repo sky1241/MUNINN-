@@ -43,9 +43,13 @@ def test_m4_last_chunk_preserved():
         # Create .mn with NO headers but enough lines to trigger fallback
         # chunk_size = max(5, 12 // 4) = 5
         # Chunks: [0:5], [5:10], [10:12] <- last chunk has only 2 lines
+        # Use distinct structures to avoid _resolve_contradictions treating them as duplicates
+        topics = ["database", "network", "security", "frontend", "backend",
+                  "testing", "deploy", "monitoring", "cache", "queue",
+                  "logging", "metrics"]
         lines = []
-        for i in range(12):
-            lines.append(f"B> fact_{i} metric={i*10}")
+        for i, topic in enumerate(topics):
+            lines.append(f"B> {topic} implementation uses config_{i}")
         mn_content = "\n".join(lines)
         mn_path = tmp / ".muninn" / "sessions" / "test.mn"
         mn_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,14 +69,14 @@ def test_m4_last_chunk_preserved():
             for f in tree_dir.glob("b*.mn"):
                 all_branch_content += f.read_text(encoding="utf-8")
 
-            # The last 2 lines (fact_10, fact_11) should NOT be lost
-            has_fact_10 = "fact_10" in all_branch_content
-            has_fact_11 = "fact_11" in all_branch_content
-            print(f"  fact_10 preserved: {has_fact_10}")
-            print(f"  fact_11 preserved: {has_fact_11}")
+            # The last 2 lines (logging, metrics) should NOT be lost
+            has_logging = "logging" in all_branch_content
+            has_metrics = "metrics" in all_branch_content
+            print(f"  logging preserved: {has_logging}")
+            print(f"  metrics preserved: {has_metrics}")
 
-            assert has_fact_10, "Last chunk content (fact_10) was silently dropped!"
-            assert has_fact_11, "Last chunk content (fact_11) was silently dropped!"
+            assert has_logging, "Last chunk content (logging) was silently dropped!"
+            assert has_metrics, "Last chunk content (metrics) was silently dropped!"
 
         finally:
             if old_tree_dir is not None:
