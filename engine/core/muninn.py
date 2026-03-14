@@ -879,7 +879,7 @@ def compress_line(line: str) -> str:
     )
     # P24: Protect causal connectors — "because X" carries the WHY
     _CAUSAL_PROTECTED = re.findall(
-        r'(?:because|since|therefore|so that|due to|parce que?|car |donc |puisque)\s+\S+',
+        r'(?:because|since|therefore|so that|due to|parce que?|car|donc|puisque)\s+\S+',
         result, flags=re.IGNORECASE
     )
     # Replace protected spans with placeholders
