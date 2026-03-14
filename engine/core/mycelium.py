@@ -388,6 +388,9 @@ class Mycelium:
                 finally:
                     self._p41_recursion_guard = False
 
+        # M10 fix: invalidate adjacency cache after adding edges
+        self._adj_cache = None
+
         if self.federated:
             self._invalidate_zone_cache()
 
@@ -803,6 +806,7 @@ class Mycelium:
                 self._db._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
                 self._db._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
             self._db._conn.commit()
+            self._adj_cache = None  # M10 fix: invalidate after decay
             return len(dead_ids)
         else:
             # Fallback: in-memory dict
@@ -834,6 +838,7 @@ class Mycelium:
                 del conns[key]
                 if key in self.data["fusions"]:
                     del self.data["fusions"][key]
+            self._adj_cache = None  # M10 fix: invalidate after decay
             return len(dead)
 
     def effective_weight(self, key: str, count: float = None) -> float:
