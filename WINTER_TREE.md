@@ -679,6 +679,32 @@ Solution: timer toutes les 15 minutes qui rattrape tout ce qui a ete manque.
 - [x] Teste: 1er run = feed all, 2eme run = "nothing changed" (instantane)
 - Filet garanti: meme si AUCUN hook ne tire, le watchdog rattrape toutes les 15 min
 
+### P42 — Live Mycelium Bridge (2026-03-14) [FAIT]
+Probleme: le mycelium n'est utilise qu'au boot (chargement) et au feed (compression).
+Pendant la conversation, Claude est DECONNECTE du mycelium — pas de pont semantique live.
+Solution: `bridge()` — requete le mycelium mid-session, spreading activation en temps reel.
+- [x] `muninn.py bridge "user text"` — extrait concepts, spread activation, retourne:
+  - Concepts actives (spreading activation Collins & Loftus 1975)
+  - Voisins directs des top seeds
+  - Branches matchant les concepts actives
+  - Fusions pertinentes
+- [x] Stopwords FR+EN (filtre bilingue, >4 chars)
+- [x] Auto-observe les concepts du bridge (nourrit le mycelium a chaque requete)
+- [x] Edge cases: texte vide, concepts inconnus → messages clairs
+- [x] CLI: `bridge` commande ajoutee au parser
+Theorie: HippoRAG (Gutierrez & Shu 2024, NeurIPS) + FLARE (Jiang 2023, EMNLP)
+Personne ne fait exactement ca: spreading activation sur un mycelium de co-occurrences
+vivant avec fusion/decay bio-inspires, mid-conversation.
+Etat de l'art scanne:
+- MemGPT/Letta (2023): self-directed memory paging
+- Mem0 (2024): graph DB write/read chaque tour
+- HippoRAG (2024): PageRank sur KG = notre spread_activation
+- FLARE/DRAGIN (2023-2024): retrieval mid-generation par confidence/entropie
+- Zep/Graphiti (2025): KG temporel avec contradictions
+- KBLaM (Microsoft 2025): KB dans l'attention, pas de retrieval step
+- A-Mem (2025): Zettelkasten auto-organise
+Aucun ne combine: mycelium vivant + compression + spreading activation + bio-vectors.
+
 ### P39 — Liane WT3 : Muninn bibliothecaire [TODO — POST-WT3]
 Muninn ne stocke pas les papers. Il devient le bibliothecaire personnalise de Sky.
 Pre-requis dur: WT3 (Bible SQLite) doit exister avec paper_id -> [concepts].
@@ -808,7 +834,7 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 ### Audit complet (2026-03-11) — Etat des lieux
 
 **Pipeline compression**: 11 couches (L0-L7, L9, L10, L11) + 7 filtres (P17, P24-P28) = TOUT OPERATIONNEL
-**Features P-series**: 19/19 FAIT (P3 supprime, P21 partiel), toutes branchees et testees
+**Features P-series**: 20/20 FAIT (P3 supprime, P21 partiel, P42 bridge), toutes branchees et testees
 **Shopping list**: 9/20 FAIT, 1 impasse (Meta-Tokens), 6 skip, 2 maybe, 1 later
 **Carmack moves**: 5/5 FAIT (L10 cue, L11 rules, sleep consolidation, spreading activation, spaced repetition)
 **TIER 1**: 6/6 FAIT (A1-A5, B1), 36 bornes, 100% PASS
@@ -823,6 +849,7 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 - P31: full arXiv run (attend WT3)
 - P39: liane Yggdrasil (attend WT3)
 - Explication A-Z du systeme pour Sky
+- P42 bridge: hook automatique UserPromptSubmit (phase 2 — quand Claude Code le supportera)
 
 ### Plan HUGINN — "Muninn stocke, Huginn pense" (session 2026-03-11) [DONE]
 

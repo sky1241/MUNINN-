@@ -2938,6 +2938,164 @@ def recall(query: str) -> str:
     return "\n".join(output)
 
 
+# ── P41: Live Mycelium Bridge ────────────────────────────────────
+
+def bridge(text: str, top_n: int = 10, hops: int = 2,
+           include_branches: bool = True) -> str:
+    """P41: Live mycelium bridge — query the mycelium mid-session.
+
+    Extracts concepts from user text, spreads activation through the
+    mycelium, and returns activated concepts + relevant branch snippets.
+    This is the LIVE CONNECTION between the conversation and the mycelium.
+
+    Unlike recall() which greps .mn files for keywords, bridge() uses
+    the semantic network to find concepts the user DIDN'T mention but
+    that are strongly connected to what they're talking about.
+
+    Theory: HippoRAG (Gutierrez & Shu 2024) + Collins & Loftus 1975
+    Pattern: FLARE/DRAGIN mid-conversation retrieval
+
+    Args:
+        text: user message or text to bridge from
+        top_n: max activated concepts to return
+        hops: spreading activation depth (2 = neighbors of neighbors)
+        include_branches: also search tree branches for activated concepts
+
+    Returns:
+        Formatted string with activated concepts and branch matches.
+    """
+    repo = _REPO_PATH or Path(".")
+
+    # Extract concepts from text (same logic as observe)
+    words = re.findall(r'[A-Za-z\u00c0-\u024f]{4,}', text.lower())
+    # Filter stopwords (EN + FR)
+    stop = {"that", "this", "with", "from", "have", "been", "were", "will",
+            "would", "could", "should", "their", "there", "about", "which",
+            "when", "what", "your", "they", "them", "than", "then", "also",
+            "just", "only", "some", "more", "very", "most", "each", "into",
+            "over", "after", "before", "between", "under", "through", "does",
+            "here", "where", "being", "other", "such", "these", "those",
+            "like", "want", "need", "know", "think", "said", "many",
+            "comme", "pour", "avec", "dans", "mais", "plus", "tout",
+            "faire", "sont", "elle", "nous", "vous", "leur", "même",
+            "encore", "aussi", "donc", "quand", "rien", "bien", "fait",
+            "dire", "veux", "faut", "peut", "suis", "sera", "etre",
+            "avoir", "chez", "vers", "sans", "sous", "tres", "trop",
+            "autre", "cette", "entre", "parce", "alors", "juste",
+            "toute", "toutes", "tous", "celle", "ceux"}
+    concepts = [w for w in words if w not in stop and len(w) >= 4]
+    if not concepts:
+        return "BRIDGE: no concepts extracted from text"
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_concepts = []
+    for c in concepts:
+        if c not in seen:
+            seen.add(c)
+            unique_concepts.append(c)
+    concepts = unique_concepts
+
+    # Load mycelium and spread activation
+    try:
+        if _CORE_DIR not in sys.path:
+            sys.path.insert(0, _CORE_DIR)
+        from mycelium import Mycelium
+        m = Mycelium(repo)
+    except Exception as e:
+        return f"BRIDGE: mycelium load failed: {e}"
+
+    activated = m.spread_activation(concepts, hops=hops, top_n=top_n)
+    if not activated:
+        return f"BRIDGE: no activation from [{', '.join(concepts[:5])}]"
+
+    # Also get direct neighbors for top 3 seed concepts
+    direct = {}
+    for seed in concepts[:3]:
+        neighbors = m.get_related(seed, top_n=5)
+        if neighbors:
+            direct[seed] = neighbors
+
+    # Format output
+    output = [f"BRIDGE: [{', '.join(concepts[:8])}] -> {len(activated)} activated concepts"]
+    output.append("")
+
+    # Activated concepts (spreading activation results)
+    output.append("  ACTIVATED (spreading activation):")
+    for concept, score in activated[:top_n]:
+        bar = "#" * int(score * 20)
+        output.append(f"    {concept:<30} {score:.3f} {bar}")
+
+    # Direct neighbors
+    if direct:
+        output.append("")
+        output.append("  DIRECT NEIGHBORS:")
+        for seed, neighbors in direct.items():
+            nbr_str = ", ".join(f"{n}({w:.0f})" for n, w in neighbors[:5])
+            output.append(f"    {seed}: {nbr_str}")
+
+    # Search tree branches for activated concepts
+    if include_branches and TREE_DIR.exists():
+        activated_words = {c for c, _ in activated[:top_n]}
+        branch_hits = []
+        for mn_file in TREE_DIR.glob("*.mn"):
+            if mn_file.name == "root.mn":
+                continue
+            try:
+                text_content = mn_file.read_text(encoding="utf-8", errors="ignore")
+                content_words = set(re.findall(r'[A-Za-z]{4,}', text_content.lower()))
+                overlap = activated_words & content_words
+                if len(overlap) >= 2:
+                    # Find the most relevant lines
+                    best_lines = []
+                    for line in text_content.split("\n"):
+                        stripped = line.strip()
+                        if not stripped or stripped.startswith("#"):
+                            continue
+                        line_words = set(re.findall(r'[A-Za-z]{4,}', stripped.lower()))
+                        line_overlap = len(activated_words & line_words)
+                        if line_overlap >= 1:
+                            best_lines.append((line_overlap, stripped[:120]))
+                    best_lines.sort(key=lambda x: x[0], reverse=True)
+                    branch_hits.append((len(overlap), mn_file.stem, best_lines[:3]))
+            except OSError:
+                continue
+
+        if branch_hits:
+            branch_hits.sort(key=lambda x: x[0], reverse=True)
+            output.append("")
+            output.append("  BRANCH MATCHES:")
+            for score, branch, lines in branch_hits[:5]:
+                output.append(f"    [{branch}] ({score} concepts)")
+                for _, line in lines:
+                    output.append(f"      {line}")
+
+    # Fusions that involve activated concepts
+    fusions = m.get_fusions()
+    relevant_fusions = []
+    activated_set = {c for c, _ in activated}
+    seed_set = set(concepts)
+    for key, fusion in fusions.items():
+        parts = set(fusion.get("concepts", []))
+        if parts & (activated_set | seed_set):
+            relevant_fusions.append(fusion)
+
+    if relevant_fusions:
+        output.append("")
+        output.append("  ACTIVE FUSIONS:")
+        for f in relevant_fusions[:5]:
+            output.append(f"    {' + '.join(f['concepts'])} -> {f.get('form', '?')} (strength: {f.get('strength', 0):.0f})")
+
+    # Observe the bridge query itself (feed the mycelium with this interaction)
+    try:
+        m.observe(concepts[:10])
+        m.save()
+    except Exception:
+        pass  # non-critical
+
+    return "\n".join(output)
+
+
 # ── B4: Endsley L3 Prediction ────────────────────────────────────
 
 def predict_next(current_concepts: list[str] = None, top_n: int = 5,
@@ -6180,7 +6338,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "upgrade-hooks", "inject", "diagnose", "trip", "think",
+        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "trip", "think",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -6349,6 +6507,19 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         result = recall(args.file)
+        print(result)
+        return
+
+    if args.command == "bridge":
+        if not args.file:
+            print('ERROR: text required. Usage: muninn.py bridge "user message or concepts"')
+            sys.exit(1)
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        result = bridge(args.file)
         print(result)
         return
 
