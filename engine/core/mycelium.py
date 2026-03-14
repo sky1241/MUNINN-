@@ -2164,6 +2164,7 @@ class Mycelium:
         db = MyceliumDB(self.meta_db_path())
         try:
             pulled = 0
+            query_ids = set()  # M9 fix: initialize before if/else to avoid NameError
             id_to_name = {v: k for k, v in db._concept_cache.items()}
 
             if query_concepts:
