@@ -3096,6 +3096,72 @@ def bridge(text: str, top_n: int = 10, hops: int = 2,
     return "\n".join(output)
 
 
+def bridge_fast(text: str, top_n: int = 5) -> str:
+    """P42 fast path: lightweight bridge for hooks (<0.5s target).
+
+    Uses get_related() (direct neighbors) instead of spread_activation()
+    (full graph traversal). 300x faster on large myceliums.
+
+    Returns compact context for injection into Claude's conversation.
+    """
+    repo = _REPO_PATH or Path(".")
+
+    # Extract concepts (same filter as bridge())
+    words = re.findall(r'[A-Za-z\u00c0-\u024f]{4,}', text.lower())
+    stop = {"that", "this", "with", "from", "have", "been", "were", "will",
+            "would", "could", "should", "their", "there", "about", "which",
+            "when", "what", "your", "they", "them", "than", "then", "also",
+            "just", "only", "some", "more", "very", "most", "each", "into",
+            "over", "after", "before", "between", "under", "through", "does",
+            "here", "where", "being", "other", "such", "these", "those",
+            "like", "want", "need", "know", "think", "said", "many",
+            "comme", "pour", "avec", "dans", "mais", "plus", "tout",
+            "faire", "sont", "elle", "nous", "vous", "leur", "même",
+            "encore", "aussi", "donc", "quand", "rien", "bien", "fait",
+            "dire", "veux", "faut", "peut", "suis", "sera", "etre",
+            "avoir", "chez", "vers", "sans", "sous", "tres", "trop",
+            "autre", "cette", "entre", "parce", "alors", "juste",
+            "toute", "toutes", "tous", "celle", "ceux"}
+    concepts = []
+    seen = set()
+    for w in words:
+        if w not in stop and w not in seen and len(w) >= 4:
+            seen.add(w)
+            concepts.append(w)
+    if not concepts:
+        return ""
+
+    # Load mycelium
+    try:
+        if _CORE_DIR not in sys.path:
+            sys.path.insert(0, _CORE_DIR)
+        from mycelium import Mycelium
+        m = Mycelium(repo)
+    except Exception:
+        return ""
+
+    # get_related for top seeds (fast path — no full graph scan)
+    all_neighbors = {}
+    for seed in concepts[:5]:
+        neighbors = m.get_related(seed, top_n=top_n)
+        if neighbors:
+            all_neighbors[seed] = neighbors
+
+    if not all_neighbors:
+        return ""
+
+    # Compact output
+    lines = ["[MYCELIUM BRIDGE]"]
+    for seed, neighbors in all_neighbors.items():
+        nbrs = ", ".join(f"{n}" for n, w in neighbors[:5])
+        lines.append(f"  {seed} -> {nbrs}")
+
+    # Skip observe+save in fast path — too slow for hooks.
+    # The full bridge() or feed hooks handle persistence.
+
+    return "\n".join(lines)
+
+
 # ── B4: Endsley L3 Prediction ────────────────────────────────────
 
 def predict_next(current_concepts: list[str] = None, top_n: int = 5,

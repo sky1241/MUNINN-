@@ -692,6 +692,16 @@ Solution: `bridge()` — requete le mycelium mid-session, spreading activation e
 - [x] Auto-observe les concepts du bridge (nourrit le mycelium a chaque requete)
 - [x] Edge cases: texte vide, concepts inconnus → messages clairs
 - [x] CLI: `bridge` commande ajoutee au parser
+- [x] `bridge_fast()`: fast path pour hooks (<0.5s), get_related() au lieu de spread_activation()
+  - spread_activation: 10s (full graph) vs get_related: 0.03s (direct neighbors) = 300x
+  - bridge_fast total: 0.12s Python, 0.35s end-to-end (incluant startup)
+  - Skip observe+save (trop lent, persistence via feed hooks)
+- [x] `.claude/hooks/bridge_hook.py`: lit stdin JSON (UserPromptSubmit), appelle bridge_fast()
+  - Retourne `[MYCELIUM BRIDGE]` avec concepts actives par seed
+  - Messages <10 chars = skip silencieux, erreurs = silencieux
+- [x] Hook UserPromptSubmit dans settings.local.json (timeout 5s)
+  - Fire sur CHAQUE message user, AVANT que Claude reponde
+  - Claude voit le stdout = contexte mycelium injecte automatiquement
 Theorie: HippoRAG (Gutierrez & Shu 2024, NeurIPS) + FLARE (Jiang 2023, EMNLP)
 Personne ne fait exactement ca: spreading activation sur un mycelium de co-occurrences
 vivant avec fusion/decay bio-inspires, mid-conversation.

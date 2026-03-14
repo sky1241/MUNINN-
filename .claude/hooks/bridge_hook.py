@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""P42 UserPromptSubmit hook — Live Mycelium Bridge.
+
+Reads user prompt from stdin (JSON), runs bridge_fast(),
+returns activated concepts as context for Claude.
+
+Target: <0.5s total execution time.
+"""
+import json
+import sys
+import os
+
+def main():
+    # Read hook input from stdin
+    try:
+        hook_input = json.loads(sys.stdin.read())
+    except (json.JSONDecodeError, Exception):
+        sys.exit(0)  # silently pass on bad input
+
+    prompt = hook_input.get("prompt", "")
+    if not prompt or len(prompt) < 10:
+        sys.exit(0)  # skip very short messages
+
+    # Find repo path
+    repo_path = hook_input.get("cwd", os.getcwd())
+
+    # Add engine/core to path
+    engine_core = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "engine", "core")
+    if engine_core not in sys.path:
+        sys.path.insert(0, engine_core)
+
+    try:
+        import muninn
+        from pathlib import Path
+        muninn._REPO_PATH = Path(repo_path).resolve()
+        muninn._refresh_tree_paths()
+        result = muninn.bridge_fast(prompt)
+        if result:
+            print(result)
+    except Exception:
+        pass  # never block the conversation
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
