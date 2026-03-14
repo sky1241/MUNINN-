@@ -3571,6 +3571,8 @@ def prune(dry_run: bool = True):
         # Optimal Forgetting: re-compress cold branches with L9
         # Cold branches get deeper compression before potential deletion
         for name, days in cold:
+            if name not in nodes:
+                continue  # H1 fix: may have been removed by _sleep_consolidate
             node = nodes[name]
             filepath = TREE_DIR / node["file"]
             if not filepath.exists():
