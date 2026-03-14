@@ -1949,9 +1949,8 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
                 # Context-Aware Merge: append + resolve contradictions + dedup
                 filepath = TREE_DIR / node["file"]
                 if not filepath.exists():
-                    print(f"  WARNING: branch file missing: {filepath}", file=sys.stderr)
-                    merged = True  # Skip this segment (don't create duplicate)
-                    break
+                    print(f"  WARNING: branch file missing: {filepath}, creating new branch", file=sys.stderr)
+                    continue  # M5 fix: fall through to create new branch instead of losing data
                 old = filepath.read_text(encoding="utf-8")
                 # Combine old + new content
                 merged_text = old + "\n" + header + "\n" + body
