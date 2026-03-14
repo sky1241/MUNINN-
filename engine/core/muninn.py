@@ -2026,6 +2026,26 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             next_id += 1
             created += 1
 
+    # B13: Cap branches at MAX_BRANCHES to prevent tree explosion
+    MAX_BRANCHES = 200
+    branch_nodes = [(n, nd) for n, nd in nodes.items() if n != "root"]
+    if len(branch_nodes) > MAX_BRANCHES:
+        # Sort by temperature (coldest first), then by access_count
+        branch_nodes.sort(key=lambda x: (x[1].get("temperature", 0), x[1].get("access_count", 0)))
+        to_remove = branch_nodes[:len(branch_nodes) - MAX_BRANCHES]
+        for name, node in to_remove:
+            # Delete branch file
+            branch_file = TREE_DIR / node["file"]
+            if branch_file.exists():
+                branch_file.unlink()
+            # Remove from tree
+            del nodes[name]
+            # Remove from root's children
+            root_children = nodes.get("root", {}).get("children", [])
+            if name in root_children:
+                root_children.remove(name)
+        print(f"  B13 branch cap: removed {len(to_remove)} coldest branches (>{MAX_BRANCHES})", file=sys.stderr)
+
     refresh_tree_metadata(tree)
     save_tree(tree)
 
