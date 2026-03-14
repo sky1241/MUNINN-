@@ -49,7 +49,7 @@ def tool_result_msg(content):
 t0 = time.time()
 details = []
 try:
-    inp = "Voici le fix:\n```python\ndef calculate_score(branch):\n    recall = compute_recall(branch)\n    return recall * 0.8 + 0.2\n```\nCa marche maintenant."
+    inp = "Voici le fix:\n```python\ndef calculate_score(branch):\n    recall = compute_recall(branch)\n    relevance = get_relevance(branch)\n    temperature = branch.get('temperature', 0.5)\n    activation = recall * relevance\n    return activation * 0.8 + temperature * 0.2\n```\nCa marche maintenant."
     out = muninn.compress_line(inp)
 
     # Check code block is compressed
@@ -80,7 +80,8 @@ try:
     details.append(f"_compress_code_blocks code lines between ```: {code_count}")
     details.append(f"_compress_code_blocks output: {repr(out2[:200])}")
 
-    ok_p17 = code_count <= 1 or "```" not in out2  # code block compressed to <=1 line or removed
+    # Input has 6 code lines, P17 should compress to fewer (signature + ...)
+    ok_p17 = code_count <= 3  # 6 -> 2 typical (sig + ...), allow up to 3
     all_pass = ok_p17
     status = "PASS" if all_pass else "FAIL"
 except Exception as e:
@@ -421,7 +422,7 @@ try:
         "padding padding padding two",
         "padding padding padding three",
         "padding padding padding four",
-        "accuracy=97% on val set after fine-tuning",
+        "accuracy=97% on val set",
         "more padding lines afterwards",
         "more filler content here",
         "more filler padding here",

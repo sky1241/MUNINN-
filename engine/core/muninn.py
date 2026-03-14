@@ -111,7 +111,7 @@ def load_codebook(repo_path: Path = None) -> dict:
             mycelium_rules = m.get_compression_rules()
             learned_fillers = m.get_learned_fillers()
             learned_abbreviations = m.get_learned_abbreviations()
-        except (ImportError, Exception):
+        except ImportError:
             pass
 
     return {
@@ -990,7 +990,11 @@ def compress_line(line: str) -> str:
     # Use word-boundary regex to prevent substring corruption
     # (e.g. "completed" must NOT become "doneed" from rule "complete"->"done")
     for pattern in sorted(cb["text_rules"].keys(), key=len, reverse=True):
-        result = re.sub(rf'\b{re.escape(pattern)}\b', cb["text_rules"][pattern], result)
+        escaped = re.escape(pattern)
+        # Only use \b around patterns that start/end with word characters
+        prefix = r'\b' if re.match(r'\w', pattern[0]) else ''
+        suffix = r'\b' if re.match(r'\w', pattern[-1]) else ''
+        result = re.sub(rf'{prefix}{escaped}{suffix}', cb["text_rules"][pattern], result)
 
     # L6: Mycelium-aware compression: strong fusions = predictable pairs.
     # Only drop shorter concept if it appears exactly once AND near the other.
@@ -2551,8 +2555,8 @@ def boot(query: str = "") -> str:
                         for n, s in pop.items():
                             r = relevance_scores.get(n, 0.1)
                             growth = r * (1.0 - s / _K_inhib) * s
-                            inhibition = sum(_beta_inhib * pop[m] * s
-                                            for m in pop if m != n)
+                            inhibition = sum(_beta_inhib * pop[peer] * s
+                                            for peer in pop if peer != n)
                             new_s = s + 0.1 * (growth - inhibition)  # dt=0.1
                             new_pop[n] = max(0.001, min(_K_inhib, new_s))
                         pop = new_pop
@@ -2564,7 +2568,7 @@ def boot(query: str = "") -> str:
 
         loaded_tokens = nodes["root"]["lines"] * BUDGET["tokens_per_line"]
 
-        # Bloom-style concept tracking: skip branches that add <10% new concepts
+        # Bloom-style concept tracking: skip branches that add <5% new concepts
         loaded_concepts = set()
         # Seed with root concepts
         root_words = set(re.findall(r'[a-zA-Z]{4,}', root_text.lower()))
@@ -2645,7 +2649,7 @@ def boot(query: str = "") -> str:
         feedback = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "query": query or "",
-            "blind_spots_total": len(blind_spot_concepts) // 2,
+            "blind_spots_total": len(blind_spot_concepts),
             "covered": list(covered),
             "uncovered": list(uncovered),
             "branches_loaded": [n for n, _ in loaded],
@@ -2704,7 +2708,7 @@ def boot(query: str = "") -> str:
                 output.append(session_text)
                 loaded_tokens += session_tokens
             elif remaining_budget > 200:
-                max_chars = remaining_budget * 4
+                max_chars = remaining_budget * 3
                 session_lines = session_text.split("\n")
                 tail_lines = []
                 char_count = 0
@@ -3057,12 +3061,9 @@ def adapt_k(concepts: list[str] = None):
     """
     try:
         mode = detect_session_mode(concepts)
-        repo = _REPO_PATH or Path(".")
-        from mycelium import Mycelium
-        m = Mycelium(repo)
-        old_k = m._sigmoid_k
-        m._sigmoid_k = mode["suggested_k"]
-        return {"old_k": old_k, "new_k": mode["suggested_k"], "mode": mode["mode"],
+        # M7 fix: don't create a throwaway Mycelium — just return the mode info.
+        # The k value is applied by callers that have a persistent Mycelium instance.
+        return {"old_k": 10, "new_k": mode["suggested_k"], "mode": mode["mode"],
                 "diversity": mode["diversity"]}
     except Exception:
         return {"old_k": 10, "new_k": 10, "mode": "balanced", "diversity": 0.5}
@@ -3498,7 +3499,6 @@ def prune(dry_run: bool = True):
         _fact_ratios = []
         for bname, bnode in branches.items():
             lc = bnode.get("lines", 0)
-            _line_counts.append(lc)
             # Compute fact ratio from tags in content
             fpath = TREE_DIR / bnode.get("file", "")
             tagged = 0
@@ -3510,9 +3510,11 @@ def prune(dry_run: bool = True):
                         st = tl.strip()
                         if st and st[:2] in ("D>", "B>", "F>", "E>", "A>"):
                             tagged += 1
-                    total = max(1, len(text.split("\n")))
+                    lc = len(text.split("\n"))
+                    total = max(1, lc)
                 except (OSError, UnicodeDecodeError):
                     pass
+            _line_counts.append(lc)
             _fact_ratios.append(tagged / total)
 
         _med_lines = statistics.median(_line_counts) if _line_counts else 10
@@ -4210,8 +4212,12 @@ def generate_winter_tree(repo_path: Path, file_count: int, mycelium):
         elif ext in {".md", ".txt"}:
             doc_files += 1
 
-    conns = len(mycelium.data.get("connections", {}))
-    fusions = len(mycelium.data.get("fusions", {}))
+    if mycelium._db is not None:
+        conns = mycelium._db.connection_count()
+        fusions = mycelium._db.fusion_count()
+    else:
+        conns = len(mycelium.data.get("connections", {}))
+        fusions = len(mycelium.data.get("fusions", {}))
 
     content = f"""# {name} — Winter Tree
 
@@ -4293,15 +4299,18 @@ def _register_repo(repo_path: Path):
     # Atomic write to prevent concurrent hook corruption
     import tempfile
     fd, tmp = tempfile.mkstemp(dir=str(reg_path.parent), suffix=".tmp")
+    fd_closed = False
     try:
         os.write(fd, json.dumps(registry, indent=2, ensure_ascii=False).encode("utf-8"))
         os.close(fd)
+        fd_closed = True
         os.replace(tmp, str(reg_path))
     except Exception:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
+        if not fd_closed:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         try:
             os.unlink(tmp)
         except OSError:
@@ -5087,7 +5096,7 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
             )
             entry["sentiment"]["quadrant"] = affect["quadrant"]
             entry["sentiment"]["label"] = affect["label"]
-        except (ImportError, Exception):
+        except ImportError:
             pass
 
     # Dedup by filename
@@ -5749,18 +5758,30 @@ def feed_history(repo_path: Path):
         print(f"\n{m.status()}")
 
     # Compress transcripts into .mn and auto-segment into branches
+    # M8 fix: track compressed files by path (not stem — stems don't match .mn timestamps)
     sessions_dir = repo_path / ".muninn" / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
+    compressed_path = muninn_dir / "compressed_transcripts.json"
+    compressed = set()
+    if compressed_path.exists():
+        try:
+            with open(compressed_path, encoding="utf-8") as f:
+                compressed = set(json.load(f))
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
     for project_dir in project_dirs:
         for jsonl_file in sorted(project_dir.glob("*.jsonl")):
-            mn_marker = sessions_dir / f"{jsonl_file.stem}.mn"
-            if mn_marker.exists():
+            file_key = str(jsonl_file)
+            if file_key in compressed:
                 continue
             mn_path, _sent = compress_transcript(jsonl_file, repo_path)
             if mn_path:
                 created = grow_branches_from_session(mn_path, session_sentiment=_sent)
                 if created > 0:
                     print(f"  {jsonl_file.name}: {created} branches created")
+            compressed.add(file_key)
+    with open(compressed_path, "w", encoding="utf-8") as f:
+        json.dump(sorted(compressed), f, indent=2)
 
     # Refresh tree
     tree = load_tree()
@@ -5904,11 +5925,11 @@ def ingest(filepath: Path, repo_path: Path):
         if len(content.strip()) < 50:
             continue
 
-        total_original += len(content)
+        total_original += token_count(content)
 
         # Compress with full pipeline
         compressed = compress_file(f)
-        total_compressed += len(compressed)
+        total_compressed += token_count(compressed)
 
         # Write as .mn in repo's .muninn/tree/ for auto-segmentation
         mn_dir = repo_path / ".muninn" / "tree"
@@ -5924,8 +5945,10 @@ def ingest(filepath: Path, repo_path: Path):
         if mn_temp.exists():
             mn_temp.unlink()
 
-        ratio = len(content) / max(len(compressed), 1)
-        print(f"  {f.name}: {len(content)} -> {len(compressed)} chars (x{ratio:.1f}), {created} branches")
+        orig_tok = token_count(content)
+        comp_tok = token_count(compressed)
+        ratio = orig_tok / max(comp_tok, 1)
+        print(f"  {f.name}: {orig_tok} -> {comp_tok} tokens (x{ratio:.1f}), {created} branches")
 
     # Nourrit aussi le mycelium avec le contenu
     if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
@@ -5944,7 +5967,7 @@ def ingest(filepath: Path, repo_path: Path):
     save_tree(tree)
 
     ratio = total_original / max(total_compressed, 1)
-    print(f"\n  Total: {total_original} -> {total_compressed} chars (x{ratio:.1f})")
+    print(f"\n  Total: {total_original} -> {total_compressed} tokens (x{ratio:.1f})")
     print(f"  Branches created: {total_branches}")
     print(f"  Mycelium updated")
 

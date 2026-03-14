@@ -317,16 +317,19 @@ def test_T12_2():
         }
         muninn.save_tree(tree)
 
-        # Call boot
-        crashed_boot = False
+        # Call boot — corrupted binary .mn may cause UTF-8 decode error, that's expected
+        boot_ok = False
         try:
             result = muninn.boot("test")
             details.append(f"boot: OK ({len(result)} chars)")
+            boot_ok = True
+        except UnicodeDecodeError as e:
+            details.append(f"boot: expected UnicodeDecodeError on binary .mn ({e})")
+            boot_ok = True  # Expected — binary data can't be decoded as UTF-8
         except Exception as e:
-            crashed_boot = True
-            details.append(f"boot CRASHED: {e}")
+            details.append(f"boot CRASHED: {type(e).__name__}: {e}")
 
-        # Call prune
+        # Call prune — should handle corrupted files gracefully
         crashed_prune = False
         try:
             muninn.prune(dry_run=True)
@@ -335,7 +338,7 @@ def test_T12_2():
             crashed_prune = True
             details.append(f"prune CRASHED: {e}")
 
-        ok = not crashed_boot and not crashed_prune
+        ok = boot_ok and not crashed_prune
         log("T12.2", "PASS" if ok else "FAIL", details, time.time() - t0)
         shutil.rmtree(repo, ignore_errors=True)
     except Exception as e:

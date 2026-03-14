@@ -439,13 +439,13 @@ class Mycelium:
             chunk = chunk.strip()
             if len(chunk) < 20:
                 continue
-            words = re.findall(r'[A-Za-zÀ-ÿ_]{4,}', chunk)
+            words = re.findall(r'[A-Za-zÀ-ÿ_]{3,}', chunk)
             word_counts = Counter(w.lower() for w in words)
             concepts = [w for w in word_counts if w not in _STOPWORDS]
-            entities = re.findall(r'[A-Z][a-z]{3,}(?:\s+[A-Z][a-z]+)*', chunk)
+            entities = re.findall(r'[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*', chunk)
             for entity in entities:
                 e = entity.lower()
-                if e not in _STOPWORDS and len(e) >= 4:
+                if e not in _STOPWORDS and len(e) >= 3:
                     concepts.append(e)
             concepts = list(set(concepts))
             if len(concepts) >= 2:
@@ -794,7 +794,7 @@ class Mycelium:
                     saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
                     new_count = max(1, new_count - saturation_loss)
 
-                if new_count <= 0:
+                if new_count < 0.01:
                     dead_ids.append((a_id, b_id))
                 else:
                     self._db._conn.execute(
@@ -830,7 +830,7 @@ class Mycelium:
                     if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
                         saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
                         new_count = max(1, new_count - saturation_loss)
-                    if new_count <= 0:
+                    if new_count < 0.01:
                         dead.append(key)
                     else:
                         conn["count"] = new_count
@@ -2540,8 +2540,12 @@ def main():
         for i, session_text in enumerate(sessions):
             m.start_session()
             m.observe_text(session_text)
-            conns = len(m.data["connections"])
-            fusions = len(m.data["fusions"])
+            if m._db is not None:
+                conns = m._db.connection_count()
+                fusions = m._db.fusion_count()
+            else:
+                conns = len(m.data["connections"])
+                fusions = len(m.data["fusions"])
             print(f"  Session {i+1}: +observe -> {conns} connections, {fusions} fusions")
 
         m.save()
@@ -2556,7 +2560,8 @@ def main():
     elif args.command == "zones":
         if not m.federated:
             print("Federated mode is OFF. Use --federated to enable.")
-            print(f"Current mycelium: {len(m.data['connections'])} connections (local mode)")
+            n_conns = m._db.connection_count() if m._db is not None else len(m.data['connections'])
+            print(f"Current mycelium: {n_conns} connections (local mode)")
         else:
             zones = m.get_zones()
             bridges = m.get_bridges()
@@ -2574,7 +2579,8 @@ def main():
                     print(f"    {a}|{b}: {' <-> '.join(z)} (weight={w:.1f})")
 
     elif args.command == "detect":
-        print(f"Detecting zones in {m.data['repo']} ({len(m.data['connections'])} connections)...")
+        n_conns = m._db.connection_count() if m._db is not None else len(m.data['connections'])
+        print(f"Detecting zones in {m.data['repo']} ({n_conns} connections)...")
         zones = m.detect_zones()
         if zones:
             print(f"\n=== {len(zones)} ZONES DETECTED ===")

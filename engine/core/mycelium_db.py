@@ -359,8 +359,9 @@ class MyceliumDB:
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(a, b) DO UPDATE SET
                 strength = ?,
-                form = ?
-        """, (a_id, b_id, form, strength, fused_at, strength, form))
+                form = ?,
+                fused_at = ?
+        """, (a_id, b_id, form, strength, fused_at, strength, form, fused_at))
         self._conn.commit()  # H3 fix: persist writes immediately
 
     def delete_connection(self, concept_a: str, concept_b: str):
@@ -539,7 +540,7 @@ class MyceliumDB:
         """Get connections whose last_seen is older than threshold days ago."""
         cutoff = today_days() - days_threshold
         rows = self._conn.execute(
-            "SELECT a, b, count, first_seen, last_seen FROM edges WHERE last_seen < ?",
+            "SELECT a, b, count, first_seen, last_seen FROM edges WHERE CAST(last_seen AS INTEGER) < ?",
             (cutoff,)
         ).fetchall()
         result = []
@@ -696,8 +697,11 @@ class MyceliumDB:
                     fs = date_to_days(conn.get("first_seen", "2026-01-01"))
                     ls = date_to_days(conn.get("last_seen", "2026-01-01"))
                     db._conn.execute(
-                        "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
-                        "VALUES (?, ?, ?, ?, ?)",
+                        "INSERT INTO edges (a, b, count, first_seen, last_seen) "
+                        "VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT(a, b) DO UPDATE SET "
+                        "count = excluded.count, first_seen = excluded.first_seen, "
+                        "last_seen = excluded.last_seen",
                         (a_id, b_id, conn.get("count", 1), fs, ls)
                     )
                     # Zones
@@ -722,8 +726,11 @@ class MyceliumDB:
                 b_id = db._get_or_create_concept(b)
                 fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
                 db._conn.execute(
-                    "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO fusions (a, b, form, strength, fused_at) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(a, b) DO UPDATE SET "
+                    "form = excluded.form, strength = excluded.strength, "
+                    "fused_at = excluded.fused_at",
                     (a_id, b_id, fusion.get("form", f"{a}+{b}"),
                      fusion.get("strength", 1), fa)
                 )

@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT COMPLETE: 5 phases remediation done.
-Engine: muninn.py 5830 lignes, 90 fonctions + mycelium.py 2077 lignes, 45 fonctions + mycelium_db.py 930 lignes = 8837 total
-Tests: 44 fichiers, 229+ bornes PASS (tests FAKE remplaces par tests PROD), 0 FAIL
+Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9 COMPLETE: 34 bugs fixes (4 HIGH, 14 MEDIUM, 16 LOW).
+Engine: muninn.py 6315 lignes + mycelium.py 2608 lignes + mycelium_db.py 985 lignes = 9908 total
+Tests: Battery V4 — 81 PASS, 0 FAIL, 3 SKIP (permanents) + 11 tests dedies bug-fixes + L9 API valide
 
 ## Anatomie
 
@@ -1066,6 +1066,37 @@ Resultat: 5 phases de remediation executees, 229+ bornes PASS, 0 FAIL.
 - [x] **PHASE 5**: 9 silent except:pass → stderr, dead code removed (effective_budget, COMPRESSION_BY_TEMP)
 
 Commits: 1f1f86f, daf6845, 0cea991, 26b42f6, cf43e8f
+
+### AUDIT V9 DEEP SCAN (session 2026-03-14) [DONE]
+
+Audit profond mode senior dev: 34 bugs trouves (4 HIGH, 14 MEDIUM, 16 LOW).
+Tous corriges + 11 tests battery corriges + L9 API valide.
+Battery V4 finale: 81 PASS, 0 FAIL, 3 SKIP (permanents).
+
+#### HIGH (4) — crashes et data loss
+- H1: prune() KeyError apres sleep_consolidate (guard `if name not in nodes`)
+- H2: id_to_name reconstruit O(N*M) dans observe() P41 loop (deplace hors boucle)
+- H3+H4: missing commit() dans upsert_connection, upsert_fusion, delete_connection, update_connection_count, add_zone_to_edge
+
+#### MEDIUM (14) — logique incorrecte et silent fails
+- M1: _line_density max->min (cap not floor), M2: causal regex trailing spaces
+- M3: R1-Compress fallback min 2 chunks, M4: last chunk >=1 not >=4
+- M5: missing branch file -> continue not break, M6: winter_tree SQLite count
+- M7: adapt_k throwaway Mycelium removed, M8: feed_history tracking by path
+- M9: query_ids init, M10: _adj_cache invalidation, M11-M12: missing commits
+- M13: IntegrityError not sqlite3.Error, M14: PRAGMA foreign_keys=ON
+
+#### LOW (16) — edge cases et inconsistances
+- L1: except scope, L2: regex anchors, L3: blind_spots count, L4: variable shadow
+- L5: doc mismatch, L6: chars/token estimate, L7: line_counts source, L8: local budget (OK)
+- L9: double-close fd, L10: ingest ratio tiktoken, L11: decay threshold 0.01
+- L12: min word length 3, L13: CLI SQLite mode, L14: REPLACE->UPSERT migration
+- L15: CAST integer comparison, L16: fused_at update
+
+#### Tests battery corriges (11)
+T1.1 format JSONL, T1.7 fusion API, T1.10 pipe format, T2.1 code block size,
+T3.2 skeleton match, T4.2 import names, T4.4 sigmoid check, T4.9 isolated format,
+T4.11 edge threshold, T4.12 get_fusions API, T12.2 corrupted .mn tolerance
 
 ### P21 — PyPI publish [TODO]
 - [x] pyproject.toml + setup (FAIT, ligne 516)
