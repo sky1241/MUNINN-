@@ -5057,11 +5057,11 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     texts = parse_transcript(jsonl_path)
     if not texts:
         print(f"  No text messages found in {jsonl_path.name}")
-        return 0
+        return 0, []
 
     if offset >= len(texts):
         print(f"  Already fed {offset}/{len(texts)} messages from {jsonl_path.name}")
-        return len(texts)
+        return len(texts), texts
 
     if offset > 0:
         print(f"  Resuming feed from message {offset}/{len(texts)} ({jsonl_path.name})")
@@ -5090,7 +5090,7 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     m.save()
     progress[file_key] = {"offset": len(texts), "size": file_size}
     progress_path.write_text(json.dumps(progress, indent=2), encoding="utf-8")
-    return len(texts)
+    return len(texts), texts  # Return texts for reuse by compress_transcript
 
 
 def _semantic_rle(texts: list[str]) -> list[str]:
@@ -5189,14 +5189,16 @@ def _semantic_rle(texts: list[str]) -> list[str]:
     return result
 
 
-def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
+def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -> tuple:
     """Compress a transcript JSONL into a dense .mn session file.
 
     Extracts user+assistant messages, compresses each with the 7-layer
     pipeline, writes result to .muninn/sessions/<timestamp>.mn.
     Returns the path to the written .mn file.
+    Accepts pre-parsed texts to avoid double parse_transcript call.
     """
-    texts = parse_transcript(jsonl_path)
+    if texts is None:
+        texts = parse_transcript(jsonl_path)
     if not texts:
         return None, None
 
@@ -5333,12 +5335,37 @@ def compress_transcript(jsonl_path: Path, repo_path: Path) -> tuple:
             if i in kept_indices
         )
 
-    # Write to .muninn/sessions/
+    # Write to .muninn/sessions/ — dedup by transcript source
     sessions_dir = repo_path / ".muninn" / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     mn_path = sessions_dir / f"{timestamp}.mn"
+
+    # Dedup: check if this transcript was already compressed (same source, same size)
+    # Prevents PreCompact+SessionEnd and repeated Stop hooks from creating duplicate .mn files
+    dedup_path = repo_path / ".muninn" / "compressed_transcripts.json"
+    dedup_state = {}
+    if dedup_path.exists():
+        try:
+            dedup_state = json.loads(dedup_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            dedup_state = {}
+
+    source_key = jsonl_path.name if 'jsonl_path' in dir() else timestamp
+    source_size = jsonl_path.stat().st_size if 'jsonl_path' in dir() and jsonl_path.exists() else 0
+    prev_entry = dedup_state.get(source_key, {})
+
+    if prev_entry.get("size", 0) == source_size and source_size > 0:
+        # Same transcript, same size — overwrite the existing .mn instead of creating new one
+        existing_mn = sessions_dir / prev_entry.get("mn_file", "")
+        if existing_mn.exists():
+            mn_path = existing_mn  # overwrite same file
+
     mn_path.write_text(result, encoding="utf-8")
+
+    # Track which transcript produced which .mn
+    dedup_state[source_key] = {"size": source_size, "mn_file": mn_path.name, "timestamp": timestamp}
+    dedup_path.write_text(json.dumps(dedup_state, indent=2), encoding="utf-8")
 
     # Keep only last 10 session files (oldest get pruned)
     session_files = sorted(sessions_dir.glob("*.mn"))
@@ -5782,33 +5809,67 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
 
 
 class _MuninnLock:
-    """Simple file lock using mkdir atomicity. Prevents concurrent hook execution."""
-    # Stale threshold must be MUCH longer than any reasonable wait timeout.
-    # A hook can legitimately hold the lock for several minutes (large transcripts).
-    STALE_SECONDS = 600  # 10 minutes — only break locks clearly abandoned
+    """Simple file lock using mkdir atomicity + PID tracking. Prevents concurrent hook execution."""
+    STALE_SECONDS = 300  # 5 min — reduced from 10 because PID check catches dead processes faster
 
     def __init__(self, repo_path: Path, name: str = "hook", timeout: int = 120):
         self.lock_dir = repo_path / ".muninn" / f"{name}.lock"
+        self.pid_file = self.lock_dir / "pid"
         self.timeout = timeout
+
+    def _is_pid_alive(self, pid: int) -> bool:
+        """Check if process with given PID is still running."""
+        try:
+            if sys.platform == "win32":
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+                if handle:
+                    kernel32.CloseHandle(handle)
+                    return True
+                return False
+            else:
+                os.kill(pid, 0)
+                return True
+        except (OSError, PermissionError, AttributeError):
+            return False
 
     def __enter__(self):
         deadline = time.time() + self.timeout
         while True:
             try:
                 self.lock_dir.mkdir(parents=True, exist_ok=False)
-                return self
-            except FileExistsError:
-                # Only break locks that are clearly abandoned (10+ minutes old).
-                # Previously used self.timeout which caused race: waiting thread
-                # would consider the lock "stale" at exactly its own timeout.
+                # Write PID so stale detection can check if owner is alive
                 try:
-                    age = time.time() - self.lock_dir.stat().st_mtime
-                    if age > self.STALE_SECONDS:
-                        import shutil
-                        shutil.rmtree(self.lock_dir, ignore_errors=True)
-                        continue
+                    self.pid_file.write_text(str(os.getpid()), encoding="utf-8")
                 except OSError:
                     pass
+                return self
+            except FileExistsError:
+                # Check if lock owner is still alive (PID-based fast detection)
+                should_break = False
+                try:
+                    if self.pid_file.exists():
+                        owner_pid = int(self.pid_file.read_text(encoding="utf-8").strip())
+                        if not self._is_pid_alive(owner_pid):
+                            should_break = True  # Owner dead, break immediately
+                except (OSError, ValueError):
+                    pass
+
+                if not should_break:
+                    # Fallback: time-based stale detection
+                    try:
+                        age = time.time() - self.lock_dir.stat().st_mtime
+                        if age > self.STALE_SECONDS:
+                            should_break = True
+                    except OSError:
+                        pass
+
+                if should_break:
+                    import shutil
+                    shutil.rmtree(self.lock_dir, ignore_errors=True)
+                    continue
+
                 if time.time() > deadline:
                     raise TimeoutError(f"Muninn lock '{self.lock_dir}' held too long")
                 time.sleep(1)
@@ -5869,11 +5930,11 @@ def feed_from_hook(repo_path: Path):
         _update_usefulness(repo_path, jsonl_path)
 
         # 1. Feed mycelium (co-occurrences)
-        count = feed_from_transcript(jsonl_path, repo_path)
+        count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
         print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
-        # 2. Compress transcript into a .mn session file
-        mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path)
+        # 2. Compress transcript into a .mn session file (reuse parsed texts)
+        mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
 
         # 3. Auto-segment into tree branches (Brique 3)
         # V6B: Pass session sentiment to branches for valence-modulated decay
@@ -5993,11 +6054,11 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
     _update_usefulness(repo_path, jsonl_path)
 
     # 1. Feed mycelium
-    count = feed_from_transcript(jsonl_path, repo_path)
+    count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
     print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
-    # 2. Compress transcript
-    mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path)
+    # 2. Compress transcript (reuse parsed texts)
+    mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
 
     # 3. Auto-segment into branches
     if mn_path:
@@ -6069,43 +6130,26 @@ def feed_history(repo_path: Path):
         except (json.JSONDecodeError, ValueError, TypeError):
             print("WARNING: fed_transcripts.json corrupted, resetting", file=sys.stderr)
 
+    # Lock to prevent concurrent history + hook from racing
+    try:
+        lock = _MuninnLock(repo_path, "hook", timeout=120)
+        lock.__enter__()
+    except TimeoutError:
+        print("MUNINN HISTORY: lock timeout, skipping", file=sys.stderr)
+        return
+
     m = Mycelium(repo_path)
     total_messages = 0
     new_files = 0
 
-    for project_dir in project_dirs:
-        # Top-level .jsonl files (main sessions)
-        for jsonl_file in sorted(project_dir.glob("*.jsonl")):
-            file_key = str(jsonl_file)
-            if file_key in fed:
-                continue
-
-            texts = parse_transcript(jsonl_file)
-            if texts:
-                m.start_session()
-                for text in texts:
-                    m.observe_text(text)
-                total_messages += len(texts)
-                new_files += 1
-
-            fed.add(file_key)
-
-        # Subagent transcripts (top-level and inside session subdirectories)
-        subagent_dirs = []
-        top_sa = project_dir / "subagents"
-        if top_sa.exists():
-            subagent_dirs.append(top_sa)
-        for sub_dir in project_dir.iterdir():
-            if sub_dir.is_dir():
-                sa_dir = sub_dir / "subagents"
-                if sa_dir.exists():
-                    subagent_dirs.append(sa_dir)
-
-        for sa_dir in subagent_dirs:
-            for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
+    try:
+        for project_dir in project_dirs:
+            # Top-level .jsonl files (main sessions)
+            for jsonl_file in sorted(project_dir.glob("*.jsonl")):
                 file_key = str(jsonl_file)
                 if file_key in fed:
                     continue
+
                 texts = parse_transcript(jsonl_file)
                 if texts:
                     m.start_session()
@@ -6113,14 +6157,48 @@ def feed_history(repo_path: Path):
                         m.observe_text(text)
                     total_messages += len(texts)
                     new_files += 1
+
                 fed.add(file_key)
 
-    if total_messages > 0:
-        m.save()
+                # Checkpoint every file (not all-or-nothing)
+                if new_files % 3 == 0:
+                    m.save()
+                    with open(fed_path, "w", encoding="utf-8") as f:
+                        json.dump(sorted(fed), f, indent=2)
 
-    # Save fed list
-    with open(fed_path, "w", encoding="utf-8") as f:
-        json.dump(sorted(fed), f, indent=2)
+            # Subagent transcripts (top-level and inside session subdirectories)
+            subagent_dirs = []
+            top_sa = project_dir / "subagents"
+            if top_sa.exists():
+                subagent_dirs.append(top_sa)
+            for sub_dir in project_dir.iterdir():
+                if sub_dir.is_dir():
+                    sa_dir = sub_dir / "subagents"
+                    if sa_dir.exists():
+                        subagent_dirs.append(sa_dir)
+
+            for sa_dir in subagent_dirs:
+                for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
+                    file_key = str(jsonl_file)
+                    if file_key in fed:
+                        continue
+                    texts = parse_transcript(jsonl_file)
+                    if texts:
+                        m.start_session()
+                        for text in texts:
+                            m.observe_text(text)
+                        total_messages += len(texts)
+                        new_files += 1
+                    fed.add(file_key)
+
+        if total_messages > 0:
+            m.save()
+
+        # Save fed list
+        with open(fed_path, "w", encoding="utf-8") as f:
+            json.dump(sorted(fed), f, indent=2)
+    finally:
+        lock.__exit__(None, None, None)
 
     print(f"=== MUNINN FEED HISTORY ===")
     print(f"  New transcripts: {new_files}")
@@ -6134,11 +6212,16 @@ def feed_history(repo_path: Path):
     sessions_dir = repo_path / ".muninn" / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
     compressed_path = muninn_dir / "compressed_transcripts.json"
-    compressed = set()
+    compressed = {}
     if compressed_path.exists():
         try:
             with open(compressed_path, encoding="utf-8") as f:
-                compressed = set(json.load(f))
+                raw = json.load(f)
+                # Handle both old format (list) and new format (dict)
+                if isinstance(raw, list):
+                    compressed = {k: {} for k in raw}
+                else:
+                    compressed = raw
         except (json.JSONDecodeError, ValueError, TypeError):
             pass
     for project_dir in project_dirs:
@@ -6151,9 +6234,9 @@ def feed_history(repo_path: Path):
                 created = grow_branches_from_session(mn_path, session_sentiment=_sent)
                 if created > 0:
                     print(f"  {jsonl_file.name}: {created} branches created")
-            compressed.add(file_key)
+            compressed[file_key] = {"mn_file": mn_path.name if mn_path else None}
     with open(compressed_path, "w", encoding="utf-8") as f:
-        json.dump(sorted(compressed), f, indent=2)
+        json.dump(compressed, f, indent=2)
 
     # Refresh tree
     tree = load_tree()
@@ -6246,11 +6329,11 @@ def feed_watch(repo_path: Path):
                 _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
 
                 # Step 1: Feed mycelium (chunked + resumable — survives timeout)
-                count = feed_from_transcript(jsonl_path, repo_path)
+                count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
                 print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
 
-                # Step 2: Compress transcript (only if feed completed)
-                mn_path, _sent = compress_transcript(jsonl_path, repo_path)
+                # Step 2: Compress transcript (reuse parsed texts)
+                mn_path, _sent = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
 
                 # Step 3: Auto-segment into branches
                 if mn_path:
@@ -6599,9 +6682,9 @@ def main():
             feed_history(repo)
         elif args.file and Path(args.file).suffix == ".jsonl":
             # Direct file mode: feed from a specific transcript
-            count = feed_from_transcript(Path(args.file), repo)
+            count, parsed_texts = feed_from_transcript(Path(args.file), repo)
             print(f"MUNINN FEED: {count} messages -> mycelium ({repo.name})")
-            _mn, _sent = compress_transcript(Path(args.file), repo)
+            _mn, _sent = compress_transcript(Path(args.file), repo, texts=parsed_texts)
             # Match hook behavior: grow branches + refresh tree + sync meta
             if _mn:
                 grow_branches_from_session(_mn, session_sentiment=_sent)

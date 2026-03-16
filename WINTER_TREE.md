@@ -3,7 +3,7 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
 Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 6739 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 10342 total
+Engine: muninn.py 6822 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 10425 total
 Tests: Battery V4 (50) + Senior (40) + Tree Fixes (12) = 102 PASS, 0 FAIL, 0 SKIP
 
 ## Anatomie
@@ -255,13 +255,19 @@ Ce que Muninn a que les autres n'ont pas:
   - CLI: prune --force cassé (argparse rejetait --force) — now proper --force flag
   - CLI: feed <file.jsonl> sans --repo utilisait le JSONL comme repo path — now CWD fallback
   - Total: 2 bugs fixes
-- [x] Scan 13 (2026-03-16, feed reliability — chunked + resumable):
+- [x] Scan 13 (2026-03-16, feed reliability — full system audit, 26 findings):
   - TIMEOUT: feed_from_transcript all-or-nothing — now chunked (saves every 50 msgs) + resumable via feed_progress.json
-  - DATA LOSS: CLI direct-file mode (`feed file.jsonl`) never called grow_branches_from_session — now full pipeline (grow+refresh+sync)
-  - INFINITE LOOP: feed_watch set state before processing — crash = file marked done but never processed. Now state saved AFTER full pipeline
-  - RETRY: feed_watch never retried files with incomplete feed_progress — now re-includes stale files
-  - Root cause: roleplay session (1.5MB, 734 msgs) stuck in infinite retry loop for 3 days, zero .mn created
-  - Total: 4 bugs fixes (1 timeout, 1 data loss, 1 infinite loop, 1 retry)
+  - TIMEOUT: hooks PreCompact/SessionEnd/Stop had NO timeout — added 180s/120s
+  - LOCK: _MuninnLock left behind on kill, blocked all hooks 10 min — now PID-based detection (instant break if owner dead)
+  - DATA LOSS: CLI direct-file mode never called grow_branches — now full pipeline
+  - DATA LOSS: Stop hook created new .mn every event, cap 10 deleted old sessions — now dedup by transcript source
+  - DATA LOSS: feed_history zero checkpoint — now saves every 3 files + lock protection
+  - INFINITE LOOP: feed_watch state before processing — now AFTER full pipeline
+  - RETRY: feed_watch never retried incomplete feeds — now re-includes stale files
+  - PERF: parse_transcript called 2x per hook — now reuse parsed texts (feed returns texts to compress)
+  - DEDUP: PreCompact+SessionEnd fire on same transcript — compressed_transcripts.json prevents double .mn
+  - Root cause: roleplay session (1.5MB, 734 msgs) stuck in infinite retry loop for 3 days
+  - Total: 10 bugs fixes (2 timeout, 1 lock, 3 data loss, 1 infinite loop, 1 retry, 1 perf, 1 dedup)
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn

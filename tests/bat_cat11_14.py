@@ -368,7 +368,8 @@ try:
     sys.stdout = StringIO()
     sys.stderr = StringIO()
     try:
-        count = muninn.feed_from_transcript(jsonl_path2, TEMP_REPO2)
+        result = muninn.feed_from_transcript(jsonl_path2, TEMP_REPO2)
+        count = result[0] if isinstance(result, tuple) else result
     finally:
         sys.stdout = old_stdout
         try:
@@ -762,8 +763,8 @@ try:
     init_tree()
     checks = {}
 
-    # Verify STALE_SECONDS = 600
-    checks["STALE_SECONDS = 600"] = muninn._MuninnLock.STALE_SECONDS == 600
+    # Verify STALE_SECONDS = 300 (reduced: PID-based detection is faster)
+    checks["STALE_SECONDS = 300"] = muninn._MuninnLock.STALE_SECONDS == 300
 
     # Create a lock, test that new lock times out (with short timeout)
     lock_dir = TEMP_REPO / ".muninn" / "hook.lock"
