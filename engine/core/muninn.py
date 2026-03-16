@@ -132,6 +132,7 @@ _CORE_DIR = str(Path(__file__).resolve().parent)
 # Secret patterns — applied in compress_file and compress_transcript
 _SECRET_PATTERNS = [
     r'ghp_[A-Za-z0-9]{20,}',       # GitHub tokens (classic PAT)
+    r'github_pat_[A-Za-z0-9_]{20,}',  # GitHub fine-grained PAT (new format)
     r'sk-[A-Za-z0-9\-._]{20,}',    # API keys (may contain dashes like sk-ant-api03-...)
     r'AKIA[A-Z0-9]{16}',            # AWS access keys
     r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # Private keys
