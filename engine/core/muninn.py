@@ -4133,6 +4133,169 @@ def show_status():
           f"({est_compressed / BUDGET['max_loaded_tokens'] * 100:.1f}%)")
 
 
+def doctor():
+    """Pre-flight environment check — runs in <5s, green/red per check."""
+    print("=== MUNINN DOCTOR ===\n")
+    ok_count = 0
+    fail_count = 0
+
+    def _ok(label, detail=""):
+        nonlocal ok_count
+        ok_count += 1
+        print(f"  [OK] {label}" + (f" — {detail}" if detail else ""))
+
+    def _fail(label, detail=""):
+        nonlocal fail_count
+        fail_count += 1
+        print(f"  [FAIL] {label}" + (f" — {detail}" if detail else ""))
+
+    def _warn(label, detail=""):
+        print(f"  [WARN] {label}" + (f" — {detail}" if detail else ""))
+
+    # 1. Python version (>= 3.10)
+    v = sys.version_info
+    if v >= (3, 10):
+        _ok(f"Python {v.major}.{v.minor}.{v.micro}")
+    else:
+        _fail(f"Python {v.major}.{v.minor}.{v.micro}", "need >= 3.10")
+
+    # 2. SQLite version (>= 3.24 for UPSERT, WAL)
+    try:
+        import sqlite3
+        sv = sqlite3.sqlite_version
+        if tuple(int(x) for x in sv.split(".")) >= (3, 24):
+            _ok(f"SQLite {sv}")
+        else:
+            _fail(f"SQLite {sv}", "need >= 3.24 for WAL/UPSERT")
+    except Exception as e:
+        _fail("SQLite", str(e))
+
+    # 3. tiktoken (required for token counting)
+    try:
+        import tiktoken
+        _ok("tiktoken installed")
+    except ImportError:
+        _fail("tiktoken missing", "pip install tiktoken")
+
+    # 4. cryptography (optional — for AES-256)
+    try:
+        from cryptography.fernet import Fernet
+        _ok("cryptography installed (AES-256 ready)")
+    except ImportError:
+        _warn("cryptography not installed", "pip install cryptography (needed for AES-256)")
+
+    # 5. anthropic (optional — for L9)
+    try:
+        import anthropic
+        _ok("anthropic installed (L9 ready)")
+    except ImportError:
+        _warn("anthropic not installed", "pip install anthropic (optional, for L9)")
+
+    # 6. .muninn directory
+    repo = _REPO_PATH or Path(".").resolve()
+    muninn_dir = repo / ".muninn"
+    if muninn_dir.exists():
+        _ok(f".muninn/ exists ({repo.name})")
+    else:
+        _fail(f".muninn/ missing in {repo}", "run: muninn init")
+
+    # 7. Write permissions
+    if muninn_dir.exists():
+        try:
+            test_file = muninn_dir / ".doctor_test"
+            test_file.write_text("ok", encoding="utf-8")
+            test_file.unlink()
+            _ok("Write permissions OK")
+        except Exception as e:
+            _fail("Write permissions", str(e))
+
+    # 8. tree.json exists and is valid JSON
+    tree_path = muninn_dir / "tree" / "tree.json" if muninn_dir.exists() else None
+    if tree_path and tree_path.exists():
+        try:
+            data = json.loads(tree_path.read_text(encoding="utf-8"))
+            n_nodes = len(data.get("nodes", {}))
+            _ok(f"tree.json valid ({n_nodes} nodes)")
+        except Exception as e:
+            _fail("tree.json corrupted", str(e))
+    elif muninn_dir.exists():
+        # Try legacy path
+        legacy = repo / "memory" / "tree.json"
+        if legacy.exists():
+            _ok(f"tree.json found (legacy path)")
+        else:
+            _warn("tree.json not found", "run: muninn bootstrap <repo>")
+
+    # 9. mycelium.db exists and is readable
+    db_path = muninn_dir / "mycelium.db" if muninn_dir.exists() else None
+    if db_path and db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            # Try both schemas: edges (SQLite tier3) or connections (legacy)
+            try:
+                count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+            except sqlite3.OperationalError:
+                count = conn.execute("SELECT COUNT(*) FROM connections").fetchone()[0]
+            conn.close()
+            _ok(f"mycelium.db valid ({count:,} connections)")
+        except Exception as e:
+            _fail("mycelium.db", str(e))
+    elif muninn_dir.exists():
+        _warn("mycelium.db not found", "run: muninn bootstrap <repo>")
+
+    # 10. Encoding check — scan repo for non-UTF8 files that could crash boot
+    if muninn_dir.exists():
+        bad_files = []
+        scan_dirs = [muninn_dir / "tree", muninn_dir / "sessions"]
+        for d in scan_dirs:
+            if not d.exists():
+                continue
+            for f in d.iterdir():
+                if f.suffix in (".mn", ".json"):
+                    try:
+                        f.read_text(encoding="utf-8")
+                    except (UnicodeDecodeError, PermissionError):
+                        bad_files.append(str(f.name))
+        if bad_files:
+            _fail(f"Encoding issues in {len(bad_files)} file(s)", ", ".join(bad_files[:5]))
+        else:
+            _ok("All .mn/.json files are valid UTF-8")
+
+    # 11. Disk space (warn if < 500MB free)
+    try:
+        import shutil
+        total, used, free = shutil.disk_usage(str(repo))
+        free_mb = free // (1024 * 1024)
+        if free_mb > 500:
+            _ok(f"Disk space: {free_mb:,} MB free")
+        else:
+            _warn(f"Disk space low: {free_mb} MB free", "< 500 MB")
+    except Exception:
+        pass  # Not critical
+
+    # 12. RAM check (warn if < 512MB available)
+    try:
+        import psutil
+        avail = psutil.virtual_memory().available // (1024 * 1024)
+        if avail > 512:
+            _ok(f"RAM: {avail:,} MB available")
+        else:
+            _warn(f"RAM low: {avail} MB available")
+    except ImportError:
+        pass  # psutil optional
+
+    # Summary
+    print(f"\n{'='*40}")
+    if fail_count == 0:
+        print(f"  ALL GREEN — {ok_count} checks passed")
+    else:
+        print(f"  {fail_count} FAIL, {ok_count} OK — fix issues above")
+    print(f"{'='*40}")
+
+    return {"ok": ok_count, "fail": fail_count}
+
+
 def diagnose():
     """C6: Full health diagnostic — tree + mycelium + anomalies + blind spots."""
     print("=== MUNINN DIAGNOSE ===\n")
@@ -6554,7 +6717,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "trip", "think",
+        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor", "trip", "think",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -6596,6 +6759,15 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         diagnose()
+        return
+
+    if args.command == "doctor":
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        doctor()
         return
 
     if args.command == "trip":
