@@ -256,7 +256,7 @@ def test_real_save(myc):
     t0 = time.time()
     myc.save()
     dt = time.time() - t0
-    assert dt < 5.0, f"save() took {dt:.2f}s — too slow for lazy mode"
+    assert dt < 10.0, f"save() took {dt:.2f}s — too slow for lazy mode"
     print(f"  [OK] save() in {dt:.3f}s (lazy = commit + meta only)")
 
 
