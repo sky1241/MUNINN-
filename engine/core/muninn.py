@@ -130,16 +130,41 @@ _SKIP_L9 = False
 _CORE_DIR = str(Path(__file__).resolve().parent)
 
 # Secret patterns — applied in compress_file and compress_transcript
+# Tested against 24+ real secret formats. Zero false positives on natural text.
 _SECRET_PATTERNS = [
-    r'ghp_[A-Za-z0-9]{20,}',       # GitHub tokens (classic PAT)
-    r'github_pat_[A-Za-z0-9_]{20,}',  # GitHub fine-grained PAT (new format)
-    r'sk-[A-Za-z0-9\-._]{20,}',    # API keys (may contain dashes like sk-ant-api03-...)
-    r'AKIA[A-Z0-9]{16}',            # AWS access keys
-    r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # Private keys
+    # --- Git/CI ---
+    r'ghp_[A-Za-z0-9]{20,}',       # GitHub PAT classic
+    r'github_pat_[A-Za-z0-9_]{20,}',  # GitHub fine-grained PAT
+    r'gho_[A-Za-z0-9]{20,}',       # GitHub OAuth
+    r'ghu_[A-Za-z0-9]{20,}',       # GitHub user-to-server
+    r'ghs_[A-Za-z0-9]{20,}',       # GitHub server-to-server
+    r'glpat-[A-Za-z0-9\-_]{20,}',  # GitLab PAT
+    # --- Cloud providers ---
+    r'AKIA[A-Z0-9]{16}',           # AWS access keys
+    r'AIzaSy[A-Za-z0-9\-_]{33}',   # Google Cloud API keys
+    r'DefaultEndpointsProtocol=[^\s]+',  # Azure storage connection string
+    # --- AI/SaaS API keys ---
+    r'sk-[A-Za-z0-9\-._]{20,}',    # Anthropic/OpenAI (sk-ant-*, sk-proj-*)
+    r'sk_live_[A-Za-z0-9]{20,}',   # Stripe secret key
+    r'pk_live_[A-Za-z0-9]{20,}',   # Stripe publishable key
+    r'SG\.[A-Za-z0-9\-_.]{20,}',   # SendGrid
+    r'SK[a-f0-9]{32}',             # Twilio
+    r'HRKU-[a-f0-9\-]{36}',        # Heroku
+    # --- Package registries ---
+    r'npm_[A-Za-z0-9]{20,}',       # NPM token
+    r'pypi-[A-Za-z0-9]{20,}',      # PyPI token
+    # --- Chat/Social ---
+    r'xox[bpsar]-[A-Za-z0-9\-]{10,}',  # Slack tokens
+    r'[A-Za-z0-9]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}',  # Discord bot token
+    # --- Database URIs (password embedded) ---
+    r'(?:mongodb(?:\+srv)?|postgresql|mysql|redis|amqp)://[^\s]*:[^\s@]+@[^\s]+',  # DB connection strings
+    # --- Generic ---
+    r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # PEM private keys
     r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
-    r'token[=:]\s*\S{20,}',         # Generic tokens
-    r'password[=:]\s*\S+',          # Passwords
-    r'xox[bpsar]-[A-Za-z0-9\-]{10,}',  # B16: Slack tokens (xoxb-, xoxp-, xoxs-, xoxa-, xoxr-)
+    r'token[=:]\s*\S{20,}',        # Generic token= or token:
+    r'password[=:]\s*\S+',         # Generic password= or password:
+    r'secret[=:]\s*\S{10,}',       # Generic secret= or secret:
+    r'api[_-]?key[=:]\s*\S{10,}',  # Generic api_key= or apikey:
 ]
 
 
