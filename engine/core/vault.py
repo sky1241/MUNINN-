@@ -32,10 +32,16 @@ _LOCK_EXT = ".vault"
 _PBKDF2_ITERATIONS = 600_000  # OWASP 2023 recommendation
 _SENSITIVE_PATTERNS = [
     "mycelium.db",
+    "mycelium.db-wal",
+    "mycelium.db-shm",
     "sessions/*.mn",
     "tree/tree.json",
+    "tree/*.mn",
     "session_index.json",
     "errors.json",
+    "boot_feedback.json",
+    "hook_log.txt",
+    "tree/*.tmp",
 ]
 
 
