@@ -62,7 +62,7 @@ class MyceliumDB:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path), timeout=10)
+        self._conn = sqlite3.connect(str(self.db_path), timeout=30)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")  # M14 fix: enforce FK constraints
         self._conn.execute("PRAGMA synchronous=NORMAL")
@@ -652,7 +652,11 @@ class MyceliumDB:
         self._conn.commit()
 
     def close(self):
-        """Close the database connection."""
+        """Close the database connection and checkpoint WAL."""
+        try:
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
         self._conn.close()
 
     # ── Migration from JSON ──────────────────────────────────────────
@@ -810,7 +814,7 @@ class ConceptTranslator:
         """Initialize translation cache DB."""
         try:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._db = sqlite3.connect(str(self._db_path), timeout=5)
+            self._db = sqlite3.connect(str(self._db_path), timeout=30)
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("""
                 CREATE TABLE IF NOT EXISTS translations (
