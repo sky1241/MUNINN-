@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Security (doctor+vault+TLS). AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 6822 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 10425 total
-Tests: Battery V4 (50) + Senior (40) + Tree Fixes (12) = 102 PASS, 0 FAIL, 0 SKIP
+Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Security (doctor+vault+TLS) + Test Intelligence. AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
+Engine: muninn.py 6824 + mycelium.py 2610 + mycelium_db.py 993 + vault.py 374 + sync_tls.py 312 = 11113 total
+Tests: 66 files, 349 tests + 7 properties + 6 boundary fuzz = 362 checks, 0 FAIL. Intelligence framework: 6-layer adaptive.
 
 ## Anatomie
 
@@ -1299,6 +1299,38 @@ Ce que Muninn a que les autres n'ont pas:
 - Secret filtering
 - Zero dependance obligatoire (L1-L7 regex only), GPU et API optionnels
 - Bootstrap one-command (mycelium + root.mn + WINTER_TREE + hooks)
+
+## Test Intelligence Framework — 2026-03-16
+
+Adaptive 6-layer test framework that classifies tests and adapts analysis per type.
+Replaced dumb battery with intelligent system. Found 1 real bug (temperature overflow).
+
+### Architecture (6 layers)
+- **L1 Classification**: auto-detect type (security/unit/integration/cli/performance) from source
+- **L2 Execution**: per-type instrumented runner, retry for flaky network tests
+- **L3 Analysis**: post-mortem per type (hardcoded dates, fragile inspections, empty tests, crypto patterns)
+- **L4 Synthesis**: cross-test correlation, failure hotspots, perf regression, slowest
+- **L5 Properties**: 7 Hypothesis-style invariant checks (crypto roundtrip, PBKDF2, rate limiter, recall bounds, protocol, secrets, temperature)
+- **L6 Fuzzing**: 6 boundary checks (empty/1MB encrypt, truncated recv, 10K burst, extreme dates, 50MB reject)
+
+### Bugs found
+- `compute_temperature()` returned 3.19 when lines > max_lines (fill ratio unbounded). Fixed: clamp to [0,1]
+- B14 dust cleanup overrode V9B sole_carrier protection. Fixed: skip _fragile_branches
+- 14 test files had hardcoded recent dates as last_access (time bombs). Fixed: dynamic _TODAY/_DAYS_AGO
+- Retrieval benchmark ground truth stale after tree evolution. Fixed: rebuilt from actual tags
+
+### Usage
+```
+python tests/muninn_test_intelligence.py              # standard
+python tests/muninn_test_intelligence.py --deep        # +properties +fuzz
+python tests/muninn_test_intelligence.py --deep --save # +history for regression
+python tests/muninn_test_intelligence.py --tier security  # security only
+```
+
+### Numbers
+- 66 files, 349 tests + 7 properties + 6 fuzz = 362 checks, 0 FAIL
+- 15 warnings remaining (code inspection fragility + pytest-style output — structural, not bugs)
+- Total time: ~250s
 
 ## Security Hardening — 2026-03-15 (Pre-PyPI)
 
