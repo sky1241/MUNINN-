@@ -6717,7 +6717,8 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor", "trip", "think",
+        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
+        "lock", "unlock", "trip", "think",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -6727,6 +6728,7 @@ def main():
     parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
                         help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
     parser.add_argument("--force", action="store_true", help="Force operation (e.g., prune without dry-run)")
+    parser.add_argument("--password", help="Password for vault lock/unlock (AES-256)")
 
     args = parser.parse_args()
 
@@ -6768,6 +6770,40 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         doctor()
+        return
+
+    if args.command in ("lock", "unlock"):
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        repo = _REPO_PATH or Path(".").resolve()
+        try:
+            from vault import Vault
+        except ImportError:
+            print("ERROR: vault module not found")
+            sys.exit(1)
+        v = Vault(repo)
+        pw = args.password
+        if not pw:
+            import getpass
+            pw = getpass.getpass("Vault password: ")
+        if args.command == "lock":
+            if not v.is_initialized():
+                v.init(pw)
+                print(f"VAULT: initialized (salt saved to {v.salt_path.name})")
+            else:
+                v.load_key(pw)
+            result = v.lock()
+            print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
+        else:  # unlock
+            if not v.is_initialized():
+                print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
+                sys.exit(1)
+            v.load_key(pw)
+            result = v.unlock()
+            print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
         return
 
     if args.command == "trip":
