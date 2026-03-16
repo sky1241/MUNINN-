@@ -1,39 +1,51 @@
 # MUNINN — Winter Tree (Baobab)
 
 Type: Baobab (gros tronc, petites branches)
-Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl). AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 6822 lignes + mycelium.py 2610 lignes + mycelium_db.py 993 lignes = 10425 total
-Tests: Battery V4 (50) + Senior (40) + Tree Fixes (12) = 102 PASS, 0 FAIL, 0 SKIP
+Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security Hardening + Test Intelligence
+Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor). 49+ bugs fixes. Feed chunked+resumable.
+Engine: muninn.py 7073 + mycelium.py 2610 + mycelium_db.py 993 + forge.py 800 + vault.py 373 + sync_tls.py 310 + sentiment.py 154 + tokenizer.py 40 + watchdog.py 57 = 12410 total
+Tests: 66 test files + muninn_test_intelligence.py (adaptive 6-layer framework). 362+ checks, 0 FAIL
 
 ## Anatomie
 
 ```
-        [CI]                    +5 Cime (tests/validation)
+        [CI + test_intelligence]   +6 Stratosphere (adaptive 6-layer test framework)
+              |
+        [66 test files]            +5 Cime (tests/validation)
        /    \
-    [.mn]  [.mn]               +4 Feuilles (memoire vivante)
+    [.mn]  [.mn]                   +4 Feuilles (memoire vivante)
       |      |
-   [tree.json]                 +2 Branches (metadata arbre)
+   [tree.json]                     +2 Branches (metadata arbre)
       |
-   [muninn.py]                 +1 Tronc (moteur principal)
+   [muninn.py]                     +1 Tronc (moteur principal, 7073 lignes)
       |
-   [mycelium.py]               0  SOL — le champignon vivant
+   [mycelium.py + mycelium_db.py]   0 SOL — le champignon vivant (SQLite)
       |
-   [tokenizer BPE]            -1 Racines (tokenizer natif Claude)
+   [vault.py + sync_tls.py]       -1 Sous-sol — securite (AES-256, TLS 1.3, mTLS)
+      |
+   [forge.py + sentiment.py]      -2 Fondations — doctor + VADER capteur
+      |
+   [tokenizer BPE]                -3 Racines (tokenizer natif Claude)
 ```
 
 ## Etat des briques
 
 | # | Brique | Etat | Action |
 |---|--------|------|--------|
-| B2 | muninn.py v0.9 | OK | Moteur: 11 couches compression + retrieval intelligent (TF-IDF + Spreading Activation + scoring) |
-| B4 | tree.json | OK | Enrichir: hash, temperature |
+| B2 | muninn.py v0.9.1 (7073 lignes) | OK | Moteur: 11 couches compression + retrieval intelligent (TF-IDF + Spreading Activation + Ebbinghaus + scoring) |
+| B4 | tree.json | OK | Hash, temperature, Ebbinghaus recall, bio-vectors (valence, arousal, fisher, pheromone...) |
 | B5 | *.mn files | OK | Memoire vivante |
-| NEW | mycelium.py | OK | Tracker co-occurrences, fusion, decay |
+| NEW | mycelium.py (2610 lignes) | OK | Co-occurrences, fusion, decay, Huginn trip/dream, spreading activation, LaTeX, federated |
+| NEW | mycelium_db.py (993 lignes) | OK | SQLite backend (S1+S2+S4), migration JSON->SQLite, ConceptTranslator |
+| NEW | vault.py (373 lignes) | OK | AES-256-GCM coffre-fort, PBKDF2 600K iter, audit JSONL, rotation cles |
+| NEW | sync_tls.py (310 lignes) | OK | TLS 1.3 strict, mTLS, rate limiting (token bucket per-IP), protocol v1 |
+| NEW | forge.py (800 lignes) | OK | Doctor self-audit: 12 checks, auto-fix, rapport structure |
+| NEW | sentiment.py (154 lignes) | OK | VADER sentiment analysis (V10A), rule-based, zero LLM |
 | B9 | docs/ | OK | LITERATURE.md enrichi (43+ papiers dont 28 bio-vectors) |
 | B10 | ci.yml | OK | Tests: tree, engine, mycelium, feed |
 | NEW | .claude/settings.local.json | OK | Hooks PreCompact + SessionEnd + Stop -> feed + compress |
 | NEW | .muninn/sessions/*.mn | OK | Transcripts compresses (auto-prune 10 derniers) |
+| NEW | muninn_test_intelligence.py | OK | Adaptive 6-layer test framework (classify, run, analyze, synthesize, property, fuzz) |
 | ~~B1~~ | ~~CODEBOOK.json~~ | SUPPRIME | Remplace par UNIVERSAL_RULES + mycelium |
 | ~~B3~~ | ~~muninn_codec.py~~ | SUPPRIME | Code sinogramme mort |
 | ~~B8~~ | ~~CODEBOOK_TREE.md~~ | SUPPRIME | Index sinogrammes mort |
@@ -891,12 +903,14 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 **TIER 1**: 6/6 FAIT (A1-A5, B1), 36 bornes, 100% PASS
 **TIER 2**: 5/5 upgrades + 4 wiring FAIT (B2-B7, W1-W6), 74 bornes, 100% PASS
 **TIER 3**: 11/11 FAIT (S1-S4, C1-C7, P41), 126 bornes cumul, CI vert
+**Bio-Vectors**: 16/16 impl + 3 immune layers, AUDIT V9-V9D: 49 bugs fixes
+**Security**: vault AES-256 + TLS 1.3 + mTLS + rate limiting + doctor self-audit
 **Cross-domain**: 7 pistes analysees, 4 isomorphismes LaTeX-confirmes (FORMULES_ETRANGERES.md)
-**Tests**: 25 fichiers, 126+ bornes, 0 FAIL, 0 SKIP
+**Tests**: 66 fichiers, 362+ bornes, 0 FAIL + adaptive 6-layer intelligence framework
+**Engine total**: 12410 lignes (9 fichiers Python dans engine/core/)
 
 **Reste a faire**:
-- Bio-Vectors: 22 formules planifiees (TIER S: 6, TIER A: 6, TIER B: 4, TIER C: 6 skip)
-- P21: publier sur PyPI (pyproject.toml pret)
+- P21: publier sur PyPI (pyproject.toml pret, tests battery clean)
 - P31: full arXiv run (attend WT3)
 - P39: liane Yggdrasil (attend WT3)
 - Explication A-Z du systeme pour Sky
@@ -1300,6 +1314,61 @@ Ce que Muninn a que les autres n'ont pas:
 - Zero dependance obligatoire (L1-L7 regex only), GPU et API optionnels
 - Bootstrap one-command (mycelium + root.mn + WINTER_TREE + hooks)
 
+### Security Hardening — Production-Ready (session 2026-03-15) [DONE]
+
+| # | Brique | Description | Status |
+|---|--------|-------------|--------|
+| SEC1 | vault.py | AES-256-GCM coffre-fort, PBKDF2 600K iterations, audit JSONL, rotation cles | DONE |
+| SEC2 | sync_tls.py | TLS 1.3 strict (no 1.2 downgrade), protocol v1 framing, send/recv with length prefix | DONE |
+| SEC3 | Rate limiting | Token bucket per-IP (thread-safe, memory-safe eviction of empty IPs) | DONE |
+| SEC4 | mTLS | Mutual TLS: CERT_REQUIRED + ca_path guard (ValueError if cert required without CA) | DONE |
+| SEC5 | .gitignore | *.crt, *.pem, *.vault, vault.salt, vault_audit.jsonl | DONE |
+| SEC6 | Secret redaction | _SECRET_PATTERNS constant used in compress_file + compress_transcript | DONE |
+| SEC7 | verify=False warning | warnings.warn() when TLS cert validation disabled | DONE |
+
+Tests: tests/test_vault.py + tests/test_sync_tls.py (T1.1-T1.10)
+
+### forge.py — Doctor Self-Audit (session 2026-03-15) [DONE]
+
+Self-diagnostic system: `muninn.py doctor` runs 12 automated health checks.
+- Tree integrity (valid JSON, required fields)
+- Branch file existence (referenced .mn files exist)
+- Mycelium DB health (SQLite integrity_check)
+- Hook configuration (PreCompact + SessionEnd + Stop)
+- Session index consistency
+- Error/fix pairs valid
+- Secret scan (no tokens/keys in .mn files)
+- Auto-fix mode for common issues
+Fichier: engine/core/forge.py (800 lignes). Tests: tests/test_doctor.py
+
+### Test Intelligence Framework (session 2026-03-15) [DONE]
+
+Fichier: tests/muninn_test_intelligence.py (~600 lignes)
+SEI CMU taxonomy: what-based (type) + when-based (phase) classification.
+
+6 couches:
+1. **TestClassifier**: auto-detects test type from source patterns (security, math, retrieval, integration, unit)
+2. **TestRunner**: per-type instrumented execution (retry for network, timeout per type)
+3. **TestAnalyzer**: per-type post-mortem (crypto checks, hardcoded dates, empty tests, flaky network)
+4. **TestSynthesizer**: cross-test correlation, failure hotspots, perf regression detection
+5. **PropertyChecker**: 7 invariants (encrypt roundtrip, PBKDF2 deterministic, rate limiter bool, Ebbinghaus [0,1], protocol roundtrip, secret filter, temperature [0,1])
+6. **BoundaryFuzzer**: 6 edge cases (empty/1MB encrypt, truncated recv, 10K burst, extreme dates, 50MB reject)
+
+CLI: `--deep` (properties+fuzz), `--save` (history), `--tier security`, `--review`
+Bug found by PropertyChecker: compute_temperature() overflow (lines > max_lines → temp=3.19). Fixed: min(1.0, fill_ratio)
+
+### Bio-Vectors + Immune — ALL IMPLEMENTED (session 2026-03-15) [DONE]
+
+16 bio-vectors + 3 immune layers, all implemented, tested, actively called in boot/prune/feed.
+66 test files, 362+ checks, 0 FAIL.
+
+TIER S (6 active): V10A VADER, V6B valence-decay, V6A emotional tagging, V2B TD-Learning, V5B cross-inhibition, V7B ACO pheromone.
+TIER A (6): V3B Bayesian ToM, V4B EWC Fisher, V9A+ fact regeneration, V9B Reed-Solomon sole-carrier, V11B Boyd-Richerson, V3A transitive inference.
+TIER B (4): V5A quorum Hill, V8B active sensing, V10B Russell circumplex, V1A coupled oscillator.
+Immune (3): I1 danger theory (session stress score), I2 immune network (continuous branch suppression), I3 negative selection (corruption detection).
+
+Key fix: B14 dust cleanup was overriding V9B sole-carrier protection. Added `if name in _fragile_branches: continue`.
+
 ## Pivots de la session 2026-03-06
 
 ### Pivot 1 — Sinogrammes = mauvais chemin
@@ -1335,3 +1404,12 @@ Muninn = premier outil construit depuis le cote boucher.
 - LAMA Probes (Facebook 2019) — cloze tests for parametric knowledge assessment
 - Selective-Context (EMNLP 2023) — self-information pruning (token-level, syntactic)
 - Prompt Compression Survey (NAACL 2025) — taxonomy: hard/soft prompt methods
+- Matzinger (1994) — Danger Theory: immune response triggered by damage signals, not foreign detection
+- Jerne (1974) — Immune Network Theory: idiotypic network, mutual suppression
+- Forrest et al. (1994) — Negative Selection: self-model for anomaly detection
+- Hutto & Gilbert (2014) — VADER: rule-based sentiment analysis, ICWSM
+- Schultz, Dayan, Montague (1997) — TD-Learning in primate dopamine neurons, Science
+- Dorigo et al. (1996) — ACO: Ant Colony Optimization pheromone trails, IEEE Trans SMC-B
+- Anderson (1993) — ACT-R: base-level activation B=ln(sum(t_j^(-d)))
+- Nader (2000) — Memory reconsolidation: retrieved memories become labile
+- Settles & Meeder (2016) — Half-life regression for spaced repetition, ACL
