@@ -255,18 +255,46 @@ Ce que Muninn a que les autres n'ont pas:
   - CLI: prune --force cassé (argparse rejetait --force) — now proper --force flag
   - CLI: feed <file.jsonl> sans --repo utilisait le JSONL comme repo path — now CWD fallback
   - Total: 2 bugs fixes
-- [x] Scan 13 (2026-03-16, feed reliability — full system audit, 26 findings):
-  - TIMEOUT: feed_from_transcript all-or-nothing — now chunked (saves every 50 msgs) + resumable via feed_progress.json
-  - TIMEOUT: hooks PreCompact/SessionEnd/Stop had NO timeout — added 180s/120s
-  - LOCK: _MuninnLock left behind on kill, blocked all hooks 10 min — now PID-based detection (instant break if owner dead)
-  - DATA LOSS: CLI direct-file mode never called grow_branches — now full pipeline
-  - DATA LOSS: Stop hook created new .mn every event, cap 10 deleted old sessions — now dedup by transcript source
-  - DATA LOSS: feed_history zero checkpoint — now saves every 3 files + lock protection
-  - INFINITE LOOP: feed_watch state before processing — now AFTER full pipeline
-  - RETRY: feed_watch never retried incomplete feeds — now re-includes stale files
-  - PERF: parse_transcript called 2x per hook — now reuse parsed texts (feed returns texts to compress)
-  - DEDUP: PreCompact+SessionEnd fire on same transcript — compressed_transcripts.json prevents double .mn
-  - Root cause: roleplay session (1.5MB, 734 msgs) stuck in infinite retry loop for 3 days
+- [x] Scan 13 (2026-03-16, feed reliability — full system audit, 26 findings, 10 fixes):
+  **Problème:** Session roleplay du 15 mars (1.5MB, 734 messages après L0) jamais digestée.
+  Le hook feed_watch tournait toutes les 15 min pendant 3 jours, loggait "WATCH feeding"
+  mais jamais "done". Zéro .mn créé. Zéro branche. Le mycelium n'a rien appris de la session.
+  Diagnostiqué quand boot("roleplay sales") retourne zéro contenu pertinent.
+  **Cause racine:** Cascade de 4 bugs indépendants qui se renforcent:
+  1. Hooks PreCompact/SessionEnd/Stop = AUCUN timeout configuré. Claude Code tuait le process
+     après son timeout par défaut. Le feed sur 734 messages dépassait ce timeout.
+  2. _MuninnLock: quand le process est tué, le lock dir reste. Stale detection = 600s (10 min).
+     Chaque hook suivant attendait 120s (son timeout) puis abandonnait. Résultat: pendant 10 min
+     après chaque kill, TOUS les hooks sont bloqués.
+  3. feed_from_transcript: tout-ou-rien. Parse tout, observe tout, save à la fin. Si tué à 80%
+     = zéro progression sauvée. Recommence de zéro au prochain cycle.
+  4. feed_watch: met à jour watch_state AVANT le processing. Si le process meurt pendant le feed,
+     le state dit "fichier traité" alors qu'il l'est pas. Au prochain cycle, fichier ignoré.
+  La boucle: hook fire → timeout kill → lock reste → hooks suivants bloqués → lock expire →
+  hook fire → feed recommence de zéro → timeout kill → ... pendant 3 jours.
+  **Bugs additionnels découverts pendant l'audit (26 findings):**
+  5. CLI direct-file mode (`feed file.jsonl`): ne faisait NI grow_branches NI refresh_tree NI sync_meta.
+     Les branches n'étaient jamais créées en mode manuel.
+  6. Stop hook: créait un NOUVEAU .mn à chaque event. Cap de 10 fichiers supprimait les .mn des
+     sessions précédentes. Perte de données systématique sur sessions actives.
+  7. feed_history: zéro checkpoint (m.save() une seule fois à la fin). Kill = toutes les données perdues.
+     Pas de lock non plus — race possible avec hooks concurrents.
+  8. parse_transcript appelé 2x par hook (feed + compress). Double le temps dans la fenêtre timeout.
+  9. PreCompact + SessionEnd = même commande. Double processing du même transcript = .mn dupliqués.
+  **Fixes appliqués:**
+  - Timeouts: PreCompact/SessionEnd 180s, Stop 120s dans settings.local.json
+  - Lock PID: écrit os.getpid() dans lock dir, vérifie si owner vivant avant d'attendre. Process mort = break immédiat (was 600s). Windows: OpenProcess via ctypes. STALE_SECONDS réduit 600→300.
+  - feed_from_transcript: checkpoint toutes les 50 messages dans .muninn/feed_progress.json. Resume automatique si interrompu. Retourne (count, texts) pour réutilisation.
+  - feed_watch: state sauvé APRÈS pipeline complet (pas avant). Re-inclut fichiers avec feed incomplet.
+  - CLI direct-file: pipeline complet aligné sur hooks (grow_branches + refresh + save + sync_meta).
+  - .mn dedup: compressed_transcripts.json mappe transcript→mn_file. Même source = overwrite, pas nouveau.
+  - feed_history: checkpoint toutes les 3 files + lock "hook" pour éviter race.
+  - compress_transcript accepte texts= param pour éviter double parse.
+  **Test d'intégration réel (pas mock):** Transcript 498KB, 28 messages.
+  PreCompact: 28 msgs → mycelium → .mn → 5 branches → meta sync = 5.3s.
+  SessionEnd dedup: même transcript → réutilise .mn = 0.9s. Stop debounce = 0.8s.
+  Total 7.1s, largement dans les 180s. 18/18 checks PASS.
+  **Batterie existante:** 61 PASS, 4 SKIP, 0 FAIL (2 tests adaptés: T11.3 return tuple, T12.6 STALE_SECONDS).
   - Total: 10 bugs fixes (2 timeout, 1 lock, 3 data loss, 1 infinite loop, 1 retry, 1 perf, 1 dedup)
 
 ### P11 — Bootstrap auto-complet [FAIT]
