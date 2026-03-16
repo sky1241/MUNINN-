@@ -8,7 +8,7 @@ Tests:
   B7.5  Tree updated with branch metadata
   B7.6  Mycelium fed with concepts
 """
-import sys, os, tempfile, json, shutil
+import sys, os, tempfile, json, shutil, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 
 def _setup_temp_repo(tmpdir):
@@ -23,7 +23,7 @@ def _setup_temp_repo(tmpdir):
                 "type": "root",
                 "tags": [],
                 "access_count": 0,
-                "last_access": "2026-03-10",
+                "last_access": time.strftime("%Y-%m-%d"),
             }
         }
     }

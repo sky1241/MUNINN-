@@ -7,9 +7,13 @@ Tests:
   B1.6  No API: only L10+L11 used
   B1.X  Root protection: root never reconsolidated
 """
-import sys, os, tempfile, json
+import sys, os, tempfile, json, time
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _cue_distill, _extract_rules, _ebbinghaus_recall
+
+_TODAY = time.strftime("%Y-%m-%d")
+_DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 def test_b1_1_size():
     """L10+L11 should reduce or maintain size, never inflate"""
@@ -47,7 +51,7 @@ def test_b1_5_fresh_skip():
     """recall > 0.3 => reconsolidation skipped"""
     node = {
         "access_count": 10,  # many reviews = high h = high recall
-        "last_access": "2026-03-01",  # 9 days ago
+        "last_access": _DAYS_AGO(9),
         "usefulness": 1.0,
     }
     recall = _ebbinghaus_recall(node)

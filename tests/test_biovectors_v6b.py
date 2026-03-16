@@ -13,9 +13,13 @@ Tests:
   V6B.6  Extreme values don't cause explosion (valence=1, arousal=1)
   V6B.7  Branch node with sentiment fields works in _ebbinghaus_recall
 """
-import sys, os
+import sys, os, time
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _ebbinghaus_recall, _days_since
+
+_TODAY = time.strftime("%Y-%m-%d")
+_DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 PASS = 0
 FAIL = 0
@@ -30,11 +34,11 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def make_node(access_count=3, last_access="2026-02-25", usefulness=1.0,
+def make_node(access_count=3, last_access=None, usefulness=1.0,
               valence=0.0, arousal=0.0):
     node = {
         "access_count": access_count,
-        "last_access": last_access,
+        "last_access": last_access if last_access is not None else _DAYS_AGO(18),
         "usefulness": usefulness,
     }
     if valence != 0.0:
@@ -68,8 +72,8 @@ def test_v6b_2_backward_compatible():
 def test_v6b_3_separation_14d():
     """Recall separation emotional vs neutral > 1.5x after 14 days simulated"""
     # 14 days ago, 1 review, usefulness=1.0
-    neutral = make_node(access_count=1, last_access="2026-02-25")
-    emotional = make_node(access_count=1, last_access="2026-02-25",
+    neutral = make_node(access_count=1, last_access=_DAYS_AGO(14))
+    emotional = make_node(access_count=1, last_access=_DAYS_AGO(14),
                           valence=0.9, arousal=0.8)
     r_neutral = _ebbinghaus_recall(neutral)
     r_emotional = _ebbinghaus_recall(emotional)
@@ -121,7 +125,7 @@ def test_v6b_7_branch_node_fields():
         "lines": 20,
         "max_lines": 150,
         "children": [],
-        "last_access": "2026-03-05",
+        "last_access": _DAYS_AGO(10),
         "access_count": 2,
         "tags": ["compression", "test"],
         "hash": "00000000",

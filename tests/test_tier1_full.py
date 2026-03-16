@@ -30,7 +30,9 @@ def run_a1():
     print("\n══ A1: h adaptatif ══")
     from muninn import _ebbinghaus_recall, compute_temperature
 
-    def node(acc=5, last="2026-03-10", u=1.0):
+    def node(acc=5, last=None, u=1.0):
+        if last is None:
+            last = time.strftime("%Y-%m-%d")
         return {"access_count": acc, "last_access": last, "usefulness": u,
                 "lines": 50, "max_lines": 150}
 
@@ -77,53 +79,50 @@ def run_a2():
     from muninn import _actr_activation, _ebbinghaus_recall
 
     def node(**kw):
-        base = {"access_count": 3, "last_access": "2026-03-10", "usefulness": 1.0,
+        base = {"access_count": 3, "last_access": time.strftime("%Y-%m-%d"), "usefulness": 1.0,
                 "lines": 50, "max_lines": 150}
         base.update(kw)
         return base
 
     # A2.1: arithmetic (compute expected dynamically to avoid date drift)
-    from datetime import datetime
-    n = node(access_history=["2026-03-09", "2026-03-07", "2026-02-08"])
+    from datetime import datetime, timedelta
+    _days_ago = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
+    n = node(access_history=[_days_ago(6), _days_ago(8), _days_ago(35)])
     B = _actr_activation(n)
-    now = datetime.now()
-    d1 = max(1, (now - datetime(2026, 3, 9)).days)
-    d2 = max(1, (now - datetime(2026, 3, 7)).days)
-    d3 = max(1, (now - datetime(2026, 2, 8)).days)
-    expected = math.log(d1**(-0.5) + d2**(-0.5) + d3**(-0.5))
+    expected = math.log(6**(-0.5) + 8**(-0.5) + 35**(-0.5))
     check("A2.1 arithmetic", abs(B - expected) < 0.02, f"B={B:.4f}, expected={expected:.4f}")
 
     # A2.2: fallback (no access_history)
-    n = node(access_count=5, last_access="2026-03-05")
+    n = node(access_count=5, last_access=_days_ago(10))
     B = _actr_activation(n)
     check("A2.2 fallback", not math.isnan(B) and not math.isinf(B), f"B={B}")
 
     # A2.3: recent > old
-    B_recent = _actr_activation(node(access_count=5, last_access="2026-03-10"))
+    B_recent = _actr_activation(node(access_count=5, last_access=_days_ago(5)))
     B_old = _actr_activation(node(access_count=5, last_access="2025-06-01"))
     check("A2.3 recency", B_recent > B_old, f"recent={B_recent:.4f}, old={B_old:.4f}")
 
     # A2.4: clustered vs spread (raw ACT-R)
-    B_clust = _actr_activation(node(access_history=["2026-03-09"]*3))
-    B_spread = _actr_activation(node(access_history=["2026-03-09", "2026-02-09", "2026-01-09"]))
+    B_clust = _actr_activation(node(access_history=[_days_ago(6)]*3))
+    B_spread = _actr_activation(node(access_history=[_days_ago(6), _days_ago(36), _days_ago(66)]))
     check("A2.4 cluster_vs_spread", True, f"clustered={B_clust:.4f}, spread={B_spread:.4f}")
 
     # A2.5: cap at 10
-    history = [f"2026-03-{i:02d}" for i in range(1, 16)]
+    history = [_days_ago(i) for i in range(15)]
     capped = history[-10:]
     check("A2.5 cap", len(capped) == 10, f"len={len(capped)}")
 
     # A2.X: Ebbinghaus not affected
-    r_with = _ebbinghaus_recall(node(access_count=5, access_history=["2026-03-10"]))
+    r_with = _ebbinghaus_recall(node(access_count=5, access_history=[_days_ago(5)]))
     r_without = _ebbinghaus_recall(node(access_count=5))
     check("A2.X ebbinghaus_unchanged", abs(r_with - r_without) < 0.001,
           f"{r_with:.4f} vs {r_without:.4f}")
 
     # COMPARATIVE: ACT-R differentiates access patterns Ebbinghaus cannot
-    n1 = node(access_count=3, last_access="2026-03-09",
-              access_history=["2026-03-09", "2026-03-09", "2026-03-09"])
-    n2 = node(access_count=3, last_access="2026-03-09",
-              access_history=["2026-03-09", "2026-02-09", "2026-01-09"])
+    n1 = node(access_count=3, last_access=_days_ago(6),
+              access_history=[_days_ago(6), _days_ago(6), _days_ago(6)])
+    n2 = node(access_count=3, last_access=_days_ago(6),
+              access_history=[_days_ago(6), _days_ago(36), _days_ago(66)])
     ebb1 = _ebbinghaus_recall(n1)
     ebb2 = _ebbinghaus_recall(n2)
     actr1 = _actr_activation(n1)
@@ -305,7 +304,7 @@ Results show: speed=fast accuracy=high cost=low latency=5ms
     check("B1.4 cooldown", _ebbinghaus_recall(n) > 0.3)
 
     # B1.5: fresh skip
-    n = {"access_count": 10, "last_access": "2026-03-01", "usefulness": 1.0}
+    n = {"access_count": 10, "last_access": time.strftime("%Y-%m-%d"), "usefulness": 1.0}
     check("B1.5 fresh_skip", _ebbinghaus_recall(n) > 0.3)
 
     # B1.6: no API

@@ -47,7 +47,7 @@ def test_a2_1_arithmetic():
 
 def test_a2_2_fallback_no_crash():
     """Node WITHOUT access_history should not crash"""
-    node = make_node(access_count=5, last_access="2026-03-05")
+    node = make_node(access_count=5, last_access=_days_ago(10))
     # No access_history key at all
     B = _actr_activation(node)
     assert not math.isnan(B), "A2.2 FAIL: B is NaN"

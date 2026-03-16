@@ -19,7 +19,11 @@ Tests:
   REGEN.12  V9B + V9A+: sole-carrier protected by V9B, no V9A+ triggered
 """
 import sys, os, re, tempfile, shutil, time
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
+
+_TODAY = time.strftime("%Y-%m-%d")
+_DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 PASS = 0
 FAIL = 0
@@ -223,7 +227,7 @@ def test_regen_1_facts_extracted():
 
     nodes = {
         "dead_branch": {"file": "dead_branch.mn", "tags": ["sqlite", "api"], "last_access": "2026-01-01"},
-        "survivor": {"file": "survivor.mn", "tags": ["database"], "last_access": "2026-03-11"},
+        "survivor": {"file": "survivor.mn", "tags": ["database"], "last_access": _TODAY},
     }
     def related(c):
         if c == "sqlite": return [("database", 0.8)]
@@ -247,7 +251,7 @@ def test_regen_2_untagged_not_copied():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["debug"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["code"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["code"], "last_access": _TODAY},
     }
     def related(c): return [("code", 0.5)]
 
@@ -269,7 +273,7 @@ def test_regen_3_regen_section_present():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["x"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["y"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["y"], "last_access": _TODAY},
     }
     def related(c): return [("y", 0.5)]
 
@@ -290,8 +294,8 @@ def test_regen_4_mycelium_proximity():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["compression"], "last_access": "2026-01-01"},
-        "close": {"file": "close.mn", "tags": ["pipeline"], "last_access": "2026-03-01"},
-        "far": {"file": "far.mn", "tags": ["misc"], "last_access": "2026-03-11"},
+        "close": {"file": "close.mn", "tags": ["pipeline"], "last_access": _DAYS_AGO(14)},
+        "far": {"file": "far.mn", "tags": ["misc"], "last_access": _TODAY},
     }
     def related(c):
         if c == "compression":
@@ -316,7 +320,7 @@ def test_regen_5_missing_mn_fallback():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["alpha"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["beta"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["beta"], "last_access": _TODAY},
     }
     def related(c):
         if c == "alpha": return [("beta", 0.7)]
@@ -341,7 +345,7 @@ def test_regen_6_no_duplication():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["code"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["muninn"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["muninn"], "last_access": _TODAY},
     }
     def related(c): return [("muninn", 0.5)]
 
@@ -364,7 +368,7 @@ def test_regen_7_budget_recompression():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["perf"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["bench"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["bench"], "last_access": _TODAY},
     }
     def related(c): return [("bench", 0.5)]
 
@@ -389,7 +393,7 @@ def test_regen_8_idempotent():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["x"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["y"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["y"], "last_access": _TODAY},
     }
     def related(c): return [("y", 0.5)]
 
@@ -429,7 +433,7 @@ def test_regen_9_end_to_end():
         "branch_io": {"file": "branch_io.mn", "tags": ["io", "async", "performance"],
                       "last_access": "2025-12-01"},
         "branch_pipeline": {"file": "branch_pipeline.mn", "tags": ["pipeline", "compression"],
-                           "last_access": "2026-03-10"},
+                           "last_access": _DAYS_AGO(1)},
     }
     def related(c):
         if c == "performance": return [("pipeline", 0.85)]
@@ -458,7 +462,7 @@ def test_regen_10_concept_findable():
 
     nodes = {
         "dead": {"file": "dead.mn", "tags": ["l9", "prompt"], "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["api"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["api"], "last_access": _TODAY},
     }
     def related(c):
         if c == "l9": return [("api", 0.8)]
@@ -488,9 +492,9 @@ def test_regen_11_multi_death():
         "dead_a": {"file": "dead_a.mn", "tags": ["alpha"], "last_access": "2026-01-01"},
         "dead_b": {"file": "dead_b.mn", "tags": ["beta"], "last_access": "2026-01-01"},
         "dead_c": {"file": "dead_c.mn", "tags": ["gamma"], "last_access": "2026-01-01"},
-        "surv_x": {"file": "surv_x.mn", "tags": ["x_concept"], "last_access": "2026-03-11"},
-        "surv_y": {"file": "surv_y.mn", "tags": ["y_concept"], "last_access": "2026-03-10"},
-        "surv_z": {"file": "surv_z.mn", "tags": ["z_concept"], "last_access": "2026-03-09"},
+        "surv_x": {"file": "surv_x.mn", "tags": ["x_concept"], "last_access": _TODAY},
+        "surv_y": {"file": "surv_y.mn", "tags": ["y_concept"], "last_access": _DAYS_AGO(1)},
+        "surv_z": {"file": "surv_z.mn", "tags": ["z_concept"], "last_access": _DAYS_AGO(2)},
     }
     def related(c):
         # Each dead branch's tag relates to a different survivor
@@ -527,7 +531,7 @@ def test_regen_12_v9b_protects():
     nodes = {
         "protected": {"file": "protected.mn", "tags": ["unique_sole"],
                       "last_access": "2026-01-01"},
-        "surv": {"file": "surv.mn", "tags": ["common"], "last_access": "2026-03-11"},
+        "surv": {"file": "surv.mn", "tags": ["common"], "last_access": _TODAY},
     }
     def related(c): return [("common", 0.5)]
 

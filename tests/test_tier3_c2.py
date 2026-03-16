@@ -7,9 +7,11 @@ Tests:
   C2.4  branches_loaded in manifest matches loaded branches
   C2.5  No crash when no mycelium exists
 """
-import sys, os, json, tempfile, shutil
+import sys, os, json, tempfile, shutil, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
+
+_TODAY = time.strftime("%Y-%m-%d")
 
 
 def _setup_repo(with_mycelium=True, n_branches=2):
@@ -19,9 +21,9 @@ def _setup_repo(with_mycelium=True, n_branches=2):
     tree_dir = os.path.join(muninn_dir, "tree")
     os.makedirs(tree_dir, exist_ok=True)
 
-    tree = {"version": 1, "updated": "2026-03-11", "nodes": {
+    tree = {"version": 1, "updated": _TODAY, "nodes": {
         "root": {"type": "root", "file": "root.mn", "lines": 5, "max_lines": 100,
-                 "access_count": 10, "last_access": "2026-03-11", "temperature": 1.0,
+                 "access_count": 10, "last_access": _TODAY, "temperature": 1.0,
                  "hash": "00000000", "tags": [], "usefulness": 1.0, "children": []},
     }}
     with open(os.path.join(tree_dir, "root.mn"), "w") as f:
@@ -31,7 +33,7 @@ def _setup_repo(with_mycelium=True, n_branches=2):
         bname = f"b{i:04d}"
         tree["nodes"][bname] = {
             "type": "branch", "file": f"{bname}.mn", "lines": 3, "max_lines": 150,
-            "access_count": 5 - i, "last_access": "2026-03-11", "temperature": 0.5,
+            "access_count": 5 - i, "last_access": _TODAY, "temperature": 0.5,
             "hash": "00000000", "tags": [f"alpha", f"topic{i}"], "usefulness": 0.7,
         }
         tree["nodes"]["root"]["children"].append(bname)

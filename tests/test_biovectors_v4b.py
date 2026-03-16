@@ -11,9 +11,13 @@ Tests:
   V4B.5  Fisher + valence stack multiplicatively
   V4B.6  Recall separation with Fisher > 1.1x after 14 days
 """
-import sys, os
+import sys, os, time
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _ebbinghaus_recall
+
+_TODAY = time.strftime("%Y-%m-%d")
+_DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 PASS = 0
 FAIL = 0
@@ -28,11 +32,11 @@ def check(name, condition, detail=""):
         print(f"  {name} FAIL{': ' + detail if detail else ''}")
 
 
-def make_node(access_count=3, last_access="2026-02-25", usefulness=1.0,
+def make_node(access_count=3, last_access=None, usefulness=1.0,
               fisher_importance=0.0, valence=0.0, arousal=0.0):
     node = {
         "access_count": access_count,
-        "last_access": last_access,
+        "last_access": last_access if last_access is not None else _DAYS_AGO(18),
         "usefulness": usefulness,
     }
     if fisher_importance != 0.0:
@@ -107,8 +111,8 @@ def test_v4b_5_stacks_with_valence():
 
 def test_v4b_6_separation_14d():
     """Recall separation Fisher > 1.1x after simulated time"""
-    neutral = make_node(access_count=1, last_access="2026-02-25")
-    important = make_node(access_count=1, last_access="2026-02-25", fisher_importance=1.0)
+    neutral = make_node(access_count=1, last_access=_DAYS_AGO(18))
+    important = make_node(access_count=1, last_access=_DAYS_AGO(18), fisher_importance=1.0)
     r_neutral = _ebbinghaus_recall(neutral)
     r_important = _ebbinghaus_recall(important)
     if r_neutral > 0:

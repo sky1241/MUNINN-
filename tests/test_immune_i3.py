@@ -8,9 +8,13 @@ Tests:
   I3.5  Code check: I3 section in prune()
   I3.6  Anomaly demotes to cold in prune output
 """
-import sys, os, json, tempfile, shutil
+import sys, os, json, tempfile, shutil, time
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
+
+_TODAY = time.strftime("%Y-%m-%d")
+_DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 
 def _make_repo_branches(branch_specs):
@@ -20,9 +24,9 @@ def _make_repo_branches(branch_specs):
     tree_dir = os.path.join(muninn_dir, "tree")
     os.makedirs(tree_dir, exist_ok=True)
 
-    tree = {"version": 1, "updated": "2026-03-11", "nodes": {
+    tree = {"version": 1, "updated": _TODAY, "nodes": {
         "root": {"type": "root", "file": "root.mn", "lines": 3, "max_lines": 100,
-                 "access_count": 10, "last_access": "2026-03-11", "temperature": 1.0,
+                 "access_count": 10, "last_access": _TODAY, "temperature": 1.0,
                  "hash": "00000000", "tags": [], "usefulness": 1.0, "children": []},
     }}
     with open(os.path.join(tree_dir, "root.mn"), "w") as f:
@@ -36,7 +40,7 @@ def _make_repo_branches(branch_specs):
             "lines": len(lines),
             "max_lines": 150,
             "access_count": 5,
-            "last_access": "2026-03-05",  # 6 days ago
+            "last_access": _DAYS_AGO(6),
             "temperature": 0.5,
             "hash": "00000000",
             "tags": [f"topic{i}"],

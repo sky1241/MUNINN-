@@ -7,9 +7,11 @@ Tests:
   C3.4  Already-loaded branches not duplicated
   C3.5  Budget check prevents overflow
 """
-import sys, os, json, tempfile, shutil
+import sys, os, json, tempfile, shutil, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
+
+_TODAY = time.strftime("%Y-%m-%d")
 
 
 def _setup_prediction_repo(n_branches=6):
@@ -19,9 +21,9 @@ def _setup_prediction_repo(n_branches=6):
     tree_dir = os.path.join(muninn_dir, "tree")
     os.makedirs(tree_dir, exist_ok=True)
 
-    tree = {"version": 1, "updated": "2026-03-11", "nodes": {
+    tree = {"version": 1, "updated": _TODAY, "nodes": {
         "root": {"type": "root", "file": "root.mn", "lines": 5, "max_lines": 100,
-                 "access_count": 10, "last_access": "2026-03-11", "temperature": 1.0,
+                 "access_count": 10, "last_access": _TODAY, "temperature": 1.0,
                  "hash": "00000000", "tags": ["compression", "memory"], "usefulness": 1.0,
                  "children": []},
     }}
@@ -32,7 +34,7 @@ def _setup_prediction_repo(n_branches=6):
         bname = f"b{i:04d}"
         tree["nodes"][bname] = {
             "type": "branch", "file": f"{bname}.mn", "lines": 3, "max_lines": 150,
-            "access_count": max(1, 10 - i * 2), "last_access": "2026-03-10",
+            "access_count": max(1, 10 - i * 2), "last_access": _TODAY,
             "temperature": max(0.1, 0.8 - i * 0.1),
             "hash": "00000000", "tags": [f"topic{i}", "compression"],
             "usefulness": max(0.1, 0.9 - i * 0.1),

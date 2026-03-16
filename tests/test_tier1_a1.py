@@ -39,14 +39,14 @@ def test_a1_1_arithmetic_default():
 
 def test_a1_2_arithmetic_half():
     """usefulness=0.5, beta=0.5 => h = 224 * 0.5^0.5 = 224 * 0.7071 = 158.39"""
-    node = make_node(access_count=5, usefulness=0.5, last_access="2026-03-10")
+    node = make_node(access_count=5, usefulness=0.5)  # last_access=today by default
     # With delta=0, recall is still 1.0 regardless of h
     # Test with delta = 158.39 (= h), recall should be 0.5
     # We need a node where delta is known
     # Use last_access far enough that delta = 224 days
     # With usefulness=1.0: h=224, recall = 2^(-224/224) = 0.5
     # With usefulness=0.5: h=158.39, recall = 2^(-224/158.39) = 2^(-1.414) = 0.375
-    node_u1 = make_node(access_count=5, usefulness=1.0, last_access="2025-07-30")  # ~224 days ago from 2026-03-10
+    node_u1 = make_node(access_count=5, usefulness=1.0, last_access="2025-07-30")  # ~224 days ago (fixed reference)
     node_u05 = make_node(access_count=5, usefulness=0.5, last_access="2025-07-30")
     recall_u1 = _ebbinghaus_recall(node_u1)
     recall_u05 = _ebbinghaus_recall(node_u05)

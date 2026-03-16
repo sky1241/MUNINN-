@@ -8,9 +8,13 @@ Tests:
   I1.5  danger_score stored in session_index entry
   I1.6  danger_score propagated to branch node via grow_branches_from_session
 """
-import sys, os, json, tempfile, shutil, re
+import sys, os, json, tempfile, shutil, re, time
+from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
+
+_TODAY = time.strftime("%Y-%m-%d")
+_DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 
 def _make_repo(n_branches=2, with_mycelium=True):
@@ -22,9 +26,9 @@ def _make_repo(n_branches=2, with_mycelium=True):
     os.makedirs(tree_dir, exist_ok=True)
     os.makedirs(sessions_dir, exist_ok=True)
 
-    tree = {"version": 1, "updated": "2026-03-11", "nodes": {
+    tree = {"version": 1, "updated": _TODAY, "nodes": {
         "root": {"type": "root", "file": "root.mn", "lines": 3, "max_lines": 100,
-                 "access_count": 5, "last_access": "2026-03-11", "temperature": 1.0,
+                 "access_count": 5, "last_access": _TODAY, "temperature": 1.0,
                  "hash": "00000000", "tags": [], "usefulness": 1.0, "children": []},
     }}
     with open(os.path.join(tree_dir, "root.mn"), "w") as f:
@@ -33,7 +37,7 @@ def _make_repo(n_branches=2, with_mycelium=True):
         bname = f"b{i:04d}"
         tree["nodes"][bname] = {
             "type": "branch", "file": f"{bname}.mn", "lines": 3, "max_lines": 150,
-            "access_count": 3, "last_access": "2026-03-10", "temperature": 0.5,
+            "access_count": 3, "last_access": _TODAY, "temperature": 0.5,
             "hash": "00000000", "tags": [f"topic{i}"], "usefulness": 0.7,
         }
         tree["nodes"]["root"]["children"].append(bname)
@@ -53,12 +57,12 @@ def test_i1_1_baseline_no_danger():
     """danger_score=0 -> recall identical to pre-I1 behavior."""
     import muninn
     node_no_danger = {
-        "last_access": "2026-03-01",
+        "last_access": _DAYS_AGO(9),
         "access_count": 3,
         "usefulness": 1.0,
     }
     node_with_zero = {
-        "last_access": "2026-03-01",
+        "last_access": _DAYS_AGO(9),
         "access_count": 3,
         "usefulness": 1.0,
         "danger_score": 0.0,
@@ -73,13 +77,13 @@ def test_i1_2_danger_boosts_recall():
     """danger_score=0.5 -> higher recall (longer half-life)."""
     import muninn
     node_safe = {
-        "last_access": "2026-03-01",
+        "last_access": _DAYS_AGO(9),
         "access_count": 2,
         "usefulness": 0.8,
         "danger_score": 0.0,
     }
     node_danger = {
-        "last_access": "2026-03-01",
+        "last_access": _DAYS_AGO(9),
         "access_count": 2,
         "usefulness": 0.8,
         "danger_score": 0.5,

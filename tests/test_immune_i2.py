@@ -7,9 +7,11 @@ Tests:
   I2.4  Code check: I2 section exists in prune()
   I2.5  Single branch: no suppression (nothing to compete with)
 """
-import sys, os, json, tempfile, shutil, zlib
+import sys, os, json, tempfile, shutil, zlib, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
+
+_TODAY = time.strftime("%Y-%m-%d")
 
 
 def _make_repo_with_content(branch_contents, days_ago=30):
@@ -23,9 +25,9 @@ def _make_repo_with_content(branch_contents, days_ago=30):
     from datetime import datetime, timedelta
     access_date = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
-    tree = {"version": 1, "updated": "2026-03-11", "nodes": {
+    tree = {"version": 1, "updated": _TODAY, "nodes": {
         "root": {"type": "root", "file": "root.mn", "lines": 3, "max_lines": 100,
-                 "access_count": 10, "last_access": "2026-03-11", "temperature": 1.0,
+                 "access_count": 10, "last_access": _TODAY, "temperature": 1.0,
                  "hash": "00000000", "tags": [], "usefulness": 1.0, "children": []},
     }}
     with open(os.path.join(tree_dir, "root.mn"), "w") as f:
