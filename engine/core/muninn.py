@@ -6847,9 +6847,13 @@ def main():
         if not _REPO_PATH:
             _REPO_PATH = repo
             _refresh_tree_paths()
-        init_tree()
         muninn_dir = repo / ".muninn"
-        muninn_dir.mkdir(exist_ok=True)
+        muninn_dir.mkdir(parents=True, exist_ok=True)
+        # Only init tree if it doesn't exist yet (protect existing branches)
+        if not TREE_META.exists():
+            init_tree()
+        else:
+            print(f"  Tree already exists: {TREE_DIR} (skipped)")
         install_hooks(repo)
         print(f"  Muninn ready: {repo}")
         return
