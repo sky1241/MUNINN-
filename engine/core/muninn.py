@@ -3896,6 +3896,8 @@ def prune(dry_run: bool = True):
     for name, node in list(branches.items()):
         if name in dict(dead):
             continue  # already dead, will be handled below
+        if name in _fragile_branches:
+            continue  # V9B: sole carriers protected even if small
         lines = node.get("lines", 0)
         if lines <= 3 and node.get("temperature", 0) < 0.3:
             dust.append(name)

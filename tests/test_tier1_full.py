@@ -35,7 +35,8 @@ def run_a1():
                 "lines": 50, "max_lines": 150}
 
     # A1.1: usefulness=1.0 => backward compat (recall=1.0 for delta=0)
-    r = _ebbinghaus_recall(node(5, "2026-03-10", 1.0))
+    today = time.strftime("%Y-%m-%d")
+    r = _ebbinghaus_recall(node(5, today, 1.0))
     check("A1.1 backward_compat", abs(r - 1.0) < 0.01, f"recall={r}")
 
     # A1.2: usefulness=0.5 reduces half-life
