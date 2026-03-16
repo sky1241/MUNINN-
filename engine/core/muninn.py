@@ -6744,7 +6744,7 @@ def main():
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
-        "lock", "unlock", "trip", "think",
+        "lock", "unlock", "rekey", "trip", "think",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -6798,7 +6798,7 @@ def main():
         doctor()
         return
 
-    if args.command in ("lock", "unlock"):
+    if args.command in ("lock", "unlock", "rekey"):
         if not _REPO_PATH:
             cwd = Path(".").resolve()
             if (cwd / ".muninn").exists():
@@ -6824,13 +6824,24 @@ def main():
                     v.load_key(pw)
                 result = v.lock()
                 print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
-            else:  # unlock
+            elif args.command == "unlock":
                 if not v.is_initialized():
                     print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
                     sys.exit(1)
                 v.load_key(pw)
                 result = v.unlock()
                 print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
+            elif args.command == "rekey":
+                if not v.is_initialized():
+                    print("ERROR: vault not initialized.")
+                    sys.exit(1)
+                v.load_key(pw)
+                import getpass as _gp
+                new_pw = args.file  # Can pass new password as positional arg
+                if not new_pw:
+                    new_pw = _gp.getpass("New vault password: ")
+                result = v.rekey(new_pw)
+                print(f"VAULT REKEYED: {result['rekeyed']} files re-encrypted ({result['total_bytes']:,} bytes)")
         except ValueError as e:
             print(f"ERROR: {e}")
             sys.exit(1)

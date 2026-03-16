@@ -325,3 +325,49 @@ class Vault:
         orig_path.write_bytes(plaintext)
         vp.unlink()
         return orig_path
+
+    def rekey(self, new_password: str) -> dict:
+        """Re-encrypt all .vault files with a new password.
+
+        Requires current key loaded (call load_key first).
+        Atomically: decrypt with old key, encrypt with new key, update salt+verify.
+        Returns: {rekeyed: int, total_bytes: int}
+        """
+        if self._key is None:
+            raise RuntimeError("No key loaded. Call load_key() first.")
+
+        old_key = self._key
+
+        # Generate new salt + key
+        new_salt = os.urandom(32)
+        new_key = bytearray(_derive_key(new_password, new_salt))
+
+        locked = self._get_locked_files()
+        rekeyed = 0
+        total_bytes = 0
+
+        for vp in locked:
+            data = vp.read_bytes()
+            # Decrypt with old key
+            plaintext = _decrypt_bytes(data, old_key)
+            # Re-encrypt with new key
+            ct = _encrypt_bytes(plaintext, new_key)
+            # Atomic write: temp file then replace
+            tmp = vp.with_suffix(".tmp")
+            tmp.write_bytes(ct)
+            tmp.replace(vp)  # Atomic on both Windows and Linux
+            total_bytes += len(plaintext)
+            rekeyed += 1
+
+        # Update salt + backup + verify
+        self.salt_path.write_bytes(new_salt)
+        self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
+        verify = hashlib.sha256(new_key).hexdigest()[:16]
+        (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
+
+        # Wipe old key, set new
+        _zero_bytes(old_key)
+        self._key = new_key
+
+        _audit_log(self.muninn_dir, "rekey", True, files=rekeyed, bytes_total=total_bytes)
+        return {"rekeyed": rekeyed, "total_bytes": total_bytes}
