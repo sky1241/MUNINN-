@@ -19,8 +19,10 @@ Key NEVER stored on disk — derived from password at runtime.
 Requires: pip install cryptography
 """
 import base64
+import ctypes
 import hashlib
 import os
+import platform
 from pathlib import Path
 
 # Fernet uses AES-128-CBC internally, but we use raw AES-256-GCM via AESGCM
@@ -74,6 +76,57 @@ def _decrypt_bytes(data: bytes, key: bytes) -> bytes:
     return aesgcm.decrypt(nonce, ct, None)
 
 
+def _zero_bytes(ba: bytearray):
+    """Zero a bytearray in-place using ctypes.memset. Best-effort memory wipe."""
+    if not ba:
+        return
+    try:
+        ctypes.memset((ctypes.c_char * len(ba)).from_buffer(ba), 0, len(ba))
+    except (TypeError, ValueError):
+        # Fallback: overwrite byte by byte
+        for i in range(len(ba)):
+            ba[i] = 0
+
+
+def _secure_delete(filepath: Path):
+    """Best-effort secure file deletion: 3-pass overwrite + rename + unlink.
+
+    Pass 1: zeros, Pass 2: ones, Pass 3: random.
+    Then rename to random name before unlinking (hides filename in journal).
+    NOTE: NOT guaranteed on SSD due to wear leveling. The real defense
+    is encrypt-first — plaintext should never exist unencrypted on disk.
+    """
+    fp = Path(filepath)
+    if not fp.exists():
+        return
+    try:
+        size = fp.stat().st_size
+        if size > 0:
+            with open(fp, "r+b") as f:
+                f.seek(0)
+                f.write(b'\x00' * size)
+                f.flush()
+                os.fsync(f.fileno())
+                f.seek(0)
+                f.write(b'\xff' * size)
+                f.flush()
+                os.fsync(f.fileno())
+                f.seek(0)
+                f.write(os.urandom(size))
+                f.flush()
+                os.fsync(f.fileno())
+        # Rename to random name before deletion (hides original filename)
+        tmp_name = fp.parent / os.urandom(16).hex()
+        fp.rename(tmp_name)
+        tmp_name.unlink()
+    except (OSError, PermissionError):
+        # Fallback: regular delete
+        try:
+            fp.unlink()
+        except OSError:
+            pass
+
+
 class Vault:
     """AES-256 encryption manager for a Muninn repo."""
 
@@ -105,7 +158,7 @@ class Vault:
         backup = self.salt_path.with_suffix(".salt.bak")
         backup.write_bytes(salt)
 
-        self._key = _derive_key(password, salt)
+        self._key = bytearray(_derive_key(password, salt))
 
         # Derive a verification hash (to detect wrong passwords without decrypting)
         verify = hashlib.sha256(self._key).hexdigest()[:16]
@@ -131,7 +184,7 @@ class Vault:
                 return False
 
         salt = salt_path.read_bytes()
-        self._key = _derive_key(password, salt)
+        self._key = bytearray(_derive_key(password, salt))
 
         # Verify password if vault.verify exists
         verify_path = self.muninn_dir / "vault.verify"
@@ -143,6 +196,12 @@ class Vault:
                 raise ValueError("Wrong password (vault.verify mismatch)")
 
         return True
+
+    def wipe_key(self):
+        """Zero the in-memory key. Call when done with crypto operations."""
+        if self._key is not None and isinstance(self._key, bytearray):
+            _zero_bytes(self._key)
+        self._key = None
 
     def _get_sensitive_files(self) -> list:
         """List all sensitive files that should be encrypted."""
@@ -186,7 +245,7 @@ class Vault:
             vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
             vault_path.write_bytes(ct)
             total_bytes += len(data)
-            fp.unlink()  # Remove plaintext
+            _secure_delete(fp)  # Overwrite + delete plaintext
             encrypted += 1
 
         return {"encrypted": encrypted, "total_bytes": total_bytes}
@@ -221,7 +280,7 @@ class Vault:
         ct = _encrypt_bytes(data, self._key)
         vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
         vault_path.write_bytes(ct)
-        fp.unlink()
+        _secure_delete(fp)
         return vault_path
 
     def decrypt_file(self, vault_path: Path) -> Path:
