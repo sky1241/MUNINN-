@@ -6811,25 +6811,29 @@ def main():
             print("ERROR: vault module not found")
             sys.exit(1)
         v = Vault(repo)
-        pw = args.password
+        pw = args.password  # --password for scripts/CI, getpass for interactive
         if not pw:
             import getpass
             pw = getpass.getpass("Vault password: ")
-        if args.command == "lock":
-            if not v.is_initialized():
-                v.init(pw)
-                print(f"VAULT: initialized (salt saved to {v.salt_path.name})")
-            else:
+        try:
+            if args.command == "lock":
+                if not v.is_initialized():
+                    v.init(pw)
+                    print(f"VAULT: initialized (salt + backup saved)")
+                else:
+                    v.load_key(pw)
+                result = v.lock()
+                print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
+            else:  # unlock
+                if not v.is_initialized():
+                    print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
+                    sys.exit(1)
                 v.load_key(pw)
-            result = v.lock()
-            print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
-        else:  # unlock
-            if not v.is_initialized():
-                print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
-                sys.exit(1)
-            v.load_key(pw)
-            result = v.unlock()
-            print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
+                result = v.unlock()
+                print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
         return
 
     if args.command == "trip":

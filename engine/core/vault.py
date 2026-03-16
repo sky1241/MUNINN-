@@ -89,22 +89,59 @@ class Vault:
 
     def init(self, password: str) -> dict:
         """Initialize vault: generate salt, derive key. One-time setup.
-        Returns: {salt_path, key_derived}
+
+        Creates vault.salt + vault.salt.bak (backup).
+        WARNING: if both salt files are lost, encrypted data is UNRECOVERABLE.
+
+        Returns: {salt_path, backup_path, key_derived}
         """
         if not self.muninn_dir.exists():
             raise FileNotFoundError(f".muninn/ not found in {self.repo}")
 
         salt = os.urandom(32)  # 256-bit random salt
         self.salt_path.write_bytes(salt)
+
+        # Backup salt — losing it means losing all encrypted data forever
+        backup = self.salt_path.with_suffix(".salt.bak")
+        backup.write_bytes(salt)
+
         self._key = _derive_key(password, salt)
-        return {"salt_path": str(self.salt_path), "key_derived": True}
+
+        # Derive a verification hash (to detect wrong passwords without decrypting)
+        verify = hashlib.sha256(self._key).hexdigest()[:16]
+        verify_path = self.muninn_dir / "vault.verify"
+        verify_path.write_text(verify, encoding="utf-8")
+
+        return {"salt_path": str(self.salt_path), "backup_path": str(backup), "key_derived": True}
 
     def load_key(self, password: str) -> bool:
-        """Load key from password + stored salt. Returns True if salt exists."""
-        if not self.salt_path.exists():
-            return False
-        salt = self.salt_path.read_bytes()
+        """Load key from password + stored salt.
+
+        Returns True if key loaded. Raises ValueError if password is wrong
+        (checked against vault.verify hash without needing to decrypt anything).
+        Falls back to vault.salt.bak if primary salt is missing.
+        """
+        salt_path = self.salt_path
+        if not salt_path.exists():
+            # Try backup
+            backup = salt_path.with_suffix(".salt.bak")
+            if backup.exists():
+                salt_path = backup
+            else:
+                return False
+
+        salt = salt_path.read_bytes()
         self._key = _derive_key(password, salt)
+
+        # Verify password if vault.verify exists
+        verify_path = self.muninn_dir / "vault.verify"
+        if verify_path.exists():
+            expected = verify_path.read_text(encoding="utf-8").strip()
+            actual = hashlib.sha256(self._key).hexdigest()[:16]
+            if actual != expected:
+                self._key = None
+                raise ValueError("Wrong password (vault.verify mismatch)")
+
         return True
 
     def _get_sensitive_files(self) -> list:
