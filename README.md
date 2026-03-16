@@ -60,7 +60,7 @@ Additional filters: P24 causal preservation, P25 priority survival, P26/P27 dedu
 Co-occurrence network that grows with each session:
 - Concepts seen together → strong connection → fusion (learned abbreviation)
 - Unused connections → decay → removal
-- Federated across repos (P20b meta-mycelium at `~/.muninn/meta_mycelium.json`)
+- Federated across repos (P20b meta-mycelium at `~/.muninn/meta_mycelium.db`)
 - Spreading Activation for semantic retrieval (Collins & Loftus 1975)
 
 ## Memory Tree (L-System)
@@ -169,28 +169,30 @@ API cost (Haiku): **$0.21** for 230 files.
 ```
 engine/
   core/
-    muninn.py          Main engine (4632 lines, 73 functions)
-    mycelium.py        Co-occurrence network (1134 lines)
+    muninn.py          Main engine (6420 lines)
+    mycelium.py        Co-occurrence network (2610 lines)
+    mycelium_db.py     SQLite backend + migration + ConceptTranslator
     tokenizer.py       tiktoken wrapper with fallback
-    watchdog.py        Scheduled task runner (55 lines)
+    watchdog.py        Scheduled task runner
 memory/
-  tree.json            L-system tree metadata
+  tree.json            L-system tree (self-repo legacy)
   root.mn              Root memory (always loaded)
   b*.mn                Branch files
 tests/
   benchmark/           Factual retention benchmark (40 questions)
-  test_*.py            Unit tests
+  test_*.py            Unit tests (tier1-3, biovectors, immune, huginn)
 docs/
   LITERATURE.md        Literature review (15+ papers)
   BENCHMARK_*.md       Benchmark results
+  SYSTEM_MAP.md        Visual architecture map
+  TIER*_SUMMARY.md     Tier upgrade summaries
+CHANGELOG.md           Project changelog (was WINTER_TREE.md)
 .muninn/               Local data (gitignored)
-  mycelium.json        Co-occurrence network
+  mycelium.db          Co-occurrence network (SQLite)
+  tree/                L-system tree (operational)
   sessions/*.mn        Compressed transcripts
   session_index.json   Session catalog
   errors.json          Error/fix pairs (P18)
-  hook_log.txt         Hook execution log
-  watch_state.json     Watchdog poll state
-  stop_dedup.json      Stop hook deduplication
 .github/
   workflows/ci.yml     CI: tree integrity + engine tests + benchmark
 ```

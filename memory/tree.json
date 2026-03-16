@@ -16,7 +16,10 @@
       "file": "root.mn",
       "lines": 29,
       "max_lines": 100,
-      "children": [],
+      "children": [
+        "b00",
+        "b01"
+      ],
       "last_access": "2026-03-12",
       "access_count": 47,
       "tags": [
@@ -42,7 +45,51 @@
         "2026-03-12",
         "2026-03-12"
       ]
+    },
+    "b00": {
+      "type": "branch",
+      "file": "b00.mn",
+      "lines": 44,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-16",
+      "access_count": 0,
+      "tags": [
+        "bloc",
+        "blocs",
+        "code",
+        "cube",
+        "ligne",
+        "lignes",
+        "llm",
+        "muninn",
+        "niveau",
+        "pypi"
+      ],
+      "hash": "46bbd04a",
+      "temperature": 0.82
+    },
+    "b01": {
+      "type": "branch",
+      "file": "b01.mn",
+      "lines": 5,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-16",
+      "access_count": 0,
+      "tags": [
+        "aussi",
+        "comment",
+        "marc",
+        "mock",
+        "module",
+        "pourquoi",
+        "senior",
+        "stripe"
+      ],
+      "hash": "26ea5cb4",
+      "temperature": 0.8
     }
   },
-  "updated": "2026-03-12"
+  "updated": "2026-03-16"
 }

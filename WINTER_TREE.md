@@ -3,7 +3,7 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security Hardening + Test Intelligence
 Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor). 49+ bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 7073 + mycelium.py 2610 + mycelium_db.py 993 + forge.py 800 + vault.py 373 + sync_tls.py 310 + sentiment.py 154 + tokenizer.py 40 + watchdog.py 57 = 12410 total
+Engine: muninn.py 7073 + mycelium.py 2610 + mycelium_db.py 993 + forge.py 1933 + vault.py 373 + sync_tls.py 310 + sentiment.py 154 + tokenizer.py 40 + watchdog.py 57 = 13543 total
 Tests: 66 test files + muninn_test_intelligence.py (adaptive 6-layer framework). 362+ checks, 0 FAIL
 
 ## Anatomie
@@ -39,7 +39,7 @@ Tests: 66 test files + muninn_test_intelligence.py (adaptive 6-layer framework).
 | NEW | mycelium_db.py (993 lignes) | OK | SQLite backend (S1+S2+S4), migration JSON->SQLite, ConceptTranslator |
 | NEW | vault.py (373 lignes) | OK | AES-256-GCM coffre-fort, PBKDF2 600K iter, audit JSONL, rotation cles |
 | NEW | sync_tls.py (310 lignes) | OK | TLS 1.3 strict, mTLS, rate limiting (token bucket per-IP), protocol v1 |
-| NEW | forge.py (800 lignes) | OK | Doctor self-audit: 12 checks, auto-fix, rapport structure |
+| NEW | forge.py (1933 lignes) | OK | Universal debug: 20 commands, 6 scientific axes (see Forge section below) |
 | NEW | sentiment.py (154 lignes) | OK | VADER sentiment analysis (V10A), rule-based, zero LLM |
 | B9 | docs/ | OK | LITERATURE.md enrichi (43+ papiers dont 28 bio-vectors) |
 | B10 | ci.yml | OK | Tests: tree, engine, mycelium, feed |
@@ -49,6 +49,49 @@ Tests: 66 test files + muninn_test_intelligence.py (adaptive 6-layer framework).
 | ~~B1~~ | ~~CODEBOOK.json~~ | SUPPRIME | Remplace par UNIVERSAL_RULES + mycelium |
 | ~~B3~~ | ~~muninn_codec.py~~ | SUPPRIME | Code sinogramme mort |
 | ~~B8~~ | ~~CODEBOOK_TREE.md~~ | SUPPRIME | Index sinogrammes mort |
+
+## Forge — Universal Debug & Regression Shield (1933 lignes)
+
+Outil universel drop-in pour n'importe quel repo Python. 20 commandes, zero config.
+Deploye sur: MUNINN-, infernal-wheel, yggdrasil-engine, drugs.
+
+### Commandes de base (v1-v2)
+| Cmd | Description |
+|-----|-------------|
+| `--init` | Init BUGS.md + .forge/ dans le repo |
+| `--add "desc"` / `--close BUG-ID` | Gestion de bugs structuree |
+| (default) | Run all tests + rapport vs baseline |
+| `--baseline` / `--diff` | Sauver/comparer les resultats |
+| `--watch` | Boucle sur changement de fichiers |
+| `--fast` | Test impact analysis: ne teste que les fichiers changes (Puha 2015) |
+| `--flaky [N]` | Detection flaky + classification Luo 2014 (7 categories + fix) |
+| `--heatmap` | Pareto: 20% des tests = 80% des echecs (Kaner 2003) |
+| `--bisect TEST` | Git bisect automatique (Zeller 1999) |
+| `--snapshot CMD` / `--snapshot-check` | Golden file testing (Feathers 2004) |
+
+### 6 Axes scientifiques (v3)
+| Axe | Cmd | Papier | Description |
+|-----|-----|--------|-------------|
+| AXE 1 | `--minimize TEST INPUT` | Zeller & Hildebrandt 2002 (ddmin) | Delta debugging: trouve le plus petit input qui casse le test |
+| AXE 2 | `--gen-props MODULE` | Claessen & Hughes 2000 (QuickCheck) | Genere des tests Hypothesis (round-trip, invariant, smoke) |
+| AXE 3 | `--mutate [FILE]` | DeMillo 1978, Jia & Harman 2011 | Mutation testing via mutmut (score, survivants, seuil 80%) |
+| AXE 4 | `--locate` | Abreu et al. 2007 (Ochiai SBFL) | Localise les lignes suspectes: score = f(s)/sqrt(F*(f(s)+p(s))) |
+| AXE 5 | `--predict` | Nagappan & Ball 2005, Hassan 2009 | Prediction de defauts: 7 metriques git + Haar wavelet + Kalman adaptatif |
+| AXE 6 | `--flaky` upgrade | Luo 2014, Parry 2021 | Classification AST (Async/Concurrency/Random/Resource/Platform/Float/Unordered) |
+
+### Carmack moves (v3.1)
+| Feature | Papier | Description |
+|---------|--------|-------------|
+| Wavelet churn | Hassan 2009 + Haar | Decomposition multi-echelle de l'activite commit (remplace burst brut) |
+| Kalman weights | Kalman 1960 | Poids adaptatifs qui apprennent du repo (feedback loop sur bugfix) |
+| Anomaly detection | Z-score/IQR | Detection multi-dimensionnelle: fichier anomal si outlier sur 2+ metriques |
+| Bio-robustness | Newman 2006 (Q-modularity) | Mesure le couplage du graphe d'imports: Q eleve = modules bien isoles |
+| Full-cycle | Pipeline | predict -> anomaly -> test -> locate -> robustness en une commande |
+
+### Deps
+- Obligatoire: Python 3.10+ et pytest
+- Optionnel: hypothesis (--gen-props), mutmut (--mutate), coverage+pytest-cov (--locate)
+- Le reste: zero dependance externe, tout en stdlib
 
 ## Pourquoi c'est dur et pourquoi personne l'a fait
 

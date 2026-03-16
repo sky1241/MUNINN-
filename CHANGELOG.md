@@ -1300,6 +1300,45 @@ Ce que Muninn a que les autres n'ont pas:
 - Zero dependance obligatoire (L1-L7 regex only), GPU et API optionnels
 - Bootstrap one-command (mycelium + root.mn + WINTER_TREE + hooks)
 
+## Forge v3 — Universal Debug & Regression Shield — 2026-03-16
+
+1933 lines, 20 commands, deployed to 4 repos (Muninn, infernal-wheel, yggdrasil, drugs).
+Drop-in single file, zero config, zero mandatory deps beyond pytest.
+
+### 6 Scientific Axes
+| Axe | Commande | Papier | Impl |
+|-----|----------|--------|------|
+| AXE 1 | `--minimize TEST INPUT` | Zeller & Hildebrandt 2002, IEEE TSE 28:2 (ddmin) | Delta debugging: minimal failing input, supports JSON/CSV/text |
+| AXE 2 | `--gen-props MODULE` | Claessen & Hughes 2000 (QuickCheck), MacIver ECOOP 2020 | AST analysis -> Hypothesis test skeletons (round-trip, invariant, smoke) |
+| AXE 3 | `--mutate [FILE]` | DeMillo, Lipton & Sayward 1978; Jia & Harman 2011 (IEEE TSE 37:5) | mutmut wrapper, score/survivors/threshold (80%) |
+| AXE 4 | `--locate` | Abreu et al. 2007 (Ochiai); Jones et al. 2002 (Tarantula) | SBFL: per-test coverage matrix + Ochiai formula, Top-10 suspects |
+| AXE 5 | `--predict` | Nagappan & Ball ICSE 2005; Hassan ICSE 2009; Nagappan & Zeller ISSRE 2010 | 7 git metrics + Haar wavelet churn + Kalman adaptive weights |
+| AXE 6 | `--flaky` | Luo et al. FSE 2014; Parry et al. 2021; Bell et al. 2018 (DeFlaker) | AST classification: 7 categories (Async/Concurrency/Random/Resource/Platform/Float/Unordered) + fix suggestions |
+
+### Carmack Moves
+- **Haar wavelet churn** (Hassan 2009): multi-scale energy decomposition of commit activity. High energy = bursts at multiple timescales = high risk. Replaces raw burst count.
+- **Kalman adaptive weights** (Kalman 1960): 1D Kalman filter per metric weight, learns optimal PREDICT_WEIGHTS from observed bugfix correlation. Feedback loop.
+- **Anomaly detection** (`--anomaly`): modified Z-score (MAD-based, robust to outliers) across 6 dimensions. File flagged if outlier on 2+ metrics.
+- **Bio-robustness** (`--robustness`): Q-modularity of Python import graph (Newman 2006). High Q = well-isolated modules = mutation-robust. Per-module coupling score.
+- **Full-cycle** (`--full-cycle`): predict -> anomaly -> test -> locate -> robustness pipeline.
+
+### Existing Commands (v1-v2)
+--init, --add, --close, --baseline, --diff, --watch, --fast, --flaky, --heatmap, --bisect, --snapshot, --snapshot-check
+
+### References
+- Zeller & Hildebrandt 2002: "Simplifying and Isolating Failure-Inducing Input" IEEE TSE 28:2
+- Claessen & Hughes 2000: "QuickCheck: A Lightweight Tool for Random Testing" ICFP
+- DeMillo, Lipton & Sayward 1978: "Hints on Test Data Selection" IEEE Computer 11:4
+- Abreu et al. 2007: "On the Accuracy of Spectrum-based Fault Localization" TAROT
+- Nagappan & Ball 2005: "Use of Relative Code Churn Measures to Predict System Defect Density" ICSE
+- Hassan 2009: "Predicting Faults Using the Complexity of Code Changes" ICSE
+- Luo et al. 2014: "An Empirical Analysis of Flaky Tests" FSE
+- Parry et al. 2021: "A Survey of Flaky Tests" TSE
+- Newman 2006: "Modularity and community structure in networks" PNAS
+- Kalman 1960: "A New Approach to Linear Filtering and Prediction Problems" ASME
+- Feathers 2004: "Working Effectively with Legacy Code" (golden master testing)
+- Kaner 2003: "The Power of 'What If...' and Nine Ways to Fuel Your Imagination" (Pareto in testing)
+
 ## Test Intelligence Framework — 2026-03-16
 
 Adaptive 6-layer test framework that classifies tests and adapts analysis per type.

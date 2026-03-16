@@ -1,0 +1,2365 @@
+{
+  "timestamp": "20260316_153441",
+  "report": {
+    "total_files": 66,
+    "total_tests": 366,
+    "total_passed": 349,
+    "total_failed": 6,
+    "total_skipped": 11,
+    "files_pass": 66,
+    "files_fail": 0,
+    "total_time": 212.8,
+    "findings": [
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_biovectors_v4b.py: hardcoded recent date '2026-02-25' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_biovectors_v6b.py: hardcoded recent date '2026-02-25' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_biovectors_v6b.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_immune_i3.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_l9_full.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_m13m14_db_safety.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_m2_causal_regex.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_retrieval_benchmark.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_retrieval_benchmark.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier3_c3.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_tier3_s4.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_v9a_regen_e2e.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_full.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_full.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_full.py: hardcoded recent date '2026-03-01' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_tier1_full.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier2_b7.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_tier2_wiring.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_tier3_s1.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_tier3_s3.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_h2_id_to_name_perf.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_immune_i1.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_immune_i1.py: hardcoded recent date '2026-03-01' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_lazy_real.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_m3_chunker.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_a1.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_a2.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_b1.py: hardcoded recent date '2026-03-01' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_tier1_b1.py: uses source code inspection \u2014 will break on refactor"
+      }
+    ],
+    "security_blockers": [],
+    "warnings": [
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_biovectors_v4b.py: hardcoded recent date '2026-02-25' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_biovectors_v6b.py: hardcoded recent date '2026-02-25' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_biovectors_v6b.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_immune_i3.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_l9_full.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_m13m14_db_safety.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_m2_causal_regex.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_retrieval_benchmark.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_retrieval_benchmark.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier3_c3.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_tier3_s4.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_v9a_regen_e2e.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_full.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_full.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_full.py: hardcoded recent date '2026-03-01' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_tier1_full.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier2_b7.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_tier2_wiring.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_tier3_s1.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_tier3_s3.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_h2_id_to_name_perf.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_immune_i1.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_immune_i1.py: hardcoded recent date '2026-03-01' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "empty_test",
+        "msg": "test_lazy_real.py: passed but reported 0 individual test results"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_m3_chunker.py: uses source code inspection \u2014 will break on refactor"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_a1.py: hardcoded recent date '2026-03-10' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_a2.py: hardcoded recent date '2026-03-05' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "hardcoded_date",
+        "msg": "test_tier1_b1.py: hardcoded recent date '2026-03-01' as last_access \u2014 use time.strftime('%Y-%m-%d')"
+      },
+      {
+        "level": "warn",
+        "type": "fragile_test",
+        "msg": "test_tier1_b1.py: uses source code inspection \u2014 will break on refactor"
+      }
+    ],
+    "by_tier": {
+      "network": {
+        "pass": 1,
+        "fail": 0,
+        "skip": 0,
+        "time": 25.85
+      },
+      "cli_e2e": {
+        "pass": 3,
+        "fail": 0,
+        "skip": 0,
+        "time": 8.07
+      },
+      "unit": {
+        "pass": 43,
+        "fail": 0,
+        "skip": 0,
+        "time": 161.41999999999993
+      },
+      "integration": {
+        "pass": 8,
+        "fail": 0,
+        "skip": 0,
+        "time": 15.979999999999999
+      },
+      "performance": {
+        "pass": 11,
+        "fail": 0,
+        "skip": 0,
+        "time": 1.49
+      }
+    },
+    "by_domain": {
+      "mycelium": {
+        "pass": 38,
+        "fail": 0
+      },
+      "compression": {
+        "pass": 5,
+        "fail": 0
+      },
+      "bio_vectors": {
+        "pass": 1,
+        "fail": 0
+      },
+      "general": {
+        "pass": 9,
+        "fail": 0
+      },
+      "tree_memory": {
+        "pass": 12,
+        "fail": 0
+      },
+      "retrieval": {
+        "pass": 1,
+        "fail": 0
+      }
+    },
+    "slowest": [
+      [
+        "test_l9_full.py",
+        66.65
+      ],
+      [
+        "test_tier2_b4.py",
+        35.52
+      ],
+      [
+        "test_sync_tls.py",
+        25.85
+      ],
+      [
+        "test_tier2_wiring.py",
+        11.62
+      ],
+      [
+        "test_vault.py",
+        5.87
+      ]
+    ]
+  },
+  "results": [
+    {
+      "file": "test_sync_tls.py",
+      "classification": {
+        "types": [
+          "network",
+          "performance",
+          "security"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "socket_networking",
+          "timing_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "critical",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "T1.1 PASS: certs generated (1094 bytes)",
+        "T1.2 PASS: server lifecycle OK (port 51212)",
+        "T1.3 PASS: ping/pong over TLS (v0.9.1)",
+        "T1.4 PASS: push OK (1 connections)",
+        "T1.5 PASS: pull OK (count=0)",
+        "T1.6 PASS: plain TCP rejected by TLS server",
+        "T1.7 PASS: protocol roundtrip OK",
+        "T1.8 PASS: rate limiter blocks after max (3/min)",
+        "T1.9 PASS: server rate limiting works (3/min)",
+        "T1.10 PASS: mTLS rejects unauthenticated client"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 25.85,
+      "status": "PASS"
+    },
+    {
+      "file": "test_vault.py",
+      "classification": {
+        "types": [
+          "cli_e2e",
+          "performance",
+          "security"
+        ],
+        "domain": "compression",
+        "patterns": [
+          "real_data",
+          "subprocess_cli",
+          "timing_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "critical",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V1.1 PASS: salt created (32 bytes)",
+        "V1.2 PASS: roundtrip OK (53 bytes)",
+        "V1.3 PASS: wrong password rejected",
+        "V1.4 PASS: lock/unlock cycle OK (3 files)",
+        "V1.5 PASS: state checks correct",
+        "V1.6 PASS: PBKDF2 deterministic (256-bit key)",
+        "V1.7 PASS: CLI lock + unlock clean"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 5.87,
+      "status": "PASS"
+    },
+    {
+      "file": "test_ablation_vectors.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "real_data"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 13,
+      "failed": 1,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS  ABL.1  10 branches scored > 0.01",
+        "PASS  ABL.2  all 11 vectors tested without crash",
+        "PASS  ABL.3  V7B max_delta=0.040038, impact=1.26%",
+        "PASS  ABL.4  V11B max_delta=0.041400, impact=4.49%",
+        "PASS  ABL.5  V6B emotional delta=0.054637 > neutral delta=0.000000",
+        "PASS  ABL.6  V4B Fisher delta=0.005476 (high fisher branch decays slower)",
+        "PASS  ABL.7  A2 ACT-R delta=-0.057939 (blended vs pure Ebbinghaus)",
+        "PASS  ABL.8  V5B rank_changes=0, max_delta=0.000000",
+        "PASS  ABL.9  V1A max_delta=0.015000, impact=0.00%",
+        "PASS  ABL.10  full report printed",
+        "PASS  ABL.11  no negative total scores in baseline",
+        "PASS  ABL.12  all vectors OFF: top score = 0.8350",
+        "ABLATION: 12 PASS, 0 FAIL"
+      ],
+      "fail_lines": [
+        "ABLATION: 12 PASS, 0 FAIL"
+      ],
+      "skip_lines": [],
+      "elapsed": 4.52,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v10a.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "bio_vectors",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V10A.1 PASS: all 10 inputs in [-1,+1]",
+        "V10A.2 PASS: compound=0.6588",
+        "V10A.3 PASS: compound=-0.7506",
+        "V10A.4 PASS: compound=0.0000",
+        "V10A.5 PASS: 0.046ms per call",
+        "V10A.6 PASS: empty=0.0, spaces=0.0, None=0.0, int=0.0",
+        "V10A.7 PASS: 1000 msgs scored, mean_v=0.0761",
+        "V10A.8 PASS: arousal == abs(valence) for all tests",
+        "V10A.9 PASS: pos=2 neg=2 neu=1",
+        "V10A.10 PASS: empty session = all zeros",
+        "V10A.11 PASS: mixed types: 5 scores, no crash",
+        "=== RESULTAT: 11 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.12,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v10b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "general",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V10B.1 PASS: quadrant=Q1, label=excited, r=1.0",
+        "V10B.2 PASS: quadrant=Q2, label=tense",
+        "V10B.3 PASS: quadrant=Q3, label=sad",
+        "V10B.4 PASS: quadrant=Q4, label=calm",
+        "V10B.5 PASS: r=0.0, theta=0.0",
+        "V10B.6 PASS: r=1.0 (clamped from sqrt(2))",
+        "V10B.7 PASS: all inputs -> theta in [-pi, +pi]",
+        "=== RESULTAT: 7 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.05,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v11b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V11B.1 PASS: popular=True, rare=True",
+        "V11B.2 PASS: prestige=True, no_prestige=True",
+        "V11B.3 PASS: boot completed with guided variation, loaded=1",
+        "V11B.4 PASS: no_tags=False, with_tags=True",
+        "V11B.5 PASS: default td_value=0.5 works fine",
+        "=== RESULTAT: 5 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.8,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v1a.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "real_data"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V1A.1 PASS: shared tags: a=True, b=True",
+        "V1A.2 PASS: no shared tags: x=True, y=True",
+        "V1A.3 PASS: extreme temps: boot completed, branches loaded",
+        "V1A.4 PASS: same temp: a=True, b=True",
+        "=== RESULTAT: 4 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.66,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v2b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V2B.1 PASS: usefulness=0.645 (should be > 0.5)",
+        "V2B.2 PASS: usefulness=0.49 (should be < 0.7)",
+        "V2B.3 PASS: td_value=0.545, td_delta=0.45",
+        "V2B.4 PASS: td_value=0.57 (changed from 0.5)",
+        "V2B.5 PASS: usefulness=1.0, td_value=1.0",
+        "=== RESULTAT: 5 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.15,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v3a.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V3A.1 PASS: top=['beta', 'gamma'], scores=[0.5, 0.25]",
+        "V3A.2 PASS: found=['beta', 'delta'], delta present via 2-hop chain",
+        "V3A.3 PASS: beta=0.5000 > gamma=0.2500 > delta=0.1250",
+        "V3A.4 PASS: results=[] (beta=0 disables)",
+        "V3A.5 PASS: results=[]",
+        "V3A.6 PASS: results=[]",
+        "V3A.7 PASS: results=['beta', 'gamma'] (no cycle, alpha excluded)",
+        "=== RESULTAT: 7 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.06,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v3b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V3B.1 PASS: memory=True, network=True",
+        "V3B.2 PASS: boot works without session_index",
+        "V3B.3 PASS: music=True, code=True",
+        "V3B.4 PASS: high_u=True, low_u=True",
+        "=== RESULTAT: 4 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.5,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v4b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "general",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V4B.1 PASS: important=0.850280 > neutral=0.790433",
+        "V4B.2 PASS: default=0.790433 zero=0.790433",
+        "V4B.3 PASS: over=0.854889==max=0.854889, under=0.790433==min=0.790433",
+        "V4B.4 PASS: lambda=0: with_fisher=0.790433 == no_fisher=0.790433",
+        "V4B.5 PASS: both=0.882179 > fisher=0.845369, valence=0.839034 > base=0.790433",
+        "V4B.6 PASS: ratio=1.3683 (important=0.534121, neutral=0.390355)",
+        "=== RESULTAT: 6 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.08,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v5a.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V5A.1 PASS: quorum=True, isolated=True",
+        "V5A.2 PASS: tagged=True, untagged=False",
+        "V5A.3 PASS: boot completed with Hill code active",
+        "=== RESULTAT: 3 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.18,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v5b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V5B.1 PASS: loaded={'br_gamma', 'br_alpha', 'br_beta'} (cross-inhibition applied)",
+        "V5B.2 PASS: winner loaded: True",
+        "V5B.3 PASS: single branch loads normally",
+        "V5B.4 PASS: loaded 1 of 5 branches",
+        "=== RESULTAT: 4 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.38,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v6a.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "tmpdir_isolation"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V6A.1 PASS: E(0)=1.0",
+        "V6A.2 PASS: E(1)=1.8889",
+        "V6A.3 PASS: emotional=5.56 > neutral=3.00",
+        "V6A.4 PASS: E(100)=2.000000",
+        "V6A.5 PASS: counts=[1.0, 1.0, 1.0]",
+        "V6A.6 PASS: E(0.2)=1.0602 E(0.5)=1.5000 E(0.8)=1.8038",
+        "=== RESULTAT: 6 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.3,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v6b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V6B.1 PASS: emotional=0.843313 > neutral=0.790433",
+        "V6B.2 PASS: default=0.790433 zero=0.790433",
+        "V6B.3 PASS: ratio=1.3269 (emotional=0.517973, neutral=0.390355)",
+        "V6B.4 PASS: emotional=0.790433 neutral=0.790433 (alphas=0)",
+        "V6B.5 PASS: positive=0.839034 negative=0.839034",
+        "V6B.6 PASS: recall=0.854889 (v=1,a=1)",
+        "V6B.7 PASS: recall=0.785349 (full branch node)",
+        "=== RESULTAT: 7 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v7b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V7B.1 PASS: strong=True, weak=True",
+        "V7B.2 PASS: relevant=True, historical=True",
+        "V7B.3 PASS: zero usefulness still loaded: True",
+        "V7B.4 PASS: blend produces positive score, branch loads",
+        "=== RESULTAT: 4 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.57,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v8b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V8B.1 PASS: manifest has branches, clarify=True",
+        "V8B.2 PASS: manifest valid, clarify=none",
+        "V8B.3 PASS: <3 branches: no clarify (correct)",
+        "V8B.4 PASS: manifest keys: ['branches', 'query', 'timestamp']",
+        "=== RESULTAT: 4 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.49,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v9a.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V9A.1 PASS: dead_gone=True, regen_in_survivor=True",
+        "V9A.2 PASS: hot branch survived prune",
+        "V9A.3 PASS: prune with 0 branches: no crash",
+        "=== RESULTAT: 3 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.12,
+      "status": "PASS"
+    },
+    {
+      "file": "test_biovectors_v9b.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "V9B.1 PASS: fragile_branch preserved in tree (V9B protection)",
+        "V9B.2 PASS: sole_carrier survived: True",
+        "V9B.3 PASS: redundant branch deleted: True",
+        "V9B.4 PASS: empty tree: no crash",
+        "=== RESULTAT: 4 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.14,
+      "status": "PASS"
+    },
+    {
+      "file": "test_h1_prune_keyerror.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.08,
+      "status": "PASS"
+    },
+    {
+      "file": "test_h3h4_missing_commits.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS upsert_connection",
+        "PASS upsert_fusion",
+        "PASS delete_connection",
+        "PASS update_connection_count",
+        "PASS add_zone_to_edge"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.13,
+      "status": "PASS"
+    },
+    {
+      "file": "test_huginn_h1.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "H1.1 PASS: trip returns ['created', 'entropy_before', 'entropy_after', 'entropy_delta', 'dreams']",
+        "H1.2 PASS: 10 dreams created, cross=True",
+        "H1.3 PASS: 5 dream entries with from/to keys",
+        "H1.4 PASS: entropy 0.985 -> 2.414",
+        "H1.5 PASS: empty mycelium, 0 dreams, no crash",
+        "H1.6 PASS: low=18, high=20",
+        "H1.7 PASS: entropy=1.5000",
+        "H1.8 PASS: trip wired in prune()",
+        "H1.9 PASS: trip in CLI choices"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 3.45,
+      "status": "PASS"
+    },
+    {
+      "file": "test_huginn_h2.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "real_data"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "H2.1 PASS: 8 insights, all valid dicts",
+        "H2.2 PASS: 1 strong pairs, alpha-beta found",
+        "H2.3 PASS: 5 absences, hub1-hub2 found",
+        "H2.4 PASS: health=34.91%",
+        "H2.5 PASS: empty mycelium, 0 insights, no crash",
+        "H2.6 PASS: insights.json with 8 entries",
+        "H2.7 PASS: dream wired in prune()"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 3.16,
+      "status": "PASS"
+    },
+    {
+      "file": "test_huginn_h3.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "retrieval",
+        "patterns": [
+          "real_data"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "H3.1 PASS: 5 insights, all valid dicts",
+        "H3.2 PASS: relevance filtering works, top=strong_pair",
+        "H3.3 PASS: empty insights, no crash",
+        "H3.4 PASS: all 5 insights have icon+score in formatted",
+        "H3.5 PASS: boot surface works, 104 chars",
+        "H3.6 PASS: top_n=2 gives 2, top_n=100 gives 5",
+        "H3.7 PASS: think in CLI choices",
+        "H3.8 PASS: huginn_think wired in boot()"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.1,
+      "status": "PASS"
+    },
+    {
+      "file": "test_immune_i3.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "I3.1 PASS: no anomaly in normal branches",
+        "I3.2 PASS: anomalous branch 100 lines vs median 4 (25.0x)",
+        "I3.3 PASS: zero-fact branch detected (0 tags vs others with high ratio)",
+        "I3.4 PASS: I3 skipped with only 2 branches",
+        "I3.5 PASS: I3 Negative Selection in prune()",
+        "I3.6 PASS: anomaly detected in prune output"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.13,
+      "status": "PASS"
+    },
+    {
+      "file": "test_l9_full.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "compression",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 66.65,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m10_adj_cache.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.37,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m13m14_db_safety.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "code_inspection"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS M13",
+        "PASS M14"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.1,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m1_line_density.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "general",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m2_causal_regex.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "compression",
+        "patterns": [
+          "code_inspection"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.1,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m4_last_chunk.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.11,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m5_missing_branch.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.08,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m9_query_ids.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.1,
+      "status": "PASS"
+    },
+    {
+      "file": "test_retrieval_benchmark.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "code_inspection",
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.44,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_a4.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "A4.1 PASS: w=100, loss=10, result=90",
+        "A4.2 PASS: beta=0 does not apply saturation",
+        "A4.3 PASS: w=2 < threshold=50, no saturation",
+        "A4.4 PASS: w=10000, loss=100000, result=1 (clamped)",
+        "A4.5 PASS: result is int (90)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "A4.INT SKIP: no connections"
+      ],
+      "elapsed": 0.17,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_b4.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "tmpdir_isolation"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "B4.1 PASS: empty concepts returns empty predictions",
+        "B4.2 PASS: 7 predictions sorted descending (top=0.3975)",
+        "B4.3 PASS: cold b0002 (1.0000) > fresh b0001 (0.3000)",
+        "B4.4 PASS: output format = list of (str, float), 3 items",
+        "B4.5 PASS: 5 predictions, top: b18 (0.4047)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 35.52,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_c2.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "C2.1 PASS: boot returned 4567 chars",
+        "C2.2 PASS: last_boot.json with 4 branches",
+        "C2.3 PASS: history cap at 50",
+        "C2.4 PASS: 4 branches in manifest",
+        "C2.5 PASS: no crash without mycelium"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.53,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_c3.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "C3.1 PASS: 4 branches loaded",
+        "C3.2 PASS: threshold check in C3 section",
+        "C3.3 PASS: max 3 preloads cap in code",
+        "C3.4 PASS: 4 unique branches, 0 duplicates",
+        "C3.5 PASS: budget check in C3 preload section"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 4.14,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_c4.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "general",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "C4.1 PASS: adapt_k returns {'old_k': 10, 'new_k': 5, 'mode': 'divergent', 'diversity': 1.0}",
+        "C4.2 PASS: divergent k=5, mode=divergent",
+        "C4.3 PASS: convergent k=20, mode=convergent",
+        "C4.4 PASS: adapt_k wired in recall()",
+        "C4.5 PASS: adapt_k wired in inject_memory()"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_c6.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "C6.1 PASS: diagnose runs without crash",
+        "C6.2 PASS: diagnose in CLI choices",
+        "C6.3 PASS: all expected sections present",
+        "C6.4 PASS: works on empty repo",
+        "C6.5 PASS: minimal tree handled"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.1,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_c7.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "general",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "C7.1 PASS: stale numeric line removed",
+        "C7.2 PASS: last-writer-wins",
+        "C7.3 PASS: non-contradicting lines preserved",
+        "C7.4 PASS: headers and ?FACTS protected",
+        "C7.5 PASS: wired in B1 reconsolidation"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_p41.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "P41.1 PASS: 1 fusion-concept connections found",
+        "P41.2 PASS: no infinite recursion",
+        "P41.3 PASS: 0 fusion connections (capped)",
+        "P41.4 PASS: no crash with empty fusions",
+        "P41.5 PASS: second-order connections are real"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.39,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_s4.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.05,
+      "status": "PASS"
+    },
+    {
+      "file": "test_v9a_plus.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "REGEN.1 PASS: facts=4, has_D=True",
+        "REGEN.2 PASS: decision=True, narrative=False",
+        "REGEN.3 PASS: has_regen_section=True",
+        "REGEN.4 PASS: close=True, far=False",
+        "REGEN.5 PASS: facts=0, tags=1, surv_tags=['beta', 'alpha']",
+        "REGEN.6 PASS: injected=0, occurrences=1",
+        "REGEN.7 PASS: fact_present=True, lines=212",
+        "REGEN.8 PASS: second_run_facts=0, occurrences=1",
+        "REGEN.9 PASS: facts=5, all_present=True, no_narrative=True",
+        "REGEN.10 PASS: L9_in_survivor=True, 847_in_survivor=True",
+        "REGEN.11 PASS: A->X=True, B->Y=True, C->Z=True, total=3",
+        "REGEN.12 PASS: facts=0, tags=0, protected_content_leaked=False",
+        "=== RESULTAT: 12 PASS, 0 FAIL ==="
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.17,
+      "status": "PASS"
+    },
+    {
+      "file": "test_v9a_regen_e2e.py",
+      "classification": {
+        "types": [
+          "unit"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "code_inspection",
+          "math_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "fast"
+      },
+      "exit_code": 0,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "REGEN.1 PASS: dead_gone=True, facts_found=5/5",
+        "REGEN.2 PASS: decision=True, narrative_leaked=False",
+        "REGEN.3 PASS: header_found=True",
+        "REGEN.4 PASS: in_api=True, in_ui=False",
+        "REGEN.5 PASS: no_crash=True, dead_removed=True",
+        "REGEN.6 PASS: fact_count=1 (expected 1)",
+        "REGEN.7 PASS: final_lines=206, raw_expected=207, compressed=True",
+        "REGEN.8 PASS: regen_headers=1, fact_copies=1",
+        "REGEN.9 PASS: migrated=True, in_boot=True",
+        "REGEN.10 PASS: migration_fact_found=True",
+        "REGEN.11 PASS: api=True, ui=True, db=True",
+        "REGEN.12 PASS: sole_alive=True, file=True, no_regen=True",
+        "RESULTAT: 12 PASS, 0 FAIL / 12 bornes"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 3.95,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_a5.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "A5.2 PASS: empty mycelium returns None, no crash",
+        "A5.3 PASS: eigenvalue=0 returns None (no division by zero)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "A5.1 SKIP: too few connections (0)"
+      ],
+      "elapsed": 0.18,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_full.py",
+      "classification": {
+        "types": [
+          "cli_e2e",
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "code_inspection",
+          "math_assertions",
+          "subprocess_cli",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 34,
+      "failed": 1,
+      "skipped": 4,
+      "pass_lines": [
+        "PASS  A1.1 backward_compat",
+        "PASS  A1.2 usefulness_effect",
+        "PASS  A1.3 monotonicity",
+        "PASS  A1.5 differentiation",
+        "PASS  A1.7 zero_safety",
+        "PASS  A2.1 arithmetic",
+        "PASS  A2.2 fallback",
+        "PASS  A2.3 recency",
+        "PASS  A2.4 cluster_vs_spread",
+        "PASS  A2.5 cap",
+        "PASS  A2.X ebbinghaus_unchanged",
+        "PASS  A3.1 sigmoid(0)",
+        "PASS  A3.2 sigmoid(0.5)",
+        "PASS  A3.3 noise_filter",
+        "PASS  A3.4 signal_preserve",
+        "PASS  A3.6 disabled",
+        "PASS  A4.1 arithmetic",
+        "PASS  A4.2 beta_zero",
+        "PASS  A4.3 small_w",
+        "PASS  A4.4 enormous_w",
+        "PASS  A4.5 integer",
+        "PASS  A4.INT default_beta",
+        "PASS  A5.2 empty_safe",
+        "PASS  A5.3 div_zero_safe",
+        "PASS  B1.1 size_reduction",
+        "PASS  B1.3 idempotence",
+        "PASS  B1.4 cooldown",
+        "PASS  B1.5 fresh_skip",
+        "PASS  B1.6 no_api",
+        "PASS  B1.X root_protection",
+        "PASS  CROSS A1 recall_by_usefulness",
+        "PASS  CROSS A1 temperature_diff",
+        "PASS  CROSS A2 actr_differentiates",
+        "RESULTS: 33 PASS, 0 FAIL, 3 SKIP"
+      ],
+      "fail_lines": [
+        "RESULTS: 33 PASS, 0 FAIL, 3 SKIP"
+      ],
+      "skip_lines": [
+        "SKIP  A3.INT \u2014 no mycelium connections",
+        "SKIP  A5.1 \u2014 too few connections (0)",
+        "SKIP  BOOT_COMPARE \u2014 no baseline file",
+        "RESULTS: 33 PASS, 0 FAIL, 3 SKIP"
+      ],
+      "elapsed": 0.43,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_b2.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "B2.1 PASS: isolated nodes detected (2 found)",
+        "B2.2 PASS: hub monopoly detected (degree=20)",
+        "B2.3 PASS: empty graph returns empty anomalies",
+        "B2.5 PASS: output keys = {isolated, hubs, weak_zones}"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "B2.4 SKIP: no connections"
+      ],
+      "elapsed": 0.18,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_b3.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "B3.1 PASS: zone gap detected (alpha-beta, 20 total spots)",
+        "B3.2 PASS: transitive gap detected (aaa-ccc)",
+        "B3.3 PASS: empty graph returns empty blind spots",
+        "B3.5 PASS: output format = list of (str, str, str)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "B3.4 SKIP: too few connections"
+      ],
+      "elapsed": 3.38,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_b6.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "compression",
+        "patterns": [
+          "math_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "B6.1 PASS: debug session (confidence=0.71)",
+        "B6.2 PASS: explore session (confidence=0.45)",
+        "B6.3 PASS: review session (confidence=0.75)",
+        "B6.4 PASS: empty input returns unknown",
+        "B6.5 PASS: output keys = {type, confidence, tag_profile}",
+        "B6.6 PASS: confidence always in [0, 1]"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.08,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_b7.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "real_data",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "B7.1 PASS: branch b0000 created with fact",
+        "B7.2 PASS: second inject appends to b0000 (2 facts)",
+        "B7.3 PASS: fact retrievable from branch b0000",
+        "B7.4 PASS: empty facts rejected",
+        "B7.5 PASS: tree updated with b0000 (type=branch, tags include live_inject)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "B7.6 SKIP: mycelium.json not created (observe_text may need more content)"
+      ],
+      "elapsed": 0.41,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_wiring.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "code_inspection",
+          "math_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "W1 PASS: k=5 -> sig(0.5)=0.731, k=20 -> sig(0.5)=0.982",
+        "W3 PASS: 5 predictions, all valid branches, top=('b18', 0.3152868999378468)",
+        "W4 PASS: debug(conf=0.83), explore(conf=0.64), weights wired",
+        "W5 PASS: inject -> tree + mycelium persisted",
+        "W6 PASS: all 4 wiring points confirmed in boot() source"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "W2 SKIP: no mycelium"
+      ],
+      "elapsed": 11.62,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_s1.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_s3.py",
+      "classification": {
+        "types": [
+          "integration"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "tmpdir_isolation"
+        ],
+        "risk_level": "medium",
+        "estimated_time": "medium"
+      },
+      "exit_code": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.06,
+      "status": "PASS"
+    },
+    {
+      "file": "test_doctor.py",
+      "classification": {
+        "types": [
+          "cli_e2e",
+          "performance"
+        ],
+        "domain": "general",
+        "patterns": [
+          "math_assertions",
+          "real_data",
+          "subprocess_cli",
+          "timing_assertions"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 4,
+      "skipped": 0,
+      "pass_lines": [
+        "D1.1 PASS: returns dict with ok=7, fail=1",
+        "D1.2 PASS: missing .muninn/ detected (fail=1)",
+        "D1.3 PASS: real repo all green (12 checks)",
+        "D1.4 PASS: CLI runs clean (exit 0)"
+      ],
+      "fail_lines": [
+        "[FAIL] .muninn/ missing in C:\\Users\\ludov\\AppData\\Local\\Temp\\tmpl37nmizg \u2014 run: muninn init",
+        "1 FAIL, 7 OK \u2014 fix issues above",
+        "[FAIL] .muninn/ missing in C:\\Users\\ludov\\AppData\\Local\\Temp\\tmps1m5lxvf \u2014 run: muninn init",
+        "1 FAIL, 7 OK \u2014 fix issues above"
+      ],
+      "skip_lines": [],
+      "elapsed": 1.77,
+      "status": "PASS"
+    },
+    {
+      "file": "test_h2_id_to_name_perf.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "code_inspection",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.32,
+      "status": "PASS"
+    },
+    {
+      "file": "test_immune_i1.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "I1.1 PASS: baseline recall=0.830552, zero-danger=0.830552 (identical)",
+        "I1.2 PASS: safe=0.6602, danger=0.7582 (+14.8%)",
+        "I1.3 PASS: error_rate=0.57 > clean_rate=0.00",
+        "I1.4 PASS: clean session: error_rate=0.0, retry_rate=0.000",
+        "I1.5 PASS: danger_score=0.6600 stored in session_index",
+        "I1.6 PASS: 1 branches created, danger_score propagated"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.12,
+      "status": "PASS"
+    },
+    {
+      "file": "test_immune_i2.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "I2.1 PASS: NCD=0.145 (< 0.4), raw recalls: b0=0.7691, b1=0.5915",
+        "I2.2 PASS: NCD=0.703 (>= 0.4), no suppression expected",
+        "I2.3 PASS: prune ran with suppression logic active",
+        "I2.4 PASS: I2 Competitive Suppression in prune()",
+        "I2.5 PASS: single branch recall=0.7691, no suppression"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.12,
+      "status": "PASS"
+    },
+    {
+      "file": "test_lazy_real.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "real_data",
+          "timing_assertions"
+        ],
+        "risk_level": "high",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.21,
+      "status": "PASS"
+    },
+    {
+      "file": "test_m3_chunker.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "compression",
+        "patterns": [
+          "code_inspection",
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "PASS"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.09,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_a1.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "general",
+        "patterns": [
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "A1.1 PASS: recall=1.0000 (usefulness=1.0, delta=0)",
+        "A1.2 PASS: recall(u=1.0)=0.4923, recall(u=0.5)=0.3671",
+        "A1.3 PASS: monotonic ['0.106', '0.274', '0.367', '0.429', '0.492']",
+        "A1.5 PASS: temp(u=0.3)=0.100, temp(u=0.9)=0.230, diff=0.130",
+        "A1.7 PASS: recall=0.1064 (usefulness=0.0, clamped to 0.1)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_a2.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "general",
+        "patterns": [
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "A2.1 PASS: B=0.5653, expected=0.5653",
+        "A2.2 PASS: B=0.2693 (fallback, no access_history)",
+        "A2.3 PASS: B_recent=1.3309 > B_old=-1.3602",
+        "A2.4 PASS: ordering verified (clustered > spread in raw ACT-R, as expected)",
+        "A2.5 PASS: len=10, B=1.6136",
+        "A2.X PASS: Ebbinghaus unchanged by access_history (1.0000 == 1.0000)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.07,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_a3.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "pass_lines": [
+        "A3.1 PASS: sigmoid(0)=0.0474, expected=0.0474",
+        "A3.2 PASS: sigmoid(0.5)=0.8808, expected=0.8808",
+        "A3.3 PASS: sigmoid(0.05)=0.0759 < 0.1 (noise filtered)",
+        "A3.4 PASS: sigmoid(0.8)=0.9933 > 0.9 (signal preserved)",
+        "A3.6 PASS: k=0 gives 0.5 for all inputs (disabled)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [
+        "A3.INT SKIP: no mycelium connections to test"
+      ],
+      "elapsed": 0.16,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier1_b1.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "tree_memory",
+        "patterns": [
+          "code_inspection",
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "B1.1 PASS: 463 -> 244 chars (53%)",
+        "B1.4 PASS: recall=1.0000 > 0.3, reconsolidation skipped",
+        "B1.5 PASS: recall=0.9986 > 0.3 (well-reviewed branch skipped)",
+        "B1.6 PASS: L10+L11 contain no API calls",
+        "B1.X PASS: root protection clause present in read_node",
+        "B1.3 PASS: idempotent (pass1=175, pass2=175, delta=0.00%)"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.09,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier2_b5.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "general",
+        "patterns": [
+          "timing_assertions",
+          "tmpdir_isolation"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "B5.1 PASS: divergent mode (diversity=1.0, k=5)",
+        "B5.2 PASS: convergent mode (diversity=0.1, k=20)",
+        "B5.3 PASS: balanced mode (diversity=0.5, k=10)",
+        "B5.4 PASS: empty concepts returns balanced default",
+        "B5.5 PASS: output keys = {mode, diversity, suggested_k, concept_count}"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.08,
+      "status": "PASS"
+    },
+    {
+      "file": "test_tier3_c1.py",
+      "classification": {
+        "types": [
+          "performance"
+        ],
+        "domain": "mycelium",
+        "patterns": [
+          "math_assertions",
+          "timing_assertions"
+        ],
+        "risk_level": "low",
+        "estimated_time": "slow"
+      },
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_lines": [
+        "C1.1 PASS: beta is active",
+        "C1.2 PASS: big=50.0 < 100 (saturation applied)",
+        "C1.3 PASS: small=7.5 (below threshold, untouched by saturation)",
+        "C1.4 PASS: decay still kills weak connections",
+        "C1.5 PASS: moderate conn survives at 20.0"
+      ],
+      "fail_lines": [],
+      "skip_lines": [],
+      "elapsed": 0.16,
+      "status": "PASS"
+    }
+  ]
+}

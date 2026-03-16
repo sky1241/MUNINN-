@@ -1,0 +1,16 @@
+[
+  {
+    "ts": "20260316_153441",
+    "status": "PASS",
+    "elapsed": 0.08,
+    "passed": 1,
+    "failed": 0
+  },
+  {
+    "ts": "20260316_160936",
+    "status": "PASS",
+    "elapsed": 0.1,
+    "passed": 1,
+    "failed": 0
+  }
+]
