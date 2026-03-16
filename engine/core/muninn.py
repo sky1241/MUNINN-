@@ -5031,27 +5031,65 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
 def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     """Feed the mycelium from a single transcript JSONL file.
     V6A: Per-message arousal via VADER -> passed to observe() for emotional tagging.
+    Chunked: saves every FEED_CHUNK_SIZE messages to avoid timeout on large transcripts.
+    Resumable: tracks offset in .muninn/feed_progress.json to resume after interruption.
     """
+    FEED_CHUNK_SIZE = 50  # save mycelium every N messages
+
     if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
     from mycelium import Mycelium
 
-    m = Mycelium(repo_path)
-    m.start_session()
+    # Resume support: check how many messages we already fed for this file
+    progress_path = repo_path / ".muninn" / "feed_progress.json"
+    progress = {}
+    if progress_path.exists():
+        try:
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            progress = {}
+
+    file_key = jsonl_path.name
+    file_size = jsonl_path.stat().st_size
+    prev = progress.get(file_key, {})
+    # If file size changed since last progress, start fresh (file grew)
+    offset = prev.get("offset", 0) if prev.get("size", 0) == file_size else 0
 
     texts = parse_transcript(jsonl_path)
     if not texts:
         print(f"  No text messages found in {jsonl_path.name}")
         return 0
 
-    for text in texts:
+    if offset >= len(texts):
+        print(f"  Already fed {offset}/{len(texts)} messages from {jsonl_path.name}")
+        return len(texts)
+
+    if offset > 0:
+        print(f"  Resuming feed from message {offset}/{len(texts)} ({jsonl_path.name})")
+
+    m = Mycelium(repo_path)
+    m.start_session()
+
+    fed = 0
+    for i in range(offset, len(texts)):
+        text = texts[i]
         # V6A: Score arousal per message for emotional tagging
         msg_arousal = 0.0
         if _HAS_SENTIMENT:
             s = score_sentiment(text)
             msg_arousal = s["arousal"]
         m.observe_text(text, arousal=msg_arousal)
+        fed += 1
 
+        # Checkpoint every FEED_CHUNK_SIZE messages
+        if fed % FEED_CHUNK_SIZE == 0:
+            m.save()
+            progress[file_key] = {"offset": offset + fed, "size": file_size}
+            progress_path.write_text(json.dumps(progress, indent=2), encoding="utf-8")
+
+    # Final save
     m.save()
+    progress[file_key] = {"offset": len(texts), "size": file_size}
+    progress_path.write_text(json.dumps(progress, indent=2), encoding="utf-8")
     return len(texts)
 
 
@@ -6155,8 +6193,9 @@ def feed_watch(repo_path: Path):
         except (json.JSONDecodeError, OSError):
             state = {}
 
-    # Find transcripts that grew
+    # Find transcripts that grew or have incomplete feed
     changed = []
+    changed_keys = {}  # jsonl_path -> state key (for deferred state update)
     for project_dir in project_dirs:
         for jsonl_file in project_dir.glob("*.jsonl"):
             key = f"{project_dir.name}/{jsonl_file.name}"
@@ -6167,7 +6206,24 @@ def feed_watch(repo_path: Path):
             last_size = state.get(key, 0)
             if current_size > last_size:
                 changed.append(jsonl_file)
-                state[key] = current_size
+                changed_keys[str(jsonl_file)] = (key, current_size)
+            elif last_size > 0:
+                # B.4 fix: check if prior feed was incomplete (state says done but
+                # compress/branches may have failed). Re-include if .mn session
+                # doesn't exist for this file yet. feed_from_transcript handles
+                # "already complete" efficiently via feed_progress.json offset check.
+                sessions_dir = repo_path / ".muninn" / "sessions"
+                if sessions_dir.exists():
+                    # Simple heuristic: if state recorded this file but no session
+                    # was created in the last 24h, retry the compress+grow pipeline
+                    from datetime import datetime
+                    recent_sessions = [
+                        s for s in sessions_dir.glob("*.mn")
+                        if (datetime.now().timestamp() - s.stat().st_mtime) < 86400
+                    ]
+                    if not recent_sessions:
+                        changed.append(jsonl_file)
+                        changed_keys[str(jsonl_file)] = (key, current_size)
 
     if not changed:
         _hook_log(repo_path, "EXIT watch: nothing changed")
@@ -6189,24 +6245,31 @@ def feed_watch(repo_path: Path):
             try:
                 _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
 
-                # Feed mycelium
+                # Step 1: Feed mycelium (chunked + resumable — survives timeout)
                 count = feed_from_transcript(jsonl_path, repo_path)
                 print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
 
-                # Compress transcript
+                # Step 2: Compress transcript (only if feed completed)
                 mn_path, _sent = compress_transcript(jsonl_path, repo_path)
 
-                # Auto-segment into branches
+                # Step 3: Auto-segment into branches
                 if mn_path:
                     grow_branches_from_session(mn_path, session_sentiment=_sent)
+
+                # Save state AFTER full pipeline (feed+compress+grow) succeeds
+                ck = changed_keys.get(str(jsonl_path))
+                if ck:
+                    state[ck[0]] = ck[1]
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
                 fed_count += 1
+                _hook_log(repo_path, f"WATCH fed ok {jsonl_path.name}: {count} msgs")
             except Exception as e:
                 print(f"  WATCH error on {jsonl_path.name}: {e}", file=sys.stderr)
                 _hook_log(repo_path, f"WATCH error {jsonl_path.name}: {e}")
-
-            # Save state after each file so progress isn't lost on crash
-            state_path.parent.mkdir(parents=True, exist_ok=True)
-            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+                import traceback
+                traceback.print_exc(file=sys.stderr)
 
         if fed_count > 0:
             # Refresh tree
@@ -6539,6 +6602,20 @@ def main():
             count = feed_from_transcript(Path(args.file), repo)
             print(f"MUNINN FEED: {count} messages -> mycelium ({repo.name})")
             _mn, _sent = compress_transcript(Path(args.file), repo)
+            # Match hook behavior: grow branches + refresh tree + sync meta
+            if _mn:
+                grow_branches_from_session(_mn, session_sentiment=_sent)
+            tree = load_tree()
+            refresh_tree_metadata(tree)
+            save_tree(tree)
+            try:
+                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+                from mycelium import Mycelium
+                m = Mycelium(repo)
+                pushed = m.sync_to_meta()
+                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+            except Exception as e:
+                print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
         elif args.trigger == "stop":
             # P32: Stop hook — debounced feed
             feed_from_stop_hook(repo)
