@@ -570,7 +570,7 @@ def compute_temperature(node: dict) -> float:
     The recall probability naturally encodes both recency and access count
     through the half-life model: h = 7 * 2^reviews.
     """
-    fill = node.get("lines", 0) / max(node.get("max_lines", 1), 1)
+    fill = min(1.0, node.get("lines", 0) / max(node.get("max_lines", 1), 1))
     recall = _ebbinghaus_recall(node)
 
     # Fill pressure: nodes near budget get hotter (need split/compress)
