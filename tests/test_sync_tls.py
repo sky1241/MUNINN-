@@ -9,7 +9,7 @@ Tests:
   T1.6  TLS enforced: plain socket rejected
   T1.7  Message protocol: send/recv roundtrip
 """
-import sys, os, tempfile, time, socket
+import sys, os, tempfile, time, socket, ssl
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 
 
@@ -220,6 +220,97 @@ def test_t1_7_protocol():
     print(f"  T1.7 PASS: protocol roundtrip OK")
 
 
+def test_t1_8_rate_limiter():
+    """Rate limiter blocks after max requests"""
+    from sync_tls import RateLimiter
+    limiter = RateLimiter(max_requests=3, window_seconds=60)
+    assert limiter.allow("1.2.3.4"), "T1.8 FAIL: first request denied"
+    assert limiter.allow("1.2.3.4"), "T1.8 FAIL: second request denied"
+    assert limiter.allow("1.2.3.4"), "T1.8 FAIL: third request denied"
+    assert not limiter.allow("1.2.3.4"), "T1.8 FAIL: fourth request should be blocked"
+    # Different IP should still be allowed
+    assert limiter.allow("5.6.7.8"), "T1.8 FAIL: different IP should be allowed"
+    print(f"  T1.8 PASS: rate limiter blocks after max (3/min)")
+
+
+def test_t1_9_rate_limit_server():
+    """Server rate-limits excessive requests from same client"""
+    from pathlib import Path
+    from sync_tls import SyncServer, SyncClient, generate_certs
+    with tempfile.TemporaryDirectory() as tmpdir:
+        certs = generate_certs(Path(tmpdir))
+        import socket as _s
+        with _s.socket(_s.AF_INET, _s.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        # Server with very low rate limit (3/min)
+        server = SyncServer(
+            cert_path=certs["cert_path"],
+            key_path=certs["key_path"],
+            meta_db_path=str(Path(tmpdir) / "meta.db"),
+            host="127.0.0.1",
+            port=port,
+            max_requests_per_min=3,
+        )
+        server.start(background=True)
+        time.sleep(0.5)
+
+        try:
+            client = SyncClient(host="localhost", port=port,
+                                cert_path=certs["cert_path"], verify=False)
+            # First 3 should succeed
+            for i in range(3):
+                r = client.ping()
+                assert r["status"] == "pong", f"T1.9 FAIL: request {i+1} failed: {r}"
+
+            # 4th should be rate limited
+            r = client.ping()
+            assert r["status"] == "error", f"T1.9 FAIL: 4th request should be rate-limited: {r}"
+            assert "rate_limited" in r.get("message", ""), f"T1.9 FAIL: wrong error: {r}"
+        finally:
+            server.stop()
+    print(f"  T1.9 PASS: server rate limiting works (3/min)")
+
+
+def test_t1_10_mtls():
+    """mTLS: server requires client cert, rejects unauthenticated"""
+    from pathlib import Path
+    from sync_tls import SyncServer, SyncClient, generate_certs
+    with tempfile.TemporaryDirectory() as tmpdir:
+        certs = generate_certs(Path(tmpdir), cn="muninn-ca")
+        import socket as _s
+        with _s.socket(_s.AF_INET, _s.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        # Server with mTLS enabled (uses same cert as CA for self-signed)
+        server = SyncServer(
+            cert_path=certs["cert_path"],
+            key_path=certs["key_path"],
+            meta_db_path=str(Path(tmpdir) / "meta.db"),
+            host="127.0.0.1",
+            port=port,
+            ca_path=certs["cert_path"],
+            require_client_cert=True,
+        )
+        server.start(background=True)
+        time.sleep(0.5)
+
+        try:
+            # Client WITHOUT client cert — should fail
+            client_no_cert = SyncClient(host="localhost", port=port, verify=False)
+            try:
+                r = client_no_cert.ping()
+                # If we get here, mTLS is not enforced (fail)
+                assert False, f"T1.10 FAIL: server accepted client without cert: {r}"
+            except (ConnectionError, OSError, ssl.SSLError):
+                pass  # Expected: server rejects
+        finally:
+            server.stop()
+    print(f"  T1.10 PASS: mTLS rejects unauthenticated client")
+
+
 if __name__ == "__main__":
     print("=== SYNC TLS TESTS ===")
     test_t1_1_generate_certs()
@@ -229,4 +320,7 @@ if __name__ == "__main__":
     test_t1_5_pull()
     test_t1_6_tls_enforced()
     test_t1_7_protocol()
+    test_t1_8_rate_limiter()
+    test_t1_9_rate_limit_server()
+    test_t1_10_mtls()
     print("\n  ALL PASS")

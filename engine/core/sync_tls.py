@@ -22,18 +22,21 @@ Security:
 
 Requires: Python 3.10+ (ssl stdlib). No pip dependency.
 """
+import collections
 import json
 import os
 import socket
 import ssl
 import struct
 import threading
+import time
+import warnings
 from pathlib import Path
 
 # Protocol: 4-byte length prefix (big-endian uint32) + JSON payload
 _HEADER_SIZE = 4
 _DEFAULT_PORT = 9477  # M-U-N-N on phone keypad
-_TLS_MIN = ssl.TLSVersion.TLSv1_2  # TLS 1.3 preferred, 1.2 minimum for compat
+_TLS_MIN = ssl.TLSVersion.TLSv1_3  # TLS 1.3 minimum — no downgrade to 1.2
 
 
 def generate_certs(cert_dir: Path, cn: str = "muninn-sync") -> dict:
@@ -115,27 +118,72 @@ def _recv_msg(sock) -> dict:
     return json.loads(payload.decode("utf-8"))
 
 
+class RateLimiter:
+    """Per-IP token bucket rate limiter. Thread-safe."""
+
+    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
+        self.max = max_requests
+        self.window = window_seconds
+        self._hits = collections.defaultdict(list)
+        self._lock = threading.Lock()
+
+    def allow(self, ip: str) -> bool:
+        """Return True if request is allowed, False if rate-limited."""
+        now = time.monotonic()
+        with self._lock:
+            self._hits[ip] = [t for t in self._hits[ip] if now - t < self.window]
+            if not self._hits[ip]:
+                del self._hits[ip]
+                # Fresh entry — allow and record
+                self._hits[ip] = [now]
+                return True
+            if len(self._hits[ip]) >= self.max:
+                return False
+            self._hits[ip].append(now)
+            return True
+
+
 class SyncServer:
     """TLS server that receives mycelium diffs and merges them."""
 
     def __init__(self, cert_path: str, key_path: str, meta_db_path: str,
-                 host: str = "0.0.0.0", port: int = _DEFAULT_PORT):
+                 host: str = "0.0.0.0", port: int = _DEFAULT_PORT,
+                 ca_path: str = None, require_client_cert: bool = False,
+                 max_requests_per_min: int = 30):
         self.cert_path = cert_path
         self.key_path = key_path
+        self.ca_path = ca_path
+        self.require_client_cert = require_client_cert
         self.meta_db_path = meta_db_path
         self.host = host
         self.port = port
         self._running = False
         self._server_socket = None
         self._thread = None
+        self._limiter = RateLimiter(max_requests=max_requests_per_min, window_seconds=60)
 
     def _create_context(self) -> ssl.SSLContext:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.minimum_version = _TLS_MIN
         ctx.load_cert_chain(self.cert_path, self.key_path)
+        # mTLS: require client certificate if CA provided
+        if self.require_client_cert:
+            if not self.ca_path:
+                raise ValueError("require_client_cert=True requires ca_path to verify clients")
+            ctx.load_verify_locations(self.ca_path)
+            ctx.verify_mode = ssl.CERT_REQUIRED
         return ctx
 
     def _handle_client(self, conn, addr):
+        # Rate limiting
+        ip = addr[0] if addr else "unknown"
+        if not self._limiter.allow(ip):
+            try:
+                _send_msg(conn, {"status": "error", "message": "rate_limited"})
+            except Exception:
+                pass
+            conn.close()
+            return
         try:
             msg = _recv_msg(conn)
             action = msg.get("action")
@@ -228,6 +276,7 @@ class SyncClient:
         if self.cert_path:
             ctx.load_verify_locations(self.cert_path)
         if not self.verify:
+            warnings.warn("verify=False disables TLS certificate validation", stacklevel=2)
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
         return ctx
