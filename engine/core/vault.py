@@ -20,9 +20,13 @@ Requires: pip install cryptography
 """
 import base64
 import ctypes
+import getpass as _getpass_mod
 import hashlib
+import json as _json
 import os
 import platform
+import socket as _socket
+import time as _time
 from pathlib import Path
 
 # Fernet uses AES-128-CBC internally, but we use raw AES-256-GCM via AESGCM
@@ -127,6 +131,29 @@ def _secure_delete(filepath: Path):
             pass
 
 
+def _audit_log(muninn_dir: Path, action: str, success: bool,
+               files: int = 0, bytes_total: int = 0, reason: str = None):
+    """Append-only JSONL audit log for vault operations (OWASP compliant)."""
+    log_path = muninn_dir / "vault_audit.jsonl"
+    entry = {
+        "ts": _time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "action": action,
+        "user": _getpass_mod.getuser(),
+        "host": _socket.gethostname(),
+        "pid": os.getpid(),
+        "success": success,
+        "files": files,
+        "bytes": bytes_total,
+    }
+    if reason:
+        entry["reason"] = reason
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(_json.dumps(entry, separators=(",", ":")) + "\n")
+    except OSError:
+        pass  # Logging failure should never block vault operations
+
+
 class Vault:
     """AES-256 encryption manager for a Muninn repo."""
 
@@ -165,6 +192,7 @@ class Vault:
         verify_path = self.muninn_dir / "vault.verify"
         verify_path.write_text(verify, encoding="utf-8")
 
+        _audit_log(self.muninn_dir, "init", True, reason="vault_initialized")
         return {"salt_path": str(self.salt_path), "backup_path": str(backup), "key_derived": True}
 
     def load_key(self, password: str) -> bool:
@@ -193,6 +221,7 @@ class Vault:
             actual = hashlib.sha256(self._key).hexdigest()[:16]
             if actual != expected:
                 self._key = None
+                _audit_log(self.muninn_dir, "auth_fail", False, reason="wrong_password")
                 raise ValueError("Wrong password (vault.verify mismatch)")
 
         return True
@@ -248,6 +277,7 @@ class Vault:
             _secure_delete(fp)  # Overwrite + delete plaintext
             encrypted += 1
 
+        _audit_log(self.muninn_dir, "lock", True, files=encrypted, bytes_total=total_bytes)
         return {"encrypted": encrypted, "total_bytes": total_bytes}
 
     def unlock(self) -> dict:
@@ -269,6 +299,7 @@ class Vault:
             vp.unlink()  # Remove encrypted
             decrypted += 1
 
+        _audit_log(self.muninn_dir, "unlock", True, files=decrypted, bytes_total=total_bytes)
         return {"decrypted": decrypted, "total_bytes": total_bytes}
 
     def encrypt_file(self, filepath: Path) -> Path:
