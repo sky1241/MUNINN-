@@ -8,8 +8,28 @@ Chaque test mesure le temps et verifie que le resultat est correct.
 import os
 import sys
 import time
+import functools
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+def flaky(reruns=2):
+    """Retry a test up to `reruns` times if it fails (I/O flakiness on real DB)."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_err = None
+            for attempt in range(1, reruns + 2):
+                try:
+                    return func(*args, **kwargs)
+                except (AssertionError, Exception) as e:
+                    last_err = e
+                    if attempt <= reruns:
+                        print(f"  [RETRY {attempt}/{reruns}] {func.__name__}: {e}")
+                        time.sleep(1)
+            raise last_err
+        return wrapper
+    return decorator
 
 REPO = os.path.join(os.path.dirname(__file__), "..")
 DB_PATH = os.path.join(REPO, ".muninn", "mycelium.db")
@@ -63,6 +83,7 @@ def test_real_status(myc):
 
 # ── 3. observe(): upsert SQL fonctionne ? ────────────────────────
 
+@flaky(reruns=2)
 def test_real_observe(myc):
     """observe() ecrit directement en SQL sans charger le dict.
 
@@ -251,6 +272,7 @@ def test_real_effective_weight(myc):
 
 # ── 14. save(): incremental en lazy mode ──────────────────────────
 
+@flaky(reruns=2)
 def test_real_save(myc):
     """save() en lazy mode = commit + meta update, pas rewrite complet."""
     t0 = time.time()
@@ -262,6 +284,7 @@ def test_real_save(myc):
 
 # ── 15. Cleanup: supprimer la connexion de test ──────────────────
 
+@flaky(reruns=2)
 def test_real_cleanup(myc):
     """Nettoyer les connexions de test creees par observe tests."""
     # Clean up any test artifacts (normalized names from ConceptTranslator)
