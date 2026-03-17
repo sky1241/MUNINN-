@@ -65,6 +65,20 @@ KALMAN_STATE_FILE = f"{FORGE_DIR}/kalman_state.json"
 ANOMALY_THRESHOLD = 2.0  # Z-score threshold for anomaly detection
 
 
+def _pytest_has_failures(output):
+    """Check if pytest output indicates failures, using the summary line regex.
+    Safe against test names containing 'failed' or 'error'."""
+    # pytest summary: "1 failed", "3 error" at END of output
+    if re.search(r"\d+ failed", output):
+        return True
+    if re.search(r"\d+ error", output):
+        return True
+    # Fallback: check exit status markers
+    if "FAILURES" in output or "ERRORS" in output:
+        return True
+    return False
+
+
 def _check_dep(name, pip_name=None):
     """Try to import optional dependency, return module or None."""
     try:
@@ -476,7 +490,7 @@ def bisect_test(root, test_name):
                 "--no-header", "-k", test_name]
     result = subprocess.run(cmd_test, capture_output=True, text=True,
                            cwd=str(root), encoding="utf-8", errors="replace")
-    if "failed" not in result.stdout.lower() and "error" not in result.stdout.lower():
+    if not _pytest_has_failures(result.stdout):
         print(f"  {test_name} is not currently failing. Nothing to bisect.")
         return
 
@@ -485,8 +499,8 @@ def bisect_test(root, test_name):
         log = subprocess.run(["git", "log", "--oneline", "-20"],
                             capture_output=True, text=True, cwd=str(root))
         commits = [l.split()[0] for l in log.stdout.strip().split("\n") if l.strip()]
-    except Exception:
-        print("  Git not available or not a git repo.")
+    except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+        print(f"  Git not available or not a git repo: {e}")
         return
 
     if len(commits) < 2:
@@ -512,7 +526,7 @@ def bisect_test(root, test_name):
         r = subprocess.run(cmd_test, capture_output=True, text=True,
                           cwd=str(root), encoding="utf-8", errors="replace",
                           timeout=120)
-        is_bad = "failed" in r.stdout.lower() or "error" in r.stdout.lower()
+        is_bad = _pytest_has_failures(r.stdout)
         print("FAIL" if is_bad else "PASS")
 
         if is_bad:
@@ -558,23 +572,90 @@ def get_changed_files(root):
                 if f.strip().endswith(".py"):
                     files.add(f.strip())
         return files
-    except Exception:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+        print(f"  Warning: could not get changed files from git: {e}")
         return set()
 
 
-def find_impacted_tests(root, changed_files):
+def _build_import_graph(root):
+    """Build a module dependency graph via AST. Returns {module_name: set(imported_modules)}.
+    Reuses the same AST logic as measure_robustness() (Newman 2006)."""
+    tracked = _run_git(root, "ls-files", "*.py")
+    if not tracked:
+        return {}, {}
+    files = [f for f in tracked.split("\n") if f.strip()]
+    known_modules = {Path(f).stem for f in files}
+
+    # graph: module -> set of modules it imports
+    graph = {}
+    # reverse: module -> set of modules that import it
+    reverse = {}
+    for mod in known_modules:
+        graph[mod] = set()
+        reverse[mod] = set()
+
+    for f in files:
+        p = root / f
+        if not p.exists():
+            continue
+        mod_name = Path(f).stem
+        try:
+            source = p.read_text(encoding="utf-8", errors="replace")
+            tree = ast.parse(source)
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    target = alias.name.split(".")[0]
+                    if target in known_modules:
+                        graph.setdefault(mod_name, set()).add(target)
+                        reverse.setdefault(target, set()).add(mod_name)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                target = node.module.split(".")[0]
+                if target in known_modules:
+                    graph.setdefault(mod_name, set()).add(target)
+                    reverse.setdefault(target, set()).add(mod_name)
+
+    return graph, reverse
+
+
+def _transitive_dependents(reverse, modules):
+    """Find all modules that transitively depend on any module in `modules`.
+    BFS on the reverse import graph."""
+    visited = set()
+    queue = list(modules)
+    while queue:
+        mod = queue.pop(0)
+        if mod in visited:
+            continue
+        visited.add(mod)
+        for dependent in reverse.get(mod, set()):
+            if dependent not in visited:
+                queue.append(dependent)
+    return visited
+
+
+def find_impacted_tests(root, changed_files, deep=False):
     """Find tests that import or reference changed modules.
-    Inspired by pytest-testmon (Puha 2015) — dependency graph for test selection."""
+    Inspired by pytest-testmon (Puha 2015) — dependency graph for test selection.
+    If deep=True, uses transitive closure on the import graph (catches indirect deps)."""
     changed_modules = set()
     for f in changed_files:
-        # Extract module name from path
         name = Path(f).stem
         changed_modules.add(name)
+
+    if deep:
+        # Build full import graph and compute transitive closure
+        _graph, reverse = _build_import_graph(root)
+        all_affected = _transitive_dependents(reverse, changed_modules)
+    else:
+        all_affected = changed_modules
 
     impacted = []
     for test_file in find_tests(root):
         content = test_file.read_text(encoding="utf-8", errors="replace")
-        for mod in changed_modules:
+        for mod in all_affected:
             if mod in content:
                 impacted.append(test_file)
                 break
@@ -582,8 +663,9 @@ def find_impacted_tests(root, changed_files):
     return impacted
 
 
-def run_fast(root, verbose=False):
-    """Run only tests impacted by recent changes."""
+def run_fast(root, verbose=False, deep=False):
+    """Run only tests impacted by recent changes.
+    If deep=True, uses transitive import graph (catches A->B->C deps)."""
     changed = get_changed_files(root)
     if not changed:
         print("  No changes detected. Nothing to test.")
@@ -599,7 +681,7 @@ def run_fast(root, verbose=False):
     test_files = [root / f for f in changed if "test_" in f]
 
     # Find tests impacted by changed source files
-    impacted = find_impacted_tests(root, changed)
+    impacted = find_impacted_tests(root, changed, deep=deep)
     test_files.extend(impacted)
     test_files = sorted(set(test_files))
 
@@ -1086,7 +1168,7 @@ def _test_with_input(root, test_name, input_content, input_ext):
                            "--no-header", "-k", test_name],
                           capture_output=True, text=True, cwd=str(root),
                           env=env, timeout=30, encoding="utf-8", errors="replace")
-        return "failed" in r.stdout.lower() or "error" in r.stdout.lower()
+        return _pytest_has_failures(r.stdout)
     except subprocess.TimeoutExpired:
         return False  # timeout = can't confirm failure
     finally:
@@ -1246,7 +1328,7 @@ def gen_props(root, module_path):
     rel = mod_path.relative_to(root)
     import_path = str(rel).replace(os.sep, ".").replace(".py", "")
 
-    # Build test file
+    # Build test file — imports are LIVE, not commented
     lines = [
         "#!/usr/bin/env python3",
         f'"""Property-based tests for {mod_path.name} — generated by forge.py --gen-props"""',
@@ -1255,8 +1337,7 @@ def gen_props(root, module_path):
         f"sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))",
         "",
         "from hypothesis import given, strategies as st, settings",
-        f"# Adjust import path if needed:",
-        f"# from {import_path} import *",
+        f"from {import_path} import *",
         "",
     ]
 
@@ -1268,7 +1349,7 @@ def gen_props(root, module_path):
         lines.append(f"@settings(max_examples=100)")
         lines.append(f"def test_roundtrip_{enc}_{dec}(data):")
         lines.append(f'    """Round-trip: {dec}({enc}(x)) == x"""')
-        lines.append(f"    # from {import_path} import {enc}, {dec}")
+        lines.append(f"    # Round-trip: {enc} <-> {dec}")
         lines.append(f"    assert {dec}({enc}(data)) == data")
         lines.append("")
         test_count += 1
@@ -1289,7 +1370,7 @@ def gen_props(root, module_path):
             lines.append(f"@settings(max_examples=100)")
             lines.append(f"def test_{name}_idempotent({', '.join(a['name'] for a in args)}):")
             lines.append(f'    """Idempotent: {name}({name}(x)) == {name}(x)"""')
-            lines.append(f"    # from {import_path} import {name}")
+            lines.append(f"    # Property test for {name}")
             lines.append(f"    result = {name}({args[0]['name']})")
             lines.append(f"    assert {name}(result) == result")
             lines.append(f"    assert len(result) == len({args[0]['name']})")
@@ -1300,7 +1381,7 @@ def gen_props(root, module_path):
             lines.append(f"@settings(max_examples=100)")
             lines.append(f"def test_{name}_subset({', '.join(a['name'] for a in args)}):")
             lines.append(f'    """Subset: len({name}(x)) <= len(x)"""')
-            lines.append(f"    # from {import_path} import {name}")
+            lines.append(f"    # Property test for {name}")
             lines.append(f"    result = {name}({', '.join(a['name'] for a in args)})")
             lines.append(f"    assert len(result) <= len({args[0]['name']})")
             lines.append("")
@@ -1311,7 +1392,7 @@ def gen_props(root, module_path):
             lines.append(f"@settings(max_examples=50)")
             lines.append(f"def test_{name}_no_crash({', '.join(a['name'] for a in args)}):")
             lines.append(f'    """Smoke: {name}() does not crash on arbitrary input"""')
-            lines.append(f"    # from {import_path} import {name}")
+            lines.append(f"    # Property test for {name}")
             lines.append(f"    try:")
             lines.append(f"        {name}({', '.join(a['name'] for a in args)})")
             lines.append(f"    except (ValueError, TypeError, KeyError, IndexError):")
@@ -1755,8 +1836,9 @@ def full_cycle(root):
         print("  [4/5] FAULT LOCALIZATION (Ochiai)")
         try:
             fault_locate(root)
-        except SystemExit:
-            pass  # fault_locate may exit, we continue
+        except SystemExit as e:
+            if e.code not in (0, None):
+                print(f"  fault_locate exited with code {e.code}, continuing pipeline")
     else:
         print("  [4/5] FAULT LOCALIZATION — skipped (no failures)")
 
@@ -1809,6 +1891,10 @@ def main():
             print("  Usage: forge.py --bisect test_name")
             return
         bisect_test(root, test_name)
+        return
+
+    if "--fast-deep" in args:
+        run_fast(root, verbose="--verbose" in args or "-v" in args, deep=True)
         return
 
     if "--fast" in args:
