@@ -2140,7 +2140,7 @@ class Mycelium:
 
         return n_synced
 
-    def pull_from_meta(self, query_concepts: list[str] = None, max_pull: int = 500):
+    def pull_from_meta(self, query_concepts: list[str] = None, max_pull: int = 1000):
         """Pull relevant connections from meta-mycelium into local.
 
         S1 (TIER 3): Reads from SQLite meta_mycelium.db.

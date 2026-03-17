@@ -346,9 +346,20 @@ BUDGET = {
     "branch_lines": 150,
     "leaf_lines": 200,
     "tokens_per_line": 16,
-    "max_loaded_tokens": 30_000,
+    "max_loaded_tokens": 50_000,  # default, overridden by adaptive_boot_budget()
     "compression_ratio": 4.6,
 }
+
+
+def adaptive_boot_budget(context_size: int = None) -> int:
+    """Compute boot budget: 15% of context, floor 15K, cap 100K.
+
+    If context_size not given, uses MUNINN_CONTEXT_SIZE env var or 200K default.
+    """
+    if context_size is None:
+        context_size = int(os.environ.get("MUNINN_CONTEXT_SIZE", 200_000))
+    budget = int(context_size * 0.15)
+    return max(15_000, min(budget, 100_000))
 
 # ── TREE STRUCTURE ────────────────────────────────────────────────
 
@@ -2245,6 +2256,9 @@ def boot(query: str = "") -> str:
       score = α×recency + β×importance + γ×relevance(query)
     where relevance uses TF-IDF cosine similarity on branch content.
     """
+    # Adaptive boot budget based on context size
+    BUDGET["max_loaded_tokens"] = adaptive_boot_budget()
+
     tree = load_tree()
     nodes = tree["nodes"]
 
@@ -2280,7 +2294,7 @@ def boot(query: str = "") -> str:
 
             # P20b: Pull relevant cross-repo knowledge from meta-mycelium
             query_words = re.findall(r'[A-Za-zÀ-ÿ]{3,}', query.lower())
-            pulled = m.pull_from_meta(query_concepts=query_words, max_pull=200)
+            pulled = m.pull_from_meta(query_concepts=query_words)
             if pulled > 0:
                 m.save()
 
