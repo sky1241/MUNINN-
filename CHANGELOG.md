@@ -1451,3 +1451,55 @@ Muninn = premier outil construit depuis le cote boucher.
 - LAMA Probes (Facebook 2019) — cloze tests for parametric knowledge assessment
 - Selective-Context (EMNLP 2023) — self-information pruning (token-level, syntactic)
 - Prompt Compression Survey (NAACL 2025) — taxonomy: hard/soft prompt methods
+
+## Cube Muninn — Resilience par Destruction/Reconstruction (2026-03-18) [TODO]
+
+Architecture systeme de resilience de code par destruction/reconstruction atomique.
+Le mycelium se subdivise et teste sa propre connaissance. C'est de l'immunologie:
+on rend le systeme malade EXPRES pour qu'il developpe des anticorps.
+
+### Concept
+- Scan brut du code → index raw SHA-256 → subdivision recursive /8 → cubes de 88 tokens
+- Chaque cube detruit, 9 voisins (analyse statique puis mycelium) + LLM reconstruisent
+- Validation SHA-256 normalise. Cubes chauds = irreconstructibles = valeurs critiques
+- Remontee par niveaux 88→704→5632, antifragile, plugin sur le LLM existant du client
+- God's Number = nombre minimum de cubes irreconstructibles
+
+### Flow corrige (insight 2026-03-18)
+Premier passage voisins = analyse statique (imports, calls, refs), PAS le mycelium.
+Le mycelium APPREND des resultats du cube (poids mecaniques prouves).
+Double poids: statistique (co-occurrences) + mecanique (prouve par destruction/reconstruction).
+Le code brut sert de ground truth pour SHA-256, jamais du compresse.
+
+### 39 Briques
+B1-B6: Scan & Structure (scanner, tokenizer, dataclass, subdivision, SHA-256, SQLite)
+B7-B10: Voisins (AST parser, graphe, Laplacian RG, Cheeger constant)
+B11-B15: LLM (interface abstraite, Ollama, Claude API, OpenAI API, FIM)
+B16-B22: Reconstruction (moteur, SHA-256, perplexite, NCD, BP, SP, Tononi)
+B23-B26: Scoring (temperature, Kaplan-Meier, Danger Theory, God's Number)
+B27-B28: Niveaux (remontee, agregation)
+B29-B31: Integration (feed mycelium, Hebbian, git blame)
+B32-B34: Infra (scheduling async, securite local_only, hooks multi-LLM)
+B35-B38: Visu & Forge (heatmap, Muninn→Forge link, auto-repair, feedback loop)
+B39: CLI (cube scan/run/status/heatmap/god)
+
+### Formules
+Hotness(cube) = -Σ log P_LLM(token_i | voisins) ← 1 appel, 4 theories convergentes
+God's Number = dim H¹(G,F) ← Sheaf ≈ k-core ≥ n/10 (LRC) ~ O(log N) (MERA)
+MSR point: ~4 tokens/voisin pour exact repair (Dimakis 2010, r=9, k=3)
+Percolation: fc = <k>/(<k²>-<k>) (Callaway 2000)
+
+### Carmack Moves (20 trouvailles Ygg, 842 papers scannes)
+TIER S: Sheaf Theory (Hansen-Ghrist 19), LLM perplexite=MDL (Rissanen+Tishby+Cilibrasi),
+  MERA (Vidal 07), k-core percolation (Dorogovtsev 06), LRC r=9 (Gopalan 12)
+TIER A: BP (Pearl 88), SP (Mezard-Parisi 02), NCD, Spectral Wavelets (Hammond 11),
+  Laplacian RG (Villegas 23), Stackelberg (Tambe 11), Tononi (99), Brier scoring (50)
+CARMACK: Self-Healing Neural Codes (Rule & O'Leary PNAS 22), Kaplan-Meier Code Survival
+  (Scanniello 11), Levin Bioelectric (17), FIM infilling (InCoder 22)
+
+### Forge Evolution (branche dans le Cube)
+- Muninn→Forge: temperature guide debug cible (plus de scan aveugle)
+- Auto-repair: 3 patchs → mutation test → propose le meilleur
+- Feedback loop: bugs fixes nourrissent mycelium → prediction a 6 mois
+
+### Detail: CUBE_YGG_QUERY.md (39 briques detaillees + sources + battle plan 11 jours)
