@@ -3,7 +3,7 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
 Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Security (doctor+vault+TLS) + Test Intelligence. AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 6824 + mycelium.py 2610 + mycelium_db.py 993 + vault.py 374 + sync_tls.py 312 = 11113 total
+Engine: muninn.py 6824 + mycelium.py 2610 + cube.py 2403 + mycelium_db.py 993 + vault.py 374 + sync_tls.py 312 = 13516 total
 Tests: 66 files, 349 tests + 7 properties + 6 boundary fuzz = 362 checks, 0 FAIL. Intelligence framework: 6-layer adaptive.
 
 ## Anatomie
@@ -1452,7 +1452,10 @@ Muninn = premier outil construit depuis le cote boucher.
 - Selective-Context (EMNLP 2023) — self-information pruning (token-level, syntactic)
 - Prompt Compression Survey (NAACL 2025) — taxonomy: hard/soft prompt methods
 
-## Cube Muninn — Resilience par Destruction/Reconstruction (2026-03-18) [TODO]
+## Cube Muninn — Resilience par Destruction/Reconstruction (2026-03-18) [DONE]
+
+Implementation complete: engine/core/cube.py (2400+ lignes), 216 tests (7 fichiers), 0 FAIL.
+8 commits: B1-B6 → B7-B8 → B11-B15 → B16-B19 → B23-B26 → B27-B31 → B32-B39 → B9-B10+B20-B22.
 
 Architecture systeme de resilience de code par destruction/reconstruction atomique.
 Le mycelium se subdivise et teste sa propre connaissance. C'est de l'immunologie:
@@ -1503,3 +1506,14 @@ CARMACK: Self-Healing Neural Codes (Rule & O'Leary PNAS 22), Kaplan-Meier Code S
 - Feedback loop: bugs fixes nourrissent mycelium → prediction a 6 mois
 
 ### Detail: CUBE_YGG_QUERY.md (39 briques detaillees + sources + battle plan 11 jours)
+
+### Engine: engine/core/cube.py
+- B1 scan_repo() + B2 tokenizer + B3 Cube dataclass + B4 subdivide_file() + B5 sha256_hash() + B6 CubeStore
+- B7 parse_dependencies() (Python AST + regex JS/TS/Go/Java) + B8 build_neighbor_graph()
+- B9 laplacian_rg_grouping() (numpy spectral) + B10 cheeger_constant() (Fiedler vector)
+- B11 LLMProvider ABC + B12 OllamaProvider + B13 ClaudeProvider + B14 OpenAIProvider + B15 FIMReconstructor
+- B16 reconstruct_cube() + B17 validate_reconstruction() + B18 compute_hotness() + B19 compute_ncd()
+- B20 belief_propagation() + B21 survey_propagation_filter() + B22 tononi_degeneracy()
+- B23 compute_temperature() + B24 kaplan_meier_survival() + B25 detect_dead_code() + B26 compute_gods_number()
+- B27 build_level_cubes() + B28 aggregate_scores() + B29 feed_mycelium_from_results() + B30 hebbian_update()
+- B31 git_blame_cube() + B32 CubeScheduler + B33 CubeConfig + B39 cli_scan/run/status/god
