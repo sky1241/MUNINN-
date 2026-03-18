@@ -5,7 +5,8 @@ Cube Muninn — Code resilience through atomic destruction/reconstruction.
 The cube is the mycelium subdividing and testing its own knowledge.
 Scan → subdivide → destroy → reconstruct → validate → learn.
 
-Briques B1-B8: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256, Storage, AST, Neighbors.
+Briques B1-B8, B11-B15: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
+Storage, AST, Neighbors, LLM Providers, FIM.
 """
 
 import ast as ast_module
@@ -881,3 +882,369 @@ def assign_neighbors(cubes: list[Cube], deps: list[Dependency],
         if store:
             for nid, weight in neighbors:
                 store.set_neighbor(cube.id, nid, weight, 'static')
+
+
+# ─── B11: Interface LLMProvider abstraite ─────────────────────────────
+
+from abc import ABC, abstractmethod
+
+
+class LLMProvider(ABC):
+    """
+    B11: Abstract LLM provider interface for cube reconstruction.
+
+    Implementations: Ollama (B12), Claude (B13), OpenAI (B14).
+    """
+
+    @abstractmethod
+    def generate(self, prompt: str, max_tokens: int = 256,
+                 temperature: float = 0.0) -> str:
+        """Generate text completion."""
+        ...
+
+    @abstractmethod
+    def get_perplexity(self, prompt: str, completion: str) -> float:
+        """Calculate perplexity of completion given prompt."""
+        ...
+
+    @abstractmethod
+    def list_models(self) -> list[str]:
+        """List available models."""
+        ...
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Provider name (e.g. 'ollama', 'claude', 'openai')."""
+        ...
+
+    @property
+    def supports_fim(self) -> bool:
+        """Whether this provider supports Fill-in-the-Middle."""
+        return False
+
+    def fim_generate(self, prefix: str, suffix: str,
+                     max_tokens: int = 256) -> str:
+        """FIM: generate text to fill between prefix and suffix."""
+        raise NotImplementedError(f"{self.name} does not support FIM")
+
+
+# ─── B12: Backend Ollama ──────────────────────────────────────────────
+
+class OllamaProvider(LLMProvider):
+    """
+    B12: LLM provider for Ollama (local models).
+
+    Supports llama, mistral, phi, codellama, deepseek-coder.
+    """
+
+    def __init__(self, model: str = 'codellama', base_url: str = 'http://localhost:11434'):
+        self.model = model
+        self.base_url = base_url.rstrip('/')
+        self._available = None
+
+    @property
+    def name(self) -> str:
+        return 'ollama'
+
+    @property
+    def supports_fim(self) -> bool:
+        return self.model in ('codellama', 'deepseek-coder', 'deepseek-coder-v2',
+                              'starcoder2', 'codegemma', 'qwen2.5-coder')
+
+    def _request(self, endpoint: str, payload: dict, timeout: int = 120) -> dict:
+        """Make HTTP request to Ollama API."""
+        import urllib.request
+        url = f"{self.base_url}{endpoint}"
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data,
+                                     headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        except Exception:
+            raise ConnectionError(f"Cannot connect to Ollama at {self.base_url}")
+
+    def generate(self, prompt: str, max_tokens: int = 256,
+                 temperature: float = 0.0) -> str:
+        resp = self._request('/api/generate', {
+            'model': self.model,
+            'prompt': prompt,
+            'options': {'num_predict': max_tokens, 'temperature': temperature},
+            'stream': False,
+        })
+        return resp.get('response', '')
+
+    def get_perplexity(self, prompt: str, completion: str) -> float:
+        """Estimate perplexity by tokenizing completion and measuring log probs."""
+        # Ollama doesn't expose logprobs directly, estimate via generation
+        # For now, return a rough estimate based on edit distance
+        if not completion:
+            return 0.0
+        full_prompt = prompt + '\n# Expected:\n' + completion
+        result = self.generate(full_prompt, max_tokens=len(completion) * 2)
+        # Simple proxy: how different is the regeneration from the completion
+        import difflib
+        ratio = difflib.SequenceMatcher(None, completion, result).ratio()
+        return max(0.0, -2.0 * (ratio - 1.0))  # 0 = perfect match, higher = more different
+
+    def list_models(self) -> list[str]:
+        if self._available is None:
+            try:
+                import urllib.request
+                url = f"{self.base_url}/api/tags"
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    self._available = [m['name'] for m in data.get('models', [])]
+            except Exception:
+                self._available = []
+        return self._available
+
+    def fim_generate(self, prefix: str, suffix: str,
+                     max_tokens: int = 256) -> str:
+        """FIM using Ollama's raw mode with FIM tokens."""
+        if not self.supports_fim:
+            raise NotImplementedError(f"{self.model} does not support FIM")
+        # Use the standard FIM format (works with CodeLlama, DeepSeek-Coder)
+        prompt = f"<PRE> {prefix} <SUF>{suffix} <MID>"
+        return self.generate(prompt, max_tokens=max_tokens)
+
+
+# ─── B13: Backend Claude API ─────────────────────────────────────────
+
+class ClaudeProvider(LLMProvider):
+    """
+    B13: LLM provider for Claude API (Anthropic).
+
+    Reuses the anthropic SDK.
+    """
+
+    def __init__(self, model: str = 'claude-sonnet-4-6',
+                 api_key: Optional[str] = None):
+        self.model = model
+        self._api_key = api_key or os.environ.get('ANTHROPIC_API_KEY', '')
+        self._client = None
+
+    @property
+    def name(self) -> str:
+        return 'claude'
+
+    def _get_client(self):
+        if self._client is None:
+            if not self._api_key:
+                raise ValueError("ANTHROPIC_API_KEY not set")
+            try:
+                import anthropic
+                self._client = anthropic.Anthropic(api_key=self._api_key)
+            except ImportError:
+                raise ImportError("pip install anthropic required")
+        return self._client
+
+    def generate(self, prompt: str, max_tokens: int = 256,
+                 temperature: float = 0.0) -> str:
+        client = self._get_client()
+        resp = client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        return resp.content[0].text if resp.content else ''
+
+    def get_perplexity(self, prompt: str, completion: str) -> float:
+        """Claude doesn't expose logprobs; estimate via regeneration similarity."""
+        if not completion:
+            return 0.0
+        result = self.generate(
+            f"Complete this code exactly:\n{prompt}",
+            max_tokens=len(completion) * 2,
+        )
+        import difflib
+        ratio = difflib.SequenceMatcher(None, completion, result).ratio()
+        return max(0.0, -2.0 * (ratio - 1.0))
+
+    def list_models(self) -> list[str]:
+        return ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+                'claude-opus-4-6']
+
+
+# ─── B14: Backend OpenAI API ─────────────────────────────────────────
+
+class OpenAIProvider(LLMProvider):
+    """
+    B14: LLM provider for OpenAI GPT models.
+    """
+
+    def __init__(self, model: str = 'gpt-4o-mini',
+                 api_key: Optional[str] = None):
+        self.model = model
+        self._api_key = api_key or os.environ.get('OPENAI_API_KEY', '')
+        self._client = None
+
+    @property
+    def name(self) -> str:
+        return 'openai'
+
+    def _get_client(self):
+        if self._client is None:
+            if not self._api_key:
+                raise ValueError("OPENAI_API_KEY not set")
+            try:
+                import openai
+                self._client = openai.OpenAI(api_key=self._api_key)
+            except ImportError:
+                raise ImportError("pip install openai required")
+        return self._client
+
+    def generate(self, prompt: str, max_tokens: int = 256,
+                 temperature: float = 0.0) -> str:
+        client = self._get_client()
+        resp = client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        return resp.choices[0].message.content or ''
+
+    def get_perplexity(self, prompt: str, completion: str) -> float:
+        if not completion:
+            return 0.0
+        result = self.generate(
+            f"Complete this code exactly:\n{prompt}",
+            max_tokens=len(completion) * 2,
+        )
+        import difflib
+        ratio = difflib.SequenceMatcher(None, completion, result).ratio()
+        return max(0.0, -2.0 * (ratio - 1.0))
+
+    def list_models(self) -> list[str]:
+        return ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
+
+
+# ─── B15: Mode FIM (Fill-in-the-Middle) ──────────────────────────────
+
+class FIMReconstructor:
+    """
+    B15: Fill-in-the-Middle reconstruction engine.
+
+    Cube reconstruction IS code infilling — the cube is the span to fill.
+    Uses FIM-capable models (DeepSeek-Coder, StarCoder2, CodeLlama) or
+    falls back to standard prompt-based reconstruction.
+    """
+
+    # FIM token formats per model family
+    FIM_FORMATS = {
+        'codellama': {'pre': '<PRE> ', 'suf': ' <SUF>', 'mid': ' <MID>'},
+        'deepseek-coder': {'pre': '<｜fim▁begin｜>', 'suf': '<｜fim▁hole｜>', 'mid': '<｜fim▁end｜>'},
+        'starcoder2': {'pre': '<fim_prefix>', 'suf': '<fim_suffix>', 'mid': '<fim_middle>'},
+        'codegemma': {'pre': '<|fim_prefix|>', 'suf': '<|fim_suffix|>', 'mid': '<|fim_middle|>'},
+    }
+
+    def __init__(self, provider: LLMProvider):
+        self.provider = provider
+
+    def reconstruct_fim(self, prefix: str, suffix: str,
+                        max_tokens: int = 256) -> str:
+        """Reconstruct missing code using FIM if available."""
+        if self.provider.supports_fim:
+            return self.provider.fim_generate(prefix, suffix, max_tokens)
+
+        # Fallback: standard prompt-based infilling
+        prompt = (
+            "You are a code completion engine. Fill in the missing code between "
+            "PREFIX and SUFFIX. Output ONLY the missing code, nothing else.\n\n"
+            f"PREFIX:\n```\n{prefix}\n```\n\n"
+            f"SUFFIX:\n```\n{suffix}\n```\n\n"
+            "MISSING CODE:"
+        )
+        return self.provider.generate(prompt, max_tokens=max_tokens)
+
+    def reconstruct_with_neighbors(self, cube: Cube, neighbors: list[Cube],
+                                   max_tokens: int = 256) -> str:
+        """
+        Reconstruct a cube using its neighbors as context.
+
+        This is the core reconstruction: neighbors provide the context,
+        the cube content is what we're trying to reconstruct.
+        """
+        # Sort neighbors by line proximity
+        sorted_neighbors = sorted(neighbors,
+                                  key=lambda n: abs(n.line_start - cube.line_start))
+
+        # Build context from neighbors
+        context_parts = []
+        for n in sorted_neighbors[:9]:
+            context_parts.append(f"# From {n.file_origin} L{n.line_start}-{n.line_end}:\n{n.content}")
+
+        context = "\n\n".join(context_parts)
+
+        # Find prefix/suffix among same-file neighbors
+        same_file = [n for n in sorted_neighbors if n.file_origin == cube.file_origin]
+        prefix_cubes = [n for n in same_file if n.line_end <= cube.line_start]
+        suffix_cubes = [n for n in same_file if n.line_start >= cube.line_end]
+
+        prefix = prefix_cubes[-1].content if prefix_cubes else ""
+        suffix = suffix_cubes[0].content if suffix_cubes else ""
+
+        # Try FIM first if available
+        if self.provider.supports_fim and prefix and suffix:
+            return self.reconstruct_fim(prefix, suffix, max_tokens)
+
+        # Standard prompt-based reconstruction
+        prompt = (
+            "Reconstruct the missing code. Context from neighboring code:\n\n"
+            f"{context}\n\n"
+            f"The missing code is from {cube.file_origin} "
+            f"lines {cube.line_start}-{cube.line_end}.\n"
+        )
+        if prefix:
+            prompt += f"\nCode immediately before:\n```\n{prefix}\n```\n"
+        if suffix:
+            prompt += f"\nCode immediately after:\n```\n{suffix}\n```\n"
+
+        prompt += "\nOutput ONLY the missing code:"
+
+        return self.provider.generate(prompt, max_tokens=max_tokens)
+
+
+# ─── Mock provider for testing ────────────────────────────────────────
+
+class MockLLMProvider(LLMProvider):
+    """Test-only mock provider that returns predictable results."""
+
+    def __init__(self, responses: Optional[dict[str, str]] = None):
+        self._responses = responses or {}
+        self._calls: list[dict] = []
+        self._fim_enabled = False
+
+    @property
+    def name(self) -> str:
+        return 'mock'
+
+    @property
+    def supports_fim(self) -> bool:
+        return self._fim_enabled
+
+    def generate(self, prompt: str, max_tokens: int = 256,
+                 temperature: float = 0.0) -> str:
+        self._calls.append({'method': 'generate', 'prompt': prompt,
+                           'max_tokens': max_tokens, 'temperature': temperature})
+        # Check if any response key is in the prompt
+        for key, response in self._responses.items():
+            if key in prompt:
+                return response
+        return "# mock generated code\npass"
+
+    def get_perplexity(self, prompt: str, completion: str) -> float:
+        self._calls.append({'method': 'perplexity', 'prompt': prompt,
+                           'completion': completion})
+        return 1.0
+
+    def list_models(self) -> list[str]:
+        return ['mock-model']
+
+    def fim_generate(self, prefix: str, suffix: str,
+                     max_tokens: int = 256) -> str:
+        self._calls.append({'method': 'fim', 'prefix': prefix, 'suffix': suffix})
+        return self._responses.get('fim', '# mock FIM result\npass')
