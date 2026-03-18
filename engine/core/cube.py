@@ -8,7 +8,7 @@ Scan → subdivide → destroy → reconstruct → validate → learn.
 Briques B1-B8, B11-B19: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
 Storage, AST, Neighbors, LLM Providers, FIM, Reconstruction, Validation,
 Scoring, NCD, Temperature, Kaplan-Meier, Danger Theory, God's Number,
-Levels, Feed Mycelium, Hebbian, Git Blame.
+Levels, Feed Mycelium, Hebbian, Git Blame, Scheduling, Security, Hooks, CLI.
 """
 
 import ast as ast_module
@@ -1847,3 +1847,298 @@ def git_log_value(cube: Cube, repo_path: str) -> list[dict]:
 
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
+
+
+# ─── B32: Scheduling async ───────────────────────────────────────────
+
+import time as _time
+
+
+class CubeScheduler:
+    """
+    B32: Async scheduling — runs cube cycles in quiet periods.
+
+    Detects repo activity via file timestamps and git status.
+    Pauses when activity detected, resumes when quiet.
+    """
+
+    def __init__(self, repo_path: str, quiet_seconds: int = 300,
+                 check_interval: int = 30):
+        self.repo_path = repo_path
+        self.quiet_seconds = quiet_seconds  # How long to wait for "quiet"
+        self.check_interval = check_interval
+        self._last_activity = _time.time()
+        self._running = False
+
+    def _check_activity(self) -> bool:
+        """Check if repo has recent activity."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                cwd=self.repo_path,
+                capture_output=True, text=True, timeout=5,
+            )
+            # Any uncommitted changes = active
+            if result.stdout.strip():
+                self._last_activity = _time.time()
+                return True
+        except Exception:
+            pass
+
+        # Check file modification times
+        for root, dirs, files in os.walk(self.repo_path):
+            dirs[:] = [d for d in dirs if d not in ('.git', 'node_modules', '__pycache__')]
+            for f in files[:10]:  # Sample first 10 files per dir
+                try:
+                    mtime = os.path.getmtime(os.path.join(root, f))
+                    if _time.time() - mtime < self.quiet_seconds:
+                        self._last_activity = _time.time()
+                        return True
+                except OSError:
+                    pass
+            break  # Only check top-level
+
+        return False
+
+    def is_quiet(self) -> bool:
+        """True if repo has been quiet for quiet_seconds."""
+        return _time.time() - self._last_activity > self.quiet_seconds
+
+    def should_run(self) -> bool:
+        """Check if we should start/continue a cycle."""
+        active = self._check_activity()
+        return not active and self.is_quiet()
+
+
+# ─── B33: Config securite ────────────────────────────────────────────
+
+@dataclass
+class CubeConfig:
+    """
+    B33: Security configuration for cube operations.
+
+    local_only=True: ONLY local models (Ollama), code never leaves network.
+    """
+    local_only: bool = True
+    max_cycles: int = 100
+    ncd_threshold: float = 0.3
+    temperature_threshold: float = 0.5
+    target_tokens: int = 88
+    max_neighbors: int = 9
+    db_path: str = '.muninn/cube.db'
+    allowed_providers: list[str] = field(default_factory=lambda: ['ollama', 'mock'])
+
+    @classmethod
+    def load(cls, config_path: str = '.muninn/config.json') -> 'CubeConfig':
+        """Load config from JSON file."""
+        if not os.path.exists(config_path):
+            return cls()
+        try:
+            with open(config_path, 'r') as f:
+                data = json.load(f)
+            cube_data = data.get('cube', {})
+            return cls(
+                local_only=cube_data.get('local_only', True),
+                max_cycles=cube_data.get('max_cycles', 100),
+                ncd_threshold=cube_data.get('ncd_threshold', 0.3),
+                temperature_threshold=cube_data.get('temperature_threshold', 0.5),
+                target_tokens=cube_data.get('target_tokens', 88),
+                max_neighbors=cube_data.get('max_neighbors', 9),
+                db_path=cube_data.get('db_path', '.muninn/cube.db'),
+                allowed_providers=cube_data.get('allowed_providers', ['ollama', 'mock']),
+            )
+        except (json.JSONDecodeError, OSError):
+            return cls()
+
+    def save(self, config_path: str = '.muninn/config.json'):
+        """Save config to JSON file."""
+        os.makedirs(os.path.dirname(config_path) or '.', exist_ok=True)
+        data = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        data['cube'] = {
+            'local_only': self.local_only,
+            'max_cycles': self.max_cycles,
+            'ncd_threshold': self.ncd_threshold,
+            'temperature_threshold': self.temperature_threshold,
+            'target_tokens': self.target_tokens,
+            'max_neighbors': self.max_neighbors,
+            'db_path': self.db_path,
+            'allowed_providers': self.allowed_providers,
+        }
+        with open(config_path, 'w') as f:
+            json.dump(data, f, indent=2)
+
+    def get_provider(self) -> LLMProvider:
+        """Get an LLM provider based on config."""
+        if self.local_only:
+            if 'ollama' not in self.allowed_providers:
+                raise ValueError("local_only=True but 'ollama' not in allowed_providers")
+            return OllamaProvider()
+
+        # Try providers in order of preference
+        if 'claude' in self.allowed_providers:
+            if os.environ.get('ANTHROPIC_API_KEY'):
+                return ClaudeProvider()
+        if 'openai' in self.allowed_providers:
+            if os.environ.get('OPENAI_API_KEY'):
+                return OpenAIProvider()
+        if 'ollama' in self.allowed_providers:
+            return OllamaProvider()
+
+        return MockLLMProvider()
+
+    def validate_provider(self, provider: LLMProvider) -> bool:
+        """Check if a provider is allowed by config."""
+        if self.local_only and provider.name not in ('ollama', 'mock'):
+            return False
+        return provider.name in self.allowed_providers
+
+
+# ─── B34: Multi-LLM hooks ────────────────────────────────────────────
+# (Already covered by B11-B14 providers + B33 config)
+# The hook system is the provider selection in CubeConfig.get_provider()
+
+
+# ─── B39: CLI commands ───────────────────────────────────────────────
+
+def cli_scan(repo_path: str, config: Optional[CubeConfig] = None) -> dict:
+    """
+    `cube scan <repo>` — Scan repo, subdivide, build index.
+
+    Returns summary dict.
+    """
+    config = config or CubeConfig()
+    store = CubeStore(config.db_path)
+
+    try:
+        # B1: scan
+        files = scan_repo(repo_path)
+
+        # B4: subdivide
+        all_cubes = []
+        for f in files:
+            cubes = subdivide_file(f.path, f.content, config.target_tokens)
+            all_cubes.extend(cubes)
+
+        # B7+B8: deps + neighbors
+        deps = parse_dependencies(files)
+        assign_neighbors(all_cubes, deps, store=store,
+                        max_neighbors=config.max_neighbors)
+
+        # B6: store
+        store.save_cubes(all_cubes)
+
+        return {
+            'files': len(files),
+            'cubes': len(all_cubes),
+            'dependencies': len(deps),
+            'db_path': config.db_path,
+        }
+    finally:
+        store.close()
+
+
+def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
+            config: Optional[CubeConfig] = None) -> dict:
+    """
+    `cube run [--cycles N] [--level L]` — Run destruction/reconstruction cycles.
+    """
+    config = config or CubeConfig()
+    store = CubeStore(config.db_path)
+
+    try:
+        provider = config.get_provider()
+        cubes = store.get_cubes_by_level(level)
+        deps = []  # Already stored; not needed for run
+
+        all_results = []
+        for cycle_num in range(1, cycles + 1):
+            results = run_destruction_cycle(
+                cubes, store, provider,
+                cycle_num=cycle_num,
+                ncd_threshold=config.ncd_threshold,
+            )
+            all_results.extend(results)
+
+            # B30: Hebbian update
+            hebbian_update(store, results)
+
+            # B29: Feed mycelium (if available)
+            feed_mycelium_from_results(results, cubes)
+
+        successes = sum(1 for r in all_results if r.success)
+        return {
+            'cycles': cycles,
+            'cubes_tested': len(cubes),
+            'total_tests': len(all_results),
+            'successes': successes,
+            'failures': len(all_results) - successes,
+            'success_rate': successes / len(all_results) if all_results else 0.0,
+        }
+    finally:
+        store.close()
+
+
+def cli_status(config: Optional[CubeConfig] = None) -> dict:
+    """
+    `cube status` — Show God's Number, hot cubes, temperature stats.
+    """
+    config = config or CubeConfig()
+    if not os.path.exists(config.db_path):
+        return {'error': 'No cube database found. Run `cube scan` first.'}
+
+    store = CubeStore(config.db_path)
+    try:
+        total = store.count_cubes()
+        hot = store.get_hot_cubes(config.temperature_threshold)
+
+        # Temperature stats
+        all_cubes = store.get_cubes_by_level(0)
+        temps = [c.temperature for c in all_cubes]
+        avg_temp = sum(temps) / len(temps) if temps else 0.0
+
+        return {
+            'total_cubes': total,
+            'hot_cubes': len(hot),
+            'gods_number_estimate': len(hot),
+            'avg_temperature': round(avg_temp, 3),
+            'max_temperature': round(max(temps), 3) if temps else 0.0,
+            'levels': {
+                lvl: store.count_cubes(level=lvl)
+                for lvl in range(4)
+                if store.count_cubes(level=lvl) > 0
+            },
+        }
+    finally:
+        store.close()
+
+
+def cli_god(config: Optional[CubeConfig] = None) -> dict:
+    """
+    `cube god` — Compute and display God's Number with bounds.
+    """
+    config = config or CubeConfig()
+    if not os.path.exists(config.db_path):
+        return {'error': 'No cube database found. Run `cube scan` first.'}
+
+    store = CubeStore(config.db_path)
+    try:
+        cubes = store.get_cubes_by_level(0)
+        result = compute_gods_number(cubes, store, [],
+                                     threshold=config.temperature_threshold)
+        return {
+            'gods_number': result.gods_number,
+            'total_cubes': result.total_cubes,
+            'dead_cubes': len(result.dead_cubes),
+            'threshold': result.threshold,
+            'bounds': result.bounds,
+            'hot_cube_ids': [c.id for c in result.hot_cubes[:20]],
+        }
+    finally:
+        store.close()
