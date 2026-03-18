@@ -7,7 +7,7 @@ Scan → subdivide → destroy → reconstruct → validate → learn.
 
 Briques B1-B8, B11-B19: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
 Storage, AST, Neighbors, LLM Providers, FIM, Reconstruction, Validation,
-Scoring, NCD.
+Scoring, NCD, Temperature, Kaplan-Meier, Danger Theory, God's Number.
 """
 
 import ast as ast_module
@@ -1409,3 +1409,163 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
         cube.score = result.perplexity
 
     return results
+
+
+# ─── B23: Temperature par cube + stockage ─────────────────────────────
+
+def compute_temperature(cube: Cube, store: CubeStore) -> float:
+    """
+    B23: Compute temperature for a cube based on cycle history.
+
+    Temperature = f(perplexity, attempts, success_rate, survival)
+    """
+    cycles = store.get_cycles(cube.id)
+    if not cycles:
+        return cube.score  # Use raw perplexity if no history
+
+    total = len(cycles)
+    successes = sum(1 for c in cycles if c['success'])
+    failures = total - successes
+    success_rate = successes / total if total > 0 else 0.0
+
+    avg_perplexity = sum(c.get('perplexity', 0) for c in cycles) / total if total else 0.0
+
+    temperature = (
+        0.4 * min(avg_perplexity / 5.0, 1.0) +
+        0.4 * (1.0 - success_rate) +
+        0.2 * min(failures / 10.0, 1.0)
+    )
+    return max(0.0, min(1.0, temperature))
+
+
+def update_all_temperatures(cubes: list[Cube], store: CubeStore):
+    """Update temperatures for all cubes based on their cycle history."""
+    for cube in cubes:
+        temp = compute_temperature(cube, store)
+        store.update_temperature(cube.id, temp)
+        cube.temperature = temp
+
+
+# ─── B24: Kaplan-Meier survie par cube ────────────────────────────────
+
+def kaplan_meier_survival(cube: Cube, store: CubeStore) -> float:
+    """
+    B24: Kaplan-Meier survival estimate. S(t) = Π(1 - d_i/n_i)
+    High S(t) = cube stays hot. Low S(t) = cooling down.
+    Scanniello 2011.
+    """
+    cycles = store.get_cycles(cube.id)
+    if not cycles:
+        return 1.0
+
+    total = len(cycles)
+    survival = 1.0
+
+    for i, cycle in enumerate(cycles):
+        n_i = total - i
+        d_i = 0 if cycle['success'] else 1
+        if n_i > 0:
+            survival *= (1.0 - d_i / n_i)
+
+    return max(0.0, min(1.0, survival))
+
+
+# ─── B25: Danger Theory filtre ───────────────────────────────────────
+
+def detect_dead_code(cube: Cube, all_cubes: list[Cube],
+                     deps: list['Dependency']) -> bool:
+    """
+    B25: Detect dead code (Matzinger 2002).
+    Dead = never imported, never called, never referenced.
+    """
+    is_target = any(d.target == cube.file_origin for d in deps)
+    is_source = any(d.source == cube.file_origin for d in deps)
+
+    if not is_target and not is_source:
+        return True
+
+    content = cube.content.strip()
+    lines = content.split('\n')
+
+    # Mostly comments
+    comment_lines = sum(1 for l in lines if l.strip().startswith('#') or l.strip().startswith('//'))
+    if len(lines) > 0 and comment_lines / len(lines) > 0.8:
+        return True
+
+    # Mostly TODO/FIXME
+    todo_count = sum(1 for l in lines if any(tag in l.upper() for tag in ('TODO', 'FIXME', 'HACK', 'XXX')))
+    if len(lines) > 2 and todo_count / len(lines) > 0.5:
+        return True
+
+    return False
+
+
+def filter_dead_cubes(cubes: list[Cube], deps: list['Dependency']) -> tuple[list[Cube], list[Cube]]:
+    """B25: Filter dead cubes. Returns (active, dead)."""
+    active, dead = [], []
+    for cube in cubes:
+        if detect_dead_code(cube, cubes, deps):
+            dead.append(cube)
+        else:
+            active.append(cube)
+    return active, dead
+
+
+# ─── B26: God's Number calcul ────────────────────────────────────────
+
+@dataclass
+class GodsNumberResult:
+    """Result of God's Number computation."""
+    gods_number: int
+    total_cubes: int
+    hot_cubes: list[Cube]
+    dead_cubes: list[Cube]
+    threshold: float
+    bounds: dict
+
+
+def compute_gods_number(cubes: list[Cube], store: CubeStore,
+                        deps: list['Dependency'],
+                        threshold: float = 0.5) -> GodsNumberResult:
+    """
+    B26: God's Number = |{cubes : Hotness > τ AND active}|
+
+    Bounds: LRC ≥ n/10 (Gopalan 2012), MERA ~ O(log N) (Vidal 2007),
+    Percolation fc = <k>/(<k²>-<k>) (Callaway 2000).
+    """
+    import math
+
+    update_all_temperatures(cubes, store)
+    active, dead = filter_dead_cubes(cubes, deps)
+    hot = [c for c in active if c.temperature > threshold]
+
+    n = len(active)
+    lrc_lower = max(1, n // 10)
+    mera_estimate = max(1, int(math.log2(max(n, 1))))
+
+    degrees = []
+    for c in active:
+        neighbors = store.get_neighbors(c.id)
+        degrees.append(len(neighbors))
+
+    if degrees:
+        k_mean = sum(degrees) / len(degrees)
+        k2_mean = sum(d * d for d in degrees) / len(degrees)
+        fc = k_mean / (k2_mean - k_mean) if (k2_mean - k_mean) > 0 else 1.0
+    else:
+        fc = 1.0
+
+    return GodsNumberResult(
+        gods_number=len(hot),
+        total_cubes=len(cubes),
+        hot_cubes=hot,
+        dead_cubes=dead,
+        threshold=threshold,
+        bounds={
+            'lrc_lower': lrc_lower,
+            'mera_estimate': mera_estimate,
+            'percolation_fc': fc,
+            'n_active': n,
+            'n_dead': len(dead),
+        }
+    )
