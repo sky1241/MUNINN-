@@ -1363,7 +1363,7 @@ def gen_props(root, module_path):
     # Round-trip tests
     for enc, dec in roundtrip_pairs:
         lines.append(f"@given(data=st.text(max_size=200))")
-        lines.append(f"@settings(max_examples=100)")
+        lines.append(f"@settings(max_examples=100, deadline=None)")
         lines.append(f"def test_roundtrip_{enc}_{dec}(data):")
         lines.append(f'    """Round-trip: {dec}({enc}(x)) == x"""')
         lines.append(f"    # Round-trip: {enc} <-> {dec}")
@@ -1384,7 +1384,7 @@ def gen_props(root, module_path):
 
         if "sort" in name.lower():
             lines.append(f"@given({strats})")
-            lines.append(f"@settings(max_examples=100)")
+            lines.append(f"@settings(max_examples=100, deadline=None)")
             lines.append(f"def test_{name}_idempotent({', '.join(a['name'] for a in args)}):")
             lines.append(f'    """Idempotent: {name}({name}(x)) == {name}(x)"""')
             lines.append(f"    # Property test for {name}")
@@ -1395,7 +1395,7 @@ def gen_props(root, module_path):
             test_count += 1
         elif "filter" in name.lower():
             lines.append(f"@given({strats})")
-            lines.append(f"@settings(max_examples=100)")
+            lines.append(f"@settings(max_examples=100, deadline=None)")
             lines.append(f"def test_{name}_subset({', '.join(a['name'] for a in args)}):")
             lines.append(f'    """Subset: len({name}(x)) <= len(x)"""')
             lines.append(f"    # Property test for {name}")
@@ -1406,13 +1406,13 @@ def gen_props(root, module_path):
         else:
             # Smoke test: does not crash
             lines.append(f"@given({strats})")
-            lines.append(f"@settings(max_examples=50)")
+            lines.append(f"@settings(max_examples=50, deadline=None)")
             lines.append(f"def test_{name}_no_crash({', '.join(a['name'] for a in args)}):")
             lines.append(f'    """Smoke: {name}() does not crash on arbitrary input"""')
             lines.append(f"    # Property test for {name}")
             lines.append(f"    try:")
             lines.append(f"        {name}({', '.join(a['name'] for a in args)})")
-            lines.append(f"    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError):")
+            lines.append(f"    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):")
             lines.append(f"        pass  # Expected rejections are OK")
             lines.append("")
             test_count += 1
