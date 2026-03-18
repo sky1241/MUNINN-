@@ -111,8 +111,9 @@ def load_codebook(repo_path: Path = None) -> dict:
             mycelium_rules = m.get_compression_rules()
             learned_fillers = m.get_learned_fillers()
             learned_abbreviations = m.get_learned_abbreviations()
-        except ImportError:
-            pass
+        except (ImportError, Exception) as e:
+            if not isinstance(e, ImportError):
+                print(f"WARNING: mycelium load failed: {e}", file=sys.stderr)
 
     return {
         "text_rules": text_rules,
@@ -1775,7 +1776,13 @@ def _llm_compress(text: str, context: str = "") -> str:
 
 
 def compress_file(filepath: Path) -> str:
-    text = filepath.read_text(encoding="utf-8")
+    filepath = Path(filepath)
+    if not filepath.exists():
+        return ""
+    try:
+        text = filepath.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return ""
 
     # Redact secrets before any compression
     for pat in _SECRET_PATTERNS:

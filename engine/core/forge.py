@@ -955,6 +955,10 @@ def predict_defects(root, weeks=8):
     """Predict which files are most likely to have bugs based on git history.
     Uses: relative churn, change frequency, change bursts, author count,
     bugfix frequency, LOC, recency. Nagappan & Ball ICSE 2005."""
+    root = Path(root)
+    if not root.is_dir():
+        print(f"  Not a directory: {root}")
+        return
     # Get tracked Python files
     tracked = _run_git(root, "ls-files", "*.py")
     if not tracked:

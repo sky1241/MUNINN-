@@ -273,6 +273,8 @@ def normalize_content(text: str) -> str:
     - Collapse multiple blank lines to single
     """
     # Normalize newlines
+    if text is None:
+        text = ""
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     # Strip trailing whitespace per line
     lines = [line.rstrip() for line in text.split('\n')]

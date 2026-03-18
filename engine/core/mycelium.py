@@ -142,7 +142,15 @@ class Mycelium:
         self.data["connections"] and self.data["fusions"] are empty dicts
         (backward compat stubs — all real access goes through self._db).
         """
-        self._db = MyceliumDB(self.db_path)
+        try:
+            self._db = MyceliumDB(self.db_path)
+        except Exception as e:
+            print(f"WARNING: corrupted mycelium DB, recreating: {e}", file=sys.stderr)
+            try:
+                self.db_path.unlink(missing_ok=True)
+            except PermissionError:
+                pass
+            self._db = MyceliumDB(self.db_path)
         data = {
             "version": int(self._db.get_meta("version", "1")),
             "repo": self._db.get_meta("repo", self.repo_path.name),
@@ -278,7 +286,9 @@ class Mycelium:
             return
         clean = []
         for c in concepts:
-            c = c.lower().strip()
+            if c is None:
+                continue
+            c = str(c).lower().strip()
             if len(c) >= self.MIN_CONCEPT_LEN and c not in _STOPWORDS:
                 clean.append(c)
 
@@ -931,7 +941,9 @@ class Mycelium:
         Returns list of (related_concept, weight) sorted by effective weight.
         In federated mode, prioritizes connections from the current zone.
         """
-        concept = concept.lower().strip()
+        if not concept:
+            return []
+        concept = str(concept).lower().strip()
         if self._db is not None:
             # Fetch more than needed to allow zone reordering, but cap to avoid full scan
             neighbors = self._db.neighbors(concept, top_n=max(50, top_n * 10))
