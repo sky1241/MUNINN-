@@ -275,6 +275,10 @@ def normalize_content(text: str) -> str:
     # Normalize newlines
     if text is None:
         text = ""
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+    if not isinstance(text, str):
+        text = str(text)
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     # Strip trailing whitespace per line
     lines = [line.rstrip() for line in text.split('\n')]
@@ -1713,10 +1717,10 @@ def feed_mycelium_from_results(results: list[ReconstructionResult],
             mechanical_pairs.append(pair)
 
             # Feed to mycelium if available
-            if hasattr(mycelium, 'observe'):
+            if hasattr(mycelium, 'observe_text'):
                 combined = f"{cube.content}\n{neighbor.content}"
                 try:
-                    mycelium.observe(combined, zone=cube.file_origin)
+                    mycelium.observe_text(combined)
                 except Exception:
                     pass  # Graceful if mycelium not fully initialized
 

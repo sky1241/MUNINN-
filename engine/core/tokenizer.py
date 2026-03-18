@@ -17,6 +17,9 @@ def count_tokens(text: str) -> tuple[int, str]:
     """Count tokens in text. Returns (count, method_name)."""
     global _tiktoken_enc, _method
 
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+
     # Try tiktoken (cached encoder)
     if _method is None or _method == "tiktoken":
         try:

@@ -455,6 +455,21 @@ def save_tree(tree):
         raise
 
 
+def _atomic_json_write(path: Path, data, indent: int = 2):
+    """Atomic JSON write via tempfile + os.replace. Prevents corruption on concurrent read."""
+    import tempfile, os
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with open(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=indent)
+        os.replace(tmp_path, str(path))
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+
 def compute_hash(filepath: Path) -> str:
     """SHA-256 hash of file content (first 8 hex chars)."""
     if not filepath.exists():
@@ -884,7 +899,7 @@ def _tfidf_relevance(query: str, documents: dict) -> dict:
 
 # ── COMPRESS ──────────────────────────────────────────────────────
 
-def compress_line(line: str) -> str:
+def compress_line(line) -> str:
     """Compress a single line using all compression layers.
 
     Layer 1: Markdown stripping
@@ -897,6 +912,8 @@ def compress_line(line: str) -> str:
     """
     if not line:
         return line or ""
+    if not isinstance(line, str):
+        line = str(line) if line is not None else ""
     # P14/P25: tagged lines (D>/B>/F>/E>/A>) are already classified — skip compression
     if len(line) >= 2 and line[:2] in ("B>", "E>", "F>", "D>", "A>"):
         return line
@@ -2329,10 +2346,10 @@ def boot(query: str = "") -> str:
             if name == "root":
                 continue
             filepath = TREE_DIR / node["file"]
-            if filepath.exists():
+            try:
                 branch_contents[name] = filepath.read_text(encoding="utf-8", errors="ignore")
-            else:
-                # Fallback: use tags as content
+            except (FileNotFoundError, OSError):
+                # Fallback: use tags as content (file may have been pruned concurrently)
                 branch_contents[name] = " ".join(node.get("tags", []))
 
         # TF-IDF relevance scores (0-1)
@@ -3502,8 +3519,10 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
     contents = {}
     for name, node in cold_branches:
         filepath = TREE_DIR / node["file"]
-        if filepath.exists():
+        try:
             contents[name] = filepath.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            pass
 
     if len(contents) < 2:
         return []
@@ -5374,12 +5393,12 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
         if fed % FEED_CHUNK_SIZE == 0:
             m.save()
             progress[file_key] = {"offset": offset + fed, "size": file_size}
-            progress_path.write_text(json.dumps(progress, indent=2), encoding="utf-8")
+            _atomic_json_write(progress_path, progress)
 
     # Final save
     m.save()
     progress[file_key] = {"offset": len(texts), "size": file_size}
-    progress_path.write_text(json.dumps(progress, indent=2), encoding="utf-8")
+    _atomic_json_write(progress_path, progress)
     return len(texts), texts  # Return texts for reuse by compress_transcript
 
 
@@ -5657,7 +5676,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
 
     # Track which transcript produced which .mn
     dedup_state[source_key] = {"size": source_size, "mn_file": mn_path.name, "timestamp": timestamp}
-    dedup_path.write_text(json.dumps(dedup_state, indent=2), encoding="utf-8")
+    _atomic_json_write(dedup_path, dedup_state)
 
     # Keep only last 10 session files (oldest get pruned)
     session_files = sorted(sessions_dir.glob("*.mn"))
@@ -5784,7 +5803,7 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
 
     # Keep last 50 sessions in index (even if .mn files are pruned to 10)
     index = index[-50:]
-    index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False), encoding="utf-8")
+    _atomic_json_write(index_path, index)
 
     return _danger_score  # I1: propagate to grow_branches_from_session
 
@@ -5944,7 +5963,7 @@ def _extract_error_fixes(repo_path: Path, compressed: str):
 
     # Keep last 50 entries
     errors = errors[-50:]
-    errors_path.write_text(json.dumps(errors, indent=2, ensure_ascii=False), encoding="utf-8")
+    _atomic_json_write(errors_path, errors)
 
 
 def _surface_known_errors(repo_path: Path, query: str) -> str:
@@ -6380,8 +6399,7 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
         oldest = sorted(dedup.keys())[:len(dedup) - 20]  # session_ids are timestamp-based, lexicographic = chronological
         for k in oldest:
             del dedup[k]
-    dedup_path.parent.mkdir(parents=True, exist_ok=True)
-    dedup_path.write_text(json.dumps(dedup, indent=2), encoding="utf-8")
+    _atomic_json_write(dedup_path, dedup)
 
 
 def feed_history(repo_path: Path):
