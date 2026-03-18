@@ -3,8 +3,8 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
 Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Security (doctor+vault+TLS) + Test Intelligence. AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 6824 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 993 + vault.py 374 + sync_tls.py 312 = 13826 total
-Tests: 67 files, 375 tests + 7 properties + 6 boundary fuzz = 388 checks, 0 FAIL. Intelligence framework: 6-layer adaptive.
+Engine: muninn.py 7172 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 997 + vault.py 373 + sync_tls.py 310 = 14175 total
+Tests: 77 files, 595 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
 
 ## Anatomie
 
@@ -1454,7 +1454,7 @@ Muninn = premier outil construit depuis le cote boucher.
 
 ## Cube Muninn — Resilience par Destruction/Reconstruction (2026-03-18) [DONE]
 
-Implementation complete: engine/core/cube.py (2400+ lignes), 216 tests (7 fichiers), 0 FAIL.
+Implementation complete: engine/core/cube.py (2713 lignes), 242 tests (9 fichiers), 0 FAIL.
 8 commits: B1-B6 → B7-B8 → B11-B15 → B16-B19 → B23-B26 → B27-B31 → B32-B39 → B9-B10+B20-B22.
 
 Architecture systeme de resilience de code par destruction/reconstruction atomique.
