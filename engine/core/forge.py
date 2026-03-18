@@ -498,7 +498,7 @@ def bisect_test(root, test_name):
     try:
         log = subprocess.run(["git", "log", "--oneline", "-20"],
                             capture_output=True, text=True, cwd=str(root))
-        commits = [l.split()[0] for l in log.stdout.strip().split("\n") if l.strip()]
+        commits = [l.split()[0] for l in log.stdout.strip().split("\n") if l.strip() and l.split()]
     except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
         print(f"  Git not available or not a git repo: {e}")
         return

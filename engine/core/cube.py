@@ -2204,6 +2204,7 @@ def laplacian_rg_grouping(cubes: list[Cube], store: CubeStore,
     k = min(n_groups, n - 1)
     try:
         eigenvalues, eigenvectors = eigh(L)
+        k = min(k, eigenvectors.shape[1] - 1)
         features = eigenvectors[:, 1:k+1]
     except Exception:
         features = np.random.randn(n, k)
@@ -2279,7 +2280,7 @@ def cheeger_constant(cubes: list[Cube], store: CubeStore) -> dict:
     h_lower = lambda_2 / 2.0
     h_upper = math.sqrt(2.0 * max(lambda_2, 0.0))
 
-    if len(eigenvectors) > 1:
+    if eigenvectors.shape[1] > 1:
         fiedler = eigenvectors[:, 1]
         abs_fiedler = np.abs(fiedler)
         bottleneck_indices = np.argsort(abs_fiedler)[:max(1, n // 10)]

@@ -215,7 +215,7 @@ class SyncServer:
 
         except Exception as e:
             try:
-                _send_msg(conn, {"status": "error", "message": str(e)})
+                _send_msg(conn, {"status": "error", "message": "internal error"})
             except Exception:
                 pass
         finally:

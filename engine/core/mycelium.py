@@ -642,8 +642,9 @@ class Mycelium:
             if n < 50:
                 return set()
             # SQL-native 2-step: find threshold, then filter
-            n_concepts = self._db._conn.execute(
-                "SELECT COUNT(*) FROM concepts").fetchone()[0]
+            row = self._db._conn.execute(
+                "SELECT COUNT(*) FROM concepts").fetchone()
+            n_concepts = row[0] if row else 0
             if n_concepts < 20:
                 return set()
             cutoff = max(1, int(n_concepts * self.DEGREE_FILTER_PERCENTILE))
@@ -777,9 +778,10 @@ class Mycelium:
 
                 # P20.4: immortal connections (3+ zones) skip decay
                 if self.federated:
-                    nz = self._db._conn.execute(
+                    nz_row = self._db._conn.execute(
                         "SELECT COUNT(*) FROM edge_zones WHERE a=? AND b=?",
-                        (a_id, b_id)).fetchone()[0]
+                        (a_id, b_id)).fetchone()
+                    nz = nz_row[0] if nz_row else 0
                     if nz >= self.IMMORTAL_ZONE_THRESHOLD:
                         continue
 

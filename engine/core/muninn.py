@@ -2427,7 +2427,7 @@ def boot(query: str = "") -> str:
                                     overlap = bwords & set(action_probs.keys())
                                     if overlap:
                                         alignment = sum(action_probs[w] for w in overlap)
-                                        prior = nodes[bname].get("usefulness") or 0.5
+                                        prior = nodes.get(bname, {}).get("usefulness") or 0.5
                                         # V3B fix: sigmoid instead of exp(-1/x) which kills signal
                                         posterior = (alignment / (alignment + 1.0)) * prior
                                         btom_scores[bname] = min(1.0, posterior)
@@ -2597,7 +2597,7 @@ def boot(query: str = "") -> str:
                 for _sname in _tag_to_branches.get(_t, []):
                     if _sname == name:
                         continue
-                    _other_temp = nodes[_sname].get("temperature", 0.5)
+                    _other_temp = nodes.get(_sname, {}).get("temperature", 0.5)
                     _coupling_sum += 0.02 * (_other_temp - _my_temp)
                     break  # one coupling per tag
             total += max(-0.02, min(0.02, _coupling_sum))  # V1A: tuned by retrieval benchmark
@@ -5519,6 +5519,8 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
         chunk_size = max(5, len(texts) // 6)  # ~6 sections max
         for i in range(0, len(texts), chunk_size):
             chunk = texts[i:i + chunk_size]
+            if not chunk:
+                continue
             # Use first non-trivial line as header
             header_text = chunk[0][:80].strip()
             header_text = re.sub(r"[#\n]", "", header_text)
@@ -5634,8 +5636,8 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
         except (json.JSONDecodeError, OSError):
             dedup_state = {}
 
-    source_key = jsonl_path.name if 'jsonl_path' in dir() else timestamp
-    source_size = jsonl_path.stat().st_size if 'jsonl_path' in dir() and jsonl_path.exists() else 0
+    source_key = jsonl_path.name if jsonl_path else timestamp
+    source_size = jsonl_path.stat().st_size if jsonl_path and jsonl_path.exists() else 0
     prev_entry = dedup_state.get(source_key, {})
 
     if prev_entry.get("size", 0) == source_size and source_size > 0:
@@ -5766,7 +5768,7 @@ def _update_session_index(repo_path: Path, mn_path: Path, compressed: str, ratio
             )
             entry["sentiment"]["quadrant"] = affect["quadrant"]
             entry["sentiment"]["label"] = affect["label"]
-        except ImportError:
+        except (ImportError, KeyError, TypeError):
             pass
 
     # Dedup by filename
