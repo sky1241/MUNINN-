@@ -1944,7 +1944,8 @@ def build_tree(filepath: Path):
         if len(root_lines) > BUDGET["root_lines"]:
             print(f"  WARNING: root {len(root_lines)} > {BUDGET['root_lines']}, force-splitting")
             overflow_refs = []
-            while len(root_lines) > BUDGET["root_lines"] - len(overflow_refs) and len(overflow_refs) < BUDGET["root_lines"] - 1:
+            max_overflow = BUDGET["root_lines"] // 4  # Cap refs to 25% of root, keep 75% content
+            while len(root_lines) > BUDGET["root_lines"] - len(overflow_refs) and len(overflow_refs) < max_overflow:
                 overflow = root_lines.pop()
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
@@ -6012,7 +6013,7 @@ def _surface_known_errors(repo_path: Path, query: str) -> str:
         error_words = set(re.findall(r'[a-z0-9_]+', entry["error"].lower()))
         query_words = set(re.findall(r'[a-z0-9_]+', query_lower))
         overlap = error_words & query_words
-        if len(overlap) >= 1:  # at least 1 word match
+        if len(overlap) >= 2:  # at least 2 word match (1 was too noisy)
             hints.append(f"KNOWN: {entry['error']} -> FIX: {entry['fix']}")
     return "\n".join(hints[:3])  # max 3 hints
 
@@ -6258,13 +6259,7 @@ def feed_from_hook(repo_path: Path):
 
     # Lock to prevent concurrent hooks (Stop + PreCompact) from racing on tree.json
     try:
-        lock = _MuninnLock(repo_path, "hook", timeout=120)
-    except TimeoutError:
-        print(f"MUNINN {hook_event}: lock timeout, skipping", file=sys.stderr)
-        return
-
-    with lock:
-        try:
+        with _MuninnLock(repo_path, "hook", timeout=120):
             # 0. P36: Update usefulness scores before anything modifies the tree
             _update_usefulness(repo_path, jsonl_path)
 
@@ -6304,11 +6299,13 @@ def feed_from_hook(repo_path: Path):
 
             # P20c: Ensure repo is registered for cross-repo discovery
             _register_repo(repo_path)
-        except Exception as e:
-            _hook_log(repo_path, f"CRITICAL feed_from_hook crashed: {e}")
-            print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
+    except TimeoutError:
+        print(f"MUNINN {hook_event}: lock timeout, skipping", file=sys.stderr)
+    except Exception as e:
+        _hook_log(repo_path, f"CRITICAL feed_from_hook crashed: {e}")
+        print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -6348,13 +6345,10 @@ def feed_from_stop_hook(repo_path: Path):
 
     # Lock to prevent concurrent stop hooks from racing
     try:
-        lock = _MuninnLock(repo_path, "hook", timeout=120)
+        with _MuninnLock(repo_path, "hook", timeout=120):
+            _feed_from_stop_hook_locked(repo_path, jsonl_path, session_id)
     except TimeoutError:
         print("MUNINN STOP: lock timeout, skipping", file=sys.stderr)
-        return
-
-    with lock:
-        _feed_from_stop_hook_locked(repo_path, jsonl_path, session_id)
 
 
 def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: str):
@@ -6464,56 +6458,19 @@ def feed_history(repo_path: Path):
             print("WARNING: fed_transcripts.json corrupted, resetting", file=sys.stderr)
 
     # Lock to prevent concurrent history + hook from racing
-    try:
-        lock = _MuninnLock(repo_path, "hook", timeout=120)
-    except TimeoutError:
-        print("MUNINN HISTORY: lock timeout, skipping", file=sys.stderr)
-        return
-
     m = Mycelium(repo_path)
     total_messages = 0
     new_files = 0
 
-    with lock:
-        for project_dir in project_dirs:
-            # Top-level .jsonl files (main sessions)
-            for jsonl_file in sorted(project_dir.glob("*.jsonl")):
-                file_key = str(jsonl_file)
-                if file_key in fed:
-                    continue
-
-                texts = parse_transcript(jsonl_file)
-                if texts:
-                    m.start_session()
-                    for text in texts:
-                        m.observe_text(text)
-                    total_messages += len(texts)
-                    new_files += 1
-
-                fed.add(file_key)
-
-                # Checkpoint every file (not all-or-nothing)
-                if new_files % 3 == 0:
-                    m.save()
-                    with open(fed_path, "w", encoding="utf-8") as f:
-                        json.dump(sorted(fed), f, indent=2)
-
-            # Subagent transcripts (top-level and inside session subdirectories)
-            subagent_dirs = []
-            top_sa = project_dir / "subagents"
-            if top_sa.exists():
-                subagent_dirs.append(top_sa)
-            for sub_dir in project_dir.iterdir():
-                if sub_dir.is_dir():
-                    sa_dir = sub_dir / "subagents"
-                    if sa_dir.exists():
-                        subagent_dirs.append(sa_dir)
-
-            for sa_dir in subagent_dirs:
-                for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
+    try:
+        with _MuninnLock(repo_path, "hook", timeout=120):
+            for project_dir in project_dirs:
+                # Top-level .jsonl files (main sessions)
+                for jsonl_file in sorted(project_dir.glob("*.jsonl")):
                     file_key = str(jsonl_file)
                     if file_key in fed:
                         continue
+
                     texts = parse_transcript(jsonl_file)
                     if texts:
                         m.start_session()
@@ -6521,14 +6478,49 @@ def feed_history(repo_path: Path):
                             m.observe_text(text)
                         total_messages += len(texts)
                         new_files += 1
+
                     fed.add(file_key)
 
-        if total_messages > 0:
-            m.save()
+                    # Checkpoint every file (not all-or-nothing)
+                    if new_files % 3 == 0:
+                        m.save()
+                        with open(fed_path, "w", encoding="utf-8") as f:
+                            json.dump(sorted(fed), f, indent=2)
 
-        # Save fed list
-        with open(fed_path, "w", encoding="utf-8") as f:
-            json.dump(sorted(fed), f, indent=2)
+                # Subagent transcripts (top-level and inside session subdirectories)
+                subagent_dirs = []
+                top_sa = project_dir / "subagents"
+                if top_sa.exists():
+                    subagent_dirs.append(top_sa)
+                for sub_dir in project_dir.iterdir():
+                    if sub_dir.is_dir():
+                        sa_dir = sub_dir / "subagents"
+                        if sa_dir.exists():
+                            subagent_dirs.append(sa_dir)
+
+                for sa_dir in subagent_dirs:
+                    for jsonl_file in sorted(sa_dir.glob("*.jsonl")):
+                        file_key = str(jsonl_file)
+                        if file_key in fed:
+                            continue
+                        texts = parse_transcript(jsonl_file)
+                        if texts:
+                            m.start_session()
+                            for text in texts:
+                                m.observe_text(text)
+                            total_messages += len(texts)
+                            new_files += 1
+                        fed.add(file_key)
+
+            if total_messages > 0:
+                m.save()
+
+            # Save fed list
+            with open(fed_path, "w", encoding="utf-8") as f:
+                json.dump(sorted(fed), f, indent=2)
+    except TimeoutError:
+        print("MUNINN HISTORY: lock timeout, skipping", file=sys.stderr)
+        return
 
     print(f"=== MUNINN FEED HISTORY ===")
     print(f"  New transcripts: {new_files}")
@@ -6645,61 +6637,59 @@ def feed_watch(repo_path: Path):
     print(f"MUNINN WATCH: {len(changed)} transcript(s) changed")
 
     # Lock to prevent concurrent watch + hook from racing
+    fed_count = 0
     try:
-        lock = _MuninnLock(repo_path, "hook", timeout=120)
+        with _MuninnLock(repo_path, "hook", timeout=120):
+            for jsonl_path in changed:
+                try:
+                    _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
+
+                    # Step 1: Feed mycelium (chunked + resumable — survives timeout)
+                    count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
+                    print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
+
+                    # Step 2: Compress transcript (reuse parsed texts)
+                    mn_path, _sent = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
+
+                    # Step 3: Auto-segment into branches
+                    if mn_path:
+                        grow_branches_from_session(mn_path, session_sentiment=_sent)
+
+                    # Save state AFTER full pipeline (feed+compress+grow) succeeds
+                    ck = changed_keys.get(str(jsonl_path))
+                    if ck:
+                        state[ck[0]] = ck[1]
+                    state_path.parent.mkdir(parents=True, exist_ok=True)
+                    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+                    fed_count += 1
+                    _hook_log(repo_path, f"WATCH fed ok {jsonl_path.name}: {count} msgs")
+                except Exception as e:
+                    print(f"  WATCH error on {jsonl_path.name}: {e}", file=sys.stderr)
+                    _hook_log(repo_path, f"WATCH error {jsonl_path.name}: {e}")
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+
+            if fed_count > 0:
+                # Refresh tree
+                tree = load_tree()
+                refresh_tree_metadata(tree)
+                save_tree(tree)
+
+                # Sync to meta-mycelium
+                try:
+                    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+                    from mycelium import Mycelium
+                    m = Mycelium(repo_path)
+                    pushed = m.sync_to_meta()
+                    print(f"  SYNC: {pushed} connections -> meta-mycelium")
+                except Exception as e:
+                    print(f"  SYNC warning: {e}", file=sys.stderr)
+
+                _register_repo(repo_path)
     except TimeoutError:
         print("MUNINN WATCH: lock timeout, skipping", file=sys.stderr)
         return
-
-    fed_count = 0
-    with lock:
-        for jsonl_path in changed:
-            try:
-                _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
-
-                # Step 1: Feed mycelium (chunked + resumable — survives timeout)
-                count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
-                print(f"  FEED: {count} messages -> mycelium ({jsonl_path.name})")
-
-                # Step 2: Compress transcript (reuse parsed texts)
-                mn_path, _sent = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
-
-                # Step 3: Auto-segment into branches
-                if mn_path:
-                    grow_branches_from_session(mn_path, session_sentiment=_sent)
-
-                # Save state AFTER full pipeline (feed+compress+grow) succeeds
-                ck = changed_keys.get(str(jsonl_path))
-                if ck:
-                    state[ck[0]] = ck[1]
-                state_path.parent.mkdir(parents=True, exist_ok=True)
-                state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-                fed_count += 1
-                _hook_log(repo_path, f"WATCH fed ok {jsonl_path.name}: {count} msgs")
-            except Exception as e:
-                print(f"  WATCH error on {jsonl_path.name}: {e}", file=sys.stderr)
-                _hook_log(repo_path, f"WATCH error {jsonl_path.name}: {e}")
-                import traceback
-                traceback.print_exc(file=sys.stderr)
-
-        if fed_count > 0:
-            # Refresh tree
-            tree = load_tree()
-            refresh_tree_metadata(tree)
-            save_tree(tree)
-
-            # Sync to meta-mycelium
-            try:
-                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-                from mycelium import Mycelium
-                m = Mycelium(repo_path)
-                pushed = m.sync_to_meta()
-                print(f"  SYNC: {pushed} connections -> meta-mycelium")
-            except Exception as e:
-                print(f"  SYNC warning: {e}", file=sys.stderr)
-
-            _register_repo(repo_path)
 
     _hook_log(repo_path, f"WATCH done: {fed_count}/{len(changed)} transcript(s) fed")
 

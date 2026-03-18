@@ -536,10 +536,14 @@ def bisect_test(root, test_name):
             good_idx = mid
 
     # Return to original
-    subprocess.run(["git", "checkout", "-", "--quiet"], cwd=str(root),
-                   capture_output=True)
-    subprocess.run(["git", "stash", "pop", "--quiet"], cwd=str(root),
-                   capture_output=True)
+    checkout_result = subprocess.run(["git", "checkout", "-", "--quiet"], cwd=str(root),
+                                    capture_output=True)
+    if checkout_result.returncode != 0:
+        print(f"  WARNING: git checkout failed (rc={checkout_result.returncode}), working tree may be detached")
+    stash_result = subprocess.run(["git", "stash", "pop", "--quiet"], cwd=str(root),
+                                 capture_output=True)
+    if stash_result.returncode != 0:
+        print(f"  WARNING: git stash pop failed — your changes are still in stash. Run 'git stash pop' manually.")
 
     bad_commit = commits[bad_idx]
     # Get commit details
