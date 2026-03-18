@@ -19,7 +19,7 @@ REPOS_PATH = Path.home() / ".muninn" / "repos.json"
 
 def main():
     if not MUNINN.exists():
-        print(f"WATCHDOG: muninn.py not found at {MUNINN}", file=sys.stderr)
+        print(f"WATCHDOG: muninn.py not found", file=sys.stderr)
         return
 
     if not REPOS_PATH.exists():
@@ -46,7 +46,7 @@ def main():
                 creationflags=creationflags,
             )
             if result.returncode != 0:
-                print(f"WATCHDOG: {name} failed (exit {result.returncode}): {result.stderr[:200]}", file=sys.stderr)
+                print(f"WATCHDOG: {name} failed (exit {result.returncode})", file=sys.stderr)
         except subprocess.TimeoutExpired:
             print(f"WATCHDOG: {name} timed out (5min)", file=sys.stderr)
         except Exception as e:

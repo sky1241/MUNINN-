@@ -17,6 +17,11 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
+try:
+    from .wal_monitor import WALMonitor
+except ImportError:
+    from wal_monitor import WALMonitor
+
 # Reference date for epoch-days encoding (S2)
 _EPOCH_REF = date(2020, 1, 1)
 
@@ -69,6 +74,7 @@ class MyceliumDB:
         self._conn.execute("PRAGMA mmap_size=100000000")
         self._conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
         self._setup_tables()
+        self._wal_monitor = WALMonitor(self._conn)
         self._concept_cache = {}  # name -> id (in-memory for fast lookups)
         self._load_concept_cache()
 
@@ -184,6 +190,7 @@ class MyceliumDB:
             (key, value)
         )
         self._conn.commit()
+        self._wal_monitor.on_write()
 
     # ── Connection operations ────────────────────────────────────────
 
@@ -257,6 +264,7 @@ class MyceliumDB:
                 (a_id, b_id, zone)
             )
         self._conn.commit()  # H3 fix: persist writes immediately
+        self._wal_monitor.on_write()
 
     def get_all_connections(self) -> dict:
         """Get all connections as a dict (for compatibility with existing code).
@@ -363,6 +371,7 @@ class MyceliumDB:
                 fused_at = ?
         """, (a_id, b_id, form, strength, fused_at, strength, form, fused_at))
         self._conn.commit()  # H3 fix: persist writes immediately
+        self._wal_monitor.on_write()
 
     def delete_connection(self, concept_a: str, concept_b: str):
         """Delete a connection and its fusion if any."""
@@ -376,6 +385,7 @@ class MyceliumDB:
         self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
         self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
         self._conn.commit()  # H4 fix: persist deletes immediately
+        self._wal_monitor.on_write()
 
     def update_connection_count(self, concept_a: str, concept_b: str, new_count: int):
         """Update a connection's count directly."""
@@ -389,6 +399,7 @@ class MyceliumDB:
             "UPDATE edges SET count=? WHERE a=? AND b=?", (new_count, a_id, b_id)
         )
         self._conn.commit()  # M11 fix: persist count update
+        self._wal_monitor.on_write()
 
     # ── Iteration helpers (cursor-based, low RAM) ────────────────────
 
@@ -480,6 +491,7 @@ class MyceliumDB:
             (a_id, b_id, zone)
         )
         self._conn.commit()  # M12 fix: persist zone addition
+        self._wal_monitor.on_write()
 
     # ── Top/sorted queries ───────────────────────────────────────────
 
@@ -650,6 +662,7 @@ class MyceliumDB:
     def commit(self):
         """Explicit commit."""
         self._conn.commit()
+        self._wal_monitor.on_write()
 
     def close(self):
         """Close the database connection and checkpoint WAL."""
@@ -676,7 +689,7 @@ class MyceliumDB:
         """
         import sys
 
-        print(f"Migrating {json_path} -> {db_path} ...", file=sys.stderr)
+        print(f"Migrating database...", file=sys.stderr)
         t0 = time.time()
 
         with open(json_path, encoding="utf-8") as f:

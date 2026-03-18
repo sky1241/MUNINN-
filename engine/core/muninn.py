@@ -169,6 +169,19 @@ _SECRET_PATTERNS = [
 ]
 
 
+def _safe_path(filepath) -> str:
+    """Sanitize path for display — never show absolute paths.
+
+    Shows max 2 parent directories for context without exposing full tree.
+    '/home/user/projects/myapp/src/main.py' -> 'myapp/src/main.py'
+    """
+    p = Path(filepath)
+    parts = p.parts
+    if len(parts) <= 3:
+        return str(p.name)
+    return str(Path(*parts[-3:]))
+
+
 def get_codebook():
     global _CB, _CB_REPO
     if _CB is None or _CB_REPO != _REPO_PATH:
@@ -330,7 +343,7 @@ def scan_repo(repo_path: Path):
         json.dump(local, f, ensure_ascii=False, indent=2)
 
     print(f"  Generated: {len(encode)} local codes")
-    print(f"  Saved: {local_path}")
+    print(f"  Saved: {_safe_path(local_path)}")
 
     # Show top 15
     print(f"\n  Top codes:")
@@ -414,7 +427,7 @@ def init_tree():
         "# MUNINN|codebook=v0.1\n", encoding="utf-8"
     )
 
-    print(f"  Tree initialized: {TREE_DIR}")
+    print(f"  Tree initialized: {_safe_path(TREE_DIR)}")
     return tree
 
 
@@ -1887,7 +1900,7 @@ def build_tree(filepath: Path):
     compressed = compress_file(filepath)
     comp_lines = compressed.split("\n")
 
-    print(f"\n  Source: {filepath}")
+    print(f"\n  Source: {filepath.name}")
     print(f"  Original: {filepath.stat().st_size} chars")
     print(f"  Compressed: {len(compressed)} chars")
     print(f"  Lines: {len(comp_lines)}")
@@ -2059,7 +2072,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
                 # Context-Aware Merge: append + resolve contradictions + dedup
                 filepath = TREE_DIR / node["file"]
                 if not filepath.exists():
-                    print(f"  WARNING: branch file missing: {filepath}, creating new branch", file=sys.stderr)
+                    print(f"  WARNING: branch file missing: {_safe_path(filepath)}, creating new branch", file=sys.stderr)
                     continue  # M5 fix: fall through to create new branch instead of losing data
                 old = filepath.read_text(encoding="utf-8")
                 # Combine old + new content
@@ -4191,7 +4204,7 @@ def prune(dry_run: bool = True):
                 try:
                     filepath.unlink()
                 except OSError as e:
-                    print(f"  WARNING: could not delete {filepath}: {e}", file=sys.stderr)
+                    print(f"  WARNING: could not delete {_safe_path(filepath)}: {e}", file=sys.stderr)
                     continue  # don't remove node if file still exists
             del nodes[name]
             if name in nodes.get("root", {}).get("children", []):
@@ -4902,7 +4915,7 @@ def _register_repo(repo_path: Path):
         except OSError:
             pass
         raise
-    print(f"  Repo registered: {repo_key} -> {repo_str}")
+    print(f"  Repo registered: {repo_key}")
 
 
 def _generate_bridge_hook(repo_path: Path, engine_core_dir: Path) -> Path:
@@ -6258,7 +6271,7 @@ def feed_from_hook(repo_path: Path):
 
     jsonl_path = Path(transcript_path)
     if not jsonl_path.exists():
-        print(f"MUNINN {hook_event}: transcript not found: {jsonl_path}", file=sys.stderr)
+        print(f"MUNINN {hook_event}: transcript not found: {_safe_path(jsonl_path)}", file=sys.stderr)
         sys.exit(1)
 
     print(f"MUNINN {hook_event}: processing {jsonl_path.name} for {repo_path.name}", file=sys.stderr)
@@ -6332,7 +6345,7 @@ def feed_from_stop_hook(repo_path: Path):
     try:
         hook_input = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
-        print(f"MUNINN STOP: invalid JSON on stdin: {raw[:200]}", file=sys.stderr)
+        print(f"MUNINN STOP: invalid JSON on stdin", file=sys.stderr)
         return
 
     # Note: stop_hook_active is always True in Claude Code Stop events.
@@ -6344,7 +6357,7 @@ def feed_from_stop_hook(repo_path: Path):
         return
     jsonl_path = Path(transcript_path)
     if not jsonl_path.exists():
-        print(f"MUNINN STOP: transcript not found: {jsonl_path}", file=sys.stderr)
+        print(f"MUNINN STOP: transcript not found: {_safe_path(jsonl_path)}", file=sys.stderr)
         return
 
     session_id = hook_input.get("session_id", jsonl_path.stem)
@@ -6437,7 +6450,7 @@ def feed_history(repo_path: Path):
     # Find the project's transcript directory
     claude_dir = Path.home() / ".claude" / "projects"
     if not claude_dir.exists():
-        print(f"ERROR: {claude_dir} not found")
+        print(f"ERROR: claude projects directory not found")
         sys.exit(1)
 
     # Find matching project dirs (repo name encoded in path)
@@ -6582,7 +6595,7 @@ def feed_watch(repo_path: Path):
     # Find project dir
     claude_dir = Path.home() / ".claude" / "projects"
     if not claude_dir.exists():
-        print(f"MUNINN WATCH: {claude_dir} not found", file=sys.stderr)
+        print(f"MUNINN WATCH: claude projects directory not found", file=sys.stderr)
         return
 
     repo_name = repo_path.name
@@ -6712,7 +6725,7 @@ def ingest(filepath: Path, repo_path: Path):
         files_to_ingest = [filepath]
         print(f"=== MUNINN INGEST: {filepath.name} ===")
     else:
-        print(f"ERROR: {filepath} not found")
+        print(f"ERROR: {_safe_path(filepath)} not found")
         return
 
     total_branches = 0
@@ -7052,7 +7065,7 @@ def main():
             sys.exit(1)
         _REPO_PATH = Path(args.file).resolve()
         if not _REPO_PATH.exists():
-            print(f"ERROR: path does not exist: {_REPO_PATH}", file=sys.stderr)
+            print(f"ERROR: path does not exist: {_safe_path(_REPO_PATH)}", file=sys.stderr)
             sys.exit(1)
         _refresh_tree_paths()
         bootstrap_mycelium(Path(args.file))
@@ -7177,7 +7190,7 @@ def main():
         if args.file:
             fpath = Path(args.file)
             if not fpath.exists():
-                print(f"ERROR: file not found: {args.file}", file=sys.stderr)
+                print(f"ERROR: file not found: {_safe_path(args.file)}", file=sys.stderr)
                 sys.exit(1)
             text = fpath.read_text(encoding="utf-8")
         else:
@@ -7192,7 +7205,7 @@ def main():
             sys.exit(1)
         fp = Path(args.file)
         if not fp.exists():
-            print(f"ERROR: {fp} not found")
+            print(f"ERROR: {_safe_path(fp)} not found")
             sys.exit(1)
         verify_compression(fp)
         return
@@ -7203,7 +7216,7 @@ def main():
 
     filepath = Path(args.file)
     if not filepath.exists():
-        print(f"ERROR: {filepath} not found")
+        print(f"ERROR: {_safe_path(filepath)} not found")
         sys.exit(1)
 
     if args.command == "read":

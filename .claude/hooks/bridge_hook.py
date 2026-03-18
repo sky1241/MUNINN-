@@ -10,6 +10,7 @@ Target: <0.5s total execution time.
 import json
 import sys
 import os
+from pathlib import Path
 
 def main():
     try:
@@ -23,7 +24,7 @@ def main():
 
     repo_path = hook_input.get("cwd", os.getcwd())
 
-    engine_core = "C:/Users/ludov/MUNINN-/engine/core"
+    engine_core = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")
     if engine_core not in sys.path:
         sys.path.insert(0, engine_core)
 

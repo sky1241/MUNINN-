@@ -48,6 +48,15 @@ import math
 import textwrap
 import shlex
 
+def _safe_path(filepath) -> str:
+    """Sanitize path for display — never show absolute paths."""
+    p = Path(filepath)
+    parts = p.parts
+    if len(parts) <= 3:
+        return str(p.name)
+    return str(Path(*parts[-3:]))
+
+
 # === CONFIG ===
 BUGS_FILE = "BUGS.md"
 FORGE_DIR = ".forge"
@@ -740,7 +749,7 @@ def snapshot_capture(root, cmd_str):
     snap_path = snap_dir / f"{name}.golden"
     meta_path = snap_dir / f"{name}.meta.json"
 
-    print(f"  Capturing: {cmd_str}")
+    print(f"  Capturing: {cmd_str[:60]}...")
     try:
         result = subprocess.run(shlex.split(cmd_str, posix=(os.name != "nt")),
                                capture_output=True,
@@ -967,7 +976,7 @@ def predict_defects(root, weeks=8):
     bugfix frequency, LOC, recency. Nagappan & Ball ICSE 2005."""
     root = Path(root)
     if not root.is_dir():
-        print(f"  Not a directory: {root}")
+        print(f"  Not a directory: {_safe_path(root)}")
         return
     # Get tracked Python files
     tracked = _run_git(root, "ls-files", "*.py")
@@ -1199,7 +1208,7 @@ def minimize_input(root, test_name, input_file):
     if not input_path.is_absolute():
         input_path = root / input_path
     if not input_path.exists():
-        print(f"  File not found: {input_path}")
+        print(f"  File not found: {_safe_path(input_path)}")
         return
 
     ext = input_path.suffix
@@ -1277,14 +1286,14 @@ def gen_props(root, module_path):
     if not mod_path.is_absolute():
         mod_path = root / mod_path
     if not mod_path.exists():
-        print(f"  File not found: {mod_path}")
+        print(f"  File not found: {_safe_path(mod_path)}")
         return
 
     source = mod_path.read_text(encoding="utf-8", errors="replace")
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
-        print(f"  Syntax error in {mod_path}: {e}")
+        print(f"  Syntax error in {_safe_path(mod_path)}: {e}")
         return
 
     # Collect all public functions (top-level only, skip class methods)
@@ -1809,14 +1818,14 @@ def measure_robustness(root):
         print(f"\n  FRAGILE modules (high external coupling):")
         for mod, c in fragile[:10]:
             f_path = modules.get(mod, mod)
-            print(f"    {c:.0%} external  {f_path}")
+            print(f"    {c:.0%} external  {_safe_path(f_path)}")
 
     robust = [(m, c) for m, c in ranked if c == 0.0 and degree[m] > 0]
     if robust:
         print(f"\n  ROBUST modules (zero external coupling):")
         for mod, c in robust[:5]:
             f_path = modules.get(mod, mod)
-            print(f"    {degree[mod]} internal imports  {f_path}")
+            print(f"    {degree[mod]} internal imports  {_safe_path(f_path)}")
 
     print(f"{bar}\n")
     return q

@@ -24,6 +24,13 @@ from pathlib import Path
 from typing import Optional
 
 from engine.core.tokenizer import count_tokens, token_count
+try:
+    from engine.core.wal_monitor import WALMonitor
+except ImportError:
+    try:
+        from .wal_monitor import WALMonitor
+    except ImportError:
+        from wal_monitor import WALMonitor
 
 # ─── B1: Scanner de repo ──────────────────────────────────────────────
 
@@ -518,9 +525,14 @@ class CubeStore:
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(CUBE_DB_SCHEMA)
         self.conn.commit()
+        self._wal_monitor = WALMonitor(self.conn)
 
     def close(self):
         if self.conn:
+            try:
+                self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
             self.conn.close()
             self.conn = None
 
@@ -543,6 +555,7 @@ class CubeStore:
              cube.score, cube.temperature, cube.token_count)
         )
         self.conn.commit()
+        self._wal_monitor.on_write()
 
     def save_cubes(self, cubes: list[Cube]):
         """Batch insert cubes."""
@@ -554,6 +567,7 @@ class CubeStore:
               c.level, c.score, c.temperature, c.token_count) for c in cubes]
         )
         self.conn.commit()
+        self._wal_monitor.on_write()
 
     def get_cube(self, cube_id: str) -> Optional[Cube]:
         """Get a cube by ID."""
@@ -620,6 +634,7 @@ class CubeStore:
                           (cube_id, cube_id))
         self.conn.execute("DELETE FROM cycles WHERE cube_id = ?", (cube_id,))
         self.conn.commit()
+        self._wal_monitor.on_write()
 
     # ── Neighbors ──
 
@@ -632,6 +647,7 @@ class CubeStore:
             (cube_id, neighbor_id, weight, ntype)
         )
         self.conn.commit()
+        self._wal_monitor.on_write()
 
     def get_neighbors(self, cube_id: str) -> list[tuple[str, float, str]]:
         """Get neighbors of a cube. Returns [(neighbor_id, weight, type)]."""
@@ -653,6 +669,7 @@ class CubeStore:
             (cube_id, cycle_num, int(success), reconstruction, perplexity, time.time())
         )
         self.conn.commit()
+        self._wal_monitor.on_write()
 
     def get_cycles(self, cube_id: str) -> list[dict]:
         """Get cycle history for a cube."""
@@ -671,6 +688,7 @@ class CubeStore:
             (temperature, cube_id)
         )
         self.conn.commit()
+        self._wal_monitor.on_write()
 
     def update_score(self, cube_id: str, score: float):
         """Update a cube's hotness score."""
@@ -679,6 +697,7 @@ class CubeStore:
             (score, cube_id)
         )
         self.conn.commit()
+        self._wal_monitor.on_write()
 
 
 # ─── B7: AST parser multi-langage ────────────────────────────────────
