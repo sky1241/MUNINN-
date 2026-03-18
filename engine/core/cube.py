@@ -1396,7 +1396,8 @@ def compute_ncd(a: str, b: str) -> float:
 def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
                           provider: LLMProvider,
                           cycle_num: int = 1,
-                          ncd_threshold: float = 0.3) -> list[ReconstructionResult]:
+                          ncd_threshold: float = 0.3,
+                          config: 'CubeConfig | None' = None) -> list[ReconstructionResult]:
     """
     Run one cycle of destruction/reconstruction on all cubes.
 
@@ -1424,6 +1425,16 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
         # Record in store
         store.record_cycle(cube.id, cycle_num, result.success,
                            result.reconstruction, result.perplexity)
+
+        # Quarantine: sauvegarder le bloc corrompu avant guérison
+        _q_enabled = config.quarantine_enabled if config else True
+        if _q_enabled and result.success and not result.exact_match:
+            quarantine_path = os.path.join(
+                os.path.expanduser('~'), '.muninn', 'quarantine.jsonl')
+            record_quarantine(
+                quarantine_path, cube,
+                result.reconstruction, result.exact_match,
+                result.ncd_score)
 
         # Update temperature: hotter if reconstruction fails
         if result.success:
@@ -1954,6 +1965,7 @@ class CubeConfig:
     max_neighbors: int = 9
     db_path: str = '.muninn/cube.db'
     allowed_providers: list[str] = field(default_factory=lambda: ['ollama', 'mock'])
+    quarantine_enabled: bool = False
 
     @classmethod
     def load(cls, config_path: str = '.muninn/config.json') -> 'CubeConfig':
@@ -1973,6 +1985,7 @@ class CubeConfig:
                 max_neighbors=cube_data.get('max_neighbors', 9),
                 db_path=cube_data.get('db_path', '.muninn/cube.db'),
                 allowed_providers=cube_data.get('allowed_providers', ['ollama', 'mock']),
+                quarantine_enabled=cube_data.get('quarantine_enabled', False),
             )
         except (json.JSONDecodeError, OSError):
             return cls()
@@ -1996,6 +2009,7 @@ class CubeConfig:
             'max_neighbors': self.max_neighbors,
             'db_path': self.db_path,
             'allowed_providers': self.allowed_providers,
+            'quarantine_enabled': self.quarantine_enabled,
         }
         with open(config_path, 'w') as f:
             json.dump(data, f, indent=2)
@@ -2091,6 +2105,7 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
                 cubes, store, provider,
                 cycle_num=cycle_num,
                 ncd_threshold=config.ncd_threshold,
+                config=config,
             )
             all_results.extend(results)
 
@@ -2101,6 +2116,15 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
             feed_mycelium_from_results(results, cubes)
 
         successes = sum(1 for r in all_results if r.success)
+
+        # Auto-activation quarantaine: si convergence (100% success rate sur
+        # le dernier cycle = toutes reconstructions exactes), on active la quarantaine
+        if not config.quarantine_enabled and all_results:
+            last_cycle = [r for r in all_results[-len(cubes):]]  # dernier cycle
+            if last_cycle and all(r.success for r in last_cycle):
+                config.quarantine_enabled = True
+                config.save()
+
         return {
             'cycles': cycles,
             'cubes_tested': len(cubes),
@@ -2108,6 +2132,7 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
             'successes': successes,
             'failures': len(all_results) - successes,
             'success_rate': successes / len(all_results) if all_results else 0.0,
+            'quarantine_enabled': config.quarantine_enabled,
         }
     finally:
         store.close()
@@ -2606,6 +2631,48 @@ def auto_repair(store: CubeStore, failed_files: list[str],
             break
 
     return patches
+
+
+# ─── Quarantine — photographier la blessure avant de guérir ──────────
+
+def record_quarantine(quarantine_path: str, cube: 'Cube',
+                      reconstruction: str, exact_match: bool,
+                      ncd_score: float = None):
+    """
+    Sauvegarde le contenu corrompu d'un bloc AVANT régénération.
+    Garde la preuve pour forensic : contenu original, hash attendu vs trouvé,
+    contenu reconstruit, timestamp.
+
+    Stocké en JSONL dans .muninn/quarantine.jsonl
+    """
+    import time as time_mod
+    import hashlib as hashlib_mod
+    import threading
+    os.makedirs(os.path.dirname(quarantine_path) or '.', exist_ok=True)
+
+    corrupted_hash = hashlib_mod.sha256(cube.content.encode()).hexdigest()
+
+    entry = {
+        'timestamp': time_mod.time(),
+        'date': time_mod.strftime('%Y-%m-%d %H:%M:%S'),
+        'cube_id': cube.id,
+        'file_origin': cube.file_origin,
+        'line_start': cube.line_start,
+        'line_end': cube.line_end,
+        'expected_sha256': cube.sha256,
+        'found_sha256': corrupted_hash,
+        'corrupted_content': cube.content,
+        'reconstructed_content': reconstruction,
+        'exact_match': exact_match,
+        'ncd_score': ncd_score,
+    }
+
+    if not hasattr(record_quarantine, '_lock'):
+        record_quarantine._lock = threading.Lock()
+    with record_quarantine._lock:
+        with open(quarantine_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + '\n')
+    return entry
 
 
 # ─── B38: Feedback loop — anomalies → mycelium ────────────────────────

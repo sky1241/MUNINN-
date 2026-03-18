@@ -6887,7 +6887,7 @@ def main():
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
-        "lock", "unlock", "rekey", "trip", "think",
+        "lock", "unlock", "rekey", "trip", "think", "quarantine",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -7208,6 +7208,35 @@ def main():
             print(f"ERROR: {_safe_path(fp)} not found")
             sys.exit(1)
         verify_compression(fp)
+        return
+
+    if args.command == "quarantine":
+        quarantine_path = os.path.join(os.path.expanduser('~'), '.muninn', 'quarantine.jsonl')
+        if not os.path.exists(quarantine_path):
+            print("No quarantine entries found.")
+        else:
+            import json as _json
+            with open(quarantine_path, 'r', encoding='utf-8') as f:
+                entries = [_json.loads(line) for line in f if line.strip()]
+            if not entries:
+                print("Quarantine file exists but is empty.")
+            else:
+                print(f"=== Quarantine — {len(entries)} entries ===\n")
+                for i, e in enumerate(entries, 1):
+                    date = e.get('date', '?')
+                    cube_id = e.get('cube_id', '?')
+                    forigin = e.get('file_origin', '?')
+                    ncd = e.get('ncd_score', '?')
+                    expected = e.get('expected_sha256', '?')[:12]
+                    found = e.get('found_sha256', '?')[:12]
+                    print(f"  [{i}] {date} | {forigin} | NCD={ncd}")
+                    print(f"      cube: {cube_id}")
+                    print(f"      hash: {expected}... -> {found}...")
+                    corrupted = e.get('corrupted_content', '')
+                    if corrupted:
+                        preview = corrupted[:120].replace('\n', '\\n')
+                        print(f"      corrupted: {preview}")
+                    print()
         return
 
     if not args.file:
