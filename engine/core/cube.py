@@ -5,8 +5,9 @@ Cube Muninn — Code resilience through atomic destruction/reconstruction.
 The cube is the mycelium subdividing and testing its own knowledge.
 Scan → subdivide → destroy → reconstruct → validate → learn.
 
-Briques B1-B8, B11-B15: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
-Storage, AST, Neighbors, LLM Providers, FIM.
+Briques B1-B8, B11-B19: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
+Storage, AST, Neighbors, LLM Providers, FIM, Reconstruction, Validation,
+Scoring, NCD.
 """
 
 import ast as ast_module
@@ -1248,3 +1249,163 @@ class MockLLMProvider(LLMProvider):
                      max_tokens: int = 256) -> str:
         self._calls.append({'method': 'fim', 'prefix': prefix, 'suffix': suffix})
         return self._responses.get('fim', '# mock FIM result\npass')
+
+
+# ─── B16: Moteur de reconstruction ───────────────────────────────────
+
+@dataclass
+class ReconstructionResult:
+    """Result of a cube reconstruction attempt."""
+    cube_id: str
+    original_sha256: str
+    reconstruction: str
+    reconstruction_sha256: str
+    exact_match: bool
+    ncd_score: float      # 0.0 = identical, 1.0 = completely different
+    perplexity: float
+    success: bool         # exact_match OR ncd_score < threshold
+
+
+def reconstruct_cube(cube: Cube, neighbors: list[Cube],
+                     provider: LLMProvider,
+                     ncd_threshold: float = 0.3) -> ReconstructionResult:
+    """
+    B16: Reconstruct a cube using its neighbors + LLM.
+
+    1. Build prompt from neighbors context
+    2. Call LLM to reconstruct
+    3. Validate via SHA-256 (B17) and NCD fallback (B19)
+    4. Score perplexity (B18)
+    """
+    fim = FIMReconstructor(provider)
+    reconstruction = fim.reconstruct_with_neighbors(
+        cube, neighbors, max_tokens=cube.token_count * 3
+    )
+
+    # B17: SHA-256 validation
+    recon_sha256 = sha256_hash(reconstruction)
+    exact_match = (recon_sha256 == cube.sha256)
+
+    # B19: NCD fallback
+    ncd = compute_ncd(cube.content, reconstruction)
+
+    # B18: Perplexity scoring
+    perplexity = provider.get_perplexity(
+        "\n".join(n.content for n in neighbors[:3]),
+        cube.content
+    )
+
+    success = exact_match or ncd < ncd_threshold
+
+    return ReconstructionResult(
+        cube_id=cube.id,
+        original_sha256=cube.sha256,
+        reconstruction=reconstruction,
+        reconstruction_sha256=recon_sha256,
+        exact_match=exact_match,
+        ncd_score=ncd,
+        perplexity=perplexity,
+        success=success,
+    )
+
+
+# ─── B17: Validation SHA-256 ─────────────────────────────────────────
+
+def validate_reconstruction(original: str, reconstruction: str) -> bool:
+    """
+    B17: Validate reconstruction via SHA-256 comparison.
+
+    Both strings are normalized before hashing.
+    """
+    return sha256_hash(original) == sha256_hash(reconstruction)
+
+
+# ─── B18: Scoring perplexite (hotness) ───────────────────────────────
+
+def compute_hotness(cube: Cube, neighbors: list[Cube],
+                    provider: LLMProvider) -> float:
+    """
+    B18: Compute hotness score for a cube.
+
+    Hotness(cube) = -Σ log P_LLM(token_i | neighbors)
+    ≈ perplexity of cube content given neighbor context.
+
+    High hotness = irreconstructible = critical code.
+    1 LLM call instead of 11 destructions.
+    """
+    context = "\n".join(n.content for n in neighbors[:9])
+    return provider.get_perplexity(context, cube.content)
+
+
+# ─── B19: NCD fallback ───────────────────────────────────────────────
+
+def compute_ncd(a: str, b: str) -> float:
+    """
+    B19: Normalized Compression Distance.
+
+    NCD(a,b) = (C(ab) - min(C(a),C(b))) / max(C(a),C(b))
+
+    Returns 0.0 for identical strings, ~1.0 for completely different.
+    Uses zlib as compressor.
+    """
+    import zlib
+
+    if not a and not b:
+        return 0.0
+    if not a or not b:
+        return 1.0
+
+    a_bytes = a.encode('utf-8')
+    b_bytes = b.encode('utf-8')
+
+    ca = len(zlib.compress(a_bytes, 9))
+    cb = len(zlib.compress(b_bytes, 9))
+    cab = len(zlib.compress(a_bytes + b_bytes, 9))
+
+    ncd = (cab - min(ca, cb)) / max(ca, cb)
+    return max(0.0, min(1.0, ncd))  # Clamp to [0, 1]
+
+
+def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
+                          provider: LLMProvider,
+                          cycle_num: int = 1,
+                          ncd_threshold: float = 0.3) -> list[ReconstructionResult]:
+    """
+    Run one cycle of destruction/reconstruction on all cubes.
+
+    For each cube:
+    1. Get its neighbors from store
+    2. Reconstruct
+    3. Record result
+    4. Update temperature
+    """
+    results = []
+
+    for cube in cubes:
+        # Get neighbor cubes
+        neighbor_entries = store.get_neighbors(cube.id)
+        neighbor_cubes = []
+        for nid, weight, ntype in neighbor_entries:
+            n = store.get_cube(nid)
+            if n:
+                neighbor_cubes.append(n)
+
+        # Reconstruct
+        result = reconstruct_cube(cube, neighbor_cubes, provider, ncd_threshold)
+        results.append(result)
+
+        # Record in store
+        store.record_cycle(cube.id, cycle_num, result.success,
+                           result.reconstruction, result.perplexity)
+
+        # Update temperature: hotter if reconstruction fails
+        if result.success:
+            new_temp = max(0.0, cube.temperature - 0.1)
+        else:
+            new_temp = min(1.0, cube.temperature + 0.2)
+        store.update_temperature(cube.id, new_temp)
+        store.update_score(cube.id, result.perplexity)
+        cube.temperature = new_temp
+        cube.score = result.perplexity
+
+    return results
