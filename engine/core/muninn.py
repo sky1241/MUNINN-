@@ -457,7 +457,15 @@ def save_tree(tree):
     try:
         with open(fd, "w", encoding="utf-8") as f:
             json.dump(tree, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, str(TREE_META))
+        # Windows: os.replace can fail if target is open by another thread
+        for _attempt in range(3):
+            try:
+                os.replace(tmp_path, str(TREE_META))
+                break
+            except PermissionError:
+                time.sleep(0.05)
+        else:
+            os.replace(tmp_path, str(TREE_META))  # final attempt, let it raise
     except Exception:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)

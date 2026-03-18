@@ -513,7 +513,7 @@ class CubeStore:
     def __init__(self, db_path: str):
         self.db_path = db_path
         os.makedirs(os.path.dirname(db_path) or '.', exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(CUBE_DB_SCHEMA)
@@ -2608,8 +2608,12 @@ def record_anomaly(anomaly_path: str, file: str, metrics: dict,
         'label': label,
         'validated': False,
     }
-    with open(anomaly_path, 'a', encoding='utf-8') as f:
-        f.write(json.dumps(entry) + '\n')
+    import threading
+    if not hasattr(record_anomaly, '_lock'):
+        record_anomaly._lock = threading.Lock()
+    with record_anomaly._lock:
+        with open(anomaly_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + '\n')
     return entry
 
 
