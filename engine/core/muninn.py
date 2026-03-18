@@ -2489,15 +2489,16 @@ def boot(query: str = "") -> str:
             session_type = classify_session()
             stype = session_type.get("type", "unknown")
             if stype == "debug":
-                # Debug: boost recall (recent errors) + usefulness
+                # Debug: boost recall (recent errors), reduce rehearsal
                 w_recall = 0.20
-                w_usefulness = 0.15
+                w_usefulness = 0.10
                 w_rehearsal = 0.10
             elif stype == "explore":
                 # Explore: boost activation (spread wider)
                 w_activation = 0.30
                 w_relevance = 0.30
                 w_recall = 0.10
+                w_usefulness = 0.15
             elif stype == "review":
                 # Review: boost rehearsal (need to re-read)
                 w_rehearsal = 0.25
