@@ -77,7 +77,7 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 
 ## Etat du projet (mars 2026)
 - 43 features + 39 briques Cube, 11 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- Engine: muninn.py 7172 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 997 = 14175 lignes total
+- Engine: muninn.py 7180 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 997 = 16453 lignes total (10 fichiers)
 - mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
 - Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, Forge integration
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API

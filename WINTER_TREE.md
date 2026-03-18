@@ -3,21 +3,21 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security Hardening + Test Intelligence
 Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor). 49+ bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 7073 + mycelium.py 2610 + mycelium_db.py 993 + forge.py 1933 + vault.py 373 + sync_tls.py 310 + sentiment.py 154 + tokenizer.py 40 + watchdog.py 57 = 13543 total
-Tests: 66 test files + muninn_test_intelligence.py (adaptive 6-layer framework). 362+ checks, 0 FAIL
+Engine: muninn.py 7180 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 997 + forge.py 2019 + vault.py 373 + sync_tls.py 310 + sentiment.py 154 + tokenizer.py 40 + watchdog.py 57 = 16453 total
+Tests: 77 test files + muninn_test_intelligence.py (adaptive 6-layer framework). 595 tests, 0 FAIL
 
 ## Anatomie
 
 ```
         [CI + test_intelligence]   +6 Stratosphere (adaptive 6-layer test framework)
               |
-        [66 test files]            +5 Cime (tests/validation)
+        [77 test files]            +5 Cime (tests/validation)
        /    \
     [.mn]  [.mn]                   +4 Feuilles (memoire vivante)
       |      |
    [tree.json]                     +2 Branches (metadata arbre)
       |
-   [muninn.py]                     +1 Tronc (moteur principal, 7073 lignes)
+   [muninn.py]                     +1 Tronc (moteur principal, 7180 lignes)
       |
    [mycelium.py + mycelium_db.py]   0 SOL — le champignon vivant (SQLite)
       |
@@ -949,8 +949,8 @@ Zero dependance nouvelle (sqlite3 = stdlib, tiktoken deja present, anthropic dej
 **Bio-Vectors**: 16/16 impl + 3 immune layers, AUDIT V9-V9D: 49 bugs fixes
 **Security**: vault AES-256 + TLS 1.3 + mTLS + rate limiting + doctor self-audit
 **Cross-domain**: 7 pistes analysees, 4 isomorphismes LaTeX-confirmes (FORMULES_ETRANGERES.md)
-**Tests**: 66 fichiers, 362+ bornes, 0 FAIL + adaptive 6-layer intelligence framework
-**Engine total**: 12410 lignes (9 fichiers Python dans engine/core/)
+**Tests**: 77 fichiers, 595 tests, 0 FAIL + adaptive 6-layer intelligence framework
+**Engine total**: 16453 lignes (10 fichiers Python dans engine/core/)
 
 **Reste a faire**:
 - P21: publier sur PyPI (pyproject.toml pret, tests battery clean)
@@ -1403,7 +1403,7 @@ Bug found by PropertyChecker: compute_temperature() overflow (lines > max_lines 
 ### Bio-Vectors + Immune — ALL IMPLEMENTED (session 2026-03-15) [DONE]
 
 16 bio-vectors + 3 immune layers, all implemented, tested, actively called in boot/prune/feed.
-66 test files, 362+ checks, 0 FAIL.
+77 test files, 595 tests, 0 FAIL.
 
 TIER S (6 active): V10A VADER, V6B valence-decay, V6A emotional tagging, V2B TD-Learning, V5B cross-inhibition, V7B ACO pheromone.
 TIER A (6): V3B Bayesian ToM, V4B EWC Fisher, V9A+ fact regeneration, V9B Reed-Solomon sole-carrier, V11B Boyd-Richerson, V3A transitive inference.

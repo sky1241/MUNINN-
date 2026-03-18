@@ -771,9 +771,8 @@ def test_ablation():
     print(f"\n{'=' * 72}")
     print(f"ABLATION: {PASS} PASS, {FAIL} FAIL")
     print(f"{'=' * 72}")
-    return FAIL == 0
+    assert FAIL == 0, f"Ablation: {FAIL} tests failed"
 
 
 if __name__ == "__main__":
-    success = test_ablation()
-    sys.exit(0 if success else 1)
+    test_ablation()

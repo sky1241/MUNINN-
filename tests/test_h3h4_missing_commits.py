@@ -32,7 +32,6 @@ def test_upsert_connection_persists():
     assert conn is not None, "upsert_connection data lost after close!"
     assert conn["count"] >= 1, f"count={conn['count']}, expected >= 1"
     print("  PASS upsert_connection")
-    return True
 
 
 def test_upsert_fusion_persists():
@@ -53,7 +52,6 @@ def test_upsert_fusion_persists():
     print(f"  upsert_fusion persisted: {has}")
     assert has, "upsert_fusion data lost after close!"
     print("  PASS upsert_fusion")
-    return True
 
 
 def test_delete_connection_persists():
@@ -78,7 +76,6 @@ def test_delete_connection_persists():
     print(f"  delete_connection persisted: {conn is None}")
     assert conn is None, "delete_connection didn't persist!"
     print("  PASS delete_connection")
-    return True
 
 
 def test_update_connection_count_persists():
@@ -102,7 +99,6 @@ def test_update_connection_count_persists():
     print(f"  update_connection_count persisted: count={count} (expected 42)")
     assert count == 42, f"update_connection_count lost: count={count}"
     print("  PASS update_connection_count")
-    return True
 
 
 def test_add_zone_to_edge_persists():
@@ -126,15 +122,13 @@ def test_add_zone_to_edge_persists():
     print(f"  add_zone_to_edge persisted: zones={zones}")
     assert "test_zone" in zones, f"add_zone_to_edge lost: zones={zones}"
     print("  PASS add_zone_to_edge")
-    return True
 
 
 if __name__ == "__main__":
     print("## H3+H4+M11+M12 — missing commits in mycelium_db")
-    results = []
-    results.append(test_upsert_connection_persists())
-    results.append(test_upsert_fusion_persists())
-    results.append(test_delete_connection_persists())
-    results.append(test_update_connection_count_persists())
-    results.append(test_add_zone_to_edge_persists())
-    print(f"\n  ALL {sum(results)}/5 PASS" if all(results) else f"\n  FAIL: {5 - sum(results)} tests failed")
+    test_upsert_connection_persists()
+    test_upsert_fusion_persists()
+    test_delete_connection_persists()
+    test_update_connection_count_persists()
+    test_add_zone_to_edge_persists()
+    print("\n  ALL 5/5 PASS")

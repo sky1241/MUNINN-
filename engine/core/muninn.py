@@ -637,9 +637,12 @@ def read_node(name: str, _tree: dict | None = None) -> str:
     # Uses L10 (cue distillation) + L11 (rule extraction) — zero API calls.
     # MUST check BEFORE updating access (otherwise recall jumps to ~1.0)
     recall = _ebbinghaus_recall(node)
-    days_ago = _days_since(node.get("access_history", [time.strftime("%Y-%m-%d")])[-1]
-                           if node.get("access_history")
-                           else node.get("last_access", time.strftime("%Y-%m-%d")))
+    access_hist = node.get("access_history", [])
+    if access_hist:
+        last_date = access_hist[-1]
+    else:
+        last_date = node.get("last_access", time.strftime("%Y-%m-%d"))
+    days_ago = _days_since(last_date)
 
     node["access_count"] = node.get("access_count", 0) + 1
     node["last_access"] = time.strftime("%Y-%m-%d")
@@ -1030,6 +1033,8 @@ def compress_line(line: str) -> str:
     for pattern in sorted(cb["text_rules"].keys(), key=len, reverse=True):
         escaped = re.escape(pattern)
         # Only use \b around patterns that start/end with word characters
+        if not pattern:
+            continue
         prefix = r'\b' if re.match(r'\w', pattern[0]) else ''
         suffix = r'\b' if re.match(r'\w', pattern[-1]) else ''
         result = re.sub(rf'{prefix}{escaped}{suffix}', cb["text_rules"][pattern], result)
@@ -1037,10 +1042,13 @@ def compress_line(line: str) -> str:
     # L6: Mycelium-aware compression: strong fusions = predictable pairs.
     # Only drop shorter concept if it appears exactly once AND near the other.
     strong_fusions = {k: v for k, v in cb["mycelium_rules"].items()
-                      if v["strength"] >= 10}
+                      if v.get("strength", 0) >= 10}
     result_lower = result.lower()
     for key, rule in strong_fusions.items():
-        a, b = rule["concepts"]
+        concepts = rule.get("concepts", [])
+        if len(concepts) != 2:
+            continue
+        a, b = concepts
         if a in result_lower and b in result_lower:
             drop = b if len(b) <= len(a) else a
             keep = a if drop == b else b

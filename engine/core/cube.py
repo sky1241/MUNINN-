@@ -455,8 +455,8 @@ def subdivide_recursive(file_path: str, content: str,
         size = size // 8
         level += 1
 
-    # Direct subdivision to atomic level
-    return subdivide_file(file_path, content, target_tokens, level=0)
+    # Direct subdivision to calculated level
+    return subdivide_file(file_path, content, target_tokens, level=level)
 
 
 # ─── B6: Stockage index SQLite ────────────────────────────────────────
@@ -2550,15 +2550,15 @@ def auto_repair(store: CubeStore, failed_files: list[str],
                 if ncube:
                     context_parts.append(ncube.content)
 
-            prefix = "\n".join(context_parts[:len(context_parts)//2])
-            suffix = "\n".join(context_parts[len(context_parts)//2:])
+            mid = max(1, len(context_parts) // 2)
+            prefix = "\n".join(context_parts[:mid])
+            suffix = "\n".join(context_parts[mid:])
 
             patch_content = None
             if reconstructor:
                 try:
-                    patch_content = reconstructor.reconstruct(
-                        prefix=prefix, suffix=suffix,
-                        hint=f"# Reconstruct {cube.file_origin} L{cube.line_start}-{cube.line_end}"
+                    patch_content = reconstructor.reconstruct_fim(
+                        prefix=prefix, suffix=suffix
                     )
                 except Exception:
                     patch_content = None
@@ -2704,10 +2704,10 @@ def feed_anomalies_to_mycelium(anomaly_path: str, mycelium=None) -> list[dict]:
                 continue
 
     if mycelium and pairs:
-        for p in pairs:
-            try:
-                mycelium.observe_pair(p['source'], p['target'], weight=p['weight'])
-            except Exception:
-                pass
+        try:
+            concepts = [p['source'] for p in pairs] + [p['target'] for p in pairs]
+            mycelium.observe(list(set(concepts)))
+        except Exception:
+            pass
 
     return pairs

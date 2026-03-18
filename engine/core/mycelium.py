@@ -1088,7 +1088,7 @@ class Mycelium:
             return []
 
         # Normalize weights to [0,1] for meaningful chain products
-        inv_max = 1.0 / max_weight
+        inv_max = 1.0 / max(max_weight, 1e-10)
 
         # BFS with multiplicative path strength + relaxation
         # Unlike spreading activation, we track path products and allow
