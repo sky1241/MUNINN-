@@ -75,11 +75,11 @@ Le mycelium se subdivise et teste sa propre connaissance.
 33. Config securite (local_only flag)
 34. Multi-LLM hooks (ChatGPT, Copilot, Ollama, etc.)
 
-### VISU & FORGE (B35-B38)
-35. Tree heatmap (visu zones chaudes)
-36. Lien Muninn → Forge (temperature guide debug cible)
-37. Auto-repair (3 patchs → mutation test → propose)
-38. Feedback loop bugs → mycelium (prediction 6 mois)
+### VISU & FORGE (B35-B38) [DONE]
+35. Tree heatmap — cube_heatmap() groupe par fichier, avg/max temp, hot_count
+36. Forge link — fuse_risks() combine Forge risk (0.4) + Cube temp (0.6)
+37. Auto-repair — auto_repair() identifie cubes chauds, genere patchs FIM
+38. Feedback loop — record_anomaly() + feedback_loop_check() + feed_anomalies_to_mycelium()
 
 ### CLI (B39)
 39. Commandes: cube scan, cube run, cube status, cube heatmap, cube god
@@ -125,6 +125,8 @@ God's Number = |{cubes : Hotness > τ}|
 | B26 | fc = ⟨k⟩/(⟨k²⟩-⟨k⟩), God's ≥ n/10, ~ O(log N) | Callaway 00, Gopalan 12, Vidal 07 |
 | B30 | Δw = η × pre × post | Rule & O'Leary PNAS 2022 (Hebbian) |
 | B17+MSR | ~4 tokens/voisin pour exact repair (r=9,k=3) | Dimakis 2010 |
+| B36 | combined = 0.4×forge_risk + 0.6×cube_temp | Nagappan & Ball 2005 + Cube |
+| B38 | accuracy = correct/total over lookback_days | Feedback validation |
 
 ---
 
@@ -196,5 +198,5 @@ Fichier complet: `data/scan/cube_muninn_papers.txt` (Yggdrasil Engine WT3)
 | 7 | B27-B28 | Remontee niveaux + agregation |
 | 8 | B29-B31 | Feed mycelium + Hebbian + git blame |
 | 9 | B9-B10 + B20-B22 | Laplacian RG + Cheeger + BP + SP + Tononi |
-| 10 | B32-B35 | Scheduling + securite + hooks + heatmap |
-| 11 | B36-B39 | Forge link + auto-repair + feedback + CLI |
+| 10 | B32-B35 | Scheduling + securite + hooks + heatmap [DONE] |
+| 11 | B36-B39 | Forge link + auto-repair + feedback + CLI [DONE] |

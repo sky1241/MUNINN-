@@ -3,8 +3,8 @@
 Type: Baobab (gros tronc, petites branches)
 Phase: MATURE — pipeline complet, 3 TIERs valides
 Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Security (doctor+vault+TLS) + Test Intelligence. AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 6824 + mycelium.py 2610 + cube.py 2403 + mycelium_db.py 993 + vault.py 374 + sync_tls.py 312 = 13516 total
-Tests: 66 files, 349 tests + 7 properties + 6 boundary fuzz = 362 checks, 0 FAIL. Intelligence framework: 6-layer adaptive.
+Engine: muninn.py 6824 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 993 + vault.py 374 + sync_tls.py 312 = 13826 total
+Tests: 67 files, 375 tests + 7 properties + 6 boundary fuzz = 388 checks, 0 FAIL. Intelligence framework: 6-layer adaptive.
 
 ## Anatomie
 

@@ -1978,6 +1978,8 @@ class CubeConfig:
     def get_provider(self) -> LLMProvider:
         """Get an LLM provider based on config."""
         if self.local_only:
+            if 'mock' in self.allowed_providers:
+                return MockLLMProvider()
             if 'ollama' not in self.allowed_providers:
                 raise ValueError("local_only=True but 'ollama' not in allowed_providers")
             return OllamaProvider()
@@ -2401,3 +2403,311 @@ def tononi_degeneracy(cube: Cube, store: CubeStore,
     joint_mi = 1.0 - combined_ncd
 
     return max(0.0, individual_mi - joint_mi)
+
+
+# ─── B35: Cube Heatmap ────────────────────────────────────────────────
+
+def cube_heatmap(store: CubeStore) -> dict:
+    """
+    B35: Generate heatmap of cube temperatures grouped by file.
+    Returns {file: {count, hot_count, avg_temp, max_temp, cubes: [{id, temp, lines}]}}.
+    """
+    rows = store.conn.execute(
+        "SELECT file_origin, id, temperature, line_start, line_end "
+        "FROM cubes WHERE level = 0 ORDER BY file_origin, line_start"
+    ).fetchall()
+
+    heatmap = {}
+    for file_origin, cid, temp, ls, le in rows:
+        if file_origin not in heatmap:
+            heatmap[file_origin] = {
+                'count': 0, 'hot_count': 0, 'temps': [],
+                'cubes': [],
+            }
+        entry = heatmap[file_origin]
+        entry['count'] += 1
+        entry['temps'].append(temp)
+        if temp > 0.5:
+            entry['hot_count'] += 1
+        entry['cubes'].append({'id': cid, 'temp': temp, 'lines': f"L{ls}-{le}"})
+
+    # Compute aggregates
+    for f, entry in heatmap.items():
+        temps = entry.pop('temps')
+        entry['avg_temp'] = sum(temps) / len(temps) if temps else 0.0
+        entry['max_temp'] = max(temps) if temps else 0.0
+
+    return heatmap
+
+
+# ─── B36: Forge Link — fuse Cube + Forge risks ────────────────────────
+
+def fuse_risks(store: CubeStore, forge_root: str,
+               forge_weight: float = 0.4,
+               cube_weight: float = 0.6) -> list[dict]:
+    """
+    B36: Combine Forge defect prediction risk with Cube temperature.
+    combined_risk = forge_weight * forge_risk + cube_weight * cube_avg_temp.
+    Returns sorted list of {file, forge_risk, cube_temp, combined, hot_cubes}.
+    """
+    # Get cube temperatures per file
+    cube_temps = {}
+    rows = store.conn.execute(
+        "SELECT file_origin, AVG(temperature), MAX(temperature), COUNT(*), "
+        "SUM(CASE WHEN temperature > 0.5 THEN 1 ELSE 0 END) "
+        "FROM cubes WHERE level = 0 GROUP BY file_origin"
+    ).fetchall()
+    for file_origin, avg_t, max_t, count, hot in rows:
+        cube_temps[file_origin] = {
+            'avg_temp': avg_t, 'max_temp': max_t,
+            'count': count, 'hot_cubes': hot,
+        }
+
+    # Get Forge risks (capture printed output, parse risk scores)
+    forge_risks = _get_forge_risks(forge_root)
+
+    # Fuse
+    all_files = set(cube_temps.keys()) | set(forge_risks.keys())
+    results = []
+    for f in all_files:
+        fr = forge_risks.get(f, 0.0)
+        ct = cube_temps.get(f, {}).get('avg_temp', 0.0)
+        combined = forge_weight * fr + cube_weight * ct
+        results.append({
+            'file': f,
+            'forge_risk': fr,
+            'cube_temp': ct,
+            'combined': combined,
+            'hot_cubes': cube_temps.get(f, {}).get('hot_cubes', 0),
+        })
+
+    results.sort(key=lambda x: x['combined'], reverse=True)
+    return results
+
+
+def _get_forge_risks(forge_root: str) -> dict:
+    """Extract risk scores from Forge predict_defects (parse output)."""
+    import io
+    import contextlib
+    try:
+        from engine.core.forge import predict_defects
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            predict_defects(Path(forge_root))
+        output = buf.getvalue()
+        # Parse "  0.73  engine/core/muninn.py" lines
+        risks = {}
+        for line in output.split('\n'):
+            line = line.strip()
+            parts = line.split(maxsplit=1)
+            if len(parts) == 2:
+                try:
+                    risk = float(parts[0])
+                    fname = parts[1].strip()
+                    if fname.endswith('.py'):
+                        risks[fname] = risk
+                except ValueError:
+                    continue
+        return risks
+    except Exception:
+        return {}
+
+
+# ─── B37: Auto-repair — generate patches for failing tests ────────────
+
+def auto_repair(store: CubeStore, failed_files: list[str],
+                reconstructor=None, max_patches: int = 3) -> list[dict]:
+    """
+    B37: For failing test files, find hot cubes and generate repair patches.
+    1. Find cubes in failed files sorted by temperature (hottest first)
+    2. Generate up to max_patches reconstructions via FIM
+    3. Return patches with metadata
+
+    Args:
+        store: CubeStore with scanned cubes
+        failed_files: list of file paths that have test failures
+        reconstructor: FIMReconstructor instance (or None for dry-run)
+        max_patches: max patches to generate
+
+    Returns list of {cube_id, file, original, patch, temperature}.
+    """
+    patches = []
+
+    for fpath in failed_files:
+        cubes = store.get_cubes_by_file(fpath)
+        # Sort by temperature descending — hottest cubes first
+        cubes.sort(key=lambda c: c.temperature, reverse=True)
+
+        for cube in cubes[:max_patches]:
+            neighbors = store.get_neighbors(cube.id)
+            if not neighbors:
+                continue
+
+            # Build context from neighbors
+            context_parts = []
+            for nid, weight, _ in neighbors:
+                ncube = store.get_cube(nid)
+                if ncube:
+                    context_parts.append(ncube.content)
+
+            prefix = "\n".join(context_parts[:len(context_parts)//2])
+            suffix = "\n".join(context_parts[len(context_parts)//2:])
+
+            patch_content = None
+            if reconstructor:
+                try:
+                    patch_content = reconstructor.reconstruct(
+                        prefix=prefix, suffix=suffix,
+                        hint=f"# Reconstruct {cube.file_origin} L{cube.line_start}-{cube.line_end}"
+                    )
+                except Exception:
+                    patch_content = None
+
+            patches.append({
+                'cube_id': cube.id,
+                'file': cube.file_origin,
+                'line_start': cube.line_start,
+                'line_end': cube.line_end,
+                'original': cube.content,
+                'patch': patch_content,
+                'temperature': cube.temperature,
+                'neighbor_count': len(neighbors),
+            })
+
+            if len(patches) >= max_patches:
+                break
+        if len(patches) >= max_patches:
+            break
+
+    return patches
+
+
+# ─── B38: Feedback loop — anomalies → mycelium ────────────────────────
+
+def record_anomaly(anomaly_path: str, file: str, metrics: dict,
+                   cube_ids: list[str], label: str = "predicted_risky"):
+    """
+    B38: Record a file anomaly for future feedback validation.
+    Stored as JSONL in .muninn/anomalies.jsonl.
+    """
+    import time as time_mod
+    os.makedirs(os.path.dirname(anomaly_path) or '.', exist_ok=True)
+    entry = {
+        'timestamp': time_mod.time(),
+        'date': time_mod.strftime('%Y-%m-%d'),
+        'file': file,
+        'metrics': metrics,
+        'cube_ids': cube_ids,
+        'label': label,
+        'validated': False,
+    }
+    with open(anomaly_path, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(entry) + '\n')
+    return entry
+
+
+def feedback_loop_check(anomaly_path: str, repo_root: str,
+                        lookback_days: int = 180) -> dict:
+    """
+    B38: Check old anomalies — were they actually buggy?
+    Looks at git log for bugfix commits in predicted files.
+    Returns {total, correct, accuracy, details}.
+    """
+    import subprocess
+    import time as time_mod
+
+    if not os.path.exists(anomaly_path):
+        return {'total': 0, 'correct': 0, 'accuracy': 0.0, 'details': []}
+
+    cutoff = time_mod.time() - (lookback_days * 86400)
+    anomalies = []
+    with open(anomaly_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                if entry.get('timestamp', 0) < cutoff:
+                    anomalies.append(entry)
+            except json.JSONDecodeError:
+                continue
+
+    if not anomalies:
+        return {'total': 0, 'correct': 0, 'accuracy': 0.0, 'details': []}
+
+    details = []
+    correct = 0
+    for a in anomalies:
+        # Check if file had bugfix commits since the anomaly was recorded
+        since_date = a.get('date', '2020-01-01')
+        try:
+            result = subprocess.run(
+                ['git', 'log', '--oneline', f'--since={since_date}',
+                 '--grep=fix\\|bug\\|patch\\|repair', '--', a['file']],
+                capture_output=True, text=True, cwd=repo_root, timeout=10
+            )
+            bugfixes = [l for l in result.stdout.strip().split('\n') if l.strip()]
+        except Exception:
+            bugfixes = []
+
+        was_buggy = len(bugfixes) > 0
+        if was_buggy:
+            correct += 1
+
+        details.append({
+            'file': a['file'],
+            'predicted': a['label'],
+            'was_buggy': was_buggy,
+            'bugfix_count': len(bugfixes),
+            'date': a.get('date'),
+        })
+
+    total = len(anomalies)
+    return {
+        'total': total,
+        'correct': correct,
+        'accuracy': correct / total if total > 0 else 0.0,
+        'details': details,
+    }
+
+
+def feed_anomalies_to_mycelium(anomaly_path: str, mycelium=None) -> list[dict]:
+    """
+    B38: Feed validated anomaly patterns to mycelium for future prediction.
+    Creates concept pairs: (file_concept, 'bug_prone') with positive weight
+    for correct predictions, negative for false positives.
+    """
+    if not os.path.exists(anomaly_path):
+        return []
+
+    pairs = []
+    with open(anomaly_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                if not entry.get('validated'):
+                    continue
+                # Extract file concept (stem without extension)
+                file_concept = Path(entry['file']).stem
+                weight = 1.0 if entry.get('was_buggy') else -0.5
+                pairs.append({
+                    'source': file_concept,
+                    'target': 'bug_prone',
+                    'weight': weight,
+                    'type': 'feedback',
+                })
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+    if mycelium and pairs:
+        for p in pairs:
+            try:
+                mycelium.observe_pair(p['source'], p['target'], weight=p['weight'])
+            except Exception:
+                pass
+
+    return pairs
