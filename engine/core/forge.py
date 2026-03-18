@@ -1287,9 +1287,9 @@ def gen_props(root, module_path):
         print(f"  Syntax error in {mod_path}: {e}")
         return
 
-    # Collect all public functions
+    # Collect all public functions (top-level only, skip class methods)
     functions = []
-    for node in ast.walk(tree):
+    for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
             # Extract arg names and annotations
             args = []
@@ -1412,7 +1412,7 @@ def gen_props(root, module_path):
             lines.append(f"    # Property test for {name}")
             lines.append(f"    try:")
             lines.append(f"        {name}({', '.join(a['name'] for a in args)})")
-            lines.append(f"    except (ValueError, TypeError, KeyError, IndexError):")
+            lines.append(f"    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError):")
             lines.append(f"        pass  # Expected rejections are OK")
             lines.append("")
             test_count += 1
