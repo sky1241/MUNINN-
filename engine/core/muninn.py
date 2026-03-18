@@ -423,7 +423,16 @@ def load_tree():
         return init_tree()
     try:
         with open(TREE_META, encoding="utf-8") as f:
-            return json.load(f)
+            tree = json.load(f)
+        # Validate all node file paths to prevent path traversal
+        tree_dir_resolved = str(TREE_DIR.resolve())
+        for name, node in tree.get("nodes", {}).items():
+            if "file" in node:
+                resolved = str((TREE_DIR / node["file"]).resolve())
+                if not resolved.startswith(tree_dir_resolved):
+                    print(f"WARNING: path traversal in tree node '{name}': {node['file']}, sanitized", file=sys.stderr)
+                    node["file"] = f"{name}.mn"
+        return tree
     except (json.JSONDecodeError, ValueError) as e:
         # SAFETY: backup corrupted file before re-initializing.
         # Prevents data loss from disk errors or power loss mid-write.
@@ -468,6 +477,16 @@ def _atomic_json_write(path: Path, data, indent: int = 2):
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise
+
+
+def _safe_tree_path(filename: str) -> Path:
+    """Resolve a tree node filename into a safe path within TREE_DIR.
+    Prevents path traversal via crafted node['file'] values."""
+    filepath = (TREE_DIR / filename).resolve()
+    tree_dir_resolved = TREE_DIR.resolve()
+    if not str(filepath).startswith(str(tree_dir_resolved)):
+        raise ValueError(f"Path traversal blocked: {filename}")
+    return filepath
 
 
 def compute_hash(filepath: Path) -> str:
@@ -798,7 +817,7 @@ def _kicomp_filter(text: str, max_tokens: int) -> str:
     # Final pass: if still over, trim lines from the end (least important position)
     if final_tokens > max_tokens:
         final_lines = current.split("\n")
-        while final_lines and final_tokens > max_tokens:
+        while len(final_lines) > 1 and final_tokens > max_tokens:
             removed = final_lines.pop()
             final_tokens -= token_count(removed)
         current = "\n".join(final_lines)
@@ -6231,58 +6250,56 @@ def feed_from_hook(repo_path: Path):
     # Lock to prevent concurrent hooks (Stop + PreCompact) from racing on tree.json
     try:
         lock = _MuninnLock(repo_path, "hook", timeout=120)
-        lock.__enter__()
     except TimeoutError:
         print(f"MUNINN {hook_event}: lock timeout, skipping", file=sys.stderr)
         return
 
-    try:
-        # 0. P36: Update usefulness scores before anything modifies the tree
-        _update_usefulness(repo_path, jsonl_path)
-
-        # 1. Feed mycelium (co-occurrences)
-        count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
-        print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
-
-        # 2. Compress transcript into a .mn session file (reuse parsed texts)
-        mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
-
-        # 3. Auto-segment into tree branches (Brique 3)
-        # V6B: Pass session sentiment to branches for valence-modulated decay
-        if mn_path:
-            grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
-
-        # 4. Refresh tree temperatures
-        tree = load_tree()
-        refresh_tree_metadata(tree)
-        save_tree(tree)
-
-        # B15: Auto-prune when branches exceed cap
-        # Light prune: kills dead + dust only (no L9, no consolidation)
-        branch_count = len([n for n in tree["nodes"] if n != "root"])
-        if branch_count > 150:
-            print(f"MUNINN AUTO-PRUNE: {branch_count} branches > 150, running light prune", file=sys.stderr)
-            _light_prune()
-
-        # 5. P20b: Sync to meta-mycelium (cross-repo memory)
+    with lock:
         try:
-            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-            from mycelium import Mycelium
-            m = Mycelium(repo_path)
-            pushed = m.sync_to_meta()
-            print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-        except Exception as e:
-            print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+            # 0. P36: Update usefulness scores before anything modifies the tree
+            _update_usefulness(repo_path, jsonl_path)
 
-        # P20c: Ensure repo is registered for cross-repo discovery
-        _register_repo(repo_path)
-    except Exception as e:
-        _hook_log(repo_path, f"CRITICAL feed_from_hook crashed: {e}")
-        print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-    finally:
-        lock.__exit__(None, None, None)
+            # 1. Feed mycelium (co-occurrences)
+            count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
+            print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
+
+            # 2. Compress transcript into a .mn session file (reuse parsed texts)
+            mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
+
+            # 3. Auto-segment into tree branches (Brique 3)
+            # V6B: Pass session sentiment to branches for valence-modulated decay
+            if mn_path:
+                grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
+
+            # 4. Refresh tree temperatures
+            tree = load_tree()
+            refresh_tree_metadata(tree)
+            save_tree(tree)
+
+            # B15: Auto-prune when branches exceed cap
+            # Light prune: kills dead + dust only (no L9, no consolidation)
+            branch_count = len([n for n in tree["nodes"] if n != "root"])
+            if branch_count > 150:
+                print(f"MUNINN AUTO-PRUNE: {branch_count} branches > 150, running light prune", file=sys.stderr)
+                _light_prune()
+
+            # 5. P20b: Sync to meta-mycelium (cross-repo memory)
+            try:
+                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+                from mycelium import Mycelium
+                m = Mycelium(repo_path)
+                pushed = m.sync_to_meta()
+                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+            except Exception as e:
+                print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+
+            # P20c: Ensure repo is registered for cross-repo discovery
+            _register_repo(repo_path)
+        except Exception as e:
+            _hook_log(repo_path, f"CRITICAL feed_from_hook crashed: {e}")
+            print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -6323,15 +6340,12 @@ def feed_from_stop_hook(repo_path: Path):
     # Lock to prevent concurrent stop hooks from racing
     try:
         lock = _MuninnLock(repo_path, "hook", timeout=120)
-        lock.__enter__()
     except TimeoutError:
         print("MUNINN STOP: lock timeout, skipping", file=sys.stderr)
         return
 
-    try:
+    with lock:
         _feed_from_stop_hook_locked(repo_path, jsonl_path, session_id)
-    finally:
-        lock.__exit__(None, None, None)
 
 
 def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: str):
@@ -6443,7 +6457,6 @@ def feed_history(repo_path: Path):
     # Lock to prevent concurrent history + hook from racing
     try:
         lock = _MuninnLock(repo_path, "hook", timeout=120)
-        lock.__enter__()
     except TimeoutError:
         print("MUNINN HISTORY: lock timeout, skipping", file=sys.stderr)
         return
@@ -6452,7 +6465,7 @@ def feed_history(repo_path: Path):
     total_messages = 0
     new_files = 0
 
-    try:
+    with lock:
         for project_dir in project_dirs:
             # Top-level .jsonl files (main sessions)
             for jsonl_file in sorted(project_dir.glob("*.jsonl")):
@@ -6507,8 +6520,6 @@ def feed_history(repo_path: Path):
         # Save fed list
         with open(fed_path, "w", encoding="utf-8") as f:
             json.dump(sorted(fed), f, indent=2)
-    finally:
-        lock.__exit__(None, None, None)
 
     print(f"=== MUNINN FEED HISTORY ===")
     print(f"  New transcripts: {new_files}")
@@ -6627,13 +6638,12 @@ def feed_watch(repo_path: Path):
     # Lock to prevent concurrent watch + hook from racing
     try:
         lock = _MuninnLock(repo_path, "hook", timeout=120)
-        lock.__enter__()
     except TimeoutError:
         print("MUNINN WATCH: lock timeout, skipping", file=sys.stderr)
         return
 
     fed_count = 0
-    try:
+    with lock:
         for jsonl_path in changed:
             try:
                 _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
@@ -6681,8 +6691,6 @@ def feed_watch(repo_path: Path):
                 print(f"  SYNC warning: {e}", file=sys.stderr)
 
             _register_repo(repo_path)
-    finally:
-        lock.__exit__(None, None, None)
 
     _hook_log(repo_path, f"WATCH done: {fed_count}/{len(changed)} transcript(s) fed")
 

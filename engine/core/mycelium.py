@@ -2081,7 +2081,7 @@ class Mycelium:
                             INSERT INTO edges (a, b, count, first_seen, last_seen)
                             VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(a, b) DO UPDATE SET
-                                count = excluded.count,
+                                count = MAX(count, excluded.count),
                                 first_seen = MIN(first_seen, excluded.first_seen),
                                 last_seen = MAX(last_seen, excluded.last_seen)
                         """, (a_id, b_id, row[2], row[3], row[4]))
@@ -2124,7 +2124,7 @@ class Mycelium:
                             INSERT INTO edges (a, b, count, first_seen, last_seen)
                             VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(a, b) DO UPDATE SET
-                                count = excluded.count,
+                                count = MAX(count, excluded.count),
                                 first_seen = MIN(first_seen, excluded.first_seen),
                                 last_seen = MAX(last_seen, excluded.last_seen)
                         """, (a_id, b_id, conn["count"], fs, ls))

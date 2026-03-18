@@ -46,6 +46,7 @@ from collections import Counter
 import ast
 import math
 import textwrap
+import shlex
 
 # === CONFIG ===
 BUGS_FILE = "BUGS.md"
@@ -733,7 +734,7 @@ def snapshot_capture(root, cmd_str):
 
     print(f"  Capturing: {cmd_str}")
     try:
-        result = subprocess.run(cmd_str, shell=True, capture_output=True,
+        result = subprocess.run(shlex.split(cmd_str), capture_output=True,
                                text=True, cwd=str(root), timeout=60,
                                encoding="utf-8", errors="replace")
         output = result.stdout
@@ -784,7 +785,7 @@ def snapshot_check(root):
 
         # Re-run command
         try:
-            result = subprocess.run(meta["command"], shell=True,
+            result = subprocess.run(shlex.split(meta["command"]),
                                    capture_output=True, text=True,
                                    cwd=str(root), timeout=60,
                                    encoding="utf-8", errors="replace")
