@@ -5,14 +5,16 @@ Cube Muninn — Code resilience through atomic destruction/reconstruction.
 The cube is the mycelium subdividing and testing its own knowledge.
 Scan → subdivide → destroy → reconstruct → validate → learn.
 
-Briques B1-B6: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256, Storage.
+Briques B1-B8: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256, Storage, AST, Neighbors.
 """
 
+import ast as ast_module
 import hashlib
 import json
 import os
 import re
 import sqlite3
+from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
@@ -667,3 +669,215 @@ class CubeStore:
             (score, cube_id)
         )
         self.conn.commit()
+
+
+# ─── B7: AST parser multi-langage ────────────────────────────────────
+
+@dataclass
+class Dependency:
+    """A dependency between two files."""
+    source: str      # File that depends
+    target: str      # File it depends on
+    dep_type: str    # 'import', 'call', 'ref'
+    name: str        # The imported/called name
+
+
+def _parse_python_deps(file_path: str, content: str,
+                       all_files: set[str]) -> list[Dependency]:
+    """Parse Python file for imports, function calls, class references."""
+    deps = []
+    try:
+        tree = ast_module.parse(content, filename=file_path)
+    except SyntaxError:
+        return deps
+
+    # Build module→file mapping from all_files
+    module_to_file = {}
+    for f in all_files:
+        if f.endswith('.py'):
+            # "src/utils.py" → "src.utils", "utils"
+            mod = f[:-3].replace('/', '.').replace('\\', '.')
+            module_to_file[mod] = f
+            # Also map short name (last component)
+            short = mod.split('.')[-1]
+            if short not in module_to_file:
+                module_to_file[short] = f
+
+    for node in ast_module.walk(tree):
+        if isinstance(node, ast_module.Import):
+            for alias in node.names:
+                mod_name = alias.name
+                # Check direct match or prefix match
+                target = module_to_file.get(mod_name)
+                if not target:
+                    # Try short name
+                    short = mod_name.split('.')[-1]
+                    target = module_to_file.get(short)
+                if target and target != file_path:
+                    deps.append(Dependency(file_path, target, 'import', mod_name))
+
+        elif isinstance(node, ast_module.ImportFrom):
+            if node.module:
+                mod_name = node.module
+                target = module_to_file.get(mod_name)
+                if not target:
+                    short = mod_name.split('.')[-1]
+                    target = module_to_file.get(short)
+                if target and target != file_path:
+                    for alias in (node.names or []):
+                        deps.append(Dependency(file_path, target, 'import',
+                                               f"{mod_name}.{alias.name}"))
+
+    return deps
+
+
+# Regex patterns for JS/TS/Go/Java imports
+_JS_IMPORT_RE = re.compile(
+    r'''(?:import\s+.*?from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))''')
+_GO_IMPORT_RE = re.compile(r'"([^"]+)"')
+_JAVA_IMPORT_RE = re.compile(r'import\s+([\w.]+);')
+
+
+def _parse_regex_deps(file_path: str, content: str, language: str,
+                      all_files: set[str]) -> list[Dependency]:
+    """Parse imports for JS/TS/Go/Java using regex."""
+    deps = []
+
+    if language in ('javascript', 'typescript', 'vue', 'svelte'):
+        for m in _JS_IMPORT_RE.finditer(content):
+            target_ref = m.group(1) or m.group(2)
+            if target_ref.startswith('.'):
+                # Relative import — try to resolve
+                base_dir = os.path.dirname(file_path)
+                candidate = os.path.normpath(os.path.join(base_dir, target_ref)).replace('\\', '/')
+                # Try with extensions
+                for ext in ('', '.js', '.ts', '.tsx', '.jsx', '/index.js', '/index.ts'):
+                    full = candidate + ext
+                    if full in all_files:
+                        deps.append(Dependency(file_path, full, 'import', target_ref))
+                        break
+
+    elif language == 'go':
+        for m in _GO_IMPORT_RE.finditer(content):
+            pkg = m.group(1)
+            # Go imports are package paths — match last component to dirs
+            short = pkg.split('/')[-1]
+            for f in all_files:
+                if f.endswith('.go') and short in f:
+                    if f != file_path:
+                        deps.append(Dependency(file_path, f, 'import', pkg))
+
+    elif language in ('java', 'kotlin', 'scala'):
+        for m in _JAVA_IMPORT_RE.finditer(content):
+            fqn = m.group(1)
+            short = fqn.split('.')[-1]
+            for f in all_files:
+                if short in os.path.basename(f).split('.')[0]:
+                    if f != file_path:
+                        deps.append(Dependency(file_path, f, 'import', fqn))
+
+    return deps
+
+
+def parse_dependencies(files: list[ScannedFile]) -> list[Dependency]:
+    """
+    B7: Parse all files for dependencies (imports, calls, refs).
+
+    Uses AST for Python, regex for other languages.
+    Returns list of Dependency objects.
+    """
+    all_paths = {f.path for f in files}
+    all_deps = []
+
+    for f in files:
+        if f.language == 'python':
+            deps = _parse_python_deps(f.path, f.content, all_paths)
+        else:
+            deps = _parse_regex_deps(f.path, f.content, f.language, all_paths)
+        all_deps.extend(deps)
+
+    return all_deps
+
+
+# ─── B8: Construction graphe de voisins ──────────────────────────────
+
+MAX_NEIGHBORS = 9  # 9 neighbors per cube (like a Rubik's face)
+
+
+def build_neighbor_graph(cubes: list[Cube], deps: list[Dependency],
+                         max_neighbors: int = MAX_NEIGHBORS) -> dict[str, list[tuple[str, float]]]:
+    """
+    B8: Build neighbor graph for cubes.
+
+    First pass: neighbors = static analysis (B7) + file proximity.
+    Each cube gets up to max_neighbors closest neighbors.
+
+    Returns: {cube_id: [(neighbor_id, weight), ...]}
+    """
+    if not cubes:
+        return {}
+
+    # Index cubes by file
+    cubes_by_file: dict[str, list[Cube]] = defaultdict(list)
+    cube_by_id: dict[str, Cube] = {}
+    for c in cubes:
+        cubes_by_file[c.file_origin].append(c)
+        cube_by_id[c.id] = c
+
+    # Sort cubes within each file by line_start
+    for f in cubes_by_file:
+        cubes_by_file[f].sort(key=lambda c: c.line_start)
+
+    # Build file→file dependency graph
+    file_deps: dict[str, set[str]] = defaultdict(set)
+    for d in deps:
+        file_deps[d.source].add(d.target)
+        file_deps[d.target].add(d.source)  # Bidirectional
+
+    graph: dict[str, list[tuple[str, float]]] = {}
+
+    for cube in cubes:
+        candidates: dict[str, float] = {}
+
+        # 1. Same-file neighbors (proximity) — highest weight
+        same_file = cubes_by_file.get(cube.file_origin, [])
+        for other in same_file:
+            if other.id == cube.id:
+                continue
+            # Weight inversely proportional to line distance
+            line_dist = abs(cube.line_start - other.line_start)
+            weight = 1.0 / (1.0 + line_dist * 0.01)
+            candidates[other.id] = max(candidates.get(other.id, 0), weight)
+
+        # 2. Cross-file neighbors (from dependencies) — medium weight
+        dep_files = file_deps.get(cube.file_origin, set())
+        for dep_file in dep_files:
+            for other in cubes_by_file.get(dep_file, []):
+                # Base weight 0.5 for dependency link
+                weight = 0.5
+                candidates[other.id] = max(candidates.get(other.id, 0), weight)
+
+        # Sort by weight, take top max_neighbors
+        sorted_candidates = sorted(candidates.items(), key=lambda x: -x[1])
+        graph[cube.id] = sorted_candidates[:max_neighbors]
+
+    return graph
+
+
+def assign_neighbors(cubes: list[Cube], deps: list[Dependency],
+                     store: Optional['CubeStore'] = None,
+                     max_neighbors: int = MAX_NEIGHBORS):
+    """
+    B8: Assign neighbors to cubes and optionally persist to CubeStore.
+
+    Mutates cube.neighbors in-place.
+    """
+    graph = build_neighbor_graph(cubes, deps, max_neighbors)
+
+    for cube in cubes:
+        neighbors = graph.get(cube.id, [])
+        cube.neighbors = [nid for nid, _ in neighbors]
+
+        if store:
+            for nid, weight in neighbors:
+                store.set_neighbor(cube.id, nid, weight, 'static')
