@@ -8,7 +8,8 @@ Scan → subdivide → destroy → reconstruct → validate → learn.
 Briques B1-B8, B11-B19: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
 Storage, AST, Neighbors, LLM Providers, FIM, Reconstruction, Validation,
 Scoring, NCD, Temperature, Kaplan-Meier, Danger Theory, God's Number,
-Levels, Feed Mycelium, Hebbian, Git Blame, Scheduling, Security, Hooks, CLI.
+Levels, Feed Mycelium, Hebbian, Git Blame, Scheduling, Security, Hooks, CLI,
+Laplacian RG, Cheeger, BP, Survey Propagation, Tononi Degeneracy.
 """
 
 import ast as ast_module
@@ -2142,3 +2143,261 @@ def cli_god(config: Optional[CubeConfig] = None) -> dict:
         }
     finally:
         store.close()
+
+
+# ─── B9: Laplacian RG groupage optimal ──────────────────────────────
+
+def build_adjacency_matrix(cubes: list[Cube], store: CubeStore):
+    """Build adjacency matrix from cube neighbor graph."""
+    import numpy as np
+
+    n = len(cubes)
+    id_to_idx = {c.id: i for i, c in enumerate(cubes)}
+    A = np.zeros((n, n))
+
+    for cube in cubes:
+        i = id_to_idx[cube.id]
+        neighbors = store.get_neighbors(cube.id)
+        for nid, weight, _ in neighbors:
+            j = id_to_idx.get(nid)
+            if j is not None:
+                A[i, j] = weight
+                A[j, i] = weight
+
+    return A, id_to_idx
+
+
+def laplacian_rg_grouping(cubes: list[Cube], store: CubeStore,
+                          n_groups: Optional[int] = None) -> list[list[Cube]]:
+    """
+    B9: Laplacian RG grouping (Villegas 2023).
+    L = D - A, spectral decimation groups cubes by eigenvector similarity.
+    Falls back to sequential grouping if numpy not available.
+    """
+    try:
+        import numpy as np
+        from numpy.linalg import eigh
+    except ImportError:
+        groups = []
+        by_file = defaultdict(list)
+        for c in cubes:
+            by_file[c.file_origin].append(c)
+        for f, fcubes in by_file.items():
+            fcubes.sort(key=lambda c: c.line_start)
+            for i in range(0, len(fcubes), 8):
+                groups.append(fcubes[i:i+8])
+        return groups
+
+    n = len(cubes)
+    if n <= 1:
+        return [cubes] if cubes else []
+
+    if n_groups is None:
+        n_groups = max(1, n // 8)
+
+    A, id_to_idx = build_adjacency_matrix(cubes, store)
+    D = np.diag(A.sum(axis=1))
+    L = D - A
+
+    k = min(n_groups, n - 1)
+    try:
+        eigenvalues, eigenvectors = eigh(L)
+        features = eigenvectors[:, 1:k+1]
+    except Exception:
+        features = np.random.randn(n, k)
+
+    labels = _simple_kmeans(features, n_groups)
+
+    groups_dict: dict[int, list[Cube]] = defaultdict(list)
+    for i, label in enumerate(labels):
+        groups_dict[label].append(cubes[i])
+
+    return list(groups_dict.values())
+
+
+def _simple_kmeans(X, k, max_iter: int = 20):
+    """Simple k-means using numpy only."""
+    import numpy as np
+
+    n = X.shape[0]
+    if k >= n:
+        return list(range(n))
+
+    rng = np.random.RandomState(42)
+    indices = rng.choice(n, k, replace=False)
+    centroids = X[indices].copy()
+    labels = np.zeros(n, dtype=int)
+
+    for _ in range(max_iter):
+        for i in range(n):
+            dists = np.sum((centroids - X[i]) ** 2, axis=1)
+            labels[i] = np.argmin(dists)
+
+        new_centroids = np.zeros_like(centroids)
+        for j in range(k):
+            members = X[labels == j]
+            if len(members) > 0:
+                new_centroids[j] = members.mean(axis=0)
+            else:
+                new_centroids[j] = centroids[j]
+
+        if np.allclose(centroids, new_centroids):
+            break
+        centroids = new_centroids
+
+    return labels.tolist()
+
+
+# ─── B10: Cheeger constant ──────────────────────────────────────────
+
+def cheeger_constant(cubes: list[Cube], store: CubeStore) -> dict:
+    """
+    B10: Cheeger constant. λ₂/2 ≤ h ≤ √(2λ₂).
+    Identifies bottleneck cubes via Fiedler vector sign change.
+    """
+    try:
+        import numpy as np
+        from numpy.linalg import eigh
+    except ImportError:
+        return {'h_estimate': 0.0, 'lambda_2': 0.0, 'bottlenecks': [],
+                'error': 'numpy not available'}
+
+    n = len(cubes)
+    if n < 2:
+        return {'h_estimate': 0.0, 'lambda_2': 0.0, 'bottlenecks': []}
+
+    A, id_to_idx = build_adjacency_matrix(cubes, store)
+    D = np.diag(A.sum(axis=1))
+    L = D - A
+
+    eigenvalues, eigenvectors = eigh(L)
+    lambda_2 = float(eigenvalues[1]) if len(eigenvalues) > 1 else 0.0
+
+    import math
+    h_lower = lambda_2 / 2.0
+    h_upper = math.sqrt(2.0 * max(lambda_2, 0.0))
+
+    if len(eigenvectors) > 1:
+        fiedler = eigenvectors[:, 1]
+        abs_fiedler = np.abs(fiedler)
+        bottleneck_indices = np.argsort(abs_fiedler)[:max(1, n // 10)]
+        bottleneck_ids = [cubes[i].id for i in bottleneck_indices]
+    else:
+        bottleneck_ids = []
+
+    return {
+        'h_lower': h_lower,
+        'h_upper': h_upper,
+        'h_estimate': (h_lower + h_upper) / 2,
+        'lambda_2': lambda_2,
+        'bottlenecks': bottleneck_ids,
+    }
+
+
+# ─── B20: Belief Propagation ─────────────────────────────────────────
+
+def belief_propagation(cubes: list[Cube], store: CubeStore,
+                       max_iter: int = 15, tolerance: float = 1e-4) -> dict[str, float]:
+    """
+    B20: Belief Propagation (Pearl 1988). Neighbors exchange beliefs.
+    Returns {cube_id: belief} where belief = probability of being hot.
+    """
+    beliefs: dict[str, float] = {c.id: c.temperature for c in cubes}
+    messages: dict[tuple[str, str], float] = {}
+
+    for cube in cubes:
+        neighbors = store.get_neighbors(cube.id)
+        for nid, weight, _ in neighbors:
+            messages[(cube.id, nid)] = 0.5
+
+    for iteration in range(max_iter):
+        max_change = 0.0
+        new_messages = {}
+
+        for cube in cubes:
+            neighbors = store.get_neighbors(cube.id)
+            for nid, weight, _ in neighbors:
+                incoming_product = 1.0
+                for nid2, w2, _ in neighbors:
+                    if nid2 != nid:
+                        msg = messages.get((nid2, cube.id), 0.5)
+                        incoming_product *= (msg * w2 + (1 - msg) * (1 - w2))
+
+                compat = weight * cube.temperature
+                new_msg = compat * incoming_product
+                new_msg = max(0.001, min(0.999, new_msg))
+
+                old_msg = messages.get((cube.id, nid), 0.5)
+                max_change = max(max_change, abs(new_msg - old_msg))
+                new_messages[(cube.id, nid)] = new_msg
+
+        messages.update(new_messages)
+        if max_change < tolerance:
+            break
+
+    for cube in cubes:
+        neighbors = store.get_neighbors(cube.id)
+        belief = cube.temperature
+        for nid, weight, _ in neighbors:
+            msg = messages.get((nid, cube.id), 0.5)
+            belief *= msg
+        beliefs[cube.id] = max(0.0, min(1.0, belief))
+
+    return beliefs
+
+
+# ─── B21: Survey Propagation pre-filtre ──────────────────────────────
+
+def survey_propagation_filter(cubes: list[Cube], store: CubeStore,
+                              neutral_threshold: float = 0.2) -> tuple[list[Cube], list[Cube]]:
+    """
+    B21: Survey Propagation pre-filter (Mezard-Parisi 2002).
+    Skips trivial cubes (~30% neutral, Schulte 2014).
+    Returns (non_trivial, trivial).
+    """
+    beliefs = belief_propagation(cubes, store, max_iter=5)
+    trivial, non_trivial = [], []
+
+    for cube in cubes:
+        belief = beliefs.get(cube.id, 0.5)
+        if belief < neutral_threshold:
+            trivial.append(cube)
+        else:
+            non_trivial.append(cube)
+
+    return non_trivial, trivial
+
+
+# ─── B22: Tononi Degeneracy ──────────────────────────────────────────
+
+def tononi_degeneracy(cube: Cube, store: CubeStore,
+                      all_cubes: list[Cube]) -> float:
+    """
+    B22: Tononi Degeneracy (Tononi 1999).
+    D = Σ MI(v_i, cube) - MI(all_v, cube).
+    High D = fragile (redundant neighbors). Low D = critical.
+    Uses NCD as MI proxy.
+    """
+    neighbors = store.get_neighbors(cube.id)
+    if not neighbors:
+        return 0.0
+
+    cube_by_id = {c.id: c for c in all_cubes}
+
+    individual_mi = 0.0
+    neighbor_contents = []
+    for nid, weight, _ in neighbors:
+        n = cube_by_id.get(nid)
+        if n:
+            ncd = compute_ncd(cube.content, n.content)
+            individual_mi += (1.0 - ncd)
+            neighbor_contents.append(n.content)
+
+    if not neighbor_contents:
+        return 0.0
+
+    combined = "\n".join(neighbor_contents)
+    combined_ncd = compute_ncd(cube.content, combined)
+    joint_mi = 1.0 - combined_ncd
+
+    return max(0.0, individual_mi - joint_mi)
