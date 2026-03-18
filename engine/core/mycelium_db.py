@@ -641,6 +641,7 @@ class MyceliumDB:
                         "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                         (a_id, b_id, zone)
                     )
+        self._wal_monitor.on_write()
 
     def batch_delete_connections(self, keys: list[str]):
         """Batch delete connections by key strings (atomic)."""
@@ -658,6 +659,7 @@ class MyceliumDB:
                 self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
                 self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
                 self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
+        self._wal_monitor.on_write()
 
     def commit(self):
         """Explicit commit."""

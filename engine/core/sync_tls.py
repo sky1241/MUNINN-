@@ -236,7 +236,10 @@ class SyncServer:
                 while self._running:
                     try:
                         conn, addr = ssock.accept()
-                        threading.Thread(target=self._handle_client, args=(conn, addr), daemon=True).start()
+                        try:
+                            threading.Thread(target=self._handle_client, args=(conn, addr), daemon=True).start()
+                        except Exception:
+                            conn.close()
                     except socket.timeout:
                         continue
                     except OSError:

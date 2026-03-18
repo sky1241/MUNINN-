@@ -5892,14 +5892,14 @@ def _load_relevant_sessions(query: str, sessions_dir: Path, latest_name: str,
     # Load top 2 relevant sessions (if .mn file still exists)
     loaded = 0
     for score, entry in scored[:2]:
-        mn_file = sessions_dir / entry["file"]
+        mn_file = sessions_dir / entry.get("file", "")
         if not mn_file.exists():
             continue
         text = mn_file.read_text(encoding="utf-8")
         tokens = token_count(text)
         if tokens > budget:
             continue
-        output.append(f"=== relevant_session ({entry['file']}, {entry.get('date', '?')}) ===")
+        output.append(f"=== relevant_session ({entry.get('file', '?')}, {entry.get('date', '?')}) ===")
         output.append(text)
         budget -= tokens
         loaded += 1

@@ -1,10 +1,10 @@
 # MUNINN — Winter Tree (Baobab)
 
 Type: Baobab (gros tronc, petites branches)
-Phase: MATURE — pipeline complet, 3 TIERs valides
-Etat: 56 briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Security (doctor+vault+TLS) + Test Intelligence. AUDIT V9-V9D: 49 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 7172 + mycelium.py 2610 + cube.py 2713 + mycelium_db.py 997 + vault.py 373 + sync_tls.py 310 = 14175 total
-Tests: 77 files, 595 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
+Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security + WAL Monitor
+Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor) + WAL Monitor. AUDIT 12 passes: 90 bugs fixes. Feed chunked+resumable.
+Engine: muninn.py 7244 + mycelium.py 2627 + cube.py 2743 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 16719 total
+Tests: 80 files, 607 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
 
 ## Anatomie
 
@@ -1517,3 +1517,30 @@ CARMACK: Self-Healing Neural Codes (Rule & O'Leary PNAS 22), Kaplan-Meier Code S
 - B23 compute_temperature() + B24 kaplan_meier_survival() + B25 detect_dead_code() + B26 compute_gods_number()
 - B27 build_level_cubes() + B28 aggregate_scores() + B29 feed_mycelium_from_results() + B30 hebbian_update()
 - B31 git_blame_cube() + B32 CubeScheduler + B33 CubeConfig + B39 cli_scan/run/status/god
+
+## Debug Audit — Extermination Totale — 2026-03-18
+
+12 passes systematiques. 90 bugs corriges. 607 tests, 0 FAIL. Forge confirme clean.
+Tendance: 10→11→10→16→8→2→6→10→1→5→3→6→0 (convergence atteinte).
+
+### Commits
+- fa2180d: fix: passe 10 — shlex Windows, bisect timeout, rekey safety, sync init, read_node guard
+- 9e73edc: fix: passe 11 — forge gen-props ast.walk→iter_child_nodes (skip class methods)
+- cdb20dc: fix: passe 11b — forge gen-props deadline + SystemExit + except coverage
+- e0545d9: feat: WAL adaptive flush + _safe_path sanitization + universal bridge hook
+- (pending): fix: passe 12 — batch WAL on_write, conn leak sync_tls, defensive .get()
+
+### Nouveaux fichiers
+- engine/core/wal_monitor.py (89 lignes): WAL Adaptive Flush pour SQLite
+  - PASSIVE checkpoints, seuils adaptatifs, emergency flush 50K pages
+  - Integre dans CubeStore et MyceliumDB
+
+### Ameliorations cles
+- _safe_path(): jamais afficher de paths absolus (forge.py + muninn.py)
+- bridge_hook.py: paths relatifs via Path(__file__).resolve()
+- vault.py rekey(): ne wipe pas l'ancienne cle sur failure partielle
+- forge.py: shlex.split(posix=False) pour Windows, bisect timeout safety
+- mycelium.py: try/finally sur conn SQLite dans _load()
+- mycelium_db.py: WAL on_write() sur batch_upsert + batch_delete
+- sync_tls.py: conn.close() si Thread.start() echoue dans accept loop
+- muninn.py: entry.get() defensif dans _load_relevant_sessions()

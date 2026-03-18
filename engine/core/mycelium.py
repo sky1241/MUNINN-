@@ -86,10 +86,12 @@ class Mycelium:
             try:
                 import sqlite3
                 conn = sqlite3.connect(str(self.db_path), timeout=5)
-                marker = conn.execute(
-                    "SELECT value FROM meta WHERE key='migration_complete'"
-                ).fetchone()
-                conn.close()
+                try:
+                    marker = conn.execute(
+                        "SELECT value FROM meta WHERE key='migration_complete'"
+                    ).fetchone()
+                finally:
+                    conn.close()
                 if marker or not self.mycelium_path.exists():
                     # DB is complete OR no JSON to fall back to
                     return self._load_from_sqlite()
