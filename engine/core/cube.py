@@ -7,7 +7,8 @@ Scan → subdivide → destroy → reconstruct → validate → learn.
 
 Briques B1-B8, B11-B19: Scanner, Tokenizer, Dataclass, Subdivision, SHA-256,
 Storage, AST, Neighbors, LLM Providers, FIM, Reconstruction, Validation,
-Scoring, NCD, Temperature, Kaplan-Meier, Danger Theory, God's Number.
+Scoring, NCD, Temperature, Kaplan-Meier, Danger Theory, God's Number,
+Levels, Feed Mycelium, Hebbian, Git Blame.
 """
 
 import ast as ast_module
@@ -1569,3 +1570,280 @@ def compute_gods_number(cubes: list[Cube], store: CubeStore,
             'n_dead': len(dead),
         }
     )
+
+
+# ─── B27: Remontee par niveaux ───────────────────────────────────────
+
+def build_level_cubes(level0_cubes: list[Cube], level: int = 1,
+                      group_size: int = 8) -> list[Cube]:
+    """
+    B27: Build higher-level cubes by grouping lower-level cubes.
+
+    Level 0: ~88 tokens (atomic)
+    Level 1: ~704 tokens (8×88)
+    Level 2: ~5632 tokens (8×704)
+
+    Groups cubes from the same file, adjacent by line order.
+    """
+    # Group by file
+    by_file: dict[str, list[Cube]] = defaultdict(list)
+    for c in level0_cubes:
+        by_file[c.file_origin].append(c)
+
+    upper_cubes = []
+
+    for file_path, cubes in by_file.items():
+        cubes.sort(key=lambda c: c.line_start)
+
+        for i in range(0, len(cubes), group_size):
+            group = cubes[i:i + group_size]
+            if not group:
+                continue
+
+            content = "\n".join(c.content for c in group)
+            line_start = group[0].line_start
+            line_end = group[-1].line_end
+            total_tokens = sum(c.token_count for c in group)
+
+            cube = Cube(
+                id=f"{file_path}:L{line_start}-L{line_end}:lv{level}",
+                content=content,
+                sha256=sha256_hash(content),
+                file_origin=file_path,
+                line_start=line_start,
+                line_end=line_end,
+                level=level,
+                token_count=total_tokens,
+            )
+            upper_cubes.append(cube)
+
+    return upper_cubes
+
+
+# ─── B28: Agregation des scores entre niveaux ────────────────────────
+
+def aggregate_scores(upper_cube: Cube, sub_cubes: list[Cube]) -> float:
+    """
+    B28: Aggregate scores from sub-cubes to upper cube.
+
+    Score = max of sub-cube temperatures (hottest persists).
+    A zone is only as resilient as its weakest part.
+    """
+    if not sub_cubes:
+        return 0.0
+    return max(c.temperature for c in sub_cubes)
+
+
+def propagate_levels(level0_cubes: list[Cube], store: CubeStore,
+                     max_level: int = 3) -> dict[int, list[Cube]]:
+    """
+    B27+B28: Build and score all levels.
+
+    Returns {level: [cubes]} for levels 0 to max_level.
+    Hot cubes persisting across levels = irreplaceable core.
+    """
+    levels: dict[int, list[Cube]] = {0: level0_cubes}
+
+    current = level0_cubes
+    for lvl in range(1, max_level + 1):
+        upper = build_level_cubes(current, level=lvl)
+        if not upper:
+            break
+
+        # Aggregate scores
+        by_file: dict[str, list[Cube]] = defaultdict(list)
+        for c in current:
+            by_file[c.file_origin].append(c)
+
+        for uc in upper:
+            subs = [c for c in by_file.get(uc.file_origin, [])
+                    if c.line_start >= uc.line_start and c.line_end <= uc.line_end]
+            uc.temperature = aggregate_scores(uc, subs)
+            uc.score = uc.temperature
+
+        store.save_cubes(upper)
+        levels[lvl] = upper
+        current = upper
+
+    return levels
+
+
+# ─── B29: Feed resultats → mycelium ──────────────────────────────────
+
+def feed_mycelium_from_results(results: list[ReconstructionResult],
+                               cubes: list[Cube],
+                               mycelium=None):
+    """
+    B29: Feed reconstruction results to mycelium.
+
+    Creates mechanical (proven) connections:
+    - Successful reconstruction = cube NEEDS its neighbors (proven dependency)
+    - Failed reconstruction = neighbors are insufficient (weak link)
+
+    Tags connections as 'mechanical' (distinct from statistical co-occurrence).
+    """
+    cube_by_id = {c.id: c for c in cubes}
+    mechanical_pairs = []
+
+    for result in results:
+        cube = cube_by_id.get(result.cube_id)
+        if not cube:
+            continue
+
+        for nid in cube.neighbors:
+            neighbor = cube_by_id.get(nid)
+            if not neighbor:
+                continue
+
+            # Extract concept names from cube content (simplified)
+            cube_concepts = _extract_concepts(cube.content)
+            neighbor_concepts = _extract_concepts(neighbor.content)
+
+            pair = {
+                'source': result.cube_id,
+                'target': nid,
+                'weight': 1.0 if result.success else -0.5,
+                'type': 'mechanical',
+                'cube_concepts': cube_concepts,
+                'neighbor_concepts': neighbor_concepts,
+            }
+            mechanical_pairs.append(pair)
+
+            # Feed to mycelium if available
+            if hasattr(mycelium, 'observe'):
+                combined = f"{cube.content}\n{neighbor.content}"
+                try:
+                    mycelium.observe(combined, zone=cube.file_origin)
+                except Exception:
+                    pass  # Graceful if mycelium not fully initialized
+
+    return mechanical_pairs
+
+
+def _extract_concepts(content: str) -> list[str]:
+    """Extract concept names from code content (function/class names, imports)."""
+    concepts = []
+    for line in content.split('\n'):
+        line = line.strip()
+        if line.startswith('def '):
+            name = line.split('(')[0].replace('def ', '')
+            concepts.append(name)
+        elif line.startswith('class '):
+            name = line.split('(')[0].split(':')[0].replace('class ', '')
+            concepts.append(name)
+        elif line.startswith(('import ', 'from ')):
+            parts = line.split()
+            if len(parts) >= 2:
+                concepts.append(parts[1].split('.')[0])
+    return concepts
+
+
+# ─── B30: Hebbian update ─────────────────────────────────────────────
+
+def hebbian_update(store: CubeStore, results: list[ReconstructionResult],
+                   learning_rate: float = 0.1):
+    """
+    B30: Hebbian learning on neighbor connections.
+
+    Rule & O'Leary PNAS 2022: Self-Healing Neural Codes
+    Δw = η × pre × post
+    - Neighbors that reconstruct well → connection strengthened
+    - Neighbors that fail → connection weakened
+    - Homeostasis = SHA-256 validation (the ground truth)
+    """
+    for result in results:
+        neighbors = store.get_neighbors(result.cube_id)
+        for nid, weight, ntype in neighbors:
+            if result.success:
+                # Strengthen: successful reconstruction = neighbor was useful
+                new_weight = min(2.0, weight + learning_rate)
+            else:
+                # Weaken: failed reconstruction = neighbor insufficient
+                new_weight = max(0.1, weight - learning_rate * 0.5)
+
+            store.set_neighbor(result.cube_id, nid, new_weight,
+                             'mechanical' if ntype == 'static' else ntype)
+
+
+# ─── B31: Git blame crossover ────────────────────────────────────────
+
+def git_blame_cube(cube: Cube, repo_path: str) -> dict:
+    """
+    B31: Link hot cube to git history.
+
+    Returns git blame info for the cube's lines.
+    """
+    import subprocess
+
+    file_path = os.path.join(repo_path, cube.file_origin)
+    if not os.path.exists(file_path):
+        return {'error': f'File not found: {cube.file_origin}'}
+
+    try:
+        result = subprocess.run(
+            ['git', 'blame', '-L', f'{cube.line_start},{cube.line_end}',
+             '--porcelain', cube.file_origin],
+            cwd=repo_path,
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return {'error': result.stderr.strip()}
+
+        # Parse porcelain blame output
+        commits = {}
+        current_commit = None
+        for line in result.stdout.split('\n'):
+            if len(line) >= 40 and line[0] in '0123456789abcdef':
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_commit = parts[0]
+                    if current_commit not in commits:
+                        commits[current_commit] = {'lines': 0}
+                    commits[current_commit]['lines'] += 1
+            elif current_commit and line.startswith('author '):
+                commits[current_commit]['author'] = line[7:]
+            elif current_commit and line.startswith('summary '):
+                commits[current_commit]['summary'] = line[8:]
+            elif current_commit and line.startswith('author-time '):
+                commits[current_commit]['time'] = int(line[12:])
+
+        return {
+            'cube_id': cube.id,
+            'file': cube.file_origin,
+            'lines': f'{cube.line_start}-{cube.line_end}',
+            'commits': commits,
+            'n_authors': len(set(c.get('author', '') for c in commits.values())),
+        }
+
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return {'error': 'git blame failed or git not available'}
+
+
+def git_log_value(cube: Cube, repo_path: str) -> list[dict]:
+    """
+    B31: Check if a hot cube's content has changed recently.
+
+    Returns recent commits that touched the cube's file+lines.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ['git', 'log', '--oneline', '-5', '-L',
+             f'{cube.line_start},{cube.line_end}:{cube.file_origin}'],
+            cwd=repo_path,
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return []
+
+        entries = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split(' ', 1)
+                if len(parts) == 2:
+                    entries.append({'commit': parts[0], 'message': parts[1]})
+        return entries
+
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
