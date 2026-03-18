@@ -524,10 +524,14 @@ def bisect_test(root, test_name):
         subprocess.run(["git", "checkout", commit, "--quiet"], cwd=str(root),
                        capture_output=True)
 
-        r = subprocess.run(cmd_test, capture_output=True, text=True,
-                          cwd=str(root), encoding="utf-8", errors="replace",
-                          timeout=120)
-        is_bad = _pytest_has_failures(r.stdout)
+        try:
+            r = subprocess.run(cmd_test, capture_output=True, text=True,
+                              cwd=str(root), encoding="utf-8", errors="replace",
+                              timeout=120)
+            is_bad = _pytest_has_failures(r.stdout)
+        except subprocess.TimeoutExpired:
+            print("TIMEOUT (treating as FAIL)")
+            is_bad = True
         print("FAIL" if is_bad else "PASS")
 
         if is_bad:
@@ -535,7 +539,7 @@ def bisect_test(root, test_name):
         else:
             good_idx = mid
 
-    # Return to original
+    # Return to original — ALWAYS runs even if loop exits via exception
     checkout_result = subprocess.run(["git", "checkout", "-", "--quiet"], cwd=str(root),
                                     capture_output=True)
     if checkout_result.returncode != 0:
@@ -738,7 +742,8 @@ def snapshot_capture(root, cmd_str):
 
     print(f"  Capturing: {cmd_str}")
     try:
-        result = subprocess.run(shlex.split(cmd_str), capture_output=True,
+        result = subprocess.run(shlex.split(cmd_str, posix=(os.name != "nt")),
+                               capture_output=True,
                                text=True, cwd=str(root), timeout=60,
                                encoding="utf-8", errors="replace")
         output = result.stdout
@@ -789,7 +794,7 @@ def snapshot_check(root):
 
         # Re-run command
         try:
-            result = subprocess.run(shlex.split(meta["command"]),
+            result = subprocess.run(shlex.split(meta["command"], posix=(os.name != "nt")),
                                    capture_output=True, text=True,
                                    cwd=str(root), timeout=60,
                                    encoding="utf-8", errors="replace")

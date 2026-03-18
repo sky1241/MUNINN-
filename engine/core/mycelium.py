@@ -2048,6 +2048,7 @@ class Mycelium:
                 print(f"WARNING: meta migration failed: {e}", file=sys.stderr)
 
         db = MyceliumDB(meta_db_p)
+        n_synced = 0
         try:
             # Track repo
             repos_str = db.get_meta("repos", "")

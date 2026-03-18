@@ -672,7 +672,11 @@ def read_node(name: str, _tree: dict | None = None) -> str:
             print(f"WARNING: {name} hash mismatch (stored={stored_hash}, actual={actual_hash}), skipping", file=sys.stderr)
             return ""  # Empty = will be skipped by boot (no content)
 
-    text = filepath.read_text(encoding="utf-8")
+    try:
+        text = filepath.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError, OSError) as e:
+        print(f"WARNING: cannot read {name}: {e}", file=sys.stderr)
+        return ""
 
     # B1: Reconsolidation — re-compress cold branches at read time
     # Nader 2000: recalled memory is unstable, must be re-stored.

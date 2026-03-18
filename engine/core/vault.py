@@ -351,18 +351,29 @@ class Vault:
         rekeyed = 0
         total_bytes = 0
 
+        failed = []
         for vp in locked:
-            data = vp.read_bytes()
-            # Decrypt with old key
-            plaintext = _decrypt_bytes(data, old_key)
-            # Re-encrypt with new key
-            ct = _encrypt_bytes(plaintext, new_key)
-            # Atomic write: temp file then replace
-            tmp = vp.with_suffix(".tmp")
-            tmp.write_bytes(ct)
-            tmp.replace(vp)  # Atomic on both Windows and Linux
-            total_bytes += len(plaintext)
-            rekeyed += 1
+            try:
+                data = vp.read_bytes()
+                # Decrypt with old key
+                plaintext = _decrypt_bytes(data, old_key)
+                # Re-encrypt with new key
+                ct = _encrypt_bytes(plaintext, new_key)
+                # Atomic write: temp file then replace
+                tmp = vp.with_suffix(".tmp")
+                tmp.write_bytes(ct)
+                tmp.replace(vp)  # Atomic on both Windows and Linux
+                total_bytes += len(plaintext)
+                rekeyed += 1
+            except Exception as e:
+                failed.append((vp.name, str(e)))
+
+        if failed:
+            # Partial failure — DO NOT wipe old key, user needs it for un-rekeyed files
+            _audit_log(self.muninn_dir, "rekey", False, files=rekeyed,
+                       reason=f"partial failure: {len(failed)} files failed")
+            _zero_bytes(new_key)
+            return {"rekeyed": rekeyed, "total_bytes": total_bytes, "failed": len(failed)}
 
         # Update salt + backup + verify
         self.salt_path.write_bytes(new_salt)
