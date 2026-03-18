@@ -1227,13 +1227,24 @@ class FIMReconstructor:
             f"lines {cube.line_start}-{cube.line_end}.\n"
         )
         if prefix:
-            prompt += f"\nCode immediately before:\n```\n{prefix}\n```\n"
+            prompt += f"\nCode immediately before:\n{prefix}\n"
         if suffix:
-            prompt += f"\nCode immediately after:\n```\n{suffix}\n```\n"
+            prompt += f"\nCode immediately after:\n{suffix}\n"
 
-        prompt += "\nOutput ONLY the missing code:"
+        prompt += "\nOutput ONLY the missing code, no markdown fences, no explanation:"
 
-        return self.provider.generate(prompt, max_tokens=max_tokens)
+        raw = self.provider.generate(prompt, max_tokens=max_tokens)
+        # Strip markdown code fences that LLMs love to add
+        cleaned = raw.strip()
+        if cleaned.startswith('```'):
+            lines = cleaned.split('\n')
+            # Remove first line (```python or ```) and last line (```)
+            if lines[-1].strip() == '```':
+                lines = lines[1:-1]
+            else:
+                lines = lines[1:]
+            cleaned = '\n'.join(lines)
+        return cleaned
 
 
 # ─── Mock provider for testing ────────────────────────────────────────

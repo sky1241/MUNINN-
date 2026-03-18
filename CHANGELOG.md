@@ -1,10 +1,11 @@
 # MUNINN — Winter Tree (Baobab)
 
 Type: Baobab (gros tronc, petites branches)
-Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security + WAL Monitor
-Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor) + WAL Monitor. AUDIT 12 passes: 90 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 7244 + mycelium.py 2627 + cube.py 2743 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 16719 total
-Tests: 80 files, 607 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
+Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security + WAL Monitor + Quarantine + Cube Benchmark
+Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor) + WAL Monitor + Cube Quarantine + Cube Benchmark 6 langages. AUDIT 12 passes: 90 bugs fixes. Feed chunked+resumable.
+Engine: muninn.py 7276 + mycelium.py 2627 + cube.py 2775 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 16783 total
+Tests: 82 files, 619 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
+Cube Benchmark: 1046 cubes, 6 langages, 291/811 (35.9%) NCD<0.3 cycle 1, 9 SHA exact — Sonnet single pass.
 
 ## Anatomie
 
@@ -1544,3 +1545,62 @@ Tendance: 10→11→10→16→8→2→6→10→1→5→3→6→0 (convergence at
 - mycelium_db.py: WAL on_write() sur batch_upsert + batch_delete
 - sync_tls.py: conn.close() si Thread.start() echoue dans accept loop
 - muninn.py: entry.get() defensif dans _load_relevant_sessions()
+
+## Cube Quarantine — 3 TODOs implementes — 2026-03-18
+
+Quarantaine forensic: quand le Cube guerit un bloc corrompu, il photographie le contenu pourri AVANT reconstruction.
+
+### Commits
+- 20311f5: feat: quarantine 3 TODOs — flag check, auto-activation, CLI command
+
+### Implementations
+1. **Flag quarantine_enabled verifie** dans run_destruction_cycle() — si False, pas d'ecriture JSONL. Backward compat: config=None ecrit toujours.
+2. **Auto-activation sur convergence** — apres cycles dans cli_run(), si 100% success rate, quarantine_enabled passe a True + config.save() persiste.
+3. **CLI `muninn quarantine`** — affiche les entrees JSONL (date, fichier, NCD, hashes tronques, preview contenu corrompu).
+4. **Fix: quarantine_enabled manquait dans CubeConfig.save()** — roundtrip save/load cassait le flag.
+
+### Tests
+- tests/test_quarantine.py: 5 tests (record, contenu, hashes, thread-safety, JSONL)
+- tests/test_quarantine_features.py: 10 tests (flag on/off, backward compat, auto-activation, CLI, config roundtrip)
+- Total: 15 tests quarantine, 619 suite complete
+
+## Cube Reconstruction Benchmark — 2026-03-18
+
+Premier test de destruction/reconstruction reel sur corpus multi-langage. Pas de mock — vraie API Sonnet.
+
+### Setup
+- **Corpus**: 7 fichiers, 6 langages, 11866 lignes de code (tests/cube_corpus/)
+- **1046 cubes** (~88 tokens chacun), 9 voisins sequentiels
+- **Modele**: claude-sonnet-4-6
+- **Cout**: ~$2.50, 109 minutes
+- **Cycle**: 1 seul (single pass, pas de wagons, pas de mycelium)
+
+### Resultats Cycle 1
+
+| Lang | Cubes | SHA exact | NCD<0.3 | Avg NCD | Best NCD |
+|------|-------|-----------|---------|---------|----------|
+| JSX | 81 | 2 (2.5%) | 45 (55.6%) | 0.325 | 0.041 |
+| Go | 91 | 1 (1.1%) | 44 (48.4%) | 0.376 | 0.045 |
+| Rust | 62 | 1 (1.6%) | 27 (43.5%) | 0.394 | 0.044 |
+| TypeScript | 206 | 3 (1.5%) | 80 (38.8%) | 0.408 | 0.036 |
+| Python | 77 | 0 (0.0%) | 26 (33.8%) | 0.416 | 0.089 |
+| Kotlin | 294 | 2 (0.7%) | 69 (23.5%) | 0.375 | 0.043 |
+| C | 235 | 0 (0.0%) | 0 (0.0%) | 1.000 | 1.000 |
+| **TOTAL (6 langs)** | **811** | **9 (1.1%)** | **291 (35.9%)** | **0.382** | **0.036** |
+
+- C exclus: 0% succes, NCD=1.0 (reponses vides/garbage — a investiguer)
+- 9 reconstructions SHA-256 exactes (byte-perfect) sur 6 langages
+- JSX leader (55.6%) — structure HTML/composants hautement predictible
+- Best NCD: 0.036 (TypeScript) — quasi-identique a l'original
+
+### Chemin vers 100%
+
+1. **Effet wagon** — les cubes reconstruits deviennent de meilleurs voisins pour les cubes adjacents. La qualite cascade dans la chaine: cycle 1 (36%) -> cycle 2 (~60%) -> cycle N (100%).
+2. **Voisins mycelium** — ajouter des voisins semantiques (co-occurrences mycelium + spreading activation) aux 9 voisins sequentiels. Contexte local + global.
+3. **Modele** — Sonnet -> Opus = meilleur seed, moins de cycles necessaires.
+
+### Fichiers
+- tests/cube_corpus/: 7 fichiers corpus (Go, Python, JSX, Rust, TypeScript, Kotlin, C)
+- tests/cube_corpus/RESULTS.txt: rapport complet avec metriques expliquees
+- tests/test_cube_real_api.py: test pytest (7 langages + rapport final)
+- tests/run_cube_corpus.py: script direct (output temps reel, sans buffering pytest)
