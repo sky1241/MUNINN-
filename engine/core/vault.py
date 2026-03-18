@@ -291,7 +291,11 @@ class Vault:
 
         for vp in locked:
             data = vp.read_bytes()
-            plaintext = _decrypt_bytes(data, self._key)
+            try:
+                plaintext = _decrypt_bytes(data, self._key)
+            except Exception as e:
+                print(f"WARNING: failed to decrypt {vp.name}: {e}", file=sys.stderr)
+                continue
             # Restore original path (strip .vault)
             orig_path = vp.with_suffix("")
             orig_path.write_bytes(plaintext)

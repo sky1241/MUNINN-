@@ -429,7 +429,7 @@ def load_tree():
         for name, node in tree.get("nodes", {}).items():
             if "file" in node:
                 resolved = str((TREE_DIR / node["file"]).resolve())
-                if not resolved.startswith(tree_dir_resolved):
+                if not resolved.startswith(tree_dir_resolved + os.sep) and resolved != tree_dir_resolved:
                     print(f"WARNING: path traversal in tree node '{name}': {node['file']}, sanitized", file=sys.stderr)
                     node["file"] = f"{name}.mn"
         return tree
@@ -492,7 +492,7 @@ def _safe_tree_path(filename: str) -> Path:
     Prevents path traversal via crafted node['file'] values."""
     filepath = (TREE_DIR / filename).resolve()
     tree_dir_resolved = TREE_DIR.resolve()
-    if not str(filepath).startswith(str(tree_dir_resolved)):
+    if not str(filepath).startswith(str(tree_dir_resolved) + os.sep) and filepath != tree_dir_resolved:
         raise ValueError(f"Path traversal blocked: {filename}")
     return filepath
 
@@ -5987,7 +5987,7 @@ def _extract_error_fixes(repo_path: Path, compressed: str):
                 "date": time.strftime("%Y-%m-%d"),
             }
             # Avoid duplicates
-            if not any(e["error"] == entry["error"] for e in errors):
+            if not any(e.get("error") == entry["error"] for e in errors):
                 errors.append(entry)
 
     # Keep last 50 entries
@@ -6008,6 +6008,8 @@ def _surface_known_errors(repo_path: Path, query: str) -> str:
     query_lower = query.lower()
     hints = []
     for entry in errors:
+        if not isinstance(entry, dict) or "error" not in entry or "fix" not in entry:
+            continue
         # Check if query words overlap with error text
         # Strip punctuation for matching (e.g. "TypeError:" should match "TypeError")
         error_words = set(re.findall(r'[a-z0-9_]+', entry["error"].lower()))
@@ -6484,8 +6486,7 @@ def feed_history(repo_path: Path):
                     # Checkpoint every file (not all-or-nothing)
                     if new_files % 3 == 0:
                         m.save()
-                        with open(fed_path, "w", encoding="utf-8") as f:
-                            json.dump(sorted(fed), f, indent=2)
+                        _atomic_json_write(fed_path, sorted(fed))
 
                 # Subagent transcripts (top-level and inside session subdirectories)
                 subagent_dirs = []
@@ -6516,8 +6517,7 @@ def feed_history(repo_path: Path):
                 m.save()
 
             # Save fed list
-            with open(fed_path, "w", encoding="utf-8") as f:
-                json.dump(sorted(fed), f, indent=2)
+            _atomic_json_write(fed_path, sorted(fed))
     except TimeoutError:
         print("MUNINN HISTORY: lock timeout, skipping", file=sys.stderr)
         return
@@ -6557,8 +6557,7 @@ def feed_history(repo_path: Path):
                 if created > 0:
                     print(f"  {jsonl_file.name}: {created} branches created")
             compressed[file_key] = {"mn_file": mn_path.name if mn_path else None}
-    with open(compressed_path, "w", encoding="utf-8") as f:
-        json.dump(compressed, f, indent=2)
+    _atomic_json_write(compressed_path, compressed)
 
     # Refresh tree
     tree = load_tree()
@@ -6659,8 +6658,7 @@ def feed_watch(repo_path: Path):
                     ck = changed_keys.get(str(jsonl_path))
                     if ck:
                         state[ck[0]] = ck[1]
-                    state_path.parent.mkdir(parents=True, exist_ok=True)
-                    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+                    _atomic_json_write(state_path, state)
 
                     fed_count += 1
                     _hook_log(repo_path, f"WATCH fed ok {jsonl_path.name}: {count} msgs")
@@ -6900,6 +6898,9 @@ def main():
         # Works on any repo: cd /path/to/repo && muninn init
         # Or: muninn init --repo /path/to/repo
         repo = Path(args.repo or args.file or ".").resolve()
+        if not repo.exists():
+            print(f"ERROR: path does not exist: {repo}", file=sys.stderr)
+            sys.exit(1)
         if not _REPO_PATH:
             _REPO_PATH = repo
             _refresh_tree_paths()
@@ -7046,6 +7047,9 @@ def main():
             print("ERROR: repo path required. Usage: muninn.py bootstrap <repo-path>")
             sys.exit(1)
         _REPO_PATH = Path(args.file).resolve()
+        if not _REPO_PATH.exists():
+            print(f"ERROR: path does not exist: {_REPO_PATH}", file=sys.stderr)
+            sys.exit(1)
         _refresh_tree_paths()
         bootstrap_mycelium(Path(args.file))
         return
@@ -7157,12 +7161,21 @@ def main():
         return
 
     if args.command == "prune":
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
         prune(dry_run=not args.force)
         return
 
     if args.command == "decode":
         if args.file:
-            text = Path(args.file).read_text(encoding="utf-8")
+            fpath = Path(args.file)
+            if not fpath.exists():
+                print(f"ERROR: file not found: {args.file}", file=sys.stderr)
+                sys.exit(1)
+            text = fpath.read_text(encoding="utf-8")
         else:
             text = sys.stdin.read()
         for line in text.split("\n"):

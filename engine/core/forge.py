@@ -1334,7 +1334,10 @@ def gen_props(root, module_path):
         return "st.text(max_size=50)"
 
     # Generate module path for import
-    rel = mod_path.relative_to(root)
+    try:
+        rel = mod_path.relative_to(root)
+    except ValueError:
+        rel = Path(os.path.relpath(mod_path, root))
     import_path = str(rel).replace(os.sep, ".").replace(".py", "")
 
     # Build test file — imports are LIVE, not commented
@@ -1880,6 +1883,9 @@ def main():
     if "--close" in args:
         idx = args.index("--close")
         bug_id = args[idx + 1] if idx + 1 < len(args) else ""
+        if not bug_id or bug_id.startswith("--"):
+            print("  Usage: forge.py --close BUG-001")
+            return
         close_bug(root, bug_id.upper())
         return
 
