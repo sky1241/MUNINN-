@@ -186,7 +186,7 @@ class TestB16Reconstruction:
         cube = Cube(id="t:L1:lv0", content=content, sha256=sha256_hash(content),
                     file_origin="t.py", line_start=1, line_end=1, token_count=5)
         # Mock returns the exact content
-        mock = MockLLMProvider({'Reconstruct': content})
+        mock = MockLLMProvider({'reconstructing': content})
         result = reconstruct_cube(cube, [], mock)
         assert result.exact_match is True
         assert result.success is True
@@ -197,7 +197,7 @@ class TestB16Reconstruction:
         similar = "def add(x, y):\n    return x + y"
         cube = Cube(id="t:L1:lv0", content=content, sha256=sha256_hash(content),
                     file_origin="t.py", line_start=1, line_end=2, token_count=15)
-        mock = MockLLMProvider({'Reconstruct': similar})
+        mock = MockLLMProvider({'reconstructing': similar})
         result = reconstruct_cube(cube, [], mock, ncd_threshold=0.5)
         assert result.exact_match is False
         # NCD of very similar code should be low enough
@@ -209,7 +209,7 @@ class TestB16Reconstruction:
         cube = Cube(id="t:L1:lv0", content=content, sha256=sha256_hash(content),
                     file_origin="t.py", line_start=1, line_end=1, token_count=5)
         # Mock returns something completely different
-        mock = MockLLMProvider({'Reconstruct': 'import os\nimport sys\nprint("completely different code")'})
+        mock = MockLLMProvider({'reconstructing': 'import os\nimport sys\nprint("completely different code")'})
         result = reconstruct_cube(cube, [], mock, ncd_threshold=0.3)
         assert result.exact_match is False
 

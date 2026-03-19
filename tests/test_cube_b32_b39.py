@@ -171,7 +171,7 @@ class TestB39CLI:
         cli_scan(str(mini_repo), config)
         result = cli_run(str(mini_repo), cycles=1, config=config)
         assert result['cycles'] == 1
-        assert result['cubes_tested'] >= 0
+        assert result['cubes_active'] >= 0
         assert 'success_rate' in result
 
     def test_cli_god_no_db(self, tmp_path):
