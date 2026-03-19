@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-18. Engine: 16719 lignes, 11 fichiers. Tests: 80 fichiers, 607 tests, 0 FAIL.
+> Mis a jour: 2026-03-19. Engine: 17240 lignes, 11 fichiers. Tests: 80 fichiers, 607 tests, 0 FAIL.
 
 ## Architecture
 
@@ -19,7 +19,7 @@
       |
    [vault.py 389L + sync_tls.py 313L] -1 Sous-sol — securite
       |
-   [forge.py 2048L + cube.py 2743L]   -2 Fondations — debug + resilience
+   [forge.py 2048L + cube.py 3264L]   -2 Fondations — debug + resilience
       |
    [wal_monitor 89L + tokenizer 43L]  -3 Racines — infrastructure
 ```
@@ -260,44 +260,91 @@
 
 ---
 
-## cube.py — Resilience par Destruction (2743 lignes)
+## cube.py — Resilience par Destruction (3264 lignes)
 
-### Scan & Structure (113-516)
+### Scan & Structure (43-492)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| scan_repo | 167-233 | Scan recursif fichiers |
-| subdivide_file | 374-450 | Split fichier en cubes (token-bounded) |
-| subdivide_recursive | 451-516 | Split binaire recursif (>4K tokens) |
+| B1: scan_repo | 176-237 | Scan recursif fichiers source |
+| B3: Cube dataclass | 251-286 | id, content, sha256, file_origin, lines, level, neighbors, temp |
+| B4: subdivide_file | 383-457 | Split fichier en cubes ~88 tokens (semantic boundaries) |
+| B4: subdivide_recursive | 460-481 | Split recursif /8 par niveau |
+| B5: sha256_hash | 320-323 | SHA-256 sur contenu normalise |
+| B6: CubeStore | 493-720 | SQLite WAL, tables cubes/neighbors/cycles |
 
-### Neighbors & Graph (706-919)
+### AST & Neighbors (721-933)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| parse_dependencies | 811-835 | AST Python + regex JS/TS/Go/Java |
-| build_neighbor_graph | 836-895 | Adjacence + transitive closure |
+| B7: parse_dependencies | 820-837 | AST Python + regex JS/TS/Go/Java |
+| B7b: extract_ast_hints | 849-922 | Pre-destruction: functions, classes, imports, indent |
+| B8: assign_neighbors | 934-1017 | Adjacence sequentielle + deps, max 9 voisins |
 
-### LLM Providers (920-1283)
-- LLMProvider ABC (920-961), OllamaProvider (962-1042), ClaudeProvider (1043-1100), OpenAIProvider (1101-1154), MockLLMProvider (1241-1283)
-- FIMReconstructor (1155-1240): Fill-In-the-Middle pattern
+### LLM Providers (1018-1453)
+- B11: LLMProvider ABC (1018-1062), B12: OllamaProvider (1063-1159)
+- B13: ClaudeProvider (1160-1217), B14: OpenAIProvider (1218-1271)
+- B15: FIMReconstructor (1272-1400): lexicon + AST hints + FIM/prompt
+- MockLLMProvider (1403-1442)
 
-### Reconstruction & Scoring (1284-1602)
+### Reconstruction & Cycle (1454-1745)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| reconstruct_cube | 1296-1340 | Appelle LLM avec voisins comme contexte |
-| compute_hotness | 1352-1368 | Score coverage voisins + qualite reconstruction |
-| compute_ncd | 1369-1395 | NCD zlib original vs reconstruction |
-| compute_temperature | 1443-1467 | Kaplan-Meier survival probability |
-| compute_gods_number | 1554-1602 | Max level depth + quality metrics |
+| B16: reconstruct_cube | 1460-1502 | Orchestre B15+B17+B18+B19 |
+| B17: validate_reconstruction | 1507-1513 | SHA-256 compare |
+| B18: compute_hotness | 1518-1530 | Perplexite voisins |
+| B19: compute_ncd | 1535-1559 | NCD zlib (seuil 0.3) |
+| run_destruction_cycle | 1562-1700 | CYCLE COMPLET: reconstruit + B30+B29+B23+B24+B22+B38 |
+| _add_semantic_neighbors | 1703-1743 | Mycelium spreading activation (cycle 2+) |
 
-### Graph Algorithms (2177-2435)
+### Orchestration (1746-1981)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| laplacian_rg_grouping | 2197-2245 | Spectral clustering (eigenvectors + KMeans) |
-| cheeger_constant | 2281-2326 | Constante isoperimetrique (Fiedler) |
-| belief_propagation | 2327-2378 | BP inference sur graphe cubes |
-| tononi_degeneracy | 2401-2435 | Information integree (phi) |
+| post_cycle_analysis | 1746-1850 | B27+B28+B9+B10+B26+B35+B31+B37+B38 — toutes les diagnostiques |
+| B23: compute_temperature | 1854-1876 | 0.4*perplexity + 0.4*(1-success_rate) + 0.2*failures |
+| B24: kaplan_meier_survival | 1889-1908 | S(t) = prod(1-d_i/n_i) |
+| B25: filter_dead_cubes | 1911-1959 | Vire commentaires/TODOs |
+| prepare_cubes | 1952-1981 | B25 + B21 pre-filtre (~30% trivial) |
 
-### CLI (2038-2176)
-- cli_scan (2038-2074), cli_run (2075-2115), cli_status (2116-2149), cli_god (2150-2176)
+### Metrics & Levels (1983-2234)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| B26: compute_gods_number | 1983-2041 | Cubes chauds irremplacables + bornes LRC/MERA |
+| B27: build_level_cubes | 2043-2088 | Groupe 8 cubes lv0 -> 1 cube lv1 (88->704->5632) |
+| B28: propagate_levels | 2091-2136 | Remontee temperature max entre niveaux |
+| B29: feed_mycelium_from_results | 2139-2207 | Connexions "mechanical" succes=+1.0, echec=-0.5 |
+| B30: hebbian_update | 2209-2234 | Δw = ±η*0.1 (renforce/affaiblit voisins) |
+
+### External Tools (2236-2475)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| B31: git_blame_cube | 2238-2319 | Lie cubes chauds a l'historique git |
+| B32: CubeScheduler | 2320-2380 | Async — run quand repo quiet (5min) |
+| B33: CubeConfig | 2382-2473 | Config YAML + get_provider() |
+
+### CLI (2481-2652)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| cli_scan | 2483-2517 | B1+B4+B7+B8+B6 |
+| cli_run | 2520-2592 | FULL PIPELINE: prepare + cycles + analysis (ALL bricks) |
+| cli_status | 2595-2627 | God's Number + temperature stats |
+| cli_god | 2629-2652 | Compute + display God's Number |
+
+### Graph Algorithms (2654-2911)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| B9: laplacian_rg_grouping | 2676-2722 | Spectral clustering (Laplacien + k-means) |
+| B10: cheeger_constant | 2758-2802 | Bottleneck detection (Fiedler vector) |
+| B20: belief_propagation | 2804-2853 | BP inference Pearl 1988 |
+| B21: survey_propagation_filter | 2856-2875 | Pre-filtre cubes triviaux (~30%) |
+| B22: tononi_degeneracy | 2878-2911 | Fragilite cube (voisins redondants vs critiques) |
+
+### Diagnostics & Feedback (2913-3264)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| B35: cube_heatmap | 2913-2946 | Temperatures groupees par fichier |
+| B36: fuse_risks | 2948-3019 | Forge defect + Cube temperature |
+| B37: auto_repair | 3021-3087 | Patches FIM pour cubes chauds |
+| B38: record_anomaly + feedback_loop | 3132-3264 | Anomalies -> validation git -> mycelium |
+| Quarantine | 3090-3129 | Sauvegarde contenu corrompu avant guerison |
 
 ---
 
@@ -383,9 +430,9 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | Defect prediction | forge.py | 973-1108 |
 | Fault localization | forge.py | 1507-1609 |
 | Property tests | forge.py | 1282-1449 |
-| Cube destruction cycle | cube.py | 1396-1442 |
-| God's Number | cube.py | 1554-1602 |
-| Spectral clustering | cube.py 2197-2245 / mycelium.py 1188-1342 |
+| Cube destruction cycle | cube.py | 1562-1700 |
+| God's Number | cube.py | 1983-2041 |
+| Spectral clustering | cube.py 2676-2722 / mycelium.py 1188-1342 |
 | WAL checkpoints | wal_monitor.py | 70-89 |
 | Spaced repetition | muninn.py | 521-570 (_ebbinghaus_recall) |
 | Path security | muninn.py | 503-510 (_safe_tree_path), 172-182 (_safe_path) |
@@ -404,7 +451,7 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | PBKDF2 iterations | 600K | vault.py | 58 |
 | AES nonce size | 12 bytes | vault.py | 68 |
 | TLS minimum version | 1.3 | sync_tls.py | ~38 |
-| TARGET_TOKENS (cube) | 4K | cube.py | ~380 |
+| TARGET_TOKENS (cube) | 4K | cube.py | ~337 |
 
 ## Audit Debug (2026-03-18)
 

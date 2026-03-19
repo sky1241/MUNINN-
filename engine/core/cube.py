@@ -32,6 +32,14 @@ except ImportError:
     except ImportError:
         from wal_monitor import WALMonitor
 
+try:
+    from engine.core.lang_lexicons import get_lexicon, format_lexicon_prompt
+except ImportError:
+    try:
+        from .lang_lexicons import get_lexicon, format_lexicon_prompt
+    except ImportError:
+        from lang_lexicons import get_lexicon, format_lexicon_prompt
+
 # ─── B1: Scanner de repo ──────────────────────────────────────────────
 
 # Extensions considered binary (skip)
@@ -98,6 +106,7 @@ LANG_MAP = {
     '.zig': 'zig',
     '.nim': 'nim',
     '.v': 'v',
+    '.cob': 'cobol', '.cbl': 'cobol', '.cpy': 'cobol',
     '.sol': 'solidity',
     '.proto': 'protobuf',
     '.graphql': 'graphql', '.gql': 'graphql',
@@ -116,10 +125,19 @@ class ScannedFile:
     content: str
     language: str
     token_count: int = 0
+    extension: str = ''
+    size: int = 0
+    lines: int = 0
 
     def __post_init__(self):
         if self.token_count == 0 and self.content:
             self.token_count = token_count(self.content)
+        if self.size == 0 and self.content:
+            self.size = len(self.content)
+        if self.lines == 0 and self.content:
+            self.lines = self.content.count('\n') + 1
+        if not self.extension and self.path:
+            self.extension = os.path.splitext(self.path)[1]
 
 
 def _should_skip_dir(name: str) -> bool:
@@ -828,6 +846,91 @@ def parse_dependencies(files: list[ScannedFile]) -> list[Dependency]:
     return all_deps
 
 
+# ─── B7b: Extract AST hints per cube (pre-destruction) ──────────────
+
+def extract_ast_hints(cube: Cube) -> dict:
+    """
+    Extract structural constraints from a cube's content before destruction.
+    These hints constrain the LLM during reconstruction.
+    Returns dict with functions, classes, imports, variables, indent info.
+    """
+    content = cube.content
+    lines = content.split('\n')
+    hints = {
+        'functions': [],
+        'classes': [],
+        'imports': [],
+        'variables': [],
+        'indent_char': None,
+        'indent_level': 0,
+        'n_lines': len(lines),
+        'n_tokens': cube.token_count,
+    }
+
+    # Detect indentation
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped and line != stripped:
+            indent = line[:len(line) - len(stripped)]
+            if '\t' in indent:
+                hints['indent_char'] = 'tabs'
+            else:
+                n_spaces = len(indent)
+                hints['indent_char'] = f'{n_spaces} spaces'
+            hints['indent_level'] = len(indent)
+            break
+
+    # Language-agnostic extraction via regex
+    for line in lines:
+        stripped = line.strip()
+
+        # Functions: def, func, fn, function, fun, sub, proc
+        m = re.match(
+            r'(?:pub\s+)?(?:async\s+)?(?:static\s+)?'
+            r'(?:def|func|fn|function|fun|sub|proc)\s+'
+            r'([a-zA-Z_]\w*)', stripped)
+        if m:
+            hints['functions'].append(m.group(1))
+            continue
+
+        # Methods with return types (Go, Rust, Java, Kotlin, etc.)
+        m = re.match(
+            r'(?:pub|public|private|protected|internal)?\s*'
+            r'(?:static\s+)?(?:suspend\s+)?'
+            r'(?:fun|func|fn|def|void|int|string|bool|float|double)\s+'
+            r'([a-zA-Z_]\w*)\s*[(<]', stripped)
+        if m and m.group(1) not in hints['functions']:
+            hints['functions'].append(m.group(1))
+            continue
+
+        # Classes: class, struct, enum, interface, trait, type
+        m = re.match(
+            r'(?:pub\s+)?(?:data\s+|sealed\s+|abstract\s+)?'
+            r'(?:class|struct|enum|interface|trait|type)\s+'
+            r'([A-Z]\w*)', stripped)
+        if m:
+            hints['classes'].append(m.group(1))
+            continue
+
+        # Imports
+        if stripped.startswith(('import ', 'from ', '#include', 'use ', 'require')):
+            hints['imports'].append(stripped[:80])
+            continue
+
+        # Variable assignments (simple patterns)
+        m = re.match(
+            r'(?:let|const|var|val|mut)\s+([a-zA-Z_]\w*)', stripped)
+        if m:
+            hints['variables'].append(m.group(1))
+
+    return hints
+
+
+def extract_all_ast_hints(cubes: list[Cube]) -> dict[str, dict]:
+    """Extract AST hints for all cubes. Returns {cube_id: hints}."""
+    return {cube.id: extract_ast_hints(cube) for cube in cubes}
+
+
 # ─── B8: Construction graphe de voisins ──────────────────────────────
 
 MAX_NEIGHBORS = 9  # 9 neighbors per cube (like a Rubik's face)
@@ -977,11 +1080,12 @@ class OllamaProvider(LLMProvider):
 
     @property
     def supports_fim(self) -> bool:
-        return self.model in ('codellama', 'deepseek-coder', 'deepseek-coder-v2',
-                              'starcoder2', 'codegemma', 'qwen2.5-coder')
+        fim_families = ('codellama', 'deepseek-coder', 'starcoder2',
+                        'codegemma', 'qwen2.5-coder')
+        return any(f in self.model for f in fim_families)
 
-    def _request(self, endpoint: str, payload: dict, timeout: int = 120) -> dict:
-        """Make HTTP request to Ollama API."""
+    def _request(self, endpoint: str, payload: dict, timeout: int = 300) -> dict:
+        """Make HTTP request to Ollama API. Timeout=300s for cold start model loading."""
         import urllib.request
         url = f"{self.base_url}{endpoint}"
         data = json.dumps(payload).encode('utf-8')
@@ -990,8 +1094,8 @@ class OllamaProvider(LLMProvider):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode('utf-8'))
-        except Exception:
-            raise ConnectionError(f"Cannot connect to Ollama at {self.base_url}")
+        except Exception as e:
+            raise ConnectionError(f"Cannot connect to Ollama at {self.base_url}: {e}")
 
     def generate(self, prompt: str, max_tokens: int = 256,
                  temperature: float = 0.0) -> str:
@@ -1030,12 +1134,27 @@ class OllamaProvider(LLMProvider):
 
     def fim_generate(self, prefix: str, suffix: str,
                      max_tokens: int = 256) -> str:
-        """FIM using Ollama's raw mode with FIM tokens."""
+        """FIM using Ollama's raw mode with model-specific FIM tokens."""
         if not self.supports_fim:
             raise NotImplementedError(f"{self.model} does not support FIM")
-        # Use the standard FIM format (works with CodeLlama, DeepSeek-Coder)
-        prompt = f"<PRE> {prefix} <SUF>{suffix} <MID>"
-        return self.generate(prompt, max_tokens=max_tokens)
+        # Model-specific FIM token formats
+        if 'deepseek' in self.model:
+            prompt = f"<｜fim▁begin｜>{prefix}<｜fim▁hole｜>{suffix}<｜fim▁end｜>"
+        elif 'starcoder' in self.model:
+            prompt = f"<fim_prefix>{prefix}<fim_suffix>{suffix}<fim_middle>"
+        elif 'codegemma' in self.model or 'qwen' in self.model:
+            prompt = f"<|fim_prefix|>{prefix}<|fim_suffix|>{suffix}<|fim_middle|>"
+        else:
+            # CodeLlama default
+            prompt = f"<PRE> {prefix} <SUF>{suffix} <MID>"
+        resp = self._request('/api/generate', {
+            'model': self.model,
+            'prompt': prompt,
+            'raw': True,
+            'options': {'num_predict': max_tokens, 'temperature': 0.0},
+            'stream': False,
+        })
+        return resp.get('response', '')
 
 
 # ─── B13: Backend Claude API ─────────────────────────────────────────
@@ -1188,57 +1307,100 @@ class FIMReconstructor:
         )
         return self.provider.generate(prompt, max_tokens=max_tokens)
 
+    # Language detection from file extension
+    _EXT_TO_LANG = {
+        '.py': 'Python', '.go': 'Go', '.rs': 'Rust', '.js': 'JavaScript',
+        '.jsx': 'JSX/React', '.ts': 'TypeScript', '.tsx': 'TSX/React',
+        '.c': 'C', '.h': 'C', '.cpp': 'C++', '.java': 'Java',
+        '.kt': 'Kotlin', '.rb': 'Ruby', '.swift': 'Swift', '.zig': 'Zig',
+        '.cob': 'COBOL', '.cbl': 'COBOL', '.cpy': 'COBOL',
+    }
+
     def reconstruct_with_neighbors(self, cube: Cube, neighbors: list[Cube],
-                                   max_tokens: int = 256) -> str:
+                                   max_tokens: int = 256,
+                                   ast_hints: dict | None = None) -> str:
         """
         Reconstruct a cube using its neighbors as context.
 
         This is the core reconstruction: neighbors provide the context,
         the cube content is what we're trying to reconstruct.
+        Injects language lexicon + AST constraints for maximum precision.
         """
-        # Sort neighbors by line proximity
-        sorted_neighbors = sorted(neighbors,
-                                  key=lambda n: abs(n.line_start - cube.line_start))
+        # Detect language from file extension
+        ext = os.path.splitext(cube.file_origin)[1].lower() if cube.file_origin else ''
+        lang = self._EXT_TO_LANG.get(ext, 'code')
+        lang_key = ext.lstrip('.')  # for lexicon lookup
 
-        # Build context from neighbors
-        context_parts = []
-        for n in sorted_neighbors[:9]:
-            context_parts.append(f"# From {n.file_origin} L{n.line_start}-{n.line_end}:\n{n.content}")
-
-        context = "\n\n".join(context_parts)
-
-        # Find prefix/suffix among same-file neighbors
-        same_file = [n for n in sorted_neighbors if n.file_origin == cube.file_origin]
-        prefix_cubes = [n for n in same_file if n.line_end <= cube.line_start]
-        suffix_cubes = [n for n in same_file if n.line_start >= cube.line_end]
-
-        prefix = prefix_cubes[-1].content if prefix_cubes else ""
-        suffix = suffix_cubes[0].content if suffix_cubes else ""
+        # Sort neighbors by line position (not proximity — preserve order)
+        same_file = [n for n in neighbors if n.file_origin == cube.file_origin]
+        before = sorted([n for n in same_file if n.line_end <= cube.line_start],
+                        key=lambda c: c.line_start)
+        after = sorted([n for n in same_file if n.line_start >= cube.line_end],
+                       key=lambda c: c.line_start)
 
         # Try FIM first if available
-        if self.provider.supports_fim and prefix and suffix:
-            return self.reconstruct_fim(prefix, suffix, max_tokens)
+        if self.provider.supports_fim and before and after:
+            ext_prefix = "\n".join(c.content for c in before)
+            ext_suffix = "\n".join(c.content for c in after)
+            return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
 
-        # Standard prompt-based reconstruction
-        prompt = (
-            "Reconstruct the missing code. Context from neighboring code:\n\n"
-            f"{context}\n\n"
-            f"The missing code is from {cube.file_origin} "
-            f"lines {cube.line_start}-{cube.line_end}.\n"
-        )
-        if prefix:
-            prompt += f"\nCode immediately before:\n{prefix}\n"
-        if suffix:
-            prompt += f"\nCode immediately after:\n{suffix}\n"
+        # Build structured prompt — lexicon + constraints + neighbors
+        parts = []
+        parts.append(f"You are reconstructing {lang} code from file {cube.file_origin}.")
+        n_lines = cube.line_end - cube.line_start + 1
+        parts.append(f"Lines {cube.line_start}-{cube.line_end} are missing ({n_lines} lines, ~{cube.token_count} tokens).")
+        parts.append("")
 
-        prompt += "\nOutput ONLY the missing code, no markdown fences, no explanation:"
+        # Inject language lexicon — constrains formatting + syntax
+        lexicon_text = format_lexicon_prompt(lang_key)
+        if lexicon_text:
+            parts.append(lexicon_text)
+            parts.append("")
 
-        raw = self.provider.generate(prompt, max_tokens=max_tokens)
+        # Inject AST constraints if available
+        if ast_hints:
+            parts.append("=== CONSTRAINTS (from static analysis) ===")
+            if ast_hints.get('functions'):
+                parts.append(f"Functions defined: {', '.join(ast_hints['functions'])}")
+            if ast_hints.get('classes'):
+                parts.append(f"Classes defined: {', '.join(ast_hints['classes'])}")
+            if ast_hints.get('imports'):
+                parts.append(f"Imports used: {', '.join(ast_hints['imports'])}")
+            if ast_hints.get('variables'):
+                parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
+            if ast_hints.get('indent_char'):
+                parts.append(f"Indentation: {ast_hints['indent_char']}")
+            if ast_hints.get('indent_level'):
+                parts.append(f"Base indent level: {ast_hints['indent_level']}")
+            parts.append("=== END CONSTRAINTS ===")
+            parts.append("")
+
+        if before:
+            parts.append("=== CODE BEFORE (ends at line {}) ===".format(cube.line_start - 1))
+            for b in before[-4:]:  # last 4 before-cubes max
+                parts.append(b.content)
+            parts.append("")
+
+        if after:
+            parts.append("=== CODE AFTER (starts at line {}) ===".format(cube.line_end + 1))
+            for a in after[:4]:  # first 4 after-cubes max
+                parts.append(a.content)
+            parts.append("")
+
+        parts.append(f"Write EXACTLY {n_lines} lines of {lang} code for lines {cube.line_start}-{cube.line_end}.")
+        parts.append("Match the style, indentation, and conventions of the surrounding code.")
+        parts.append("Output ONLY the code. No markdown fences. No explanation.")
+
+        prompt = "\n".join(parts)
+
+        # Constrain output to ~1.5x expected size (not 3x)
+        constrained_tokens = min(max_tokens, cube.token_count * 2)
+
+        raw = self.provider.generate(prompt, max_tokens=constrained_tokens)
         # Strip markdown code fences that LLMs love to add
         cleaned = raw.strip()
         if cleaned.startswith('```'):
             lines = cleaned.split('\n')
-            # Remove first line (```python or ```) and last line (```)
             if lines[-1].strip() == '```':
                 lines = lines[1:-1]
             else:
@@ -1306,18 +1468,20 @@ class ReconstructionResult:
 
 def reconstruct_cube(cube: Cube, neighbors: list[Cube],
                      provider: LLMProvider,
-                     ncd_threshold: float = 0.3) -> ReconstructionResult:
+                     ncd_threshold: float = 0.3,
+                     ast_hints: dict | None = None) -> ReconstructionResult:
     """
     B16: Reconstruct a cube using its neighbors + LLM.
 
-    1. Build prompt from neighbors context
+    1. Build prompt from neighbors context + lexicon + AST hints
     2. Call LLM to reconstruct
     3. Validate via SHA-256 (B17) and NCD fallback (B19)
     4. Score perplexity (B18)
     """
     fim = FIMReconstructor(provider)
     reconstruction = fim.reconstruct_with_neighbors(
-        cube, neighbors, max_tokens=cube.token_count * 3
+        cube, neighbors, max_tokens=cube.token_count * 3,
+        ast_hints=ast_hints,
     )
 
     # B17: SHA-256 validation
@@ -1408,36 +1572,62 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
                           provider: LLMProvider,
                           cycle_num: int = 1,
                           ncd_threshold: float = 0.3,
-                          config: 'CubeConfig | None' = None) -> list[ReconstructionResult]:
+                          config: 'CubeConfig | None' = None,
+                          ast_hints: dict | None = None,
+                          mycelium=None,
+                          healed: set | None = None) -> list[ReconstructionResult]:
     """
-    Run one cycle of destruction/reconstruction on all cubes.
+    Run one full cycle of destruction/reconstruction.
 
-    For each cube:
-    1. Get its neighbors from store
-    2. Reconstruct
-    3. Record result
-    4. Update temperature
+    ALL bricks wired:
+    1. Get neighbors (Hebbian-weighted) from store
+    2. Add mycelium semantic neighbors (cycle 2+)
+    3. Reconstruct with lexicon + AST hints (B15 + B7b)
+    4. SHA-256 validate (B17) + NCD fallback (B19)
+    5. Record cycle + quarantine
+    6. Wagon effect: replace successful cubes in store
+    7. Post-cycle: Hebbian update (B30) + feed mycelium (B29)
+    8. Post-cycle: update temperatures (B23)
     """
+    if healed is None:
+        healed = set()
+    if ast_hints is None:
+        ast_hints = {}
+
     results = []
 
     for cube in cubes:
-        # Get neighbor cubes
+        # Skip already healed cubes
+        if cube.id in healed:
+            continue
+
+        # Get neighbor cubes — sorted by Hebbian weight (strongest first)
         neighbor_entries = store.get_neighbors(cube.id)
+        neighbor_entries.sort(key=lambda x: -x[1])
         neighbor_cubes = []
         for nid, weight, ntype in neighbor_entries:
             n = store.get_cube(nid)
             if n:
                 neighbor_cubes.append(n)
 
-        # Reconstruct
-        result = reconstruct_cube(cube, neighbor_cubes, provider, ncd_threshold)
+        # Add mycelium semantic neighbors (cycle 2+)
+        if mycelium and cycle_num >= 2:
+            _add_semantic_neighbors(cube, cubes, store, mycelium,
+                                    neighbor_cubes, max_semantic=5)
+
+        # Get AST hints for this cube
+        hints = ast_hints.get(cube.id)
+
+        # Reconstruct with lexicon + AST + weighted neighbors
+        result = reconstruct_cube(cube, neighbor_cubes, provider,
+                                  ncd_threshold, ast_hints=hints)
         results.append(result)
 
         # Record in store
         store.record_cycle(cube.id, cycle_num, result.success,
                            result.reconstruction, result.perplexity)
 
-        # Quarantine: sauvegarder le bloc corrompu avant guérison
+        # Quarantine: save corrupted block before healing
         _q_enabled = config.quarantine_enabled if config else True
         if _q_enabled and result.success and not result.exact_match:
             quarantine_path = os.path.join(
@@ -1446,6 +1636,12 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
                 quarantine_path, cube,
                 result.reconstruction, result.exact_match,
                 result.ncd_score)
+
+        # Wagon effect: successful reconstruction replaces original
+        if result.success:
+            healed.add(cube.id)
+            cube.content = result.reconstruction
+            store.save_cube(cube)
 
         # Update temperature: hotter if reconstruction fails
         if result.success:
@@ -1457,7 +1653,200 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
         cube.temperature = new_temp
         cube.score = result.perplexity
 
+    # ─── Post-cycle: wire the learning bricks ─────────────────────
+
+    # B30: Hebbian update — strengthen/weaken neighbor weights
+    hebbian_update(store, results, learning_rate=0.1)
+
+    # B29: Feed mycelium from results
+    if mycelium:
+        feed_mycelium_from_results(results, cubes, mycelium)
+
+    # B23: Update all temperatures from full cycle history
+    update_all_temperatures(cubes, store)
+
+    # B24: Kaplan-Meier survival for hottest cubes
+    hot_cubes = sorted(cubes, key=lambda c: c.temperature, reverse=True)[:10]
+    for hc in hot_cubes:
+        try:
+            hc._km_survival = kaplan_meier_survival(hc, store)
+        except Exception:
+            hc._km_survival = 1.0
+
+    # B22: Tononi degeneracy for failed cubes — fragile vs critical
+    failed_ids = {r.cube_id for r in results if not r.success}
+    cube_by_id = {c.id: c for c in cubes}
+    for fid in list(failed_ids)[:20]:
+        fc = cube_by_id.get(fid)
+        if fc:
+            try:
+                fc._degeneracy = tononi_degeneracy(fc, store, cubes)
+            except Exception:
+                fc._degeneracy = 0.0
+
+    # B38: Record anomalies for persistently hot cubes
+    anomaly_path = os.path.join(os.path.expanduser('~'), '.muninn', 'anomalies.jsonl')
+    for hc in hot_cubes[:5]:
+        if hc.temperature > 0.5:
+            try:
+                record_anomaly(
+                    anomaly_path, hc.file_origin,
+                    {'temperature': hc.temperature,
+                     'survival': getattr(hc, '_km_survival', 0),
+                     'cycle': cycle_num},
+                    [hc.id], label='hot_cube')
+            except Exception:
+                pass
+
     return results
+
+
+def _add_semantic_neighbors(cube: Cube, all_cubes: list[Cube],
+                            store: CubeStore, mycelium,
+                            neighbor_cubes: list[Cube],
+                            max_semantic: int = 5):
+    """Add mycelium-based semantic neighbors to a cube's neighbor list."""
+    words = set(cube.content.lower().split())
+    seeds = list(words)[:5]
+    related_concepts = set()
+
+    try:
+        if hasattr(mycelium, 'spread_activation'):
+            activated = mycelium.spread_activation(seeds, hops=2, decay=0.5)
+            for concept, score in activated[:20]:
+                related_concepts.add(concept)
+        else:
+            for word in seeds:
+                related = mycelium.get_related(word, top_n=5)
+                for concept, strength in related:
+                    related_concepts.add(concept)
+    except Exception:
+        return
+
+    if not related_concepts:
+        return
+
+    existing_ids = {n.id for n in neighbor_cubes}
+    existing_ids.add(cube.id)
+
+    scored = []
+    for other in all_cubes:
+        if other.id in existing_ids:
+            continue
+        other_words = set(other.content.lower().split())
+        overlap = len(related_concepts & other_words)
+        if overlap > 0:
+            scored.append((other, overlap))
+
+    scored.sort(key=lambda x: -x[1])
+    for c, _ in scored[:max_semantic]:
+        neighbor_cubes.append(c)
+
+
+def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
+                        deps: list['Dependency'] = None,
+                        repo_path: str = None) -> dict:
+    """
+    Post-cycles analysis — ALL diagnostic bricks wired.
+
+    B27+B28: Level pyramid (88→704→5632 tokens)
+    B9:  Laplacian RG optimal grouping (spectral)
+    B10: Cheeger bottleneck detection (Fiedler vector)
+    B26: God's Number (irreplaceable core)
+    B35: Heatmap per file
+    B31: Git blame for hottest cubes
+    B37: Auto-repair suggestions for hot files
+    B38: Feedback loop validation
+
+    Returns analysis dict with all metrics.
+    """
+    analysis = {}
+
+    # B27+B28: Build level pyramid + propagate scores
+    try:
+        levels = propagate_levels(cubes, store, max_level=3)
+        analysis['levels'] = {lvl: len(cs) for lvl, cs in levels.items()}
+    except Exception as e:
+        analysis['levels'] = {'error': str(e)}
+
+    # B9: Laplacian RG grouping (spectral decimation)
+    try:
+        groups = laplacian_rg_grouping(cubes, store)
+        analysis['rg_groups'] = len(groups)
+        analysis['rg_avg_size'] = (
+            sum(len(g) for g in groups) / len(groups) if groups else 0
+        )
+    except Exception as e:
+        analysis['rg_groups'] = {'error': str(e)}
+
+    # B10: Cheeger bottleneck detection
+    try:
+        cheeger = cheeger_constant(cubes, store)
+        analysis['cheeger'] = cheeger
+    except Exception as e:
+        analysis['cheeger'] = {'error': str(e)}
+
+    # B26: God's Number
+    try:
+        gods = compute_gods_number(cubes, store, deps or [], threshold=0.5)
+        analysis['gods_number'] = {
+            'value': gods.gods_number,
+            'total': gods.total_cubes,
+            'bounds': gods.bounds,
+        }
+    except Exception as e:
+        analysis['gods_number'] = {'error': str(e)}
+
+    # B35: Heatmap per file
+    try:
+        heatmap = cube_heatmap(store)
+        analysis['heatmap'] = {
+            f: {'count': v['count'], 'avg_temp': v['avg_temp'],
+                'hot': v['hot_count']}
+            for f, v in heatmap.items()
+        }
+    except Exception as e:
+        analysis['heatmap'] = {'error': str(e)}
+
+    # B31: Git blame for hottest cubes
+    if repo_path:
+        hot = sorted(cubes, key=lambda c: c.temperature, reverse=True)[:5]
+        blame_info = []
+        for hc in hot:
+            if hc.temperature > 0.3:
+                try:
+                    info = git_blame_cube(hc, repo_path)
+                    blame_info.append(info)
+                except Exception:
+                    pass
+        if blame_info:
+            analysis['git_blame'] = blame_info
+
+    # B37: Auto-repair candidates (dry run — identify, don't reconstruct)
+    hot_files = set()
+    for c in cubes:
+        if c.temperature > 0.5:
+            hot_files.add(c.file_origin)
+    if hot_files:
+        try:
+            patches = auto_repair(store, list(hot_files),
+                                  reconstructor=None, max_patches=5)
+            analysis['auto_repair_candidates'] = len(patches)
+        except Exception:
+            pass
+
+    # B38: Feedback loop — validate past anomaly predictions
+    if repo_path:
+        try:
+            anomaly_path = os.path.join(
+                os.path.expanduser('~'), '.muninn', 'anomalies.jsonl')
+            feedback = feedback_loop_check(anomaly_path, repo_path)
+            if feedback.get('total', 0) > 0:
+                analysis['feedback'] = feedback
+        except Exception:
+            pass
+
+    return analysis
 
 
 # ─── B23: Temperature par cube + stockage ─────────────────────────────
@@ -1558,6 +1947,37 @@ def filter_dead_cubes(cubes: list[Cube], deps: list['Dependency']) -> tuple[list
         else:
             active.append(cube)
     return active, dead
+
+
+def prepare_cubes(cubes: list[Cube], store: CubeStore,
+                  deps: list['Dependency'] = None,
+                  use_survey: bool = True) -> tuple[list[Cube], dict]:
+    """
+    Pre-filter cubes before reconstruction cycles.
+    B25: Remove dead code (comments/TODOs)
+    B21: Survey Propagation removes trivial cubes (~30%)
+    Returns (filtered_cubes, filter_stats).
+    """
+    stats = {'total': len(cubes), 'dead': 0, 'trivial': 0, 'active': 0}
+
+    # B25: Danger filter — remove dead code
+    if deps is not None:
+        active, dead = filter_dead_cubes(cubes, deps)
+        stats['dead'] = len(dead)
+    else:
+        active = list(cubes)
+
+    # B21: Survey Propagation pre-filter — skip trivial cubes (~30%)
+    if use_survey and len(active) > 10:
+        try:
+            non_trivial, trivial = survey_propagation_filter(active, store)
+            stats['trivial'] = len(trivial)
+            active = non_trivial
+        except Exception:
+            pass  # numpy not available or other issue
+
+    stats['active'] = len(active)
+    return active, stats
 
 
 # ─── B26: God's Number calcul ────────────────────────────────────────
@@ -2100,7 +2520,15 @@ def cli_scan(repo_path: str, config: Optional[CubeConfig] = None) -> dict:
 def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
             config: Optional[CubeConfig] = None) -> dict:
     """
-    `cube run [--cycles N] [--level L]` — Run destruction/reconstruction cycles.
+    `cube run [--cycles N] [--level L]` — Full pipeline: prepare + cycles + analysis.
+
+    ALL bricks wired:
+    - Pre-filter: B25 (danger) + B21 (survey propagation)
+    - Per-cycle: B15+B7b (reconstruct) → B17+B19 (validate) → B30+B29+B23 (learn)
+                 + B24 (Kaplan-Meier) + B22 (Tononi) + B38 (anomalies)
+    - Post-cycles: B27+B28 (levels) + B9 (Laplacian) + B10 (Cheeger)
+                   + B26 (God's Number) + B35 (heatmap) + B31 (git blame)
+                   + B37 (auto-repair) + B38 (feedback)
     """
     config = config or CubeConfig()
     store = CubeStore(config.db_path)
@@ -2108,42 +2536,57 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
     try:
         provider = config.get_provider()
         cubes = store.get_cubes_by_level(level)
-        deps = []  # Already stored; not needed for run
 
+        # ─── Pre-filter: B25 + B21 ─────────────────────────────────
+        active_cubes, filter_stats = prepare_cubes(cubes, store)
+
+        # ─── B7b: Extract AST hints before destruction ─────────────
+        ast_hints = extract_all_ast_hints(active_cubes)
+
+        # ─── Cycle loop ────────────────────────────────────────────
+        healed = set()
         all_results = []
         for cycle_num in range(1, cycles + 1):
+            # run_destruction_cycle already does B30+B29+B23+B24+B22+B38
             results = run_destruction_cycle(
-                cubes, store, provider,
+                active_cubes, store, provider,
                 cycle_num=cycle_num,
                 ncd_threshold=config.ncd_threshold,
                 config=config,
+                ast_hints=ast_hints,
+                healed=healed,
             )
             all_results.extend(results)
 
-            # B30: Hebbian update
-            hebbian_update(store, results)
-
-            # B29: Feed mycelium (if available)
-            feed_mycelium_from_results(results, cubes)
+            # Check convergence
+            healed_count = sum(1 for c in active_cubes if c.id in healed)
+            if healed_count == len(active_cubes):
+                break
 
         successes = sum(1 for r in all_results if r.success)
 
-        # Auto-activation quarantaine: si convergence (100% success rate sur
-        # le dernier cycle = toutes reconstructions exactes), on active la quarantaine
+        # ─── Post-cycles analysis: B27+B28+B9+B10+B26+B35+B31+B37+B38
+        analysis = post_cycle_analysis(
+            active_cubes, store, repo_path=repo_path)
+
+        # Auto-activation quarantaine
         if not config.quarantine_enabled and all_results:
-            last_cycle = [r for r in all_results[-len(cubes):]]  # dernier cycle
+            last_cycle = all_results[-len(active_cubes):]
             if last_cycle and all(r.success for r in last_cycle):
                 config.quarantine_enabled = True
                 config.save()
 
         return {
             'cycles': cycles,
-            'cubes_tested': len(cubes),
+            'cubes_total': len(cubes),
+            'cubes_filtered': filter_stats,
+            'cubes_active': len(active_cubes),
             'total_tests': len(all_results),
             'successes': successes,
             'failures': len(all_results) - successes,
             'success_rate': successes / len(all_results) if all_results else 0.0,
             'quarantine_enabled': config.quarantine_enabled,
+            'analysis': analysis,
         }
     finally:
         store.close()

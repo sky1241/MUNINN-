@@ -1,0 +1,15 @@
+Cube Convergence Test — 2026-03-19 00:54
+File: server.go (Go) — 1306 lines
+Model: claude-sonnet-4-6
+============================================================
+
+WAGON EFFECT: successful reconstructions replace original cubes,
+becoming better neighbors for adjacent cubes in the next cycle.
+
+ Cycle  Attempted   Healed    Cumul        %  Avg NCD
+──────────────────────────────────────────────────
+     1         91        0        0     0.0%    1.000
+     2         91        0        0     0.0%    1.000
+     3         91        0        0     0.0%    1.000
+     4         91        0        0     0.0%    1.000
+     5         91        0        0     0.0%    1.000
