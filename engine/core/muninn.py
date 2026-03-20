@@ -6182,10 +6182,16 @@ class _MuninnLock:
             if sys.platform == "win32":
                 import ctypes
                 kernel32 = ctypes.windll.kernel32
-                handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-                if handle:
+                # PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+                handle = kernel32.OpenProcess(0x1000, False, pid)
+                if not handle:
+                    return False
+                # STILL_ACTIVE = 259
+                exit_code = ctypes.c_ulong()
+                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
                     kernel32.CloseHandle(handle)
-                    return True
+                    return exit_code.value == 259  # STILL_ACTIVE
+                kernel32.CloseHandle(handle)
                 return False
             else:
                 os.kill(pid, 0)
@@ -6226,6 +6232,11 @@ class _MuninnLock:
 
                 if should_break:
                     import shutil
+                    # Log stale lock removal for debugging
+                    try:
+                        _hook_log(self.lock_dir.parent.parent, f"STALE LOCK removed: {self.lock_dir.name} (owner PID gone or expired)")
+                    except Exception:
+                        pass
                     shutil.rmtree(self.lock_dir, ignore_errors=True)
                     continue
 

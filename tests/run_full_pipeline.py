@@ -125,7 +125,9 @@ def build_mycelium_from_corpus(contents: dict[str, str]):
         myc = Mycelium(myc_path)
 
         for fpath, content in contents.items():
-            myc.observe(content, source=os.path.basename(fpath))
+            # observe() takes a list of concepts, not raw content
+            words = list(set(content.lower().split()))[:200]
+            myc.observe(words)
 
         stats = myc.stats()
         p(f"  Mycelium: {stats.get('total_connections', 0)} connections, "
@@ -207,8 +209,13 @@ def run_full_pipeline(file_paths: dict[str, str], provider, max_cycles=10):
     # ─── Phase 3: Pre-filter (B25 danger + B21 survey prop) ────────
     p("\n  === PHASE 3: PRE-FILTER (B25 + B21) ===")
     deps = parse_dependencies(scanned_files)
-    active_cubes, filter_stats = prepare_cubes(all_cubes, store, deps,
-                                                use_survey=True)
+    # If no cross-file deps found (standalone corpus files), skip dead filter
+    # — B25 would mark ALL cubes as dead since they don't import each other
+    use_deps = deps if deps else None
+    # On cold start (no cycle history), skip survey prop — all cubes are cold
+    # B21 survey propagation is useful after N cycles, not on first run
+    active_cubes, filter_stats = prepare_cubes(all_cubes, store, use_deps,
+                                                use_survey=False)
     dead_count = filter_stats['dead']
     trivial_count = filter_stats['trivial']
     if dead_count or trivial_count:
@@ -248,7 +255,7 @@ def run_full_pipeline(file_paths: dict[str, str], provider, max_cycles=10):
             'exact': exact_count,
             'total_healed': len(healed),
             'total_cubes': len(active_cubes),
-            'pct': 100 * len(healed) / len(active_cubes),
+            'pct': 100 * len(healed) / max(1, len(active_cubes)),
             'avg_ncd': avg_ncd,
             'elapsed': elapsed,
         }
@@ -318,7 +325,7 @@ def run_full_pipeline(file_paths: dict[str, str], provider, max_cycles=10):
     p(f"  {'─'*55}")
     p(f"  Total: {total_time:.1f}s")
     p(f"  Final: {len(healed)}/{len(active_cubes)} healed "
-      f"({100*len(healed)/len(active_cubes):.1f}%)")
+      f"({100*len(healed)/max(1, len(active_cubes)):.1f}%)")
 
     p(f"  Pre-filter: {filter_stats['dead']} dead, "
       f"{filter_stats['trivial']} trivial, "
