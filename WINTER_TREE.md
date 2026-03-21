@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-19. Engine: 17240 lignes, 11 fichiers. Tests: 80 fichiers, 607 tests, 0 FAIL.
+> Mis a jour: 2026-03-21. Engine: 17572 lignes, 11 fichiers + bridge_hook.py 107L. Tests: 101 fichiers, 683 tests, 0 FAIL.
 
 ## Architecture
 
@@ -13,7 +13,7 @@
       |      |
    [tree.json]                         +2 Branches (metadata arbre)
       |
-   [muninn.py 7244L]                   +1 Tronc (moteur principal)
+   [muninn.py 7535L]                   +1 Tronc (moteur principal)
       |
    [mycelium.py 2627L + db 1012L]      0 SOL — champignon vivant (SQLite)
       |
@@ -26,13 +26,13 @@
 
 ---
 
-## muninn.py — Moteur Principal (7244 lignes)
+## muninn.py — Moteur Principal (7535 lignes)
 
 ### Globals & Config (1-191)
 | Fonction | Lignes | Role |
 |----------|--------|------|
 | UNIVERSAL_RULES | 54-64 | Dict FR->EN compact (done, wip, fail...) |
-| _SECRET_PATTERNS | 135-169 | Regex detection secrets (GitHub PAT, AWS, API keys) |
+| _SECRET_PATTERNS | 135-169 | Regex detection secrets (GitHub PAT, AWS, API keys, FR: cle/mdp/passphrase) |
 | _safe_path | 172-182 | Sanitize paths display (max 3 segments) |
 | load_codebook / get_codebook | 98-123 / 185-190 | Charge rules compression (universal + mycelium) |
 
@@ -91,7 +91,7 @@
 | compress_file | 1839-1894 | Pipeline complet: L0-L7 + L10 + L11 + secrets + (L9) |
 | build_tree | 1896-1988 | Construit arbre L-system (recursive, balanced branching) |
 | grow_branches_from_session | 1990-2177 | Pousse branches depuis session compressee (P3/P5/P6) |
-| extract_tags | 2179-2211 | Extrait tags structurels + keywords |
+| extract_tags | 2179-2237 | Extrait tags structurels + keywords |
 | _load_virtual_branches | 2214-2326 | P20c: branches read-only depuis autres repos |
 
 ### Boot & Retrieval (2329-3284)
@@ -150,7 +150,7 @@
 | _load_relevant_sessions | 5857-5908 | Charge sessions passees par TF-IDF |
 | _extract_error_fixes | 5970-6013 | P18: paires erreur/fix -> errors.json |
 | _surface_known_errors | 6015-6038 | Surface erreurs connues au boot |
-| _MuninnLock | 6170-6239 | Mutex fichier pour feed concurrent |
+| _MuninnLock | 6198-6310 | Self-healing mutex: PID check + heartbeat + max age (1h) |
 
 ### Feed Hooks (6241-6787)
 | Fonction | Lignes | Role |
@@ -162,9 +162,16 @@
 | feed_watch | 6585-6710 | Poll-based: process transcripts qui ont grandi |
 | ingest | 6712-6787 | Ingere fichiers/dossiers externes dans l'arbre |
 
-### Live Injection & CLI (6789-7244)
+### Secret Scrub (7032-7128)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| _SCRUB_EXTENSIONS | 7032-7037 | Extensions cibles: .jsonl, .json, .md, .mn, .txt, .log, .csv, .yaml, .yml, .toml, .ini, .cfg, .env, .py, .js, .ts, .sh, .bash, .zsh, .ps1 |
+| _TRIGGER_VALUE_PATTERNS | 7039-7046 | Keyword+value redaction: cle/key/password/mdp/secret/token + value |
+| scrub_secrets | 7048-7128 | Universal secret redaction (dry-run/force). Protected files: .credentials.json, .env, settings.json, config.json |
+
+### Live Injection & CLI (6789-7535)
 | inject_memory | 6789-6877 | B7: injection live fait -> branche + mycelium |
-| main | 6882-7244 | CLI argparse: init/status/doctor/boot/feed/prune/recall/bridge/inject/... |
+| main | 6882-7535 | CLI argparse: init/status/doctor/boot/feed/prune/recall/bridge/inject/scrub/... |
 
 ---
 
@@ -217,12 +224,14 @@
 | trip | 1647-1773 | H1: BARE Wave model — lower beta, dream connections cross-cluster |
 | dream | 1847-1995 | H2: consolidation — strong pairs, absences, validated dreams |
 
-### Sync & Federation (2028-2371)
+### Sync & Federation (2034-2390)
 | Methode | Lignes | Role |
 |---------|--------|------|
-| sync_to_meta | 2028-2158 | Push local -> meta-mycelium partage (SQLite) |
-| pull_from_meta | 2160-2178 | Pull connections pertinentes depuis meta |
-| _pull_from_meta_sqlite | 2180-2296 | Pull SQLite (M9 fix: query_ids init) |
+| _load_meta_dir | 2038-2055 | Config meta_path: ~/.muninn/config.json -> shared dir (NAS/OneDrive) |
+| meta_path / meta_db_path | 2057-2065 | Chemin meta-mycelium configurable (defaut ~/.muninn/) |
+| sync_to_meta | 2067-2195 | Push local -> meta-mycelium partage (SQLite) |
+| pull_from_meta | 2197-2215 | Pull connections pertinentes depuis meta |
+| _pull_from_meta_sqlite | 2217-2333 | Pull SQLite (M9 fix: query_ids init) |
 
 ### Constantes Cles
 - FUSION_THRESHOLD = 5, DECAY_HALF_LIFE = 30 jours
@@ -406,6 +415,26 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 
 ---
 
+## bridge_hook.py — Secret Sentinel + Live Bridge (107 lignes)
+
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| _shannon_entropy | 17-24 | Shannon entropy d'une string (haute = probable secret) |
+| _has_char_diversity | 26-30 | 3+ classes de caracteres (upper, lower, digit, special) |
+| main | 32-107 | P42 UserPromptSubmit: mycelium bridge + Secret Sentinel 3 niveaux |
+
+### Secret Sentinel — 3 niveaux de detection
+1. **API key patterns**: regex structurels (_SECRET_PATTERNS) — match direct
+2. **Trigger + entropy**: mot-cle (key/password/token/mdp...) + valeur entropy > 2.8 + char diversity
+3. **Standalone high-entropy**: strings >= 10 chars, entropy > 3.5, char diversity (sans trigger)
+
+### Fixes Passe 15
+- `sys.stdout.flush()` apres warning print: `import muninn` (ligne 35-36) remplace sys.stdout avec wrapper UTF-8, buffer non-flushe etait perdu
+- `sys.stdin.buffer.read().decode("utf-8")` pour encodage Windows correct
+- Template dans `_generate_bridge_hook()` (muninn.py:4950) synchronise avec hook live
+
+---
+
 ## Ou chercher quoi (index thematique)
 
 | Je cherche... | Fichier | Lignes |
@@ -421,7 +450,8 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | Zones/clusters | mycelium.py | 1188-1342 |
 | Blind spots | mycelium.py | 1511-1639 |
 | Dreams/trip | mycelium.py | 1647-1773 (trip), 1847-1995 (dream) |
-| Sync cross-repo | mycelium.py | 2028-2371 |
+| Sync cross-repo | mycelium.py | 2034-2390 |
+| Team shared meta config | ~/.muninn/config.json | {"meta_path": "//nas/shared"} |
 | SQLite operations | mycelium_db.py | 134-662 |
 | Migration JSON->SQLite | mycelium_db.py | 679-781 |
 | Traduction concepts | mycelium_db.py | 803-1012 |
@@ -437,6 +467,8 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | Spaced repetition | muninn.py | 521-570 (_ebbinghaus_recall) |
 | Path security | muninn.py | 503-510 (_safe_tree_path), 172-182 (_safe_path) |
 | Secret filtering | muninn.py | 135-169 (_SECRET_PATTERNS) |
+| Secret scrub (files) | muninn.py | 7032-7128 (scrub_secrets), CLI: `muninn scrub <path>` |
+| Secret sentinel (live) | bridge_hook.py | 17-66 (Shannon entropy + 3 levels) |
 
 ## Constantes critiques
 
@@ -446,6 +478,9 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | FUSION_THRESHOLD | 5 | mycelium.py | ~280 |
 | DECAY_HALF_LIFE | 30 jours | mycelium.py | ~770 |
 | DEGREE_FILTER_PERCENTILE | 0.05 (top 5%) | mycelium.py | ~650 |
+| LOCK MAX_AGE_SECONDS | 3600 (1h) | muninn.py | 6202 |
+| LOCK HEARTBEAT_STALE | 120s | muninn.py | 6201 |
+| WAL auto-checkpoint | 50MB | mycelium.py | ~345 |
 | WAL check_every | 50 commits | wal_monitor.py | 19 |
 | WAL emergency_threshold | 50000 pages (~200MB) | wal_monitor.py | 25 |
 | PBKDF2 iterations | 600K | vault.py | 58 |
@@ -458,3 +493,10 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 12 passes, 90 bugs fixes, convergence atteinte (0 bug en passe 12 finale).
 Outils: forge --predict/--heatmap/--anomaly/--locate/--gen-props/--robustness + 8 agents deep audit.
 Details: voir CHANGELOG.md section "Debug Audit — Extermination Totale".
+
+## Scan 15 — Secret Hardening (2026-03-21)
+
+- scrub_secrets(): redaction universelle secrets dans fichiers (JSONL/JSON/MD/YAML/logs/code)
+- Secret Sentinel: detection temps-reel dans bridge_hook.py (3 niveaux: regex, trigger+entropy, high-entropy)
+- FR patterns ajoutes a _SECRET_PATTERNS (cle/mdp/passphrase)
+- Fix: bridge_hook stdout flush + stdin Windows encoding

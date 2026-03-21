@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security + WAL Monitor + Quarantine + Cube Benchmark
-Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor) + WAL Monitor + Cube Quarantine + Cube Benchmark 6 langages. AUDIT 12 passes: 90 bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 7276 + mycelium.py 2627 + cube.py 2775 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 16783 total
-Tests: 82 files, 619 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
+Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor+scrub+sentinel) + WAL Monitor + Cube Quarantine + Cube Benchmark 6 langages. AUDIT 12 passes + Passe 15: 90+ bugs fixes. Feed chunked+resumable.
+Engine: muninn.py 7535 + mycelium.py 2668 + cube.py 3264 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 17572 total + bridge_hook.py 107
+Tests: 101 files, 683 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
 Cube Benchmark: 1046 cubes, 6 langages, 291/811 (35.9%) NCD<0.3 cycle 1, 9 SHA exact — Sonnet single pass.
 
 ## Anatomie
@@ -297,6 +297,53 @@ Ce que Muninn a que les autres n'ont pas:
   Total 7.1s, largement dans les 180s. 18/18 checks PASS.
   **Batterie existante:** 61 PASS, 4 SKIP, 0 FAIL (2 tests adaptés: T11.3 return tuple, T12.6 STALE_SECONDS).
   - Total: 10 bugs fixes (2 timeout, 1 lock, 3 data loss, 1 infinite loop, 1 retry, 1 perf, 1 dedup)
+
+### Scan 14 (2026-03-20, self-healing lock + shared meta + tag discrimination)
+
+**Problème 1:** Feed pipeline bloqué 4+ jours (mars 16-20). Stale lock .muninn/hook.lock
+contenait PID 18264 (mort). `_is_pid_alive` retournait True sur Windows car `OpenProcess`
+renvoie un handle même pour des PIDs morts. Le WAL a gonflé à 318 Mo. Zombies Python
+s'accumulaient (feed_watch relancé par scheduled task toutes les 15 min, chacun bloqué).
+
+**Problème 2:** Tags des branches = bruit français ("aie", "ais", "alle") présent dans
+toutes les branches. Boot ne pouvait pas discriminer quelle branche charger.
+
+**Problème 3:** Meta-mycelium hardcodé à ~/.muninn/ — impossible de partager entre devs.
+
+**Fixes appliqués:**
+
+1. **_MuninnLock self-healing — 3 couches de détection:**
+   - PID check: `GetExitCodeProcess == 259 (STILL_ACTIVE)` au lieu de juste `OpenProcess`
+   - Heartbeat: owner écrit timestamp toutes les 60s. Pas de heartbeat depuis 120s = zombie
+   - Max age: lock > 1h = suppression inconditionnelle. Aucun feed ne dure 1h.
+   - feed_history + feed_watch appellent `lock.touch_heartbeat()` périodiquement
+
+2. **WAL auto-checkpoint:**
+   - `mycelium.save()`: PASSIVE checkpoint à chaque sauvegarde
+   - `observe()`: checkpoint si WAL > 50 Mo (toutes les ~50 observations)
+   - Transactions découpées en batches de 5000 paires (était une seule transaction géante)
+
+3. **extract_tags refactorisé:**
+   - Stoplist étendue: 80+ mots FR+EN+tool noise (était 14)
+   - Keywords-first (mots techniques discriminants) au lieu d'entities-first (noms propres)
+   - Concepts mycelium supprimés des tags (243K rules polluaient tout)
+   - 36 branches re-taggées: "cube,hash,tokens" au lieu de "aie,ais,alle"
+
+4. **P20c: Meta-mycelium partagé (team mode):**
+   - `~/.muninn/config.json` → `{"meta_path": "//nas/shared"}` (ou OneDrive, ou tout dossier)
+   - `_load_meta_dir()` dans mycelium.py: lit config, fallback ~/.muninn/ si absent
+   - Zéro serveur, zéro infra. Un dossier partagé suffit.
+   - Chaque dev garde son .muninn/ local (arbre, branches, sessions)
+   - Le meta-mycelium = cerveau collectif partagé
+   - SQLite WAL supporte lecteurs concurrents, lock protège les writers
+
+**Tests:** 13 tests dédiés (test_shared_meta.py), tous PASS:
+  - Config: défaut, custom path, corrompu, clé manquante, auto-create dir
+  - Sync: Alice→Bob, bidirectionnel, zones préservées
+  - Conflits: concurrent sync, MAX pas SUM, pull n'écrase pas local
+  - Edge cases: meta vide, dir inexistant
+
+**Batterie existante:** 326 PASS, 3 SKIP, 0 FAIL (1 skip API = solde Anthropic vide).
 
 ### P11 — Bootstrap auto-complet [FAIT]
 - [x] Format SOL.mn: template machine-optimal (P/E/S/F/K/R) pour root.mn
@@ -1604,3 +1651,34 @@ Premier test de destruction/reconstruction reel sur corpus multi-langage. Pas de
 - tests/cube_corpus/RESULTS.txt: rapport complet avec metriques expliquees
 - tests/test_cube_real_api.py: test pytest (7 langages + rapport final)
 - tests/run_cube_corpus.py: script direct (output temps reel, sans buffering pytest)
+
+## Passe 15 — Secret Hardening — 2026-03-21
+
+Securisation universelle des secrets: redaction dans les fichiers + detection temps-reel quand le dev tape un secret dans Claude Code.
+
+### Nouvelles fonctionnalites
+
+1. **scrub_secrets()** (muninn.py:7048-7128) — redaction universelle de secrets dans n'importe quel fichier texte
+   - `muninn scrub <path>` (dry-run) / `muninn scrub <path> --force` (applique)
+   - Format-agnostique: JSONL, JSON, MD, YAML, logs, code (.py/.js/.ts/.sh...)
+   - Protected files: .credentials.json, .env, settings.json, config.json jamais touches
+   - `_SECRET_PATTERNS` (structurels) + `_TRIGGER_VALUE_PATTERNS` (keyword+valeur)
+   - `_SCRUB_EXTENSIONS`: 20 extensions supportees (.jsonl, .json, .md, .mn, .txt, .log, .csv, .yaml, .yml, .toml, .ini, .cfg, .env, .py, .js, .ts, .sh, .bash, .zsh, .ps1)
+
+2. **Secret Sentinel** (bridge_hook.py) — detection temps-reel dans le hook UserPromptSubmit
+   - 3 niveaux: (1) regex API key patterns, (2) trigger+entropy > 2.8, (3) standalone high-entropy > 3.5
+   - Shannon entropy + character diversity (3+ classes: upper/lower/digit/special)
+   - Warning affiche dans la console Claude Code en temps reel
+
+3. **FR secret patterns** — `cle:/mdp=/mot de passe/passwd/passphrase` ajoute a `_SECRET_PATTERNS`
+
+### Bug fixes
+
+- **bridge_hook.py stdout flush**: `import muninn` (ligne 35-36) remplace sys.stdout avec un wrapper UTF-8, le buffer non-flushe etait silencieusement perdu. Fix: `sys.stdout.flush()` apres chaque print warning
+- **bridge_hook.py stdin encoding**: `sys.stdin.read()` pouvait corrompre UTF-8 sur Windows. Fix: `sys.stdin.buffer.read().decode("utf-8")`
+- **Template sync**: `_generate_bridge_hook()` (muninn.py:4950) synchronise avec le hook live
+
+### Metriques
+- muninn.py: 7244 -> 7535 lignes (+291)
+- bridge_hook.py: 107 lignes (Secret Sentinel + Live Bridge)
+- Engine total: 17572 lignes (11 fichiers + bridge_hook)

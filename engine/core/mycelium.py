@@ -20,6 +20,7 @@ Usage:
 """
 import io
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -208,6 +209,11 @@ class Mycelium:
                                        ("session_count", str(self.data.get("session_count", 0))))
                 self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                                        ("migration_complete", "1"))
+            # WAL auto-checkpoint: prevent WAL from growing unbounded
+            try:
+                self._db._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            except Exception:
+                pass
         else:
             # Fallback: no DB yet (fresh install), create and write everything
             db = MyceliumDB(self.db_path)
@@ -315,6 +321,7 @@ class Mycelium:
             e_a = 1.0
 
         # Record all pairs — direct SQL upsert (lazy mode)
+        # Batched commits every 5000 pairs to prevent WAL from growing unbounded
         if self._db is not None:
             pairs = []
             for i in range(len(clean)):
@@ -322,23 +329,35 @@ class Mycelium:
                     pairs.append((clean[i], clean[j]))
             if pairs:
                 td = today_days()
-                with self._db._conn:
-                    for ca, cb in pairs:
-                        a_key = min(ca, cb)
-                        b_key = max(ca, cb)
-                        a_id = self._db._get_or_create_concept(a_key)
-                        b_id = self._db._get_or_create_concept(b_key)
-                        self._db._conn.execute("""
-                            INSERT INTO edges (a, b, count, first_seen, last_seen)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(a, b) DO UPDATE SET
-                                count = count + ?,
-                                last_seen = ?
-                        """, (a_id, b_id, e_a, td, td, e_a, td))
-                        if self.federated:
-                            self._db._conn.execute(
-                                "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                                (a_id, b_id, self.zone))
+                _batch_size = 5000
+                for batch_start in range(0, len(pairs), _batch_size):
+                    batch = pairs[batch_start:batch_start + _batch_size]
+                    with self._db._conn:
+                        for ca, cb in batch:
+                            a_key = min(ca, cb)
+                            b_key = max(ca, cb)
+                            a_id = self._db._get_or_create_concept(a_key)
+                            b_id = self._db._get_or_create_concept(b_key)
+                            self._db._conn.execute("""
+                                INSERT INTO edges (a, b, count, first_seen, last_seen)
+                                VALUES (?, ?, ?, ?, ?)
+                                ON CONFLICT(a, b) DO UPDATE SET
+                                    count = count + ?,
+                                    last_seen = ?
+                            """, (a_id, b_id, e_a, td, td, e_a, td))
+                            if self.federated:
+                                self._db._conn.execute(
+                                    "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                                    (a_id, b_id, self.zone))
+                # WAL guard: checkpoint if WAL > 50MB (prevents 300MB+ WAL buildup)
+                if not getattr(self, '_wal_check_count', 0) % 50:
+                    try:
+                        wal_path = str(self.db_path) + "-wal"
+                        if os.path.exists(wal_path) and os.path.getsize(wal_path) > 50_000_000:
+                            self._db._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                    except Exception:
+                        pass
+                self._wal_check_count = getattr(self, '_wal_check_count', 0) + 1
         else:
             # Fallback: in-memory dict (fresh install before first save)
             conns = self.data["connections"]
@@ -2015,15 +2034,37 @@ class Mycelium:
     # ── P20b: Meta-mycelium sync ──────────────────────────────────
 
     @staticmethod
+    def _load_meta_dir() -> Path:
+        """Load meta-mycelium directory from config, defaulting to ~/.muninn/.
+
+        Config file: ~/.muninn/config.json  ->  {"meta_path": "/path/to/shared/dir"}
+        Supports: local path, NAS (//server/share), OneDrive, any mounted folder.
+        Team use: point all devs to the same meta_path for shared collective brain.
+        """
+        config_path = Path.home() / ".muninn" / "config.json"
+        if config_path.exists():
+            try:
+                import json as _json
+                cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+                custom = cfg.get("meta_path")
+                if custom:
+                    p = Path(custom)
+                    p.mkdir(parents=True, exist_ok=True)
+                    return p
+            except (ValueError, OSError, KeyError):
+                pass
+        return Path.home() / ".muninn"
+
+    @staticmethod
     def meta_path() -> Path:
-        """Path to the shared meta-mycelium (~/.muninn/meta_mycelium.json).
-        Note: kept for backward compat. SQLite version is meta_mycelium.db."""
-        return Path.home() / ".muninn" / "meta_mycelium.json"
+        """Path to the shared meta-mycelium JSON (legacy compat)."""
+        return Mycelium._load_meta_dir() / "meta_mycelium.json"
 
     @staticmethod
     def meta_db_path() -> Path:
-        """Path to the shared meta-mycelium SQLite DB."""
-        return Path.home() / ".muninn" / "meta_mycelium.db"
+        """Path to the shared meta-mycelium SQLite DB.
+        Configurable via ~/.muninn/config.json {"meta_path": "..."}"""
+        return Mycelium._load_meta_dir() / "meta_mycelium.db"
 
     def sync_to_meta(self):
         """Push local connections to the shared meta-mycelium.

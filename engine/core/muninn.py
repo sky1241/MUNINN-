@@ -166,6 +166,7 @@ _SECRET_PATTERNS = [
     r'password[=:]\s*\S+',         # Generic password= or password:
     r'secret[=:]\s*\S{10,}',       # Generic secret= or secret:
     r'api[_-]?key[=:]\s*\S{10,}',  # Generic api_key= or apikey:
+    r'(?:cl[eé]|mdp|mot\s+de\s+passe|passwd|passphrase)[=:\s]+\S+',  # FR: clé/mdp/mot de passe
 ]
 
 
@@ -2178,35 +2179,63 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
 
 def extract_tags(text: str) -> list[str]:
     """Extract semantic tags from text — repo-agnostic.
-    Uses word frequency + mycelium concept matching."""
+    Uses word frequency + mycelium concept matching.
+    Filters stopwords (EN+FR) and short noise words for branch discrimination."""
+    # Expanded stoplist: common EN + FR words that pollute tags
+    _STOP = {
+        # English
+        "this", "that", "with", "from", "have", "been", "will", "what",
+        "when", "where", "which", "there", "their", "about", "would",
+        "could", "should", "some", "other", "than", "then", "them",
+        "these", "those", "also", "just", "like", "into", "over",
+        "only", "very", "each", "more", "most", "such", "much",
+        "make", "made", "does", "done", "here", "come", "came",
+        "take", "took", "good", "well", "back", "know", "want",
+        "give", "need", "still", "even", "after", "before", "between",
+        "under", "through", "same", "first", "last", "long", "great",
+        "little", "right", "while", "think", "every", "being", "going",
+        # French
+        "pour", "dans", "avec", "sont", "plus", "tout", "mais",
+        "elle", "elles", "nous", "vous", "leur", "cette", "faire",
+        "fait", "dire", "peut", "comme", "bien", "aussi", "encore",
+        "donc", "alors", "quand", "rien", "autre", "meme", "sans",
+        "etre", "avoir", "tres", "trop", "deja", "avant", "apres",
+        "parce", "entre", "depuis", "vers", "chez", "voila",
+        "faut", "sur", "pas", "non", "oui", "bon", "ton", "par",
+        "fais", "devrait", "laisse", "maintenant", "continu",
+        "commence", "finit", "ensuite", "regarde",
+        # Noise from compressed text
+        "aie", "ais", "alle", "aile", "aire", "ante", "amener",
+        "attend", "avait", "bord", "dure", "ease",
+        # Generic tool/context noise (present in most branches)
+        "users", "ludov", "user", "bash", "grep", "exit", "true",
+        "false", "none", "text", "file", "path", "import", "json",
+        "get", "let", "uses", "tool",
+    }
     tags = set()
     text_lower = text.lower()
 
-    # Match mycelium fused concepts present in text
-    cb = get_codebook()
-    for key, rule in cb["mycelium_rules"].items():
-        for concept in rule["concepts"]:
-            if concept in text_lower:
-                tags.add(concept)
-
-    # Extract high-frequency capitalized words as tags (entity detection)
-    # Match both "Capitalized" and "SQLite" (mixed-case technical terms)
-    entities = re.findall(r'\b[A-Z][A-Za-z]{2,}\b', text)
-    # Adaptive threshold: count >= 2 for long texts, >= 1 for short texts
-    _ent_thresh = 2 if len(text) > 500 else 1
-    for entity, count in Counter(entities).most_common(5):
-        if count >= _ent_thresh:
-            tags.add(entity.lower())
-
-    # Extract technical keywords generically
-    tech_words = re.findall(r'\b[a-z]{4,}\b', text_lower)
-    # Adaptive threshold: count >= 3 for long texts, >= 2 for short texts
+    # 1. Extract technical keywords: word-boundary match, min 4 chars
+    # Keywords first — they're the most discriminating for branch selection
+    tech_words = re.findall(r'\b[a-z_][a-z_0-9]{3,}\b', text_lower)
     _kw_thresh = 3 if len(text) > 500 else 2
-    for word, count in Counter(tech_words).most_common(10):
-        if count >= _kw_thresh and word not in ("this", "that", "with", "from", "have",
-                                        "been", "will", "pour", "dans", "avec",
-                                        "sont", "dans", "plus", "tout", "mais"):
+    for word, count in Counter(tech_words).most_common(20):
+        if count >= _kw_thresh and word not in _STOP and len(tags) < 10:
             tags.add(word)
+
+    # 2. Add capitalized entities not yet captured (proper nouns, acronyms)
+    entities = re.findall(r'\b[A-Z][A-Za-z]{2,}\b', text)
+    _ent_thresh = 2 if len(text) > 500 else 1
+    for entity, count in Counter(entities).most_common(8):
+        e_low = entity.lower()
+        if count >= _ent_thresh and e_low not in _STOP and e_low not in tags and len(tags) < 10:
+            tags.add(e_low)
+
+    # 3. Extract technical identifiers (snake_case)
+    identifiers = re.findall(r'\b[a-z_]+(?:_[a-z]+)+\b', text_lower)
+    for ident, count in Counter(identifiers).most_common(5):
+        if count >= 2 and ident not in _STOP and ident not in tags and len(tags) < 10:
+            tags.add(ident)
 
     return sorted(tags)[:10]
 
@@ -4932,27 +4961,90 @@ def _generate_bridge_hook(repo_path: Path, engine_core_dir: Path) -> Path:
     engine_core_str = str(engine_core_dir).replace("\\", "/")
 
     bridge_code = f'''#!/usr/bin/env python3
-"""P42 UserPromptSubmit hook — Live Mycelium Bridge.
+"""P42 UserPromptSubmit hook — Live Mycelium Bridge + Secret Sentinel.
 
-Reads user prompt from stdin (JSON), runs bridge_fast(),
-returns activated concepts as context for Claude.
+Reads user prompt from stdin (JSON), checks for accidental secrets,
+then runs bridge_fast() for activated concepts.
 
 Auto-generated by muninn install_hooks(). Do not edit manually.
 Target: <0.5s total execution time.
 """
 import json
+import math
+import re
 import sys
 import os
+from pathlib import Path
+
+def _shannon_entropy(s):
+    """Shannon entropy of a string. High entropy = likely a secret."""
+    if not s:
+        return 0.0
+    freq = {{}}
+    for c in s:
+        freq[c] = freq.get(c, 0) + 1
+    length = len(s)
+    return -sum((n / length) * math.log2(n / length) for n in freq.values())
+
+def _has_char_diversity(s):
+    """Check if string has mixed character classes (upper+lower+digit+special)."""
+    classes = 0
+    if re.search(r'[a-z]', s): classes += 1
+    if re.search(r'[A-Z]', s): classes += 1
+    if re.search(r'[0-9]', s): classes += 1
+    if re.search(r'[^a-zA-Z0-9\\s]', s): classes += 1
+    return classes >= 3
+
+_SECRET_TRIGGERS = re.compile(
+    r'(?:cl[eé]|key|password|mdp|mot de passe|passwd|secret|token|passphrase'
+    r'|api.?key|credentials?|auth)',
+    re.IGNORECASE
+)
+
+def _check_secrets(prompt):
+    """Detect if user accidentally typed a password/key in their prompt.
+    Returns warning string or None."""
+    # 1. Check known API key patterns (structural)
+    _API_PATTERNS = [
+        r'ghp_[A-Za-z0-9]{{20,}}', r'sk-[A-Za-z0-9\\-._]{{20,}}',
+        r'AKIA[A-Z0-9]{{16}}', r'Bearer\\s+[A-Za-z0-9\\-._~+/]+=*',
+    ]
+    for pat in _API_PATTERNS:
+        if re.search(pat, prompt):
+            return "[MUNINN SENTINEL] API key/token detected in your message. It will be stored in the Claude transcript. Consider rotating it."
+
+    # 2. Check for password-like strings near trigger words
+    if _SECRET_TRIGGERS.search(prompt):
+        words = prompt.split()
+        for word in words:
+            clean = word.strip('.,;:!?\\'\\"/()[]{{}}')
+            if len(clean) >= 6 and _has_char_diversity(clean) and _shannon_entropy(clean) > 2.8:
+                return "[MUNINN SENTINEL] You may have typed a password or secret in your message. It will be recorded in the Claude transcript (.jsonl). Consider changing it. Muninn will redact it from .mn files but CANNOT erase it from the raw transcript."
+
+    # 3. Standalone high-entropy check (no trigger needed) for very suspicious strings
+    for word in prompt.split():
+        clean = word.strip('.,;:!?\\'\\"/()[]{{}}')
+        if len(clean) >= 10 and _has_char_diversity(clean) and _shannon_entropy(clean) > 3.5:
+            return "[MUNINN SENTINEL] High-entropy string detected — possible password or key. It will be stored in the raw transcript."
+
+    return None
 
 def main():
     try:
-        hook_input = json.loads(sys.stdin.read())
-    except (json.JSONDecodeError, Exception):
+        raw = sys.stdin.buffer.read().decode("utf-8")
+        hook_input = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError, Exception):
         sys.exit(0)
 
     prompt = hook_input.get("prompt", "")
     if not prompt or len(prompt) < 10:
         sys.exit(0)
+
+    # Secret detection — runs FIRST, before anything else
+    warning = _check_secrets(prompt)
+    if warning:
+        print(warning)
+        sys.stdout.flush()
 
     repo_path = hook_input.get("cwd", os.getcwd())
 
@@ -4962,7 +5054,6 @@ def main():
 
     try:
         import muninn
-        from pathlib import Path
         muninn._REPO_PATH = Path(repo_path).resolve()
         muninn._refresh_tree_paths()
         result = muninn.bridge_fast(prompt)
@@ -6168,13 +6259,26 @@ def _update_usefulness(repo_path: Path, jsonl_path: Path):
 
 
 class _MuninnLock:
-    """Simple file lock using mkdir atomicity + PID tracking. Prevents concurrent hook execution."""
-    STALE_SECONDS = 300  # 5 min — reduced from 10 because PID check catches dead processes faster
+    """Self-healing file lock: mkdir atomicity + PID check + heartbeat + max age.
+
+    Three layers of stale detection (any one triggers cleanup):
+    1. PID check — owner process dead? Remove immediately.
+    2. Heartbeat — owner hasn't written heartbeat in 120s? Zombie. Remove.
+    3. Max age — lock older than 1h? Unconditional remove. No lock should last that long.
+
+    The owner writes a heartbeat file every ~60s via touch_heartbeat().
+    Long-running operations (feed_history, feed_watch) must call it periodically.
+    """
+    STALE_SECONDS = 300     # 5 min — fallback time-based detection
+    HEARTBEAT_STALE = 120   # 2 min — if heartbeat not refreshed, owner is stuck
+    MAX_AGE_SECONDS = 3600  # 1h — absolute maximum, unconditional removal
 
     def __init__(self, repo_path: Path, name: str = "hook", timeout: int = 120):
         self.lock_dir = repo_path / ".muninn" / f"{name}.lock"
         self.pid_file = self.lock_dir / "pid"
+        self.heartbeat_file = self.lock_dir / "heartbeat"
         self.timeout = timeout
+        self._repo_path = repo_path
 
     def _is_pid_alive(self, pid: int) -> bool:
         """Check if process with given PID is still running."""
@@ -6199,42 +6303,66 @@ class _MuninnLock:
         except (OSError, PermissionError, AttributeError):
             return False
 
+    def _is_lock_stale(self) -> bool:
+        """Three-layer stale detection. Returns True if lock should be force-removed."""
+        # Layer 1: PID check — is the owner process dead?
+        try:
+            if self.pid_file.exists():
+                owner_pid = int(self.pid_file.read_text(encoding="utf-8").strip())
+                if not self._is_pid_alive(owner_pid):
+                    _hook_log(self._repo_path, f"STALE LOCK: PID {owner_pid} dead")
+                    return True
+        except (OSError, ValueError):
+            pass
+
+        # Layer 2: Heartbeat — is the owner stuck/frozen?
+        try:
+            if self.heartbeat_file.exists():
+                hb_age = time.time() - self.heartbeat_file.stat().st_mtime
+                if hb_age > self.HEARTBEAT_STALE:
+                    _hook_log(self._repo_path, f"STALE LOCK: heartbeat {hb_age:.0f}s old (limit {self.HEARTBEAT_STALE}s)")
+                    return True
+        except OSError:
+            pass
+
+        # Layer 3: Max age — absolute limit, no lock should live this long
+        try:
+            lock_age = time.time() - self.lock_dir.stat().st_mtime
+            if lock_age > self.MAX_AGE_SECONDS:
+                _hook_log(self._repo_path, f"STALE LOCK: age {lock_age:.0f}s exceeds max {self.MAX_AGE_SECONDS}s")
+                return True
+            # Fallback: mtime-based (original behavior)
+            if lock_age > self.STALE_SECONDS:
+                return True
+        except OSError:
+            pass
+
+        return False
+
+    def touch_heartbeat(self):
+        """Update heartbeat timestamp. Call this periodically in long operations."""
+        try:
+            self.heartbeat_file.write_text(str(time.time()), encoding="utf-8")
+        except OSError:
+            pass
+
     def __enter__(self):
         deadline = time.time() + self.timeout
         while True:
             try:
                 self.lock_dir.mkdir(parents=True, exist_ok=False)
-                # Write PID so stale detection can check if owner is alive
+                # Write PID + initial heartbeat
                 try:
                     self.pid_file.write_text(str(os.getpid()), encoding="utf-8")
+                    self.touch_heartbeat()
                 except OSError:
                     pass
                 return self
             except FileExistsError:
-                # Check if lock owner is still alive (PID-based fast detection)
-                should_break = False
-                try:
-                    if self.pid_file.exists():
-                        owner_pid = int(self.pid_file.read_text(encoding="utf-8").strip())
-                        if not self._is_pid_alive(owner_pid):
-                            should_break = True  # Owner dead, break immediately
-                except (OSError, ValueError):
-                    pass
-
-                if not should_break:
-                    # Fallback: time-based stale detection
-                    try:
-                        age = time.time() - self.lock_dir.stat().st_mtime
-                        if age > self.STALE_SECONDS:
-                            should_break = True
-                    except OSError:
-                        pass
-
-                if should_break:
+                if self._is_lock_stale():
                     import shutil
-                    # Log stale lock removal for debugging
                     try:
-                        _hook_log(self.lock_dir.parent.parent, f"STALE LOCK removed: {self.lock_dir.name} (owner PID gone or expired)")
+                        _hook_log(self._repo_path, f"STALE LOCK removed: {self.lock_dir.name}")
                     except Exception:
                         pass
                     shutil.rmtree(self.lock_dir, ignore_errors=True)
@@ -6493,7 +6621,8 @@ def feed_history(repo_path: Path):
     new_files = 0
 
     try:
-        with _MuninnLock(repo_path, "hook", timeout=120):
+        with _MuninnLock(repo_path, "hook", timeout=120) as lock:
+            _last_hb = time.time()
             for project_dir in project_dirs:
                 # Top-level .jsonl files (main sessions)
                 for jsonl_file in sorted(project_dir.glob("*.jsonl")):
@@ -6506,6 +6635,10 @@ def feed_history(repo_path: Path):
                         m.start_session()
                         for text in texts:
                             m.observe_text(text)
+                            # Heartbeat every 60s so lock doesn't look stale
+                            if time.time() - _last_hb > 60:
+                                lock.touch_heartbeat()
+                                _last_hb = time.time()
                         total_messages += len(texts)
                         new_files += 1
 
@@ -6515,6 +6648,8 @@ def feed_history(repo_path: Path):
                     if new_files % 3 == 0:
                         m.save()
                         _atomic_json_write(fed_path, sorted(fed))
+                        lock.touch_heartbeat()
+                        _last_hb = time.time()
 
                 # Subagent transcripts (top-level and inside session subdirectories)
                 subagent_dirs = []
@@ -6537,6 +6672,9 @@ def feed_history(repo_path: Path):
                             m.start_session()
                             for text in texts:
                                 m.observe_text(text)
+                                if time.time() - _last_hb > 60:
+                                    lock.touch_heartbeat()
+                                    _last_hb = time.time()
                             total_messages += len(texts)
                             new_files += 1
                         fed.add(file_key)
@@ -6666,8 +6804,9 @@ def feed_watch(repo_path: Path):
     # Lock to prevent concurrent watch + hook from racing
     fed_count = 0
     try:
-        with _MuninnLock(repo_path, "hook", timeout=120):
+        with _MuninnLock(repo_path, "hook", timeout=120) as lock:
             for jsonl_path in changed:
+                lock.touch_heartbeat()
                 try:
                     _hook_log(repo_path, f"WATCH feeding {jsonl_path.name}")
 
@@ -6888,6 +7027,96 @@ def inject_memory(fact: str, repo_path: Path = None):
     return live_name
 
 
+# ── SCRUB — universal secret redaction ────────────────────────────
+
+_SCRUB_EXTENSIONS = {
+    ".jsonl", ".json", ".md", ".mn", ".txt", ".log", ".csv",
+    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".env", ".conf",
+    ".py", ".js", ".ts", ".sh", ".bash", ".zsh", ".ps1",
+}
+
+# Trigger-word patterns: "clé xxx", "password xxx", etc. — redact the VALUE not the keyword
+_TRIGGER_VALUE_PATTERNS = [
+    re.compile(
+        r'((?:cl[eé]|key|password|mdp|mot\s+de\s+passe|passwd|secret|token|passphrase'
+        r'|api[_\-]?key|credentials?)\s*[=:\s]\s*)(\S+)',
+        re.IGNORECASE
+    ),
+]
+
+
+def scrub_secrets(target_path: Path, dry_run: bool = False) -> dict:
+    """Scan files under target_path and redact secrets in-place.
+
+    Works on any text file — JSONL, JSON, Markdown, logs, code, etc.
+    Returns stats: {files_scanned, files_modified, secrets_found, errors}.
+    """
+    target = Path(target_path).resolve()
+    stats = {"files_scanned": 0, "files_modified": 0, "secrets_found": 0, "errors": []}
+
+    # Files that MUST NOT be scrubbed (auth, config, lock files)
+    _SKIP_FILES = {
+        ".credentials.json", "credentials.json", "settings.json",
+        "settings.local.json", "config.json", ".env",
+    }
+
+    if target.is_file():
+        if target.name in _SKIP_FILES:
+            print(f"  SKIPPED (protected): {_safe_path(target)}")
+            return stats
+        files = [target]
+    elif target.is_dir():
+        files = []
+        for root, _dirs, fnames in os.walk(target):
+            # Skip .git, node_modules, __pycache__, .venv
+            rp = Path(root)
+            if any(p in rp.parts for p in (".git", "node_modules", "__pycache__", ".venv", "venv")):
+                continue
+            for fn in fnames:
+                if fn in _SKIP_FILES:
+                    continue
+                fp = rp / fn
+                if fp.suffix.lower() in _SCRUB_EXTENSIONS:
+                    files.append(fp)
+    else:
+        stats["errors"].append(f"Path not found: {target}")
+        return stats
+
+    for fp in files:
+        stats["files_scanned"] += 1
+        try:
+            text = fp.read_text(encoding="utf-8", errors="replace")
+        except Exception as e:
+            stats["errors"].append(f"{_safe_path(fp)}: {e}")
+            continue
+
+        modified = text
+        file_hits = 0
+
+        # 1. Structural patterns (_SECRET_PATTERNS) — redact entire match
+        for pat in _SECRET_PATTERNS:
+            new, count = re.subn(pat, "[REDACTED]", modified)
+            file_hits += count
+            modified = new
+
+        # 2. Trigger-word patterns — redact only the VALUE after the keyword
+        for pat in _TRIGGER_VALUE_PATTERNS:
+            def _redact_value(m):
+                return m.group(1) + "[REDACTED]"
+            new, count = pat.subn(_redact_value, modified)
+            file_hits += count
+            modified = new
+
+        if file_hits > 0:
+            stats["secrets_found"] += file_hits
+            stats["files_modified"] += 1
+            if not dry_run:
+                fp.write_text(modified, encoding="utf-8")
+            print(f"  {'[DRY-RUN] ' if dry_run else ''}SCRUBBED {_safe_path(fp)}: {file_hits} secret(s) redacted")
+
+    return stats
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -6898,7 +7127,7 @@ def main():
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
-        "lock", "unlock", "rekey", "trip", "think", "quarantine",
+        "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -7219,6 +7448,28 @@ def main():
             print(f"ERROR: {_safe_path(fp)} not found")
             sys.exit(1)
         verify_compression(fp)
+        return
+
+    if args.command == "scrub":
+        target = Path(args.file or ".").resolve()
+        if not target.exists():
+            print(f"ERROR: path not found: {target}", file=sys.stderr)
+            sys.exit(1)
+        dry = not args.force
+        if dry:
+            print("=== MUNINN SCRUB (dry-run) — use --force to apply ===")
+        else:
+            print("=== MUNINN SCRUB ===")
+        stats = scrub_secrets(target, dry_run=dry)
+        print(f"\n  Scanned: {stats['files_scanned']} files")
+        print(f"  Modified: {stats['files_modified']} files")
+        print(f"  Secrets found: {stats['secrets_found']}")
+        if stats["errors"]:
+            print(f"  Errors: {len(stats['errors'])}")
+            for e in stats["errors"][:5]:
+                print(f"    {e}")
+        if dry and stats["secrets_found"] > 0:
+            print(f"\n  Run with --force to redact {stats['secrets_found']} secret(s)")
         return
 
     if args.command == "quarantine":
