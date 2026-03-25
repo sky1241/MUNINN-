@@ -1,0 +1,2205 @@
+{
+  "meta": {
+    "type": "carmack_security_v2",
+    "db": "d:/ygg/yggdrasil-engine/data/wt3.db",
+    "formulas": 19,
+    "axes": 7
+  },
+  "axis_concepts": {
+    "AXE1_EPIDEMIO": [
+      {
+        "idx": 1156,
+        "name": "Epidemiology",
+        "works_count": 2543994
+      },
+      {
+        "idx": 18853,
+        "name": "Respiratory tract infections",
+        "works_count": 115844
+      },
+      {
+        "idx": 10437,
+        "name": "Infection control",
+        "works_count": 114595
+      },
+      {
+        "idx": 64659,
+        "name": "Molecular epidemiology",
+        "works_count": 98731
+      },
+      {
+        "idx": 2154,
+        "name": "Subclinical infection",
+        "works_count": 94598
+      },
+      {
+        "idx": 24852,
+        "name": "Staphylococcal infections",
+        "works_count": 76164
+      },
+      {
+        "idx": 45029,
+        "name": "Coronavirus Infections",
+        "works_count": 71403
+      },
+      {
+        "idx": 49907,
+        "name": "Respiratory infection",
+        "works_count": 68331
+      }
+    ],
+    "AXE2_FINANCE": [
+      {
+        "idx": 60887,
+        "name": "Financial system",
+        "works_count": 601731
+      },
+      {
+        "idx": 47867,
+        "name": "Banking industry",
+        "works_count": 80227
+      },
+      {
+        "idx": 12254,
+        "name": "Credit risk",
+        "works_count": 67142
+      },
+      {
+        "idx": 8175,
+        "name": "Investment banking",
+        "works_count": 54342
+      },
+      {
+        "idx": 8766,
+        "name": "Retail banking",
+        "works_count": 36619
+      },
+      {
+        "idx": 50316,
+        "name": "Islamic banking",
+        "works_count": 32225
+      },
+      {
+        "idx": 6986,
+        "name": "Systemic risk",
+        "works_count": 24479
+      },
+      {
+        "idx": 18453,
+        "name": "Mobile banking",
+        "works_count": 14989
+      }
+    ],
+    "AXE3_PHYSICS": [
+      {
+        "idx": 7678,
+        "name": "Phase transition",
+        "works_count": 362325
+      },
+      {
+        "idx": 60732,
+        "name": "Quantum phase transition",
+        "works_count": 61005
+      },
+      {
+        "idx": 16064,
+        "name": "Heat equation",
+        "works_count": 53448
+      },
+      {
+        "idx": 56807,
+        "name": "Ising model",
+        "works_count": 48310
+      },
+      {
+        "idx": 65006,
+        "name": "Statistical mechanics",
+        "works_count": 41988
+      },
+      {
+        "idx": 39311,
+        "name": "Percolation (cognitive psychology)",
+        "works_count": 39421
+      },
+      {
+        "idx": 58421,
+        "name": "Diffusion equation",
+        "works_count": 30535
+      },
+      {
+        "idx": 53965,
+        "name": "Quantum statistical mechanics",
+        "works_count": 30459
+      }
+    ],
+    "AXE4_NEURO": [
+      {
+        "idx": 12633,
+        "name": "Cognitive psychology",
+        "works_count": 1734139
+      },
+      {
+        "idx": 13763,
+        "name": "Cognitive science",
+        "works_count": 774287
+      },
+      {
+        "idx": 47630,
+        "name": "Cognitive impairment",
+        "works_count": 197107
+      },
+      {
+        "idx": 47615,
+        "name": "Cognitive decline",
+        "works_count": 169827
+      },
+      {
+        "idx": 13569,
+        "name": "Cognitive reframing",
+        "works_count": 127644
+      },
+      {
+        "idx": 13336,
+        "name": "Effects of sleep deprivation on cognitive performance",
+        "works_count": 123120
+      },
+      {
+        "idx": 5346,
+        "name": "Cognitive skill",
+        "works_count": 102165
+      },
+      {
+        "idx": 59618,
+        "name": "Cognitive neuroscience of visual object recognition",
+        "works_count": 97475
+      }
+    ],
+    "AXE5_ECOLOGY": [
+      {
+        "idx": 57486,
+        "name": "Species richness",
+        "works_count": 241735
+      },
+      {
+        "idx": 1548,
+        "name": "Population dynamics of fisheries",
+        "works_count": 18210
+      },
+      {
+        "idx": 54258,
+        "name": "Ecological network",
+        "works_count": 17578
+      },
+      {
+        "idx": 13977,
+        "name": "Metapopulation",
+        "works_count": 14568
+      },
+      {
+        "idx": 53853,
+        "name": "Population dynamics",
+        "works_count": 10316
+      },
+      {
+        "idx": 57483,
+        "name": "Body size and species richness",
+        "works_count": 3262
+      }
+    ],
+    "AXE6_GAMES": [
+      {
+        "idx": 7533,
+        "name": "Outcome (game theory)",
+        "works_count": 561669
+      },
+      {
+        "idx": 41278,
+        "name": "Star (game theory)",
+        "works_count": 180241
+      },
+      {
+        "idx": 47099,
+        "name": "Resource allocation",
+        "works_count": 146820
+      },
+      {
+        "idx": 12038,
+        "name": "Game theory",
+        "works_count": 126439
+      },
+      {
+        "idx": 55850,
+        "name": "Nash equilibrium",
+        "works_count": 50470
+      },
+      {
+        "idx": 8355,
+        "name": "Mechanism design",
+        "works_count": 30019
+      },
+      {
+        "idx": 16011,
+        "name": "Evolutionary game theory",
+        "works_count": 10823
+      },
+      {
+        "idx": 64925,
+        "name": "Optimal stopping",
+        "works_count": 5738
+      }
+    ],
+    "AXE7_CELLBIO": [
+      {
+        "idx": 11018,
+        "name": "Receptor",
+        "works_count": 1625829
+      },
+      {
+        "idx": 59228,
+        "name": "Signal transduction",
+        "works_count": 1597635
+      },
+      {
+        "idx": 14087,
+        "name": "Apoptosis",
+        "works_count": 791974
+      },
+      {
+        "idx": 31148,
+        "name": "Cytokine",
+        "works_count": 616595
+      },
+      {
+        "idx": 3126,
+        "name": "Phosphorylation",
+        "works_count": 466164
+      },
+      {
+        "idx": 58484,
+        "name": "Oxidative phosphorylation",
+        "works_count": 411983
+      },
+      {
+        "idx": 7884,
+        "name": "Cell signaling",
+        "works_count": 319458
+      },
+      {
+        "idx": 10000,
+        "name": "Proinflammatory cytokine",
+        "works_count": 313887
+      }
+    ],
+    "SEC_SECURITY": [
+      {
+        "idx": 54548,
+        "name": "Computer security",
+        "works_count": 2648110
+      },
+      {
+        "idx": 64328,
+        "name": "Vulnerability (computing)",
+        "works_count": 1354796
+      },
+      {
+        "idx": 6985,
+        "name": "Principal (computer security)",
+        "works_count": 351242
+      },
+      {
+        "idx": 61356,
+        "name": "Asset (computer security)",
+        "works_count": 236740
+      },
+      {
+        "idx": 10467,
+        "name": "Vulnerability assessment",
+        "works_count": 85459
+      },
+      {
+        "idx": 54072,
+        "name": "Intrusion detection system",
+        "works_count": 61237
+      },
+      {
+        "idx": 34924,
+        "name": "Social vulnerability",
+        "works_count": 49588
+      },
+      {
+        "idx": 64663,
+        "name": "Static analysis",
+        "works_count": 36970
+      }
+    ],
+    "NET_NETWORK": [
+      {
+        "idx": 28241,
+        "name": "Interval (graph theory)",
+        "works_count": 2809205
+      },
+      {
+        "idx": 53792,
+        "name": "Dimension (graph theory)",
+        "works_count": 698623
+      },
+      {
+        "idx": 13206,
+        "name": "Loop (graph theory)",
+        "works_count": 590113
+      },
+      {
+        "idx": 161,
+        "name": "Bridge (graph theory)",
+        "works_count": 541797
+      },
+      {
+        "idx": 64906,
+        "name": "Saturation (graph theory)",
+        "works_count": 185898
+      },
+      {
+        "idx": 10029,
+        "name": "Rank (graph theory)",
+        "works_count": 183076
+      },
+      {
+        "idx": 63207,
+        "name": "Graph theory",
+        "works_count": 167644
+      },
+      {
+        "idx": 15597,
+        "name": "Network topology",
+        "works_count": 144916
+      }
+    ]
+  },
+  "structural_holes": {
+    "AXE1_EPIDEMIO": {
+      "vs_security": [
+        {
+          "axis_concept": "Epidemiology",
+          "axis_idx": 1156,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 3.429980970453471
+        },
+        {
+          "axis_concept": "Epidemiology",
+          "axis_idx": 1156,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 3.578361982945353
+        },
+        {
+          "axis_concept": "Epidemiology",
+          "axis_idx": 1156,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 1.4568089914973825
+        },
+        {
+          "axis_concept": "Epidemiology",
+          "axis_idx": 1156,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.012286000419408083
+        },
+        {
+          "axis_concept": "Epidemiology",
+          "axis_idx": 1156,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "axis_idx": 18853,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "axis_idx": 18853,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.09542499715462327
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "axis_idx": 18853,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.08802299946546555
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "axis_idx": 18853,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "axis_idx": 18853,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Infection control",
+          "axis_idx": 10437,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 2.0091849877499044
+        },
+        {
+          "axis_concept": "Infection control",
+          "axis_idx": 10437,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.18775499844923615
+        },
+        {
+          "axis_concept": "Infection control",
+          "axis_idx": 10437,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.0915439985692501
+        },
+        {
+          "axis_concept": "Infection control",
+          "axis_idx": 10437,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.06877300050109625
+        },
+        {
+          "axis_concept": "Infection control",
+          "axis_idx": 10437,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.012821000069379807
+        },
+        {
+          "axis_concept": "Molecular epidemiology",
+          "axis_idx": 64659,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Molecular epidemiology",
+          "axis_idx": 64659,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Molecular epidemiology",
+          "axis_idx": 64659,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Molecular epidemiology",
+          "axis_idx": 64659,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Molecular epidemiology",
+          "axis_idx": 64659,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Subclinical infection",
+          "axis_idx": 2154,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.02777799963951111
+        },
+        {
+          "axis_concept": "Subclinical infection",
+          "axis_idx": 2154,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.31357899820432067
+        },
+        {
+          "axis_concept": "Subclinical infection",
+          "axis_idx": 2154,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.026140999980270863
+        },
+        {
+          "axis_concept": "Subclinical infection",
+          "axis_idx": 2154,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Subclinical infection",
+          "axis_idx": 2154,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Epidemiology",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 2.243113978765905
+        },
+        {
+          "axis_concept": "Epidemiology",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.615688000805676
+        },
+        {
+          "axis_concept": "Epidemiology",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Respiratory tract infections",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Infection control",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.006535999942570925
+        },
+        {
+          "axis_concept": "Infection control",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.006535999942570925
+        },
+        {
+          "axis_concept": "Infection control",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        }
+      ]
+    },
+    "AXE2_FINANCE": {
+      "vs_security": [
+        {
+          "axis_concept": "Financial system",
+          "axis_idx": 60887,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 12.966324856039137
+        },
+        {
+          "axis_concept": "Financial system",
+          "axis_idx": 60887,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 13.270833933027461
+        },
+        {
+          "axis_concept": "Financial system",
+          "axis_idx": 60887,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 9.561612924793735
+        },
+        {
+          "axis_concept": "Financial system",
+          "axis_idx": 60887,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 139.59756441321224
+        },
+        {
+          "axis_concept": "Financial system",
+          "axis_idx": 60887,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.10543399769812822
+        },
+        {
+          "axis_concept": "Banking industry",
+          "axis_idx": 47867,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 1.6069039977155626
+        },
+        {
+          "axis_concept": "Banking industry",
+          "axis_idx": 47867,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.0811259993351996
+        },
+        {
+          "axis_concept": "Banking industry",
+          "axis_idx": 47867,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.636352997738868
+        },
+        {
+          "axis_concept": "Banking industry",
+          "axis_idx": 47867,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 3.0975749948993325
+        },
+        {
+          "axis_concept": "Banking industry",
+          "axis_idx": 47867,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Credit risk",
+          "axis_idx": 12254,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.7261759983375669
+        },
+        {
+          "axis_concept": "Credit risk",
+          "axis_idx": 12254,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.6784329956863075
+        },
+        {
+          "axis_concept": "Credit risk",
+          "axis_idx": 12254,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.5656020003370941
+        },
+        {
+          "axis_concept": "Credit risk",
+          "axis_idx": 12254,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 10.618415957782418
+        },
+        {
+          "axis_concept": "Credit risk",
+          "axis_idx": 12254,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Investment banking",
+          "axis_idx": 8175,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.26386899943463504
+        },
+        {
+          "axis_concept": "Investment banking",
+          "axis_idx": 8175,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.052387000527232885
+        },
+        {
+          "axis_concept": "Investment banking",
+          "axis_idx": 8175,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.9980519935488701
+        },
+        {
+          "axis_concept": "Investment banking",
+          "axis_idx": 8175,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 2.957691986579448
+        },
+        {
+          "axis_concept": "Investment banking",
+          "axis_idx": 8175,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Retail banking",
+          "axis_idx": 8766,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 1.4525519905146211
+        },
+        {
+          "axis_concept": "Retail banking",
+          "axis_idx": 8766,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.16291899932548404
+        },
+        {
+          "axis_concept": "Retail banking",
+          "axis_idx": 8766,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.4208119995892048
+        },
+        {
+          "axis_concept": "Retail banking",
+          "axis_idx": 8766,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 1.931687990669161
+        },
+        {
+          "axis_concept": "Retail banking",
+          "axis_idx": 8766,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Financial system",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.12460299767553806
+        },
+        {
+          "axis_concept": "Financial system",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 5.950779948849231
+        },
+        {
+          "axis_concept": "Financial system",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.30230899900197983
+        },
+        {
+          "axis_concept": "Banking industry",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Banking industry",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.6891230018809438
+        },
+        {
+          "axis_concept": "Banking industry",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Credit risk",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.1681460002437234
+        },
+        {
+          "axis_concept": "Credit risk",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.8824719951953739
+        },
+        {
+          "axis_concept": "Credit risk",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        }
+      ]
+    },
+    "AXE3_PHYSICS": {
+      "vs_security": [
+        {
+          "axis_concept": "Phase transition",
+          "axis_idx": 7678,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Phase transition",
+          "axis_idx": 7678,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Phase transition",
+          "axis_idx": 7678,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.11500800028443336
+        },
+        {
+          "axis_concept": "Phase transition",
+          "axis_idx": 7678,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.022221999242901802
+        },
+        {
+          "axis_concept": "Phase transition",
+          "axis_idx": 7678,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "axis_idx": 60732,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "axis_idx": 60732,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "axis_idx": 60732,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "axis_idx": 60732,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "axis_idx": 60732,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Heat equation",
+          "axis_idx": 16064,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Heat equation",
+          "axis_idx": 16064,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Heat equation",
+          "axis_idx": 16064,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.06933299964293838
+        },
+        {
+          "axis_concept": "Heat equation",
+          "axis_idx": 16064,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Heat equation",
+          "axis_idx": 16064,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Ising model",
+          "axis_idx": 56807,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Ising model",
+          "axis_idx": 56807,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Ising model",
+          "axis_idx": 56807,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.0073529998771846294
+        },
+        {
+          "axis_concept": "Ising model",
+          "axis_idx": 56807,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.06984099932014942
+        },
+        {
+          "axis_concept": "Ising model",
+          "axis_idx": 56807,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Statistical mechanics",
+          "axis_idx": 65006,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Statistical mechanics",
+          "axis_idx": 65006,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Statistical mechanics",
+          "axis_idx": 65006,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.1675349986180663
+        },
+        {
+          "axis_concept": "Statistical mechanics",
+          "axis_idx": 65006,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.01910499995574355
+        },
+        {
+          "axis_concept": "Statistical mechanics",
+          "axis_idx": 65006,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Phase transition",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.8083619943354279
+        },
+        {
+          "axis_concept": "Phase transition",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 6.095918979728594
+        },
+        {
+          "axis_concept": "Phase transition",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 2.5773619858082384
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.04470199951902032
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.6023569996468723
+        },
+        {
+          "axis_concept": "Quantum phase transition",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.07967900042422116
+        },
+        {
+          "axis_concept": "Heat equation",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 1.3089549993164837
+        },
+        {
+          "axis_concept": "Heat equation",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 3.651843982981518
+        },
+        {
+          "axis_concept": "Heat equation",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.0073529998771846294
+        }
+      ]
+    },
+    "AXE4_NEURO": {
+      "vs_security": [
+        {
+          "axis_concept": "Cognitive psychology",
+          "axis_idx": 12633,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 14.346259923651814
+        },
+        {
+          "axis_concept": "Cognitive psychology",
+          "axis_idx": 12633,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 14.145769932307303
+        },
+        {
+          "axis_concept": "Cognitive psychology",
+          "axis_idx": 12633,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 7.347395933931693
+        },
+        {
+          "axis_concept": "Cognitive psychology",
+          "axis_idx": 12633,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 1.7382139819674194
+        },
+        {
+          "axis_concept": "Cognitive psychology",
+          "axis_idx": 12633,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "axis_idx": 13763,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 10.57940593152307
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "axis_idx": 13763,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 3.2097029606811702
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "axis_idx": 13763,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 5.886181968497112
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "axis_idx": 13763,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.8716349960304797
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "axis_idx": 13763,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "axis_idx": 47630,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.17433700058609247
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "axis_idx": 47630,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.3398879999294877
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "axis_idx": 47630,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "axis_idx": 47630,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "axis_idx": 47630,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive decline",
+          "axis_idx": 47615,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.008333000354468822
+        },
+        {
+          "axis_concept": "Cognitive decline",
+          "axis_idx": 47615,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.6400059969164431
+        },
+        {
+          "axis_concept": "Cognitive decline",
+          "axis_idx": 47615,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.018182000145316124
+        },
+        {
+          "axis_concept": "Cognitive decline",
+          "axis_idx": 47615,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.009523999877274036
+        },
+        {
+          "axis_concept": "Cognitive decline",
+          "axis_idx": 47615,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive reframing",
+          "axis_idx": 13569,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 1.2424439964815974
+        },
+        {
+          "axis_concept": "Cognitive reframing",
+          "axis_idx": 13569,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 1.06809298961889
+        },
+        {
+          "axis_concept": "Cognitive reframing",
+          "axis_idx": 13569,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.2992920004762709
+        },
+        {
+          "axis_concept": "Cognitive reframing",
+          "axis_idx": 13569,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.49290200090035796
+        },
+        {
+          "axis_concept": "Cognitive reframing",
+          "axis_idx": 13569,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.0058479998260736465
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Cognitive psychology",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 23.809363832697272
+        },
+        {
+          "axis_concept": "Cognitive psychology",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 45.54503678763285
+        },
+        {
+          "axis_concept": "Cognitive psychology",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 1.8463899814523757
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.4123389977030456
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 13.459130929782987
+        },
+        {
+          "axis_concept": "Cognitive science",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 1.6925599998794496
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.030554999597370625
+        },
+        {
+          "axis_concept": "Cognitive impairment",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        }
+      ]
+    },
+    "AXE5_ECOLOGY": {
+      "vs_security": [
+        {
+          "axis_concept": "Species richness",
+          "axis_idx": 57486,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.11818200163543224
+        },
+        {
+          "axis_concept": "Species richness",
+          "axis_idx": 57486,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.7253829957917333
+        },
+        {
+          "axis_concept": "Species richness",
+          "axis_idx": 57486,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.20486799953505397
+        },
+        {
+          "axis_concept": "Species richness",
+          "axis_idx": 57486,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.05858599953353405
+        },
+        {
+          "axis_concept": "Species richness",
+          "axis_idx": 57486,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.05176100041717291
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "axis_idx": 1548,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "axis_idx": 1548,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.11948599899187684
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "axis_idx": 1548,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "axis_idx": 1548,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "axis_idx": 1548,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.008658000268042088
+        },
+        {
+          "axis_concept": "Ecological network",
+          "axis_idx": 54258,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Ecological network",
+          "axis_idx": 54258,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.03828199906274676
+        },
+        {
+          "axis_concept": "Ecological network",
+          "axis_idx": 54258,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.050087000243365765
+        },
+        {
+          "axis_concept": "Ecological network",
+          "axis_idx": 54258,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.02777799963951111
+        },
+        {
+          "axis_concept": "Ecological network",
+          "axis_idx": 54258,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Metapopulation",
+          "axis_idx": 13977,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.06666699796915054
+        },
+        {
+          "axis_concept": "Metapopulation",
+          "axis_idx": 13977,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.09532999945804477
+        },
+        {
+          "axis_concept": "Metapopulation",
+          "axis_idx": 13977,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Metapopulation",
+          "axis_idx": 13977,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.03571400046348572
+        },
+        {
+          "axis_concept": "Metapopulation",
+          "axis_idx": 13977,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics",
+          "axis_idx": 53853,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics",
+          "axis_idx": 53853,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics",
+          "axis_idx": 53853,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics",
+          "axis_idx": 53853,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics",
+          "axis_idx": 53853,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Species richness",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.6725249907467514
+        },
+        {
+          "axis_concept": "Species richness",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.14891200046986341
+        },
+        {
+          "axis_concept": "Species richness",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.06984099932014942
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.010989000089466572
+        },
+        {
+          "axis_concept": "Population dynamics of fisheries",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Ecological network",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.07948799803853035
+        },
+        {
+          "axis_concept": "Ecological network",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.040563999209553
+        },
+        {
+          "axis_concept": "Ecological network",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0
+        }
+      ]
+    },
+    "AXE6_GAMES": {
+      "vs_security": [
+        {
+          "axis_concept": "Outcome (game theory)",
+          "axis_idx": 7533,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 12.479452874977142
+        },
+        {
+          "axis_concept": "Outcome (game theory)",
+          "axis_idx": 7533,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 1.8264759934972972
+        },
+        {
+          "axis_concept": "Outcome (game theory)",
+          "axis_idx": 7533,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 6.3404929749667645
+        },
+        {
+          "axis_concept": "Outcome (game theory)",
+          "axis_idx": 7533,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 2.7338709940668195
+        },
+        {
+          "axis_concept": "Outcome (game theory)",
+          "axis_idx": 7533,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.15085200057365
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "axis_idx": 41278,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 9.885523906443268
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "axis_idx": 41278,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.040403999388217926
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "axis_idx": 41278,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 1.145554980263114
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "axis_idx": 41278,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0.7165449960157275
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "axis_idx": 41278,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.022221999242901802
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "axis_idx": 47099,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 12.06426693033427
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "axis_idx": 47099,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.7441369972657412
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "axis_idx": 47099,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 1.349937996827066
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "axis_idx": 47099,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 1.697784992866218
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "axis_idx": 47099,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.04918099963106215
+        },
+        {
+          "axis_concept": "Game theory",
+          "axis_idx": 12038,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 57.99136163131334
+        },
+        {
+          "axis_concept": "Game theory",
+          "axis_idx": 12038,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 1.6814799935091287
+        },
+        {
+          "axis_concept": "Game theory",
+          "axis_idx": 12038,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 3.8633709815330803
+        },
+        {
+          "axis_concept": "Game theory",
+          "axis_idx": 12038,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 1.260204994585365
+        },
+        {
+          "axis_concept": "Game theory",
+          "axis_idx": 12038,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.22953399713151157
+        },
+        {
+          "axis_concept": "Nash equilibrium",
+          "axis_idx": 55850,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 10.905975948553532
+        },
+        {
+          "axis_concept": "Nash equilibrium",
+          "axis_idx": 55850,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.14688999950885773
+        },
+        {
+          "axis_concept": "Nash equilibrium",
+          "axis_idx": 55850,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 1.332822997123003
+        },
+        {
+          "axis_concept": "Nash equilibrium",
+          "axis_idx": 55850,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 1.2008269922807813
+        },
+        {
+          "axis_concept": "Nash equilibrium",
+          "axis_idx": 55850,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0.0052629997953772545
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Outcome (game theory)",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 4.983733973000199
+        },
+        {
+          "axis_concept": "Outcome (game theory)",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 5.0245129759423435
+        },
+        {
+          "axis_concept": "Outcome (game theory)",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.663348002359271
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 1.0066019969526678
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 2.7471019935328513
+        },
+        {
+          "axis_concept": "Star (game theory)",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 1.3656639943365008
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 1.0657299933955073
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 1.0732059988658875
+        },
+        {
+          "axis_concept": "Resource allocation",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.3105770000256598
+        }
+      ]
+    },
+    "AXE7_CELLBIO": {
+      "vs_security": [
+        {
+          "axis_concept": "Receptor",
+          "axis_idx": 11018,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.15641399985179305
+        },
+        {
+          "axis_concept": "Receptor",
+          "axis_idx": 11018,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.7293240022845566
+        },
+        {
+          "axis_concept": "Receptor",
+          "axis_idx": 11018,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.16666699945926666
+        },
+        {
+          "axis_concept": "Receptor",
+          "axis_idx": 11018,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Receptor",
+          "axis_idx": 11018,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "axis_idx": 59228,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.018182000145316124
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "axis_idx": 59228,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.21523299859836698
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "axis_idx": 59228,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.05922799929976463
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "axis_idx": 59228,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "axis_idx": 59228,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "axis_idx": 14087,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.07142800092697144
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "axis_idx": 14087,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.7996879843994975
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "axis_idx": 14087,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "axis_idx": 14087,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "axis_idx": 14087,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cytokine",
+          "axis_idx": 31148,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.04761900007724762
+        },
+        {
+          "axis_concept": "Cytokine",
+          "axis_idx": 31148,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.025535000022500753
+        },
+        {
+          "axis_concept": "Cytokine",
+          "axis_idx": 31148,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.10000000149011612
+        },
+        {
+          "axis_concept": "Cytokine",
+          "axis_idx": 31148,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Cytokine",
+          "axis_idx": 31148,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Phosphorylation",
+          "axis_idx": 3126,
+          "sec_concept": "Computer security",
+          "sec_idx": 54548,
+          "cooc_weight": 0.10000000149011612
+        },
+        {
+          "axis_concept": "Phosphorylation",
+          "axis_idx": 3126,
+          "sec_concept": "Vulnerability (computing)",
+          "sec_idx": 64328,
+          "cooc_weight": 0.0674059996381402
+        },
+        {
+          "axis_concept": "Phosphorylation",
+          "axis_idx": 3126,
+          "sec_concept": "Principal (computer security)",
+          "sec_idx": 6985,
+          "cooc_weight": 0.08174599800258875
+        },
+        {
+          "axis_concept": "Phosphorylation",
+          "axis_idx": 3126,
+          "sec_concept": "Asset (computer security)",
+          "sec_idx": 61356,
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Phosphorylation",
+          "axis_idx": 3126,
+          "sec_concept": "Vulnerability assessment",
+          "sec_idx": 10467,
+          "cooc_weight": 0
+        }
+      ],
+      "vs_network": [
+        {
+          "axis_concept": "Receptor",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.06511000078171492
+        },
+        {
+          "axis_concept": "Receptor",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.14674599841237068
+        },
+        {
+          "axis_concept": "Receptor",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 2.513137983623892
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.05855099996551871
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0.02381000015884638
+        },
+        {
+          "axis_concept": "Signal transduction",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.7405209965072572
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "net_concept": "Interval (graph theory)",
+          "cooc_weight": 0.08583699818700552
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "net_concept": "Dimension (graph theory)",
+          "cooc_weight": 0
+        },
+        {
+          "axis_concept": "Apoptosis",
+          "net_concept": "Loop (graph theory)",
+          "cooc_weight": 0.2054059999063611
+        }
+      ]
+    }
+  },
+  "title_searches": {
+    "DebtRank": {
+      "count": 4,
+      "papers": [
+        {
+          "id": "1503.00621",
+          "title": "Leveraging the network: A stress-test framework based on DebtRank",
+          "year": 2016
+        },
+        {
+          "id": "1512.04460",
+          "title": "Distress Propagation in Complex Networks: The Case of Non-Linear DebtRank",
+          "year": 2016
+        },
+        {
+          "id": "1504.01857",
+          "title": "DebtRank: A Microscopic Foundation for Shock Propagation",
+          "year": 2015
+        },
+        {
+          "id": "1301.6115",
+          "title": "DebtRank-transparency: Controlling systemic risk in financial networks",
+          "year": 2013
+        }
+      ]
+    },
+    "epidemic+scale-free": {
+      "count": 20,
+      "papers": [
+        {
+          "id": "1107.1532",
+          "title": "SIR epidemics on a scale-free spatial nested modular network with a non-trivial threshold",
+          "year": 2011
+        },
+        {
+          "id": "1004.1663",
+          "title": "Generalized individual-based epidemic model for vulnerability assessment of correlated scale-free complex networks",
+          "year": 2010
+        },
+        {
+          "id": "0903.0924",
+          "title": "Epidemic spreading with nonlinear infectivity in weighted scale-free networks",
+          "year": 2009
+        },
+        {
+          "id": "0909.4279",
+          "title": "Traffic-driven Epidemic Spreading in Finite-size Scale-Free Networks",
+          "year": 2009
+        },
+        {
+          "id": "0803.0361",
+          "title": "Finite epidemic thresholds in fractal scale-free `large-world' networks",
+          "year": 2008
+        }
+      ]
+    },
+    "Ising+network": {
+      "count": 86,
+      "papers": []
+    },
+    "metapopulation+network": {
+      "count": 11,
+      "papers": [
+        {
+          "id": "1410.5116",
+          "title": "Sufficient conditions of endemic threshold on metapopulation networks",
+          "year": 2014
+        },
+        {
+          "id": "1411.7310",
+          "title": "The Scaling of Human Contacts in Reaction-Diffusion Processes on Heterogeneous Metapopulation Networks",
+          "year": 2014
+        },
+        {
+          "id": "1302.3480",
+          "title": "Mobility and density induced amplitude death in metapopulation networks of coupled oscillators",
+          "year": 2013
+        },
+        {
+          "id": "1303.6764",
+          "title": "Mobility-enhanced signal response in metapopulation networks of coupled oscillators",
+          "year": 2013
+        },
+        {
+          "id": "1305.4965",
+          "title": "Effects of local population structure in a reaction-diffusion model of a contact process on metapopulation networks",
+          "year": 2013
+        }
+      ]
+    },
+    "influence+maximization": {
+      "count": 21,
+      "papers": []
+    },
+    "cytokine+storm": {
+      "count": 0,
+      "papers": []
+    },
+    "MAPK+cascade": {
+      "count": 3,
+      "papers": [
+        {
+          "id": "1508.07822",
+          "title": "Dynamical features of the MAPK cascade",
+          "year": 2015
+        },
+        {
+          "id": "q-bio/0702051",
+          "title": "On the equilibria of the MAPK cascade: cooperativity, modularity and bistability",
+          "year": 2007
+        },
+        {
+          "id": "0710.5195",
+          "title": "MAPK Cascades as Feedback Amplifiers",
+          "year": 2007
+        }
+      ]
+    },
+    "ultrasensitiv": {
+      "count": 24,
+      "papers": []
+    },
+    "percolation+software": {
+      "count": 0,
+      "papers": []
+    },
+    "epidemic+software": {
+      "count": 0,
+      "papers": []
+    },
+    "Ising+software": {
+      "count": 0,
+      "papers": []
+    },
+    "heat kernel+graph": {
+      "count": 12,
+      "papers": [
+        {
+          "id": "1410.3168",
+          "title": "Computing Diffusion State Distance using Green's Function and Heat Kernel on Graphs",
+          "year": 2014
+        },
+        {
+          "id": "1411.5087",
+          "title": "Volume doubling, Poincaré inequality and Guassian heat kernel estimate for nonnegative curvature graphs",
+          "year": 2014
+        },
+        {
+          "id": "1208.6211",
+          "title": "Sub-Riemannian heat kernels and mean curvature flow of graphs",
+          "year": 2013
+        },
+        {
+          "id": "1302.4644",
+          "title": "Heat kernels on regular graphs and generalized Ihara zeta function formulas",
+          "year": 2013
+        },
+        {
+          "id": "1312.3035",
+          "title": "Heat kernel coupling for multiple graph analysis",
+          "year": 2013
+        }
+      ]
+    },
+    "bandit+security": {
+      "count": 0,
+      "papers": []
+    },
+    "free energy+anomaly": {
+      "count": 0,
+      "papers": []
+    },
+    "vulnerability+cascade": {
+      "count": 0,
+      "papers": []
+    },
+    "secretary problem": {
+      "count": 18,
+      "papers": [
+        {
+          "id": "0902.0232",
+          "title": "Shelf life of candidates in the generalized secretary problem",
+          "year": 2016
+        },
+        {
+          "id": "1502.02155",
+          "title": "Secretary Problems with Non-Uniform Arrival Order",
+          "year": 2015
+        },
+        {
+          "id": "1507.01732",
+          "title": "The Temp Secretary Problem",
+          "year": 2015
+        },
+        {
+          "id": "1507.08384",
+          "title": "The Submodular Secretary Problem Goes Linear",
+          "year": 2015
+        },
+        {
+          "id": "1403.7343",
+          "title": "O(log log rank) Competitive-Ratio for the Matroid Secretary Problem",
+          "year": 2014
+        }
+      ]
+    },
+    "biased competition": {
+      "count": 0,
+      "papers": []
+    },
+    "Goldbeter": {
+      "count": 1,
+      "papers": [
+        {
+          "id": "1306.1904",
+          "title": "Network Inference Using Steady State Data and Goldbeter-Koshland Kinetics",
+          "year": 2013
+        }
+      ]
+    },
+    "Eisenberg+Noe": {
+      "count": 0,
+      "papers": []
+    },
+    "receptor+cluster+signal": {
+      "count": 1,
+      "papers": [
+        {
+          "id": "1309.0868",
+          "title": "The impact of high density receptor clusters on VEGF signaling",
+          "year": 2013
+        }
+      ]
+    }
+  },
+  "summary": {
+    "cooc_pairs_tested": 175,
+    "true_holes_zero": 62,
+    "weak_holes": 97,
+    "strong_bridges": 2,
+    "title_zeros": 9,
+    "title_rare": 4
+  }
+}

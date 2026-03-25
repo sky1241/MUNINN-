@@ -78,21 +78,50 @@ Comprime par Muninn, ca devient encore plus dense.
 ### Maths
 - **SIR Model** (Susceptible-Infected-Recovered): chaque fichier est S, I ou R
 - **R0 = degre sortant du noeud dans le graphe de dependances**
-- **Priorite de scan = R0 * centralite * temperature**
 - **Centralite**: deux metriques combinées:
   - **Degree centrality** (nombre de connexions) → trouve les hubs (fichiers tres importes)
-  - **Betweenness centrality** (nombre de plus courts chemins qui passent par le noeud) → trouve les ponts (fichiers qui connectent deux clusters)
+  - **Betweenness centrality** (nombre de plus courts chemins qui passent par le noeud) → trouve les ponts (fichiers qui connectent deux clusters). ATTENTION: n'existe PAS encore dans cube.py, a implementer dans B-SCAN-04 (algo de Brandes, O(n*m)).
   - Un fichier peut etre hub OU pont OU les deux. Les deux sont critiques mais pour des raisons differentes.
-- **Laplacien du graphe** (deja dans le Cube) → detecte les clusters isoles vs connectes
-- **Cheeger bound** → identifie les goulots d'etranglement (un fichier qui connecte deux clusters = point critique, correle avec betweenness)
+- **Laplacien du graphe** (deja dans le Cube, cube.py:2704) → detecte les clusters isoles vs connectes
+- **Cheeger bound** (deja dans le Cube, cube.py:2760) → identifie les goulots d'etranglement
+- **Seuil epidemique** (Pastor-Satorras & Vespignani 2001): λ_c = <k> / <k²>. Si le graphe est scale-free, λ_c → 0 = toute faille se propage. <k> et <k²> existent deja dans cube.py:2015-2025.
+- **Seuil de percolation** (Molloy & Reed 1995): p_c = 1 / (κ - 1), κ = <k²>/<k>. Au-dela de p_c, le repo entier est compromis.
+- **DebtRank** (Battiston 2012): propagation d'impact systemique. h_i(t+1) = min(1, h_i(t) + Σ W_ji·h_j(t)·(1-h_j(t-1))). Mesure l'IMPACT, pas juste la distance.
+- **Heat Kernel** (Kondor & Lafferty 2002): u(t) = exp(-t·L) · u(0). Propagation EXACTE via Laplacien. Remplace le BFS par une diffusion probabiliste.
+- **Goldbeter-Koshland switch** (1981): score = x^n / (K^n + x^n). Scoring NON-LINEAIRE — 5 deps = LOW, 15 deps = CRIT, le basculement est un cliff, pas une rampe.
+- **Free Energy surprise** (Friston 2010): fichier "surprenant" = structurellement different de ses voisins. Utilise NCD (deja dans cube.py:1544) pour mesurer la distance. Detecte les vulns par la STRUCTURE, pas le contenu.
+- **Influence Minimization** (Kempe-Kleinberg-Tardos 2003, inverse): greedy (1-1/e)-optimal pour trouver les k fichiers a PATCHER pour tuer la propagation.
+- **MAPK cascade amplification** (Huang & Ferrell 1996): chaque couche de dependance MULTIPLIE le risque. n_eff ≈ n₁ × n₂ × ... × n_L. Une faille LOW qui traverse 4 couches → potentiellement CRIT.
+- **Competing Epidemics** (Prakash 2012): quand 2+ failles se propagent en meme temps, celle avec β·λ₁(A)/δ le plus grand gagne. Sert a prioriser quel patch en premier.
+
+### Priorite de scan (formule composite)
+Remplace l'ancien `R0 * centralite * temperature` par un score multi-signal:
+```
+priority(f) = (
+    0.25 * goldbeter(R0(f), K=10, n=4)     # switch non-lineaire sur le R0
+    + 0.20 * free_energy_surprise(f)         # anomalie structurelle
+    + 0.20 * betweenness(f)                  # fichier-pont
+    + 0.20 * temperature(f)                  # chaud = modifie souvent
+    + 0.15 * cheeger_bottleneck(f)           # goulot d'etranglement
+)
+
+goldbeter(x, K, n) = x^n / (K^n + x^n)     # Hill function
+free_energy_surprise(f) = |mean_NCD(f, voisins) - mean_NCD_global| / std_NCD_global
+```
+
+### Propagation (DebtRank + Heat Kernel)
+Deux modes complementaires:
+1. **DebtRank** (mode par defaut, pure Python): propagation iterative avec importance ponderee. Distingue "50 fichiers de tests touches" de "3 fichiers core touches".
+2. **Heat Kernel** (si numpy disponible): propagation exacte via exponentielle du Laplacien. Plus precis, plus lent.
 
 ### En pratique
 1. Cube construit le graphe
-2. Calcul du R0 par noeud
-3. Tri par R0 * centralite (descending)
-4. Scan les noeuds critiques en premier
-5. Si infection trouvee → propagation sur le graphe → scan les voisins
-6. Pas besoin de tout scanner. 20% des fichiers couvrent 80% du risque.
+2. B-SCAN-04 calcule R0, degree, betweenness, seuil epidemique, seuil de percolation
+3. B-SCAN-05 trie par score composite (Goldbeter + Free Energy + betweenness + temperature + Cheeger)
+4. Scan les noeuds critiques en premier (top 20%)
+5. Si infection trouvee → DebtRank ou Heat Kernel sur le graphe → blast radius probabiliste
+6. Influence Minimization → recommandation "quels fichiers patcher en priorite"
+7. Pas besoin de tout scanner. 20% des fichiers couvrent 80% du risque.
 
 ## Pipeline de Scan
 
@@ -232,18 +261,35 @@ REGLE: chaque brique est independante, testable seule, assemblable apres. On cod
 - TEST: 0% de perte sur critiques. Si perte → ajuster compression.
 - DEPENDANCES: B-SCAN-01, B-SCAN-02
 
-### B-SCAN-04: R0 Calculator
+### B-SCAN-04: R0 Calculator + Graph Metrics
 - INPUT: graphe de dependances du Cube (build_neighbor_graph() + parse_dependencies())
-- OUTPUT: dictionnaire {fichier: {R0: int, degree_centrality: float, betweenness_centrality: float, temperature: float}}
+- OUTPUT: dictionnaire {fichier: {R0: int, degree_centrality: float, betweenness_centrality: float, temperature: float, cheeger_bottleneck: bool}}
+- OUTPUT GLOBAL: {lambda_c: float, percolation_pc: float, regime: "local"|"systemic"}
 - NOTE: degree = nb connexions directes (hubs). betweenness = nb plus courts chemins qui passent par le noeud (ponts). Les deux sont utiles.
-- TEST: sur un repo connu, verifier que les hubs ont le degree le plus haut et que les fichiers-ponts ont le betweenness le plus haut
+- **BETWEENNESS**: algorithme de Brandes (2001), O(n*m). N'EXISTE PAS dans cube.py, a coder from scratch. Pour 5000 fichiers × 45K edges ≈ 2-5 secondes.
+- **SEUIL EPIDEMIQUE** (Pastor-Satorras & Vespignani 2001): λ_c = <k>/<k²>. <k> et <k²> existent deja (cube.py:2015-2025). Si λ_c < 0.05 → regime "systemic" = toute faille se propage. Sinon → regime "local".
+- **SEUIL PERCOLATION** (Molloy & Reed 1995): κ = <k²>/<k>, p_c = 1/(κ-1). Pourcentage critique de fichiers infectes au-dela duquel le repo est condamne.
+- TEST: sur un repo connu, verifier que les hubs ont le degree le plus haut et que les fichiers-ponts ont le betweenness le plus haut. Verifier lambda_c et p_c sur graphe scale-free vs graphe regulier.
 - DEPENDANCES: Cube graphe existant (build_neighbor_graph, parse_dependencies). Brique isolee cote scanner.
+- REF: Pastor-Satorras & Vespignani "Epidemic spreading in scale-free networks" PRL 2001 (~8000 citations). Molloy & Reed "A critical point for random graphs" 1995. Brandes "A faster algorithm for betweenness centrality" 2001.
 
-### B-SCAN-05: Priority Ranker
-- INPUT: output de B-SCAN-04
-- OUTPUT: liste ordonnee de fichiers par priorite = R0 * centralite * temperature
-- TEST: le fichier le plus modifie et le plus importe est en haut
+### B-SCAN-05: Priority Ranker (Carmack scoring)
+- INPUT: output de B-SCAN-04 + NCD depuis Cube (cube.py:1544)
+- OUTPUT: liste ordonnee de fichiers par score composite
+- **FORMULE COMPOSITE** (remplace l'ancien R0 * centralite * temperature):
+```
+priority(f) = 0.25 * goldbeter(R0, K=10, n=4)
+            + 0.20 * free_energy_surprise(f)
+            + 0.20 * betweenness_norm(f)
+            + 0.20 * temperature(f)
+            + 0.15 * cheeger_bottleneck(f)
+```
+- **GOLDBETER-KOSHLAND** (1981): Hill function `x^n / (K^n + x^n)`. Switch non-lineaire. K=10 = seuil de basculement a 10 dependances. n=4 = pente du cliff. En dessous de K = score faible. Au-dessus = score sature a 1.0.
+- **FREE ENERGY SURPRISE** (Friston 2010): pour chaque fichier, calculer la distance NCD moyenne a ses voisins dans le graphe. Un fichier structurellement different de ses voisins = surprenant = suspect. `surprise(f) = |mean_NCD(f, neighbors) - global_mean| / global_std`. Utilise compute_ncd() de cube.py:1544 (zlib, stdlib).
+- **MAPK AMPLIFICATION** (Huang & Ferrell 1996): bonus pour les fichiers deep dans la chaine de dependances. `depth_bonus = 1.0 + 0.1 * max_dependency_depth(f)`. Un fichier LOW a profondeur 4 peut valoir un HIGH a profondeur 1.
+- TEST: le fichier le plus modifie, le plus importe, ET le plus surprenant est en haut. Un fichier isole avec zero import est en bas meme s'il est chaud.
 - DEPENDANCES: B-SCAN-04
+- REF: Goldbeter & Koshland PNAS 1981 (~3000 citations). Friston "The free-energy principle" Nature Reviews Neuroscience 2010 (~7000 citations). Huang & Ferrell PNAS 1996 "MAPK cascades" (~2000 citations).
 
 ### B-SCAN-06: LLM Scanner (passe 1)
 - INPUT: fichiers prioritaires (top 20% de B-SCAN-05, minimum 10 fichiers) + bible .mn (B-SCAN-02)
@@ -289,12 +335,35 @@ Do NOT explain. Do NOT add commentary. Only the format above.
 - TEST: pas de doublons (dedup par fichier+ligne+type), chaque faille a au moins une source et un niveau de confiance. Tester aussi le cas 06=vide.
 - DEPENDANCES: B-SCAN-06 (optionnel), B-SCAN-07, B-SCAN-08
 
-### B-SCAN-10: Propagation Engine
-- INPUT: failles confirmees de B-SCAN-09 + graphe de dependances
-- OUTPUT: blast radius par faille {faille_id, fichiers_impactes[], profondeur}
-- ATTENTION CYCLES: le graphe de dependances peut avoir des cycles (A→B→C→A). Le BFS DOIT avoir un visited set pour pas boucler a l'infini.
-- TEST: BFS sur le graphe, chaque fichier dependant est liste avec sa distance. Tester aussi un graphe avec cycle pour verifier que ca boucle pas.
-- DEPENDANCES: B-SCAN-09, Cube graphe existant
+### B-SCAN-10: Propagation Engine (DebtRank + Heat Kernel)
+- INPUT: failles confirmees de B-SCAN-09 + graphe de dependances + output B-SCAN-04 (importance par fichier)
+- OUTPUT: blast radius par faille {faille_id, fichiers_impactes: {fichier: proba_impact}, systemic_loss: float}
+- **MODE 1 — DebtRank** (Battiston 2012, mode par defaut, pure Python):
+```python
+# h_i = stress du fichier i (0=sain, 1=mort)
+# W_ji = poids de la dependance j→i (normalise)
+# v_i = importance du fichier (LOC * temperature * degree / max)
+h[infected] = 1.0  # patient zero
+for t in range(max_rounds):  # converge en 5-10 rounds
+    for i in all_files:
+        if h[i] < 1.0:
+            h[i] = min(1.0, h[i] + sum(W[j][i] * h[j] * (1 - h_prev[j]) for j in neighbors))
+systemic_loss = sum(h[i] * v[i] for i in all_files)  # perte totale ponderee
+```
+  Distingue "50 tests touches" (v faible) de "3 fichiers auth touches" (v enorme).
+- **MODE 2 — Heat Kernel** (si numpy/scipy dispo):
+```python
+# L = Laplacien (existe dans cube.py:2704)
+# u(0) = vecteur initial (1.0 pour fichier infecte, 0.0 sinon)
+# u(t) = expm(-t * L) @ u(0)  # scipy.sparse.linalg.expm_multiply
+# u(t)[i] = proba que le fichier i soit impacte au temps t
+```
+  Plus precis que DebtRank, necessite scipy. Fallback → DebtRank.
+- **COMPETING EPIDEMICS** (Prakash 2012): quand 2+ failles trouvees, celle avec le plus grand β·λ₁(A)/δ se propage en premier. λ₁ = plus grande eigenvalue de la matrice d'adjacence (spectral radius). Sert a ordonner les patches.
+- ATTENTION CYCLES: DebtRank converge naturellement (h capped a 1.0). Heat Kernel aussi (exponentielle decroissante). Pas de visited set necessaire.
+- TEST: sur graphe connu, verifier que DebtRank et Heat Kernel donnent des blast radius coherents. Fichier core (LOC=5000, degree=30) doit avoir impact >> fichier test (LOC=100, degree=2). Tester graphe avec cycle.
+- DEPENDANCES: B-SCAN-09, B-SCAN-04 (pour importance v_i), Cube graphe existant
+- REF: Battiston et al. "DebtRank: Too Central to Fail?" Scientific Reports 2012 (~800 citations). arXiv: 1301.6115, 1504.01857, 1512.04460, 1503.00621. Prakash et al. "Winner Takes All" ICDM 2012. Kondor & Lafferty "Diffusion Kernels on Graphs" ICML 2002.
 
 ### B-SCAN-11: Dynamic Import Detector
 - INPUT: code source
@@ -309,12 +378,21 @@ Do NOT explain. Do NOT add commentary. Only the format above.
 - TEST: modifier un fichier, verifier qu'il est dans le delta. Ne pas modifier, verifier qu'il est skip.
 - DEPENDANCES: Cube SHA-256 existant. Brique isolee.
 
-### B-SCAN-13: Report Generator
-- INPUT: output de B-SCAN-09 + B-SCAN-10 + B-SCAN-11
-- OUTPUT: rapport lisible (markdown + json) avec failles, propagation, couverture, flags
+### B-SCAN-13: Report Generator (avec metriques epidemio + patch plan)
+- INPUT: output de B-SCAN-09 + B-SCAN-10 + B-SCAN-11 + B-SCAN-04 (metriques globales)
+- OUTPUT: rapport lisible (markdown + json) avec:
+  - Failles + localisation + fix propose + blast radius (DebtRank)
+  - **SECTION EPIDEMIO**: regime du repo (local/systemic), seuil epidemique λ_c, seuil de percolation p_c, % fichiers infectes vs p_c
+  - **SECTION PATCH PLAN** (Influence Minimization, Kempe-Kleinberg-Tardos 2003 inverse):
+    - Liste ordonnee des k fichiers a patcher pour maximiser la reduction de propagation
+    - Algorithme greedy: a chaque etape, choisir le fichier dont le patch reduit le plus le systemic_loss (DebtRank avec ce fichier "immunise")
+    - Complexite O(k * n * propagation_rounds). Pour k=10 patches, n=5000 fichiers → ~5 secondes.
+  - **SECTION AMPLIFICATION** (MAPK cascade): failles LOW qui traversent 3+ couches de dependances → flag "amplified risk"
+  - Propagation map, couverture, flags imports dynamiques
 - EXIT CODE: 0 = aucune faille. 1 = failles non-critiques. 2 = failles critiques. (pour CI/CD futur)
-- TEST: le rapport est parsable, chaque faille a localisation + fix + blast radius. Verifier les 3 exit codes.
-- DEPENDANCES: B-SCAN-09, B-SCAN-10, B-SCAN-11
+- TEST: le rapport est parsable, chaque faille a localisation + fix + blast radius. Section epidemio presente avec lambda_c et p_c. Patch plan ordonne. Verifier les 3 exit codes.
+- DEPENDANCES: B-SCAN-09, B-SCAN-10, B-SCAN-11, B-SCAN-04
+- REF: Kempe, Kleinberg & Tardos "Maximizing the Spread of Influence" KDD 2003 (~12000 citations). Huang & Ferrell PNAS 1996.
 
 ### B-SCAN-14: Orchestrator
 - INPUT: chemin du repo + options (--full | --incremental | --dry-run | --no-llm)
@@ -510,6 +588,95 @@ git clone https://github.com/juice-shop/juice-shop /tmp/test_vuln_js
 git clone https://github.com/WebGoat/WebGoat /tmp/test_vuln_java
 ```
 Lancer le scanner dessus. Comparer les resultats avec les failles connues et documentees de ces repos.
+
+## CARMACK MOVES — Recherche Yggdrasil (2026-03-25)
+
+Scan Yggdrasil sur 833K papiers, 69M co-occurrences, 65K concepts OpenAlex.
+175 paires domaine × securite testees. Resultats: 62 trous absolus (co-occ=0), 97 quasi-trous (<5), 2 ponts forts.
+Donnees brutes: docs/ygg_carmack_security.json. Outil de requete: docs/ygg_query_wt3.py.
+
+### TIER S — Integre dans les briques (cout minimal, gain maximal)
+
+| # | Formule | Brique | Ref | Co-occ Ygg | Cout |
+|---|---------|--------|-----|-----------|------|
+| 1 | Seuil epidemique λ_c = <k>/<k²> | B-SCAN-04, B-SCAN-13 | Pastor-Satorras & Vespignani PRL 2001 | epidemic×software=0 papiers. epidemic×scale-free=20 papiers | 1 ligne |
+| 2 | Percolation p_c = 1/(κ-1) | B-SCAN-04, B-SCAN-13 | Molloy & Reed 1995 | percolation×software=0 papiers | 1 ligne |
+| 4 | DebtRank h_i(t+1) = min(1, h_i + Σ W·h_j·(1-h_j_prev)) | B-SCAN-10 | Battiston et al. Scientific Reports 2012 | DebtRank=4 papiers (arXiv: 1301.6115, 1504.01857, 1512.04460, 1503.00621). ZERO lie au software | ~40 lignes |
+| 16 | Goldbeter-Koshland x^n/(K^n+x^n) | B-SCAN-05 | Goldbeter & Koshland PNAS 1981. 1 papier Ygg (1306.1904), 24 "ultrasensitivity" | ~10 lignes |
+
+### TIER A — Integre dans les briques (plus de boulot, gros gain)
+
+| # | Formule | Brique | Ref | Co-occ Ygg | Cout |
+|---|---------|--------|-----|-----------|------|
+| 6 | Heat Kernel u(t) = exp(-tL)·u(0) | B-SCAN-10 | Kondor & Lafferty ICML 2002 | heat kernel×graph=12 papiers (1410.3168, 1312.3035). heat×security=0.00 absolu | ~30 lignes + scipy optionnel |
+| 9 | Free Energy surprise (Mahalanobis/NCD) | B-SCAN-05 | Friston Nature Reviews Neuroscience 2010 | free energy×anomaly=0 papiers | ~25 lignes |
+| 13 | Influence Minimization inverse greedy | B-SCAN-13 | Kempe-Kleinberg-Tardos KDD 2003 | influence×maximization=21 papiers | ~40 lignes |
+| 17 | MAPK cascade amplification n_eff = Π n_i | B-SCAN-05, B-SCAN-13 | Huang & Ferrell PNAS 1996 | MAPK×cascade=3 papiers (1508.07822, q-bio/0702051, 0710.5195) | ~15 lignes |
+
+### TIER B — V2 (utile mais pas prioritaire ou redondant)
+
+| # | Formule | Raison report V2 | Ref |
+|---|---------|------------------|-----|
+| 3 | Competing Epidemics β·λ₁(A)/δ | Utile quand 2+ failles. Edge case V1. | Prakash et al. ICDM 2012 |
+| 5 | Eisenberg-Noe clearing (point fixe) | Plus complexe que DebtRank, meme resultat | Eisenberg & Noe 2001. 0 papier Ygg |
+| 7 | Ising T_c = J·<k²>/<k> | Redondant avec #1 (seuil epidemique) | Ising 1925. Ising×software=0 papiers |
+| 8 | Fisher-KPP c* = 2√(Dr) | Cool mais impossible a calibrer sans temporel | Fisher 1937, Kolmogorov 1937 |
+| 10 | Biased Competition inhibition | Redondant avec Belief Propagation + Survey Propagation existants | Desimone & Duncan 1995. 0 papier Ygg |
+| 11 | Levins Metapopulation c·λ₁ > e_min | Redondant avec #2 (percolation) | Levins 1969. metapopulation×network=11 papiers |
+| 12 | Island Biogeography | Redondant avec Survey Propagation filter existant | MacArthur & Wilson 1967 |
+| 14 | UCB1 Bandit x̄ + c√(ln N/n) | Besoin de scan iteratif (V2) | Auer et al. 2002. bandit×security=0 papiers |
+| 15 | Secretary Problem 1/e | Gain marginal. Early exit. | Dynkin 1963. 18 papiers Ygg |
+| 18 | Cytokine storm feedback | Detection de regression de patch. V2. | 0 papier Ygg (arXiv=pas biomedical) |
+| 19 | Receptor clustering Hill synergy | Vuln chaining LOW+LOW+LOW→CRIT. V2. | receptor×cluster×signal=1 papier (1309.0868) |
+
+### Deserts scientifiques confirmes (trous structurels purs)
+
+9 recherches a ZERO papiers dans 833K articles:
+- `percolation + software` = 0
+- `epidemic + software` = 0
+- `Ising + software` = 0
+- `bandit + security` = 0
+- `free energy + anomaly` = 0
+- `vulnerability + cascade` = 0
+- `biased competition` = 0
+- `Eisenberg + Noe` = 0
+- `cytokine + storm` = 0
+
+3 deserts par domaine (co-occ = 0.00 sur TOUS les concepts securite):
+- **Physique statistique × Security**: Ising, percolation, heat equation, phase transition
+- **Biologie cellulaire × Security**: signal transduction, apoptosis, phosphorylation, cytokine
+- **Ecologie × Security**: population dynamics, metapopulation, ecological network
+
+### Code existant reutilisable (verifie dans le code, pas assume)
+
+| Composant | Fichier | Lignes | Dependencies | Note |
+|-----------|---------|--------|-------------|------|
+| Laplacien L=D-A | cube.py | 2704-2706 | numpy | Eigenvalues PAS stockees (jetees apres) |
+| Cheeger λ₂ + Fiedler | cube.py | 2760-2801 | numpy | Retourne bottlenecks |
+| Belief Propagation | cube.py | 2806-2853 | RIEN | Pure Python, 15 iter |
+| Temperature | cube.py | 1854-1876 | RIEN | 0.4×perp + 0.4×(1-success) + 0.2×failures |
+| Neighbor graph | cube.py | 939-996 | RIEN | Max 9 voisins, dict of lists |
+| <k> et <k²> | cube.py | 2015-2025 | RIEN | Dans compute_gods_number |
+| NCD | cube.py | 1544-1568 | zlib (stdlib) | Proxy mutual information |
+| Tononi degeneracy | cube.py | 2880-2910 | zlib | Criticite vs redondance |
+| Spreading activation | mycelium.py | 1003-1093 | RIEN | Pure Python |
+| Blind spots (Burt) | mycelium.py | 1530-1658 | RIEN | Structural holes |
+| Betweenness centrality | — | — | — | **N'EXISTE PAS. A coder (Brandes 2001).** |
+| Degree centrality normalisee | — | — | — | **N'EXISTE PAS. Trivial: degree/max_degree.** |
+
+### Outils de recherche Ygg (pour creuser plus)
+
+Donnees brutes: `docs/ygg_carmack_security.json` (175 paires, co-occurrences, papiers)
+Outil CLI: `docs/ygg_query_wt3.py` — requete directe dans WT3 (833K papiers)
+```bash
+python docs/ygg_query_wt3.py concept "percolation"          # trouver un concept
+python docs/ygg_query_wt3.py title "DebtRank"                # chercher des papiers
+python docs/ygg_query_wt3.py cooc 56807 54548                # co-occurrence Ising × Computer security
+python docs/ygg_query_wt3.py hole "game theory" "vulnerability"  # trou structurel
+python docs/ygg_query_wt3.py axes                            # resume complet
+```
+Interpreteur: C:/Users/ludov/AppData/Local/Programs/Python/Python313/python.exe
+Toujours PYTHONIOENCODING=utf-8
 
 ## Pas maintenant
 - GUI (osef)
