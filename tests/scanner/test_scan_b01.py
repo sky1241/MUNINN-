@@ -106,6 +106,37 @@ class TestBSCAN01CoreBible:
         assert "HIGH" in severities, "No HIGH entries"
         assert "MED" in severities, "No MED entries"
 
+    def test_auth_hardcoded_case_insensitive(self):
+        """AUTH-HARDCODED regex must catch PASSWORD, Api_Key, etc."""
+        import re
+        entries = _core_bible()
+        auth = [e for e in entries if e.id == "AUTH-HARDCODED"][0]
+
+        test_cases = [
+            ('PASSWORD = "SuperSecret123"', "python"),
+            ('Api_Key = "abcdef1234"', "python"),
+            ('TOKEN = "mytoken1234"', "javascript"),
+            ('Secret = "keep_this_safe"', "go"),
+            ('PASSWD = "changeme1234"', "java"),
+        ]
+        for code, lang in test_cases:
+            pattern = auth.regex_per_language.get(lang, "")
+            assert pattern, f"No regex for {lang}"
+            assert re.search(pattern, code), (
+                f"AUTH-HARDCODED/{lang} missed case-variant: {code!r}"
+            )
+
+    def test_crypto_hardcoded_key_case_insensitive(self):
+        """CRYPTO-HARDCODED-KEY regex must be case-insensitive."""
+        import re
+        entries = _core_bible()
+        crypto = [e for e in entries if e.id == "CRYPTO-HARDCODED-KEY"][0]
+        # Verify (?i) prefix is present in all patterns
+        for lang, pattern in crypto.regex_per_language.items():
+            assert pattern.startswith("(?i)"), (
+                f"CRYPTO-HARDCODED-KEY/{lang} missing (?i) prefix"
+            )
+
     def test_secrets_in_universal(self):
         """Secret patterns (SECRET-*) must be in universal (cross-language)."""
         entries = _core_bible()

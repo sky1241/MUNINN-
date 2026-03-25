@@ -163,10 +163,14 @@ def generate_report(
     # Epidemio metrics
     epidemio = _build_epidemio(propagation_result, graph_metrics)
 
-    # Patch plan from propagation result
+    # Patch plan from propagation result (field is "patch_order" in PropagationResult)
     patch_plan = []
     if propagation_result and isinstance(propagation_result, dict):
-        patch_plan = propagation_result.get("patch_plan", [])
+        patch_plan = propagation_result.get("patch_plan",
+                     propagation_result.get("patch_order", []))
+
+    # Inject blast_radius from propagation result back into findings
+    _inject_blast_radius(findings, propagation_result)
 
     # Amplified risks
     amplified = detect_amplified_risks(findings, graph)
@@ -385,6 +389,48 @@ def _get_type(f) -> str:
     return getattr(f, "type", "")
 
 
+def _inject_blast_radius(findings: list, propagation_result: dict | None) -> None:
+    """Inject blast_radius from propagation blast_radii back into findings (in-place)."""
+    if not propagation_result or not isinstance(propagation_result, dict):
+        return
+    blast_radii = propagation_result.get("blast_radii", [])
+    if not blast_radii:
+        return
+
+    # Build map: finding_id -> BlastRadius info
+    br_map: dict = {}
+    for br in blast_radii:
+        if isinstance(br, dict):
+            fid = br.get("finding_id", "")
+            impacted = br.get("impacted_files", {})
+            sys_loss = br.get("systemic_loss", 0.0)
+        else:
+            fid = getattr(br, "finding_id", "")
+            impacted = getattr(br, "impacted_files", {})
+            sys_loss = getattr(br, "systemic_loss", 0.0)
+        if fid:
+            br_map[fid] = {"impacted_files": impacted, "systemic_loss": sys_loss}
+
+    # Match findings to blast radii by index (F-0, F-1, ...) or by id
+    for i, f in enumerate(findings):
+        fid = f"F-{i}"
+        br_info = br_map.get(fid)
+        if br_info is None:
+            # Try matching by finding's own id
+            if isinstance(f, dict):
+                br_info = br_map.get(f.get("id", ""))
+            else:
+                br_info = br_map.get(getattr(f, "id", ""))
+        if br_info:
+            n_impacted = len(br_info.get("impacted_files", {}))
+            sys_loss = br_info.get("systemic_loss", 0.0)
+            blast_val = round(sys_loss, 4) if sys_loss else n_impacted
+            if isinstance(f, dict):
+                f["blast_radius"] = blast_val
+            elif hasattr(f, "blast_radius"):
+                f.blast_radius = blast_val
+
+
 def _normalize_findings(findings: list) -> list:
     """Normalize findings to list of dicts."""
     result = []
@@ -431,14 +477,32 @@ def _build_epidemio(propagation_result: dict | None, graph_metrics: dict | None)
 
     # From propagation_result (B-SCAN-10)
     if propagation_result and isinstance(propagation_result, dict):
-        infected = propagation_result.get("infected_files", [])
-        total = propagation_result.get("total_files", 0)
-        if total > 0:
-            pct = len(infected) / total * 100 if isinstance(infected, list) else 0
-            metrics["infected_pct"] = f"{pct:.1f}%"
+        # PropagationResult has: blast_radii, regime, lambda_c, percolation_pc, patch_order
+        # Override graph_metrics values with propagation-specific ones if present
+        if "regime" in propagation_result:
+            metrics["regime"] = propagation_result["regime"]
+        if "lambda_c" in propagation_result:
+            metrics["lambda_c"] = propagation_result["lambda_c"]
+        if "percolation_pc" in propagation_result:
+            metrics["percolation_pc"] = propagation_result["percolation_pc"]
+
+        # Compute systemic_loss from blast_radii
+        blast_radii = propagation_result.get("blast_radii", [])
+        if blast_radii:
+            total_loss = 0.0
+            all_impacted: set = set()
+            for br in blast_radii:
+                if isinstance(br, dict):
+                    total_loss += br.get("systemic_loss", 0.0)
+                    all_impacted.update(br.get("impacted_files", {}).keys())
+                else:
+                    total_loss += getattr(br, "systemic_loss", 0.0)
+                    all_impacted.update(getattr(br, "impacted_files", {}).keys())
+            metrics["systemic_loss"] = round(total_loss, 4)
+            metrics["blast_radius_files"] = len(all_impacted)
         else:
-            metrics["infected_pct"] = "N/A"
-        metrics["systemic_loss"] = propagation_result.get("systemic_loss", "N/A")
+            # Fallback: legacy format with direct systemic_loss
+            metrics["systemic_loss"] = propagation_result.get("systemic_loss", "N/A")
 
     return metrics
 
