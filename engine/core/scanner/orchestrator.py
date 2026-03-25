@@ -60,6 +60,12 @@ compute_delta = _cache["compute_delta"]
 update_cache = _cache["update_cache"]
 ScanCacheEntry = _cache["ScanCacheEntry"]
 
+# B-SCAN-01: Bible Scraper (for core bible fallback)
+_bible = _import_brick(
+    "engine.core.scanner.bible_scraper", "bible_scraper",
+    ["_core_bible", "BibleEntry"])
+_core_bible = _bible["_core_bible"]
+
 # B-SCAN-04: R0 Calculator
 _r0 = _import_brick(
     "engine.core.scanner.r0_calculator", "r0_calculator",
@@ -531,6 +537,20 @@ def scan(options: ScanOptions):
     try:
         if options.bible_dir:
             bibles = _load_bibles(options.bible_dir, file_langs)
+        # Fallback: if no bible_dir or loading returned empty, use core bible
+        if not bibles and _core_bible is not None:
+            core_entries = _core_bible()
+            core_dicts = [e.to_dict() for e in core_entries]
+            # Group by language
+            unique_langs = set(file_langs.values()) if isinstance(file_langs, dict) else set()
+            for lang in unique_langs:
+                if lang == "config":
+                    continue
+                lang_entries = [e for e in core_dicts
+                                if lang in e.get("regex_per_language", {})
+                                or "universal" in e.get("regex_per_language", {})]
+                if lang_entries:
+                    bibles[lang] = lang_entries
     except Exception as e:
         logger.error(f"[B-SCAN-14] Bible loading failed: {e}")
         errors.append(f"bible_load: {e}")
