@@ -157,13 +157,17 @@ ETAPE 6: Merge + Dedup
   → confiance: confirmed (2+ passes) / maybe (1 passe) / fp (AST infirme)
   → gere le cas ou 4a est vide (mode degrade)
 
-ETAPE 7: Propagation
-  → pour chaque flag confirme, BFS sur le graphe
-  → blast radius par faille
+ETAPE 7: Propagation (DebtRank ou Heat Kernel)
+  → pour chaque flag confirme, DebtRank sur le graphe (pure Python)
+  → ou Heat Kernel si numpy/scipy dispo (plus precis)
+  → blast radius PROBABILISTE par faille {fichier: proba_impact}
+  → systemic_loss = perte totale ponderee par importance
 
-ETAPE 8: Rapport + exit code
+ETAPE 8: Rapport + exit code + patch plan
   → failles confirmees + localisation + fix propose
-  → propagation map
+  → propagation map + metriques epidemio (λ_c, p_c, regime)
+  → patch plan (Influence Minimization): k fichiers a patcher en priorite
+  → amplification MAPK: failles LOW qui traversent 3+ couches → flag
   → flags: couverture incomplete si imports dynamiques detectes
   → EXIT CODE: 0=clean, 1=findings, 2=critiques
 ```
@@ -173,7 +177,7 @@ ETAPE 8: Rapport + exit code
 - Secret filtering: 24+ patterns ✓
 - Mycelium: co-occurrences, spreading activation ✓
 - Compression: bible → branche .mn ✓
-- Laplacien, Cheeger, centralite: dans cube.py ✓
+- Laplacien, Cheeger: dans cube.py ✓ (betweenness centrality N'EXISTE PAS, a coder dans B-SCAN-04)
 - Triple passe LLM + regex + filtre: pattern existant dans le pipeline ✓
 
 ## Ce qui existe PAS encore (attention)
@@ -209,13 +213,7 @@ Le graphe du Cube voit les imports statiques. Il voit PAS:
 Le R0 calcule est SOUS-ESTIME quand ces patterns existent. Le rapport DOIT inclure un flag "couverture incomplete: X fichiers utilisent des imports dynamiques" pour pas donner un faux sentiment de securite.
 
 ### Temperature du Cube = risque
-Les cubes chauds (souvent modifies) sont plus dangereux. Formule de priorite mise a jour:
-
-```
-priorite = R0 * centralite * temperature
-```
-
-Un fichier modifie 50 fois en un mois avec un R0 de 30 et une centralite haute = bombe a retardement. Il passe en premier.
+Les cubes chauds (souvent modifies) sont plus dangereux. La temperature est un des 5 signaux du score composite (voir section "Priorite de scan" plus haut). Un fichier modifie 50 fois en un mois avec un R0 de 30, une betweenness haute, ET une surprise structurelle elevee = bombe a retardement. Il passe en premier.
 
 ## Validation du scanner
 
