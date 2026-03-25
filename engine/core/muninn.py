@@ -6445,16 +6445,6 @@ def feed_from_hook(repo_path: Path):
                 print(f"MUNINN AUTO-PRUNE: {branch_count} branches > 150, running light prune", file=sys.stderr)
                 _light_prune()
 
-            # 5. P20b: Sync to meta-mycelium (cross-repo memory)
-            try:
-                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-                from mycelium import Mycelium
-                m = Mycelium(repo_path)
-                pushed = m.sync_to_meta()
-                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-            except Exception as e:
-                print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
-
             # P20c: Ensure repo is registered for cross-repo discovery
             _register_repo(repo_path)
     except TimeoutError:
@@ -6464,6 +6454,19 @@ def feed_from_hook(repo_path: Path):
         print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
+    finally:
+        # P20b: Sync to meta-mycelium — ALWAYS, even if feed/compress crashed
+        # This prevents meta stalling when a single transcript hangs
+        try:
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+            from mycelium import Mycelium
+            m = Mycelium(repo_path)
+            pushed = m.sync_to_meta()
+            if pushed > 0:
+                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+                _hook_log(repo_path, f"SYNC: {pushed} -> meta")
+        except Exception as e:
+            print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -6539,34 +6542,40 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
     # 0. P36: Update usefulness scores
     _update_usefulness(repo_path, jsonl_path)
 
-    # 1. Feed mycelium
-    count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
-    print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
-
-    # 2. Compress transcript (reuse parsed texts)
-    mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
-
-    # 3. Auto-segment into branches
-    if mn_path:
-        grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
-
-    # 4. Refresh tree
-    tree = load_tree()
-    refresh_tree_metadata(tree)
-    save_tree(tree)
-
-    # 5. Sync to meta-mycelium
     try:
-        if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-        from mycelium import Mycelium
-        m = Mycelium(repo_path)
-        pushed = m.sync_to_meta()
-        print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-    except Exception as e:
-        print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+        # 1. Feed mycelium
+        count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
+        print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
-    # P20c: Ensure repo is registered for cross-repo discovery
-    _register_repo(repo_path)
+        # 2. Compress transcript (reuse parsed texts)
+        mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
+
+        # 3. Auto-segment into branches
+        if mn_path:
+            grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
+
+        # 4. Refresh tree
+        tree = load_tree()
+        refresh_tree_metadata(tree)
+        save_tree(tree)
+
+        # P20c: Ensure repo is registered for cross-repo discovery
+        _register_repo(repo_path)
+    except Exception as e:
+        _hook_log(repo_path, f"STOP feed error: {e}")
+        print(f"MUNINN STOP feed error: {e}", file=sys.stderr)
+    finally:
+        # 5. Sync to meta-mycelium — ALWAYS, even if feed crashed
+        try:
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+            from mycelium import Mycelium
+            m = Mycelium(repo_path)
+            pushed = m.sync_to_meta()
+            if pushed > 0:
+                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+                _hook_log(repo_path, f"STOP sync: {pushed} -> meta")
+        except Exception as e:
+            print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
 
     # 6. Update dedup — keep only last 20 sessions
     dedup[session_id] = msg_count
@@ -6840,18 +6849,20 @@ def feed_watch(repo_path: Path):
                 tree = load_tree()
                 refresh_tree_metadata(tree)
                 save_tree(tree)
-
-                # Sync to meta-mycelium
-                try:
-                    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-                    from mycelium import Mycelium
-                    m = Mycelium(repo_path)
-                    pushed = m.sync_to_meta()
-                    print(f"  SYNC: {pushed} connections -> meta-mycelium")
-                except Exception as e:
-                    print(f"  SYNC warning: {e}", file=sys.stderr)
-
                 _register_repo(repo_path)
+
+            # Sync to meta-mycelium — ALWAYS, even if fed_count == 0
+            # Local mycelium may have been updated by boot/recall/inject/other paths
+            try:
+                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+                from mycelium import Mycelium
+                m = Mycelium(repo_path)
+                pushed = m.sync_to_meta()
+                if pushed > 0:
+                    print(f"  SYNC: {pushed} connections -> meta-mycelium")
+                    _hook_log(repo_path, f"WATCH sync: {pushed} -> meta")
+            except Exception as e:
+                print(f"  SYNC warning: {e}", file=sys.stderr)
     except TimeoutError:
         print("MUNINN WATCH: lock timeout, skipping", file=sys.stderr)
         return
