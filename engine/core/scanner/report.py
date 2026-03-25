@@ -396,7 +396,7 @@ def _normalize_findings(findings: list) -> list:
             d = {}
             for attr in ("file", "line", "type", "severity", "description",
                          "fix", "blast_radius", "confidence", "source",
-                         "pattern_id"):
+                         "sources", "pattern_id"):
                 if hasattr(f, attr):
                     d[attr] = getattr(f, attr)
             result.append(d)

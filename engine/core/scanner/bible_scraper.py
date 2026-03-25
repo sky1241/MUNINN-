@@ -232,7 +232,7 @@ def _core_bible() -> list[BibleEntry]:
         id="AC-PATH-TRAVERSAL", severity="CRIT",
         pattern="Path traversal via user-controlled file path",
         regex_per_language={
-            "python": r'(?:open|Path|os\.path\.join)\s*\(.*?(?:request|input|args|params|argv)',
+            "python": r'(?:open|Path|os\.path\.join)\s*\(.*?(?:request|input|args|params|argv|filename|filepath|file_path|user_file|upload)',
             "javascript": r'(?:readFile|readFileSync|createReadStream|path\.join)\s*\(.*?(?:req\.|params|query)',
             "go": r'(?:os\.Open|ioutil\.ReadFile|filepath\.Join)\s*\(.*?(?:r\.URL|r\.Form|c\.Param)',
             "java": r'(?:new\s+File|Paths\.get|FileInputStream)\s*\(.*?(?:request\.getParameter)',

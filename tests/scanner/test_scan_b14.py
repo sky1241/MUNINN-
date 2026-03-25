@@ -509,3 +509,151 @@ def test_dynamic_imports_detected(tmp_path):
     assert report is not None
     # Should detect the eval() as a dynamic import
     assert len(report.dynamic_imports) > 0
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 31. AST confirms SQL injection (bad.py) end-to-end
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SQLI_VULN = '''\
+import sqlite3
+def bad_query(user_input):
+    conn = sqlite3.connect("db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id=" + user_input)
+'''
+
+SQLI_SAFE = '''\
+import sqlite3
+def safe_query(user_input):
+    conn = sqlite3.connect("db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id=?", (user_input,))
+'''
+
+
+def test_ast_confirms_sql_injection(tmp_path):
+    """AST confirms real SQL injection via string concatenation."""
+    repo = _make_repo(tmp_path, {"bad.py": SQLI_VULN})
+    report = scan(ScanOptions(repo_path=repo, full=True, no_llm=True))
+    assert report is not None
+    # Find the SQL injection finding for bad.py
+    sql_findings = [f for f in report.findings
+                    if (f.file if hasattr(f, 'file') else f['file']) == 'bad.py'
+                    and 'SQL' in (f.type if hasattr(f, 'type') else f['type']).upper()]
+    assert len(sql_findings) >= 1, "Expected SQL injection finding for bad.py"
+    finding = sql_findings[0]
+    conf = finding.confidence if hasattr(finding, 'confidence') else finding['confidence']
+    sources = finding.sources if hasattr(finding, 'sources') else finding['sources']
+    assert conf == "confirmed", f"Expected confirmed, got {conf}"
+    assert "ast" in sources, f"Expected 'ast' in sources, got {sources}"
+    assert "regex" in sources, f"Expected 'regex' in sources, got {sources}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 32. AST does NOT produce findings for safe parameterized query
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def test_ast_no_finding_safe_query(tmp_path):
+    """Safe parameterized query produces no SQL injection finding."""
+    repo = _make_repo(tmp_path, {"good.py": SQLI_SAFE})
+    report = scan(ScanOptions(repo_path=repo, full=True, no_llm=True))
+    assert report is not None
+    sql_findings = [f for f in report.findings
+                    if (f.file if hasattr(f, 'file') else f['file']) == 'good.py'
+                    and 'SQL' in (f.type if hasattr(f, 'type') else f['type']).upper()]
+    # No SQL injection finding for safe code
+    assert len(sql_findings) == 0, f"Expected no SQL finding for good.py, got {sql_findings}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 33. AST marks hardcoded secret in test file as FP
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HARDCODED_TEST = '''\
+def test_evaluate():
+    password = "test_secret_123"
+    assert len(password) > 0
+'''
+
+HARDCODED_PROD = '''\
+def connect():
+    password = "real_prod_secret_xyz"
+    return db.connect(password=password)
+'''
+
+
+def test_ast_fp_for_test_file_secret(tmp_path):
+    """Hardcoded secret in test file gets confidence=fp from AST."""
+    repo = _make_repo(tmp_path, {"test_auth.py": HARDCODED_TEST})
+    report = scan(ScanOptions(repo_path=repo, full=True, no_llm=True))
+    assert report is not None
+    secret_findings = [f for f in report.findings
+                       if (f.file if hasattr(f, 'file') else f['file']) == 'test_auth.py']
+    # All findings in test file should be FP
+    for finding in secret_findings:
+        conf = finding.confidence if hasattr(finding, 'confidence') else finding['confidence']
+        assert conf == "fp", f"Expected fp for test file, got {conf}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 34. AST confirms hardcoded secret in production code
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def test_ast_confirms_prod_secret(tmp_path):
+    """Hardcoded secret in production code gets confirmed by AST."""
+    repo = _make_repo(tmp_path, {"config.py": HARDCODED_PROD})
+    report = scan(ScanOptions(repo_path=repo, full=True, no_llm=True))
+    assert report is not None
+    secret_findings = [f for f in report.findings
+                       if (f.file if hasattr(f, 'file') else f['file']) == 'config.py']
+    assert len(secret_findings) >= 1, "Expected at least one finding for config.py"
+    for finding in secret_findings:
+        conf = finding.confidence if hasattr(finding, 'confidence') else finding['confidence']
+        sources = finding.sources if hasattr(finding, 'sources') else finding['sources']
+        assert conf == "confirmed", f"Expected confirmed, got {conf}"
+        assert "ast" in sources, f"Expected 'ast' in sources, got {sources}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 35. AST end-to-end: bad+good in same repo, AST differentiates
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def test_ast_end_to_end_mixed_repo(tmp_path):
+    """Mixed repo: AST confirms vuln in bad.py, no finding for good.py."""
+    repo = _make_repo(tmp_path, {
+        "bad.py": SQLI_VULN,
+        "good.py": SQLI_SAFE,
+        "test_auth.py": HARDCODED_TEST,
+        "config.py": HARDCODED_PROD,
+    })
+    report = scan(ScanOptions(repo_path=tmp_path / "repo", full=True, no_llm=True))
+    assert report is not None
+
+    # Classify findings by file
+    by_file = {}
+    for f in report.findings:
+        fname = f.file if hasattr(f, 'file') else f['file']
+        by_file.setdefault(fname, []).append(f)
+
+    # bad.py: confirmed SQL injection
+    assert 'bad.py' in by_file, "Expected findings for bad.py"
+    for finding in by_file['bad.py']:
+        conf = finding.confidence if hasattr(finding, 'confidence') else finding['confidence']
+        assert conf == "confirmed"
+
+    # good.py: no SQL injection findings
+    good_sql = [f for f in by_file.get('good.py', [])
+                if 'SQL' in (f.type if hasattr(f, 'type') else f['type']).upper()]
+    assert len(good_sql) == 0, f"Expected no SQL findings for good.py, got {good_sql}"
+
+    # test_auth.py: all FP
+    for finding in by_file.get('test_auth.py', []):
+        conf = finding.confidence if hasattr(finding, 'confidence') else finding['confidence']
+        assert conf == "fp"
+
+    # config.py: confirmed secrets
+    assert 'config.py' in by_file, "Expected findings for config.py"
+    for finding in by_file['config.py']:
+        conf = finding.confidence if hasattr(finding, 'confidence') else finding['confidence']
+        assert conf == "confirmed"

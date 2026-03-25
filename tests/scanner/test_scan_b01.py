@@ -361,7 +361,15 @@ class TestBSCAN01RegexAccuracy:
         import re
         entry = self._find_entry("AC-PATH-TRAVERSAL")
         regex = entry.regex_per_language["python"]
+        # Original: direct taint on same line
         assert re.search(regex, 'open(request.args["file"])')
+        # New: common tainted variable names
+        assert re.search(regex, 'open(filename)')
+        assert re.search(regex, 'open(filepath, "r")')
+        assert re.search(regex, 'open(file_path)')
+        assert re.search(regex, 'open(user_file)')
+        assert re.search(regex, 'Path(upload)')
+        assert re.search(regex, 'os.path.join(base, filename)')
 
     def test_unsafe_deserialize(self):
         import re
