@@ -1,0 +1,32 @@
+# Synthetic vulnerable config file for B-SCAN-03 testing
+# DO NOT USE IN PRODUCTION — intentionally insecure
+
+version: '3.8'
+services:
+  web:
+    image: myapp:latest
+    ports:
+      - "0.0.0.0:8080:8080"
+      - "0.0.0.0:22:22"
+    environment:
+      - DB_PASSWORD=admin123456
+      - SECRET_KEY=mysupersecretkey123
+      - API_TOKEN=ghp_1234567890abcdef1234567890abcdef12
+      - DEBUG=true
+    volumes:
+      - /etc:/host-etc:rw
+
+  database:
+    image: postgres:latest
+    ports:
+      - "0.0.0.0:5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_USER=admin
+
+  redis:
+    image: redis:latest
+    ports:
+      - "0.0.0.0:6379:6379"
+    command: redis-server
+    # No auth configured — open to the world
