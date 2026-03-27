@@ -4520,6 +4520,20 @@ def doctor():
     except ImportError:
         pass  # psutil optional
 
+    # 13. I4: Sync backend health
+    try:
+        if _CORE_DIR not in sys.path:
+            sys.path.insert(0, _CORE_DIR)
+        from sync_backend import sync_doctor
+        sync_result = sync_doctor()
+        for check, info in sync_result.items():
+            if info.get("ok"):
+                _ok(f"Sync {check}", info.get("detail", ""))
+            else:
+                _fail(f"Sync {check}", info.get("detail", ""))
+    except Exception as e:
+        _warn(f"Sync check skipped", str(e))
+
     # Summary
     print(f"\n{'='*40}")
     if fail_count == 0:
@@ -7305,6 +7319,7 @@ def main():
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
         "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
+        "sync",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -7653,6 +7668,88 @@ def main():
         repo = Path(args.file or ".").resolve()
         print("=== MUNINN PURGE-SECRETS — cleaning mycelium databases ===")
         purge_secrets_db(repo)
+        return
+
+    if args.command == "sync":
+        # I1: CLI sync commands — --status/--backend/--migrate/--export/--import
+        if not _REPO_PATH:
+            cwd = Path(".").resolve()
+            if (cwd / ".muninn").exists():
+                _REPO_PATH = cwd
+                _refresh_tree_paths()
+        if _CORE_DIR not in sys.path:
+            sys.path.insert(0, _CORE_DIR)
+        from sync_backend import get_sync_backend, save_sync_config, _load_sync_config
+        sub = args.file or "status"  # Default sub-action
+
+        if sub == "status":
+            # I1: Show backend status
+            try:
+                backend = get_sync_backend()
+                st = backend.status()
+                print("=== MUNINN SYNC STATUS ===")
+                for k, v in st.items():
+                    print(f"  {k}: {v}")
+            except Exception as e:
+                print(f"Sync status error: {e}")
+        elif sub.startswith("backend="):
+            # I1: Switch backend — sync backend=git|shared_file|tls
+            new_backend = sub.split("=", 1)[1]
+            if new_backend not in ("shared_file", "git", "tls"):
+                print(f"ERROR: unknown backend '{new_backend}'. Use: shared_file, git, tls")
+                sys.exit(1)
+            config = _load_sync_config()
+            config["backend"] = new_backend
+            save_sync_config(config)
+            print(f"Backend switched to: {new_backend}")
+        elif sub == "migrate":
+            # I2: Migration — backend-to-backend
+            from sync_backend import migrate_backend
+            config = _load_sync_config()
+            src_type = config.get("backend", "shared_file")
+            # Migrate to the "other" backend
+            target = "git" if src_type == "shared_file" else "shared_file"
+            print(f"=== MUNINN SYNC MIGRATE: {src_type} -> {target} ===")
+            result = migrate_backend(src_type, target, config)
+            print(f"  Migrated: {result['edges']} edges, {result['fusions']} fusions")
+            if result.get("verified"):
+                print(f"  Verification: PASS")
+            else:
+                print(f"  Verification: SKIP (no verification possible)")
+        elif sub == "export":
+            # I5: Export meta to JSON
+            from sync_backend import export_meta_json
+            out_path = Path(args.repo) if args.repo else Path("muninn_export.json")
+            result = export_meta_json(out_path)
+            print(f"Exported: {result['edges']} edges, {result['fusions']} fusions -> {out_path}")
+        elif sub == "import":
+            # I5: Import meta from JSON
+            if not args.repo:
+                print("ERROR: usage: muninn sync import --repo <json-file>")
+                sys.exit(1)
+            from sync_backend import import_meta_json
+            result = import_meta_json(Path(args.repo))
+            print(f"Imported: {result['edges']} edges, {result['fusions']} fusions")
+        elif sub == "verify-hooks":
+            # I3: Verify hook integration
+            from sync_backend import verify_hooks
+            result = verify_hooks()
+            print("=== MUNINN SYNC HOOK VERIFY ===")
+            for site, status in result.items():
+                mark = "[OK]" if status else "[FAIL]"
+                print(f"  {mark} {site}")
+        elif sub == "doctor":
+            # I4: Sync health check
+            from sync_backend import sync_doctor
+            result = sync_doctor()
+            print("=== MUNINN SYNC DOCTOR ===")
+            for check, info in result.items():
+                mark = "[OK]" if info.get("ok") else "[FAIL]"
+                print(f"  {mark} {check}: {info.get('detail', '')}")
+        else:
+            print(f"ERROR: unknown sync subcommand '{sub}'")
+            print("  Usage: muninn sync [status|backend=TYPE|migrate|export|import|verify-hooks|doctor]")
+            sys.exit(1)
         return
 
     if args.command == "quarantine":

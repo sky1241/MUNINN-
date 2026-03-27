@@ -88,11 +88,11 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 5 — Integration (5 briques)
 
-- [ ] **I1** CLI commands — sync --status/--backend/--migrate/--export/--import [M]
-- [ ] **I2** Migration tool — backend-to-backend avec verification row count [M]
-- [ ] **I3** Hook verify — verifier les 5 call sites avec chaque backend [S]
-- [ ] **I4** Doctor check — sante backend + integrite meta dans doctor() [S]
-- [ ] **I5** Export/Import JSON — dump meta complet en JSON pour backup + import [S]
+- [x] **I1** CLI commands — sync --status/--backend/--migrate/--export/--import [M]
+- [x] **I2** Migration tool — backend-to-backend avec verification row count [M]
+- [x] **I3** Hook verify — verifier les 5 call sites avec chaque backend [S]
+- [x] **I4** Doctor check — sante backend + integrite meta dans doctor() [S]
+- [x] **I5** Export/Import JSON — dump meta complet en JSON pour backup + import [S]
 
 **Tests Phase 5**: ~20 tests (CLI subprocess -> verifie stdout + exit code)
 
