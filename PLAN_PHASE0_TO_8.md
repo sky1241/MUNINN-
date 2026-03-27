@@ -8,7 +8,7 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 - [x] **X1** Secret scrub 7 entry points (observe_text, feed, bootstrap, ingest, inject, CLI, cube x2) + defense dans observe_text() [S]
 - [x] **X1b** Purge secrets existants dans mycelium.db + meta_mycelium.db [S]
-- [ ] **X2** UTC epoch — date.today() -> datetime.utcnow().date() partout [XS]
+- [x] **X2** UTC epoch — datetime.now(timezone.utc).date() partout [XS]
 - [ ] **X3** Indexes manquants — 4 composites sur edges/concepts/edge_zones [S]
 - [ ] **X4** Schema versioning (PRAGMA user_version) + migration idempotency (flag debut+fin) [S]
 - [ ] **X5** Fix days_to_date() fallback — retourne today() pas "2026-01-01" [XS]

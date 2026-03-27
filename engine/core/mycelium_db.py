@@ -14,7 +14,7 @@ Zero new dependencies (sqlite3 = Python stdlib).
 import json
 import sqlite3
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 try:
@@ -33,7 +33,7 @@ def date_to_days(d: str) -> int:
         dt = date(int(parts[0]), int(parts[1]), int(parts[2]))
         return (dt - _EPOCH_REF).days
     except (ValueError, IndexError, AttributeError):
-        return (date.today() - _EPOCH_REF).days
+        return (datetime.now(timezone.utc).date() - _EPOCH_REF).days
 
 
 def days_to_date(days) -> str:
@@ -54,7 +54,7 @@ def days_to_date(days) -> str:
 
 def today_days() -> int:
     """Get today as epoch-days."""
-    return (date.today() - _EPOCH_REF).days
+    return (datetime.now(timezone.utc).date() - _EPOCH_REF).days
 
 
 class MyceliumDB:
