@@ -403,6 +403,62 @@ def _refresh_tree_paths():
     TREE_META = _get_tree_meta()
 
 
+def cleanup_legacy_tree():
+    """C1: Remove memory/tree.json legacy if .muninn/tree/tree.json exists.
+
+    Returns True if legacy was removed, False otherwise.
+    """
+    if not _REPO_PATH:
+        return False
+    legacy_dir = _REPO_PATH / "memory"
+    legacy_tree = legacy_dir / "tree.json"
+    new_tree = _REPO_PATH / ".muninn" / "tree" / "tree.json"
+
+    if legacy_tree.exists() and new_tree.exists():
+        try:
+            legacy_tree.unlink()
+            # Remove legacy .mn files that have copies in .muninn/tree/
+            new_tree_dir = _REPO_PATH / ".muninn" / "tree"
+            for mn_file in legacy_dir.glob("*.mn"):
+                if (new_tree_dir / mn_file.name).exists():
+                    mn_file.unlink()
+            # Remove legacy dir if empty
+            remaining = list(legacy_dir.iterdir())
+            if not remaining:
+                legacy_dir.rmdir()
+            return True
+        except (OSError, PermissionError):
+            pass
+    return False
+
+
+def cleanup_tmp_files():
+    """C2: Cleanup orphaned .tmp files in .muninn/ at boot.
+
+    Returns number of .tmp files removed.
+    """
+    if not _REPO_PATH:
+        return 0
+    muninn_dir = _REPO_PATH / ".muninn"
+    if not muninn_dir.exists():
+        return 0
+
+    removed = 0
+    try:
+        # Only clean up .tmp files older than 1 hour
+        cutoff = time.time() - 3600
+        for tmp_file in muninn_dir.rglob("*.tmp"):
+            try:
+                if tmp_file.stat().st_mtime < cutoff:
+                    tmp_file.unlink()
+                    removed += 1
+            except (OSError, PermissionError):
+                pass
+    except Exception:
+        pass
+    return removed
+
+
 def init_tree():
     TREE_DIR.mkdir(parents=True, exist_ok=True)
 

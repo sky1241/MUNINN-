@@ -132,8 +132,8 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 8 — Cleanup (2 briques)
 
-- [ ] **C1** Supprimer memory/tree.json legacy (3 branches vs 167 dans .muninn/tree/) [XS]
-- [ ] **C2** Cleanup orphaned .tmp files au boot [XS]
+- [x] **C1** Supprimer memory/tree.json legacy (3 branches vs 167 dans .muninn/tree/) [XS]
+- [x] **C2** Cleanup orphaned .tmp files au boot [XS]
 
 **Tests Phase 8**: ~5 tests
 
