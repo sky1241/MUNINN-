@@ -451,6 +451,14 @@ def get_sync_backend(config: dict = None) -> SyncBackend:
         git_path = config.get("git_path") or str(meta_dir / "sync.git")
         remote = config.get("git_remote")
         return GitBackend(Path(git_path), remote=remote)
+    elif backend_type == "tls":
+        from sync_tls import TLSBackend
+        return TLSBackend(
+            host=config.get("tls_host", "localhost"),
+            port=config.get("tls_port", 9477),
+            cert_path=config.get("tls_cert"),
+            verify=config.get("tls_verify", True),
+        )
     else:
         # Fall back to shared file
         return SharedFileBackend(meta_dir)

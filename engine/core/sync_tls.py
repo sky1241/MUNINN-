@@ -149,7 +149,8 @@ class SyncServer:
     def __init__(self, cert_path: str, key_path: str, meta_db_path: str,
                  host: str = "0.0.0.0", port: int = _DEFAULT_PORT,
                  ca_path: str = None, require_client_cert: bool = False,
-                 max_requests_per_min: int = 30):
+                 max_requests_per_min: int = 30,
+                 allowed_users: list = None):
         self.cert_path = cert_path
         self.key_path = key_path
         self.ca_path = ca_path
@@ -161,6 +162,8 @@ class SyncServer:
         self._server_socket = None
         self._thread = None
         self._limiter = RateLimiter(max_requests=max_requests_per_min, window_seconds=60)
+        # T4: ACL — list of allowed CN values (None = allow all)
+        self.allowed_users = allowed_users
 
     def _create_context(self) -> ssl.SSLContext:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -174,6 +177,31 @@ class SyncServer:
             ctx.verify_mode = ssl.CERT_REQUIRED
         return ctx
 
+    def _check_acl(self, conn) -> str | None:
+        """T4: Check client cert CN against allowed users.
+
+        Returns CN string if authorized, None if no cert or not checked.
+        Raises PermissionError if CN not in allowed_users.
+        """
+        if not self.require_client_cert:
+            return None
+        try:
+            cert = conn.getpeercert()
+            if not cert:
+                return None
+            # Extract CN from subject
+            for field in cert.get("subject", ()):
+                for key, value in field:
+                    if key == "commonName":
+                        if self.allowed_users and value not in self.allowed_users:
+                            raise PermissionError(f"T4: User '{value}' not authorized")
+                        return value
+        except PermissionError:
+            raise
+        except Exception:
+            pass
+        return None
+
     def _handle_client(self, conn, addr):
         # Rate limiting
         ip = addr[0] if addr else "unknown"
@@ -184,27 +212,41 @@ class SyncServer:
                 pass
             conn.close()
             return
+
         try:
+            # T4: ACL check
+            try:
+                user_cn = self._check_acl(conn)
+            except PermissionError as pe:
+                _send_msg(conn, {"status": "error", "message": str(pe)})
+                conn.close()
+                return
+
             msg = _recv_msg(conn)
             action = msg.get("action")
 
             if action == "push":
-                # Client sends connections to merge
+                # T1: Real CRDT merge into meta DB
                 connections = msg.get("connections", [])
                 repo_name = msg.get("repo", "unknown")
+                zone = msg.get("zone", repo_name)
+                merged = self._merge_push(connections, repo_name, zone)
                 _send_msg(conn, {
                     "status": "ok",
-                    "merged": len(connections),
+                    "merged": merged,
                     "repo": repo_name,
                 })
 
             elif action == "pull":
-                # Client requests connections for specific concepts
+                # T1: Real data return from meta DB
                 concepts = msg.get("concepts", [])
+                max_pull = msg.get("max_pull", 1000)
+                result = self._query_pull(concepts, max_pull)
                 _send_msg(conn, {
                     "status": "ok",
-                    "connections": [],  # Would query meta DB
-                    "count": 0,
+                    "connections": result["connections"],
+                    "fusions": result["fusions"],
+                    "count": result["count"],
                 })
 
             elif action == "ping":
@@ -220,6 +262,105 @@ class SyncServer:
                 pass
         finally:
             conn.close()
+
+    def _merge_push(self, connections: list, repo_name: str, zone: str) -> int:
+        """T1: CRDT merge incoming connections into meta DB.
+
+        MAX(count), MIN(first_seen), MAX(last_seen), union(zones).
+        """
+        try:
+            from mycelium_db import MyceliumDB, date_to_days, today_days
+        except ImportError:
+            from .mycelium_db import MyceliumDB, date_to_days, today_days
+
+        db = MyceliumDB(Path(self.meta_db_path))
+        merged = 0
+        try:
+            # Track repo
+            repos_str = db.get_meta("repos", "")
+            repos = repos_str.split(",") if repos_str else []
+            if repo_name not in repos:
+                repos.append(repo_name)
+                db._conn.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                    ("repos", ",".join(repos)))
+
+            for conn in connections:
+                a, b = conn.get("a", ""), conn.get("b", "")
+                if not a or not b:
+                    continue
+                # Normalize key order (min/max) to match MyceliumDB convention
+                a_norm, b_norm = min(a, b), max(a, b)
+                a_id = db._get_or_create_concept(a_norm)
+                b_id = db._get_or_create_concept(b_norm)
+                count = conn.get("count", 1)
+                fs = conn.get("first_seen", today_days())
+                ls = conn.get("last_seen", today_days())
+                db._conn.execute("""
+                    INSERT INTO edges (a, b, count, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(a, b) DO UPDATE SET
+                        count = MAX(count, excluded.count),
+                        first_seen = MIN(first_seen, excluded.first_seen),
+                        last_seen = MAX(last_seen, excluded.last_seen)
+                """, (a_id, b_id, count, fs, ls))
+                if zone:
+                    db._conn.execute(
+                        "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                        (a_id, b_id, zone))
+                merged += 1
+
+            db.commit()
+            # H1: audit log
+            try:
+                db.log_sync(action="push_tls", repo=repo_name, count=merged)
+            except Exception:
+                pass
+        finally:
+            db.close()
+        return merged
+
+    def _query_pull(self, concepts: list, max_pull: int) -> dict:
+        """T1: Query meta DB for connections matching concepts."""
+        try:
+            from mycelium_db import MyceliumDB, days_to_date
+        except ImportError:
+            from .mycelium_db import MyceliumDB, days_to_date
+
+        db = MyceliumDB(Path(self.meta_db_path))
+        result = {"connections": [], "fusions": [], "count": 0}
+        try:
+            if concepts:
+                query_ids = set()
+                for c in concepts:
+                    cid = db._concept_cache.get(c.lower().strip())
+                    if cid is not None:
+                        query_ids.add(cid)
+                if not query_ids:
+                    return result
+                ph = ",".join("?" * len(query_ids))
+                rows = db._conn.execute(f"""
+                    SELECT a, b, count, first_seen, last_seen FROM edges
+                    WHERE a IN ({ph}) OR b IN ({ph})
+                    ORDER BY count DESC LIMIT ?
+                """, list(query_ids) + list(query_ids) + [max_pull]).fetchall()
+            else:
+                rows = db._conn.execute(
+                    "SELECT a, b, count, first_seen, last_seen FROM edges "
+                    "ORDER BY count DESC LIMIT ?", (max_pull,)
+                ).fetchall()
+
+            for row in rows:
+                a_name = db._id_to_name.get(row[0]) or db._concept_name(row[0])
+                b_name = db._id_to_name.get(row[1]) or db._concept_name(row[1])
+                result["connections"].append({
+                    "a": a_name, "b": b_name,
+                    "count": row[2], "first_seen": row[3], "last_seen": row[4],
+                })
+            result["count"] = len(result["connections"])
+        finally:
+            db.close()
+        return result
 
     def start(self, background: bool = True):
         """Start the TLS server. If background=True, runs in a thread."""
@@ -297,17 +438,163 @@ class SyncClient:
         """Check server connectivity."""
         return self._send({"action": "ping"})
 
-    def push(self, connections: list, repo_name: str) -> dict:
+    def push(self, connections: list, repo_name: str, zone: str = None) -> dict:
         """Push local connections to remote meta-mycelium."""
         return self._send({
             "action": "push",
             "connections": connections,
             "repo": repo_name,
+            "zone": zone or repo_name,
         })
 
-    def pull(self, concepts: list) -> dict:
+    def pull(self, concepts: list, max_pull: int = 1000) -> dict:
         """Pull connections for specific concepts from remote."""
         return self._send({
             "action": "pull",
             "concepts": concepts,
+            "max_pull": max_pull,
         })
+
+
+# ── T2: TLSBackend ──────────────────────────────────────────────
+
+class TLSBackend:
+    """T2: SyncBackend implementation that delegates to SyncClient.
+
+    Implements the same push/pull/status interface as SharedFileBackend
+    and GitBackend, but sends data over TLS to a remote SyncServer.
+    """
+
+    def __init__(self, host: str = "localhost", port: int = _DEFAULT_PORT,
+                 cert_path: str = None, verify: bool = True,
+                 client_cert: str = None, client_key: str = None):
+        self.client = SyncClient(host=host, port=port,
+                                 cert_path=cert_path, verify=verify)
+        self.host = host
+        self.port = port
+        # T4: mTLS client cert
+        self.client_cert = client_cert
+        self.client_key = client_key
+
+    def push(self, payload, local_db) -> int:
+        """T2: Push local edges to remote server via TLS."""
+        try:
+            from mycelium_db import days_to_date
+        except ImportError:
+            from .mycelium_db import days_to_date
+
+        connections = []
+        if local_db is not None:
+            for row in local_db._conn.execute(
+                "SELECT a, b, count, first_seen, last_seen FROM edges"
+            ):
+                a_name = local_db._id_to_name.get(row[0])
+                b_name = local_db._id_to_name.get(row[1])
+                if not a_name or not b_name:
+                    continue
+                connections.append({
+                    "a": a_name, "b": b_name,
+                    "count": row[2], "first_seen": row[3], "last_seen": row[4],
+                })
+
+        result = self.client.push(
+            connections,
+            repo_name=getattr(payload, 'repo_name', 'unknown'),
+            zone=getattr(payload, 'zone', None),
+        )
+        return result.get("merged", 0)
+
+    def pull(self, local_db, query_concepts=None, max_pull=1000) -> int:
+        """T2: Pull edges from remote server via TLS."""
+        try:
+            from mycelium_db import days_to_date
+        except ImportError:
+            from .mycelium_db import days_to_date
+
+        concepts = query_concepts or []
+        result = self.client.pull(concepts, max_pull=max_pull)
+
+        if result.get("status") != "ok":
+            return 0
+
+        pulled = 0
+        # Load tombstones
+        local_tombstones = set()
+        try:
+            for ts in local_db.get_tombstones():
+                local_tombstones.add((ts[0], ts[1]))
+        except Exception:
+            pass
+
+        for conn in result.get("connections", []):
+            a, b = conn["a"], conn["b"]
+            a_key, b_key = min(a, b), max(a, b)
+            if (a_key, b_key) in local_tombstones:
+                continue
+            if not local_db.has_connection(a, b):
+                local_db.upsert_connection(
+                    a, b, count=conn["count"],
+                    first_seen=days_to_date(conn["first_seen"]),
+                    last_seen=days_to_date(conn["last_seen"]),
+                )
+                pulled += 1
+
+        local_db.commit()
+        return pulled
+
+    def status(self) -> dict:
+        """T2: Return TLS backend status."""
+        result = {
+            "type": "tls",
+            "host": self.host,
+            "port": self.port,
+        }
+        try:
+            pong = self.client.ping()
+            result["connected"] = pong.get("status") == "pong"
+            result["server_version"] = pong.get("version")
+        except Exception as e:
+            result["connected"] = False
+            result["error"] = str(e)
+        return result
+
+
+# ── T3: Server CLI ───────────────────────────────────────────────
+
+def serve_cli():
+    """T3: CLI entrypoint — python sync_tls.py serve --port 9477."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Muninn Sync TLS Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Bind address")
+    parser.add_argument("--port", type=int, default=_DEFAULT_PORT, help="Port (default 9477)")
+    parser.add_argument("--cert", required=True, help="TLS certificate path")
+    parser.add_argument("--key", required=True, help="TLS private key path")
+    parser.add_argument("--meta-db", default=str(Path.home() / ".muninn" / "meta_mycelium.db"),
+                        help="Meta-mycelium DB path")
+    parser.add_argument("--ca", help="CA cert for mTLS client verification")
+    parser.add_argument("--require-client-cert", action="store_true",
+                        help="Require client certificate (mTLS)")
+    parser.add_argument("--allowed-users", nargs="*",
+                        help="T4: Allowed certificate CNs")
+    parser.add_argument("--generate-certs", help="Generate self-signed certs in this directory")
+    args = parser.parse_args()
+
+    if args.generate_certs:
+        certs = generate_certs(Path(args.generate_certs))
+        print(f"Generated: {certs['cert_path']}, {certs['key_path']}")
+        return
+
+    server = SyncServer(
+        cert_path=args.cert, key_path=args.key,
+        meta_db_path=args.meta_db,
+        host=args.host, port=args.port,
+        ca_path=args.ca,
+        require_client_cert=args.require_client_cert,
+        allowed_users=args.allowed_users,
+    )
+    print(f"Muninn Sync Server listening on {args.host}:{args.port}")
+    server.start(background=False)
+
+
+if __name__ == "__main__":
+    serve_cli()

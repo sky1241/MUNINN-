@@ -77,10 +77,10 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 4 — Backend TLS (4 briques)
 
-- [ ] **T1** Wire SyncServer merge — push fait le vrai CRDT merge, pull retourne des donnees [M]
-- [ ] **T2** TLSBackend class — implemente SyncBackend via SyncClient existant [S]
-- [ ] **T3** Server CLI — muninn serve --port 9477 [S]
-- [ ] **T4** Auth + ACL — verifier cert CN = user autorise, permissions par zone [M]
+- [x] **T1** Wire SyncServer merge — push fait le vrai CRDT merge, pull retourne des donnees [M]
+- [x] **T2** TLSBackend class — implemente SyncBackend via SyncClient existant [S]
+- [x] **T3** Server CLI — muninn serve --port 9477 [S]
+- [x] **T4** Auth + ACL — verifier cert CN = user autorise, permissions par zone [M]
 
 **Tests Phase 4**: ~15 tests (localhost server + client cert + push/pull)
 
