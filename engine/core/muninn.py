@@ -5489,11 +5489,14 @@ def parse_transcript(jsonl_path: Path) -> list[str]:
     return texts
 
 
-def feed_from_transcript(jsonl_path: Path, repo_path: Path):
+def feed_from_transcript(jsonl_path: Path, repo_path: Path,
+                         max_seconds: float = 60.0):
     """Feed the mycelium from a single transcript JSONL file.
     V6A: Per-message arousal via VADER -> passed to observe() for emotional tagging.
     Chunked: saves every FEED_CHUNK_SIZE messages to avoid timeout on large transcripts.
     Resumable: tracks offset in .muninn/feed_progress.json to resume after interruption.
+    Graceful timeout: if max_seconds elapsed, saves progress and exits cleanly.
+    Next call resumes where it left off. No more infinite crash loops.
     """
     FEED_CHUNK_SIZE = 50  # save mycelium every N messages
 
@@ -5531,6 +5534,8 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
     m.start_session()
 
     fed = 0
+    _t_start = time.time()
+    _timed_out = False
     for i in range(offset, len(texts)):
         text = texts[i]
         # V6A: Score arousal per message for emotional tagging
@@ -5547,11 +5552,22 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path):
             progress[file_key] = {"offset": offset + fed, "size": file_size}
             _atomic_json_write(progress_path, progress)
 
+            # GRACEFUL TIMEOUT: save progress and exit if time budget exceeded.
+            # Next cycle (15 min later) resumes from this offset. Always progresses.
+            if time.time() - _t_start > max_seconds:
+                _timed_out = True
+                print(f"  TIMEOUT: fed {fed} messages in {max_seconds:.0f}s, "
+                      f"saving at {offset + fed}/{len(texts)} ({jsonl_path.name})")
+                break
+
     # Final save
     m.save()
-    progress[file_key] = {"offset": len(texts), "size": file_size}
+    if not _timed_out:
+        progress[file_key] = {"offset": len(texts), "size": file_size}
+    else:
+        progress[file_key] = {"offset": offset + fed, "size": file_size}
     _atomic_json_write(progress_path, progress)
-    return len(texts), texts  # Return texts for reuse by compress_transcript
+    return (len(texts) if not _timed_out else offset + fed), texts
 
 
 def _semantic_rle(texts: list[str]) -> list[str]:
