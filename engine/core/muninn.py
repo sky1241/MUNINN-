@@ -170,6 +170,9 @@ _SECRET_PATTERNS = [
     r'(?:cl[eé]|mdp|mot\s+de\s+passe|passwd|passphrase)[=:\s]+\S+',  # FR: clé/mdp/mot de passe
 ]
 
+# P10: Compile secret patterns once at module load (not per-call)
+_COMPILED_SECRET_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _SECRET_PATTERNS]
+
 
 def _safe_path(filepath) -> str:
     """Sanitize path for display — never show absolute paths.
@@ -1906,9 +1909,9 @@ def compress_file(filepath: Path) -> str:
     except (UnicodeDecodeError, OSError):
         return ""
 
-    # Redact secrets before any compression
-    for pat in _SECRET_PATTERNS:
-        text = re.sub(pat, '[REDACTED]', text)
+    # P10: Redact secrets before any compression (compiled patterns)
+    for cpat in _COMPILED_SECRET_PATTERNS:
+        text = cpat.sub('[REDACTED]', text)
 
     lines = text.split("\n")
 
@@ -3649,6 +3652,12 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
     """
     if len(cold_branches) < 2:
         return []
+
+    # P8: Cap to top-20 coldest branches by recall score to avoid O(n^2) NCD
+    MAX_NCD_BRANCHES = 20
+    if len(cold_branches) > MAX_NCD_BRANCHES:
+        cold_branches = sorted(cold_branches,
+                               key=lambda x: _ebbinghaus_recall(x[1]))[:MAX_NCD_BRANCHES]
 
     # 1. Read all cold branch contents
     contents = {}
@@ -5777,10 +5786,10 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
     if not texts:
         return None, None
 
-    # Strip secrets before compression
+    # P10: Strip secrets before compression (compiled patterns)
     for i, text in enumerate(texts):
-        for pat in _SECRET_PATTERNS:
-            texts[i] = re.sub(pat, '[REDACTED]', texts[i])
+        for cpat in _COMPILED_SECRET_PATTERNS:
+            texts[i] = cpat.sub('[REDACTED]', texts[i])
 
     # Semantic RLE: collapse debug/retry loops
     # Detects sequences of similar messages (error→retry→error→retry→success)
@@ -7233,9 +7242,9 @@ def scrub_secrets(target_path: Path, dry_run: bool = False) -> dict:
         modified = text
         file_hits = 0
 
-        # 1. Structural patterns (_SECRET_PATTERNS) — redact entire match
-        for pat in _SECRET_PATTERNS:
-            new, count = re.subn(pat, "[REDACTED]", modified)
+        # 1. P10: Structural patterns (compiled) — redact entire match
+        for cpat in _COMPILED_SECRET_PATTERNS:
+            new, count = cpat.subn("[REDACTED]", modified)
             file_hits += count
             modified = new
 

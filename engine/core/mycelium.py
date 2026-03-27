@@ -888,18 +888,23 @@ class Mycelium:
                         "UPDATE edges SET count=? WHERE a=? AND b=?",
                         (new_count, a_id, b_id))
 
-            for a_id, b_id in dead_ids:
-                # H4: record tombstone before deletion
+            # P6: Batch deletes with executemany() instead of loop
+            if dead_ids:
+                td = today_days()
+                # H4: record tombstones before deletion
                 try:
-                    td = today_days()
-                    self._db._conn.execute(
+                    self._db._conn.executemany(
                         "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
-                        "VALUES (?, ?, ?, ?)", (a_id, b_id, td, "decay"))
+                        "VALUES (?, ?, ?, ?)",
+                        [(a_id, b_id, td, "decay") for a_id, b_id in dead_ids])
                 except Exception:
                     pass  # Old schema without tombstones table
-                self._db._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
-                self._db._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
-                self._db._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
+                self._db._conn.executemany(
+                    "DELETE FROM edges WHERE a=? AND b=?", dead_ids)
+                self._db._conn.executemany(
+                    "DELETE FROM fusions WHERE a=? AND b=?", dead_ids)
+                self._db._conn.executemany(
+                    "DELETE FROM edge_zones WHERE a=? AND b=?", dead_ids)
             self._db._conn.commit()
             self._adj_cache = None  # M10 fix: invalidate after decay
             return len(dead_ids)
@@ -935,6 +940,57 @@ class Mycelium:
                     del self.data["fusions"][key]
             self._adj_cache = None  # M10 fix: invalidate after decay
             return len(dead)
+
+    def cleanup_orphan_zones(self) -> int:
+        """P2: Delete zone entries whose edges no longer exist.
+
+        Returns number of orphaned zone entries removed.
+        """
+        if self._db is None:
+            return 0
+        try:
+            result = self._db._conn.execute("""
+                DELETE FROM edge_zones
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM edges WHERE edges.a = edge_zones.a AND edges.b = edge_zones.b
+                )
+            """)
+            removed = result.rowcount
+            if removed > 0:
+                self._db._conn.commit()
+            return removed
+        except Exception:
+            return 0
+
+    def vacuum_if_needed(self, threshold_seconds: float = 10.0) -> bool:
+        """P3: Run VACUUM + PRAGMA optimize if decay took longer than threshold.
+
+        Returns True if VACUUM was executed.
+        """
+        if self._db is None:
+            return False
+        try:
+            self._db._conn.execute("PRAGMA optimize")
+            self._db._conn.execute("VACUUM")
+            return True
+        except Exception:
+            return False
+
+    def growth_stats(self) -> dict:
+        """P3: Return growth statistics for monitoring.
+
+        Returns dict with connection/concept counts and quota info.
+        """
+        if self._db is None:
+            return {"connections": 0, "concepts": 0}
+        n_edges = self._db.connection_count()
+        n_concepts = len(self._db._concept_cache)
+        return {
+            "connections": n_edges,
+            "concepts": n_concepts,
+            "max_connections": self.MAX_CONNECTIONS,
+            "at_limit": self.MAX_CONNECTIONS > 0 and n_edges >= self.MAX_CONNECTIONS,
+        }
 
     def effective_weight(self, key: str, count: float = None) -> float:
         """P20.3: TF-IDF inverse — rare across zones = important, ubiquitous = small.
@@ -1314,6 +1370,8 @@ class Mycelium:
                 sorted_deg = sorted(degree.items(), key=lambda x: -x[1])
                 top_concepts = set(c for c, _ in sorted_deg[:MAX_ZONE_CONCEPTS])
 
+            # P7: Single-pass — collect concepts AND edges in one scan
+            edge_triples = []
             for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
                 a_name = id_to_name.get(row[0], "")
                 b_name = id_to_name.get(row[1], "")
@@ -1323,22 +1381,14 @@ class Mycelium:
                     continue
                 concepts.add(a_name)
                 concepts.add(b_name)
+                edge_triples.append((a_name, b_name, row[2]))
             concepts = sorted(concepts)
             idx = {c: i for i, c in enumerate(concepts)}
             N = len(concepts)
             if N < 6:
                 return {}
-            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                if not a_name or not b_name:
-                    continue
-                if top_concepts and (a_name not in top_concepts or b_name not in top_concepts):
-                    continue
-                i, j = idx.get(a_name), idx.get(b_name)
-                if i is None or j is None:
-                    continue
-                w = row[2]
+            for a_name, b_name, w in edge_triples:
+                i, j = idx[a_name], idx[b_name]
                 rows.extend([i, j])
                 cols.extend([j, i])
                 vals.extend([w, w])

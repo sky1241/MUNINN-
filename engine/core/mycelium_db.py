@@ -835,6 +835,23 @@ class MyceliumDB:
             result.append((a_name, b_name, r[2]))
         return result
 
+    def cleanup_old_tombstones(self, max_age_days: int = 30) -> int:
+        """P9: Delete tombstones older than max_age_days.
+
+        Prevents unbounded growth of the tombstones table.
+        Returns number of tombstones removed.
+        """
+        cutoff = today_days() - max_age_days
+        try:
+            result = self._conn.execute(
+                "DELETE FROM tombstones WHERE deleted_at < ?", (cutoff,))
+            removed = result.rowcount
+            if removed > 0:
+                self._conn.commit()
+            return removed
+        except Exception:
+            return 0
+
     def close(self):
         """Close the database connection and checkpoint WAL."""
         try:

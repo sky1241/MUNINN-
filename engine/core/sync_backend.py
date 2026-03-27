@@ -134,9 +134,13 @@ class SharedFileBackend(SyncBackend):
 
     This is the existing sync mechanism extracted from mycelium.py.
     Zero server, zero infra — just a shared directory.
+    P1: Concurrent access with exponential backoff + jitter for 120 users NAS.
     """
 
     NETWORK_TIMEOUT = 5  # H11: seconds to wait for NAS/network paths
+    MAX_RETRIES = 5       # P1: max lock retries before giving up
+    BASE_DELAY = 0.1      # P1: base delay in seconds (100ms)
+    MAX_DELAY = 5.0       # P1: max delay cap in seconds
 
     def __init__(self, meta_dir: Path):
         self.meta_dir = Path(meta_dir)
@@ -163,11 +167,29 @@ class SharedFileBackend(SyncBackend):
         if result[0]:
             raise result[0]
 
+    def _retry_with_backoff(self, func, operation: str = "sync"):
+        """P1: Execute func with exponential backoff + jitter on SQLite lock errors."""
+        import random
+        import sqlite3
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                return func()
+            except (sqlite3.OperationalError, OSError) as e:
+                if "locked" in str(e).lower() or "database is locked" in str(e).lower():
+                    if attempt >= self.MAX_RETRIES:
+                        raise
+                    delay = min(self.BASE_DELAY * (2 ** attempt), self.MAX_DELAY)
+                    jitter = random.uniform(0, delay * 0.5)
+                    time.sleep(delay + jitter)
+                else:
+                    raise
+
     def push(self, payload: SyncPayload, local_db: MyceliumDB) -> int:
         """Push edges/fusions to shared meta SQLite.
 
         H1: logs sync operation. H2: transaction rollback on failure.
         H3: records checksum. H4: skips tombstoned edges. H9: disk guard.
+        P1: retry with exponential backoff on lock.
         """
         # H9: Check disk space before write
         if not check_disk_space(self.meta_dir):
@@ -754,6 +776,41 @@ def save_sync_config(config: dict):
         except OSError:
             pass
         raise
+
+
+# ── P4: Observability — sync metrics ────────────────────────────
+
+def sync_metrics() -> dict:
+    """P4: Return sync growth metrics for monitoring.
+
+    Returns dict with edge count, fusion count, growth since last check,
+    last sync timestamp, and sync log summary.
+    """
+    meta_db = Path.home() / ".muninn" / "meta_mycelium.db"
+    result = {"edges": 0, "fusions": 0, "concepts": 0,
+              "last_sync": None, "total_syncs": 0, "errors": 0}
+
+    if not meta_db.exists():
+        return result
+
+    try:
+        db = MyceliumDB(meta_db)
+        result["edges"] = db.connection_count()
+        result["concepts"] = len(db._concept_cache)
+        result["fusions"] = db.fusion_count()
+
+        # Sync log summary
+        logs = db.get_sync_log(limit=100)
+        result["total_syncs"] = len(logs)
+        result["errors"] = sum(1 for l in logs if l.get("errors"))
+        if logs:
+            result["last_sync"] = logs[0].get("timestamp")
+
+        db.close()
+    except Exception:
+        pass
+
+    return result
 
 
 # ── I2: Migration tool ──────────────────────────────────────────

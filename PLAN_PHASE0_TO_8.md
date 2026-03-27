@@ -100,16 +100,16 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 6 — Scale + Performance (10 briques)
 
-- [ ] **P1** Concurrent SharedFile — backoff exponentiel + jitter pour 120 users NAS [M]
-- [ ] **P2** Zone cleanup — supprimer zones orphelines (repos supprimes) dans prune() [S]
-- [ ] **P3** Growth limits — MAX_CONNECTIONS=5M soft limit + quota par zone + VACUUM periodique [M]
-- [ ] **P4** Observability — sync.log rotatif + metriques croissance + CLI muninn sync --health [S]
-- [ ] **P5** Cache id_to_name global — utiliser _db._id_to_name au lieu de reconstruire 14x/session [S]
-- [ ] **P6** Batch deletes dans decay() — executemany() au lieu de loop [XS]
-- [ ] **P7** Single-pass detect_zones — virer le double scan edges [S]
-- [ ] **P8** NCD cap — top-20 branches par heuristique, pas O(n^2) complet dans prune [M]
-- [ ] **P9** Cycles table TTL cleanup — DELETE FROM cycles WHERE age > 30d [XS]
-- [ ] **P10** Secret patterns cache global — compiler regex une seule fois [XS]
+- [x] **P1** Concurrent SharedFile — backoff exponentiel + jitter pour 120 users NAS [M]
+- [x] **P2** Zone cleanup — supprimer zones orphelines (repos supprimes) dans prune() [S]
+- [x] **P3** Growth limits — MAX_CONNECTIONS=5M soft limit + quota par zone + VACUUM periodique [M]
+- [x] **P4** Observability — sync.log rotatif + metriques croissance + CLI muninn sync --health [S]
+- [x] **P5** Cache id_to_name global — utiliser _db._id_to_name au lieu de reconstruire 14x/session [S]
+- [x] **P6** Batch deletes dans decay() — executemany() au lieu de loop [XS]
+- [x] **P7** Single-pass detect_zones — virer le double scan edges [S]
+- [x] **P8** NCD cap — top-20 branches par heuristique, pas O(n^2) complet dans prune [M]
+- [x] **P9** Cycles table TTL cleanup — DELETE FROM cycles WHERE age > 30d [XS]
+- [x] **P10** Secret patterns cache global — compiler regex une seule fois [XS]
 
 **Tests Phase 6**: ~30 tests (100K edges -> benchmark timing < seuil)
 
