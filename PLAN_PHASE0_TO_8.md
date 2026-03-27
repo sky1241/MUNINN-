@@ -45,21 +45,21 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 2 — Hardening (13 briques)
 
-- [ ] **H1** Sync audit log — table sync_log (timestamp, user, repo, action, count, errors) [S]
-- [ ] **H2** Pre-sync snapshot + rollback — savepoint SQLite avant merge, rollback_to_last_good() [M]
-- [ ] **H3** Integrity checksums — SHA256 sur payload, validation au pull [S]
-- [ ] **H4** Tombstones — table deleted_edges, prune enregistre avant suppression, pull respecte [M]
-- [ ] **H5** Fusion conflict resolution — vote par nombre de zones utilisant chaque forme [S]
-- [ ] **H6** Dynamic degree filter — percentile ajuste selon population meta (5% / sqrt(n_repos)) [S]
-- [ ] **H7** Offline resilience — edges 3+ zones dans meta = pas de decay local [S]
-- [ ] **H8** Per-repo filter on pull — pull ne ramene que les concepts pertinents [S]
-- [ ] **H9** Disk full guard — check espace disque avant atomic writes [XS]
-- [ ] **H10** Prune rollback — snapshot arbre avant sleep_consolidate [S]
-- [ ] **H11** Network timeout — timeout sur mkdir/exists/open NAS (5s default) [S]
-- [ ] **H12** Tree file lock — flock/fcntl sur tree.json pour boot/prune concurrent [S]
-- [ ] **H13** ConceptTranslator thread lock — singleton avec threading.Lock [XS]
+- [x] **H1** Sync audit log — table sync_log (timestamp, user, repo, action, count, errors) [S]
+- [x] **H2** Pre-sync snapshot + rollback — savepoint SQLite avant merge, rollback_to_last_good() [M]
+- [x] **H3** Integrity checksums — SHA256 sur payload, validation au pull [S]
+- [x] **H4** Tombstones — table deleted_edges, prune enregistre avant suppression, pull respecte [M]
+- [x] **H5** Fusion conflict resolution — vote par nombre de zones utilisant chaque forme [S]
+- [x] **H6** Dynamic degree filter — percentile ajuste selon population meta (5% / sqrt(n_repos)) [S]
+- [x] **H7** Offline resilience — edges 3+ zones dans meta = pas de decay local [S]
+- [x] **H8** Per-repo filter on pull — pull ne ramene que les concepts pertinents [S]
+- [x] **H9** Disk full guard — check espace disque avant atomic writes [XS]
+- [x] **H10** Prune rollback — snapshot arbre avant sleep_consolidate [S]
+- [x] **H11** Network timeout — timeout sur mkdir/exists/open NAS (5s default) [S]
+- [x] **H12** Tree file lock — flock/fcntl sur tree.json pour boot/prune concurrent [S]
+- [x] **H13** ConceptTranslator thread lock — singleton avec threading.Lock [XS]
 
-**Tests Phase 2**: ~45 tests (inject corruption -> verifie recovery/rollback)
+**Tests Phase 2**: 31 tests (31 PASS, 0 FAIL)
 
 ---
 

@@ -695,12 +695,37 @@ class Mycelium:
         self._adj_cache_max_weight = max_w
         return adj
 
-    def _get_high_degree_concepts(self) -> set:
-        """S3: Identify concepts with too many connections (universal stopwords).
+    def _dynamic_degree_percentile(self) -> float:
+        """H6: Adjust degree filter percentile based on meta repo count.
 
+        With more repos, common concepts are more frequent so we tighten the filter.
+        Formula: base_percentile / sqrt(n_repos), min 0.5%, max = base.
+        """
+        if not self.federated:
+            return self.DEGREE_FILTER_PERCENTILE
+        try:
+            meta_db_p = self.meta_db_path()
+            if meta_db_p.exists():
+                db = MyceliumDB(meta_db_p)
+                repos_str = db.get_meta("repos", "")
+                db.close()
+                n_repos = len(repos_str.split(",")) if repos_str else 1
+                if n_repos > 1:
+                    import math
+                    adjusted = self.DEGREE_FILTER_PERCENTILE / math.sqrt(n_repos)
+                    return max(0.005, adjusted)  # Floor at 0.5%
+        except Exception:
+            pass
+        return self.DEGREE_FILTER_PERCENTILE
+
+    def _get_high_degree_concepts(self) -> set:
+        """S3/H6: Identify concepts with too many connections (universal stopwords).
+
+        H6: Percentile adjusts dynamically based on meta repo count.
         Lazy mode: 2 SQL queries (count distinct + filter by threshold).
         No full scan of 2.7M edges needed.
         """
+        pct = self._dynamic_degree_percentile()
         if self._db is not None:
             n = self._db.connection_count()
             if n < 50:
@@ -711,7 +736,7 @@ class Mycelium:
             n_concepts = row[0] if row else 0
             if n_concepts < 20:
                 return set()
-            cutoff = max(1, int(n_concepts * self.DEGREE_FILTER_PERCENTILE))
+            cutoff = max(1, int(n_concepts * pct))
 
             # Step 1: threshold = degree at the cutoff position
             row = self._db._conn.execute("""
@@ -757,7 +782,7 @@ class Mycelium:
                 return set()
 
             sorted_degrees = sorted(degree.values(), reverse=True)
-            cutoff_idx = max(1, int(len(sorted_degrees) * self.DEGREE_FILTER_PERCENTILE))
+            cutoff_idx = max(1, int(len(sorted_degrees) * pct))
             threshold = sorted_degrees[min(cutoff_idx, len(sorted_degrees) - 1)]
             threshold = max(threshold, 20)
 
@@ -864,6 +889,14 @@ class Mycelium:
                         (new_count, a_id, b_id))
 
             for a_id, b_id in dead_ids:
+                # H4: record tombstone before deletion
+                try:
+                    td = today_days()
+                    self._db._conn.execute(
+                        "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
+                        "VALUES (?, ?, ?, ?)", (a_id, b_id, td, "decay"))
+                except Exception:
+                    pass  # Old schema without tombstones table
                 self._db._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
                 self._db._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
                 self._db._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
@@ -2217,6 +2250,11 @@ class Mycelium:
             except ImportError:
                 from .sync_backend import get_sync_backend
             backend = get_sync_backend()
+            # H8: Auto-filter by local concepts if no explicit query
+            if query_concepts is None and self._db is not None:
+                local_concepts = list(self._db._concept_cache.keys())
+                if local_concepts:
+                    query_concepts = local_concepts[:500]  # Cap to avoid huge queries
             return backend.pull(self._db, query_concepts, max_pull)
 
         # Legacy: dict mode or JSON fallback

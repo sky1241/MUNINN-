@@ -121,6 +121,25 @@ class MyceliumDB:
             CREATE INDEX IF NOT EXISTS idx_fusions_b ON fusions(b);
             CREATE INDEX IF NOT EXISTS idx_fusions_strength ON fusions(strength);
             CREATE INDEX IF NOT EXISTS idx_edge_zones_zone ON edge_zones(zone);
+            -- H1: Sync audit log
+            CREATE TABLE IF NOT EXISTS sync_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                user TEXT,
+                repo TEXT,
+                action TEXT NOT NULL,
+                count INTEGER DEFAULT 0,
+                errors TEXT,
+                checksum TEXT
+            );
+            -- H4: Tombstones for deleted edges
+            CREATE TABLE IF NOT EXISTS tombstones (
+                a INTEGER NOT NULL,
+                b INTEGER NOT NULL,
+                deleted_at INTEGER NOT NULL,
+                deleted_by TEXT,
+                PRIMARY KEY (a, b)
+            ) WITHOUT ROWID;
             -- X3: Composite indexes for sync/decay/zone queries
             CREATE INDEX IF NOT EXISTS idx_edge_zones_ab ON edge_zones(a, b);
             CREATE INDEX IF NOT EXISTS idx_edges_last_seen_count ON edges(last_seen, count);
@@ -130,7 +149,7 @@ class MyceliumDB:
         c.commit()
 
     # X4: Current schema version — bump when schema changes
-    SCHEMA_VERSION = 2  # v1=original, v2=composite indexes
+    SCHEMA_VERSION = 3  # v1=original, v2=composite indexes, v3=sync_log+tombstones
 
     def _migrate_schema(self):
         """X4: Idempotent schema migration using PRAGMA user_version."""
@@ -732,6 +751,90 @@ class MyceliumDB:
 
         return len(purge_ids)
 
+    # ── H1: Sync audit log ──────────────────────────────────────────
+
+    def log_sync(self, action: str, repo: str = None, count: int = 0,
+                 errors: str = None, checksum: str = None, user: str = None):
+        """H1: Record a sync operation in the audit log."""
+        import getpass
+        if user is None:
+            try:
+                user = getpass.getuser()
+            except Exception:
+                user = "unknown"
+        self._conn.execute(
+            "INSERT INTO sync_log (timestamp, user, repo, action, count, errors, checksum) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (time.strftime("%Y-%m-%dT%H:%M:%SZ"), user, repo, action, count, errors, checksum)
+        )
+        self._conn.commit()
+        self._wal_monitor.on_write()
+
+    def get_sync_log(self, limit: int = 50) -> list[dict]:
+        """H1: Get recent sync log entries."""
+        rows = self._conn.execute(
+            "SELECT id, timestamp, user, repo, action, count, errors, checksum "
+            "FROM sync_log ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [{"id": r[0], "timestamp": r[1], "user": r[2], "repo": r[3],
+                 "action": r[4], "count": r[5], "errors": r[6], "checksum": r[7]}
+                for r in rows]
+
+    # ── H2: Pre-sync snapshot + rollback ──────────────────────────
+
+    def savepoint(self, name: str = "pre_sync"):
+        """H2: Create a savepoint before sync operations."""
+        self._conn.execute(f"SAVEPOINT {name}")
+
+    def rollback_to(self, name: str = "pre_sync"):
+        """H2: Rollback to a savepoint if sync fails."""
+        self._conn.execute(f"ROLLBACK TO SAVEPOINT {name}")
+
+    def release_savepoint(self, name: str = "pre_sync"):
+        """H2: Release a savepoint after successful sync."""
+        self._conn.execute(f"RELEASE SAVEPOINT {name}")
+
+    # ── H4: Tombstones ────────────────────────────────────────────
+
+    def record_tombstone(self, concept_a: str, concept_b: str, deleted_by: str = None):
+        """H4: Record a deleted edge as tombstone (respected by pull)."""
+        a_key = min(concept_a, concept_b)
+        b_key = max(concept_a, concept_b)
+        a_id = self._concept_cache.get(a_key)
+        b_id = self._concept_cache.get(b_key)
+        if a_id is None or b_id is None:
+            return
+        td = today_days()
+        self._conn.execute(
+            "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
+            "VALUES (?, ?, ?, ?)", (a_id, b_id, td, deleted_by)
+        )
+        self._conn.commit()
+        self._wal_monitor.on_write()
+
+    def is_tombstoned(self, concept_a: str, concept_b: str) -> bool:
+        """H4: Check if an edge has a tombstone."""
+        a_key = min(concept_a, concept_b)
+        b_key = max(concept_a, concept_b)
+        a_id = self._concept_cache.get(a_key)
+        b_id = self._concept_cache.get(b_key)
+        if a_id is None or b_id is None:
+            return False
+        row = self._conn.execute(
+            "SELECT 1 FROM tombstones WHERE a=? AND b=?", (a_id, b_id)
+        ).fetchone()
+        return row is not None
+
+    def get_tombstones(self) -> list[tuple[str, str, int]]:
+        """H4: Get all tombstones as (concept_a, concept_b, deleted_at_days)."""
+        rows = self._conn.execute("SELECT a, b, deleted_at FROM tombstones").fetchall()
+        result = []
+        for r in rows:
+            a_name = self._id_to_name.get(r[0]) or self._concept_name(r[0])
+            b_name = self._id_to_name.get(r[1]) or self._concept_name(r[1])
+            result.append((a_name, b_name, r[2]))
+        return result
+
     def close(self):
         """Close the database connection and checkpoint WAL."""
         try:
@@ -865,8 +968,11 @@ class ConceptTranslator:
     """
 
     _instance = None  # Singleton
+    _lock = None  # H13: threading.Lock for singleton
 
     def __init__(self):
+        import threading
+        self._lock = threading.Lock()  # H13: protect concurrent access
         self._cache = {}  # in-memory: foreign -> english
         self._db_path = Path.home() / ".muninn" / "translations.db"
         self._db = None
@@ -878,9 +984,13 @@ class ConceptTranslator:
 
     @classmethod
     def get(cls) -> "ConceptTranslator":
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            cls._instance = cls()
+        """Get or create singleton instance. H13: thread-safe."""
+        import threading
+        if not hasattr(cls, '_class_lock') or cls._class_lock is None:
+            cls._class_lock = threading.Lock()
+        with cls._class_lock:
+            if cls._instance is None:
+                cls._instance = cls()
         return cls._instance
 
     def _init_tokenizer(self):
@@ -929,22 +1039,23 @@ class ConceptTranslator:
             return True
 
     def translate(self, word: str) -> str:
-        """Translate a single word. Returns cached translation or original."""
-        word_lower = word.lower().strip()
+        """Translate a single word. Returns cached translation or original. H13: thread-safe."""
+        with self._lock:
+            word_lower = word.lower().strip()
 
-        # Already cached?
-        if word_lower in self._cache:
-            return self._cache[word_lower]
+            # Already cached?
+            if word_lower in self._cache:
+                return self._cache[word_lower]
 
-        # Is it English?
-        if self.is_english(word_lower):
-            return word_lower
+            # Is it English?
+            if self.is_english(word_lower):
+                return word_lower
 
-        # Queue for batch translation
-        if word_lower not in self._pending:
-            self._pending.append(word_lower)
+            # Queue for batch translation
+            if word_lower not in self._pending:
+                self._pending.append(word_lower)
 
-        return word_lower  # Return original until translated
+            return word_lower  # Return original until translated
 
     def translate_batch(self, words: list[str]) -> dict[str, str]:
         """Translate a batch of words. Returns {original: translated}.
@@ -1041,11 +1152,12 @@ class ConceptTranslator:
             pass
 
     def flush_pending(self) -> int:
-        """Translate all pending words in one batch. Returns count translated."""
-        if not self._pending:
-            return 0
-        words = list(set(self._pending))
-        self._pending.clear()
+        """Translate all pending words in one batch. Returns count translated. H13: thread-safe."""
+        with self._lock:
+            if not self._pending:
+                return 0
+            words = list(set(self._pending))
+            self._pending.clear()
         translations = self._api_translate(words)
         if translations:
             for src, tgt in translations.items():

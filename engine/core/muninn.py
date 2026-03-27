@@ -433,9 +433,59 @@ def init_tree():
     return tree
 
 
+def _tree_lock(path: Path, timeout: float = 5.0):
+    """H12: Advisory file lock for tree.json (cross-platform).
+
+    Uses msvcrt on Windows, fcntl on Unix. Non-blocking with retry.
+    Returns (lock_file, acquired). Caller must close lock_file when done.
+    """
+    lock_path = path.with_suffix(".lock")
+    try:
+        lock_f = open(lock_path, "w")
+        if sys.platform == "win32":
+            import msvcrt
+            for _ in range(int(timeout * 20)):
+                try:
+                    msvcrt.locking(lock_f.fileno(), msvcrt.LK_NBLCK, 1)
+                    return lock_f, True
+                except (IOError, OSError):
+                    time.sleep(0.05)
+        else:
+            import fcntl
+            for _ in range(int(timeout * 20)):
+                try:
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return lock_f, True
+                except (IOError, OSError):
+                    time.sleep(0.05)
+        return lock_f, False  # Timeout — proceed without lock
+    except Exception:
+        return None, False
+
+
+def _tree_unlock(lock_f):
+    """H12: Release tree file lock."""
+    if lock_f is None:
+        return
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            try:
+                msvcrt.locking(lock_f.fileno(), msvcrt.LK_UNLCK, 1)
+            except Exception:
+                pass
+        else:
+            import fcntl
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+        lock_f.close()
+    except Exception:
+        pass
+
+
 def load_tree():
     if not TREE_META.exists():
         return init_tree()
+    lock_f, _ = _tree_lock(TREE_META)
     try:
         with open(TREE_META, encoding="utf-8") as f:
             tree = json.load(f)
@@ -450,7 +500,6 @@ def load_tree():
         return tree
     except (json.JSONDecodeError, ValueError) as e:
         # SAFETY: backup corrupted file before re-initializing.
-        # Prevents data loss from disk errors or power loss mid-write.
         import shutil
         backup = TREE_META.with_suffix(f".corrupted.{int(time.time())}.json")
         try:
@@ -459,32 +508,38 @@ def load_tree():
         except Exception:
             print(f"WARNING: tree.json corrupted ({e}), backup failed", file=sys.stderr)
         return init_tree()
+    finally:
+        _tree_unlock(lock_f)
 
 
 def save_tree(tree):
-    """Save tree metadata (atomic write via tempfile + rename)."""
+    """Save tree metadata (atomic write via tempfile + rename). H12: file locked."""
     import tempfile, os
     tree["updated"] = time.strftime("%Y-%m-%d")
     TREE_DIR.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(
-        dir=str(TREE_DIR), suffix=".tmp", prefix="tree_"
-    )
+    lock_f, _ = _tree_lock(TREE_META)
     try:
-        with open(fd, "w", encoding="utf-8") as f:
-            json.dump(tree, f, ensure_ascii=False, indent=2)
-        # Windows: os.replace can fail if target is open by another thread
-        for _attempt in range(3):
-            try:
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(TREE_DIR), suffix=".tmp", prefix="tree_"
+        )
+        try:
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(tree, f, ensure_ascii=False, indent=2)
+            # Windows: os.replace can fail if target is open by another thread
+            for _attempt in range(3):
+                try:
+                    os.replace(tmp_path, str(TREE_META))
+                    break
+                except PermissionError:
+                    time.sleep(0.05)
+            else:
                 os.replace(tmp_path, str(TREE_META))
-                break
-            except PermissionError:
-                time.sleep(0.05)
-        else:
-            os.replace(tmp_path, str(TREE_META))  # final attempt, let it raise
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
+    finally:
+        _tree_unlock(lock_f)
 
 
 def _atomic_json_write(path: Path, data, indent: int = 2):
@@ -4059,10 +4114,19 @@ def prune(dry_run: bool = True):
                 recompressed += 1
                 print(f"  RE-COMPRESSED {name}: {original_lines} -> {new_lines} lines")
 
+        # H10: Snapshot tree before sleep consolidation (for rollback)
+        _pre_consolidate_snapshot = json.dumps(tree, indent=2, ensure_ascii=False)
+
         # Sleep Consolidation (Wilson & McNaughton 1994)
         # Merge similar cold branches into single dense branches
         cold_branch_data = [(name, nodes[name]) for name, _ in cold if name in nodes]
-        consolidated = _sleep_consolidate(cold_branch_data, nodes)
+        try:
+            consolidated = _sleep_consolidate(cold_branch_data, nodes)
+        except Exception as e:
+            # H10: Rollback tree to pre-consolidation state
+            print(f"  H10 ROLLBACK: consolidation failed ({e}), restoring tree snapshot")
+            tree.update(json.loads(_pre_consolidate_snapshot))
+            consolidated = 0
 
         # MYCELIUM DECAY — clean dead connections during prune (like the tree)
         # decay() was never called before, causing unbounded growth (14.9M edges, 1.3GB).

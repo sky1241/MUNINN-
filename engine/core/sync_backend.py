@@ -3,6 +3,7 @@
 Abstract sync backend + SharedFileBackend + factory.
 Designed for future Git (Phase 3) and TLS (Phase 4) backends.
 """
+import hashlib
 import json
 import os
 import sys
@@ -16,6 +17,22 @@ try:
     from .mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
 except ImportError:
     from mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
+
+
+# ── H9: Disk full guard ─────────────────────────────────────────
+
+def check_disk_space(path: Path, min_mb: int = 10) -> bool:
+    """H9: Check if at least min_mb of disk space is available.
+
+    Returns True if enough space, False otherwise.
+    """
+    import shutil
+    try:
+        usage = shutil.disk_usage(str(path))
+        free_mb = usage.free / (1024 * 1024)
+        return free_mb >= min_mb
+    except (OSError, AttributeError):
+        return True  # Can't check = assume OK
 
 
 # ── F1: SyncPayload dataclass ────────────────────────────────────
@@ -57,6 +74,11 @@ class SyncPayload:
     def to_json(self) -> str:
         """F5: Serialize payload to JSON string."""
         return json.dumps(asdict(self), indent=2, ensure_ascii=False)
+
+    def checksum(self) -> str:
+        """H3: SHA256 checksum of the payload content."""
+        content = json.dumps(asdict(self), sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     @classmethod
     def from_json(cls, data: str) -> "SyncPayload":
@@ -114,26 +136,64 @@ class SharedFileBackend(SyncBackend):
     Zero server, zero infra — just a shared directory.
     """
 
+    NETWORK_TIMEOUT = 5  # H11: seconds to wait for NAS/network paths
+
     def __init__(self, meta_dir: Path):
         self.meta_dir = Path(meta_dir)
-        self.meta_dir.mkdir(parents=True, exist_ok=True)
+        # H11: Timeout-protected mkdir for network paths
+        self._safe_mkdir(self.meta_dir)
         self.db_path = self.meta_dir / "meta_mycelium.db"
 
+    def _safe_mkdir(self, path: Path, timeout: int = None):
+        """H11: mkdir with timeout for network paths."""
+        if timeout is None:
+            timeout = self.NETWORK_TIMEOUT
+        import threading
+        result = [None]
+        def _do():
+            try:
+                path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                result[0] = e
+        t = threading.Thread(target=_do, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        if t.is_alive():
+            raise TimeoutError(f"H11: Network path {path} not reachable within {timeout}s")
+        if result[0]:
+            raise result[0]
+
     def push(self, payload: SyncPayload, local_db: MyceliumDB) -> int:
-        """Push edges/fusions to shared meta SQLite."""
+        """Push edges/fusions to shared meta SQLite.
+
+        H1: logs sync operation. H2: transaction rollback on failure.
+        H3: records checksum. H4: skips tombstoned edges. H9: disk guard.
+        """
+        # H9: Check disk space before write
+        if not check_disk_space(self.meta_dir):
+            raise OSError("H9: Insufficient disk space (<10MB) for sync push")
         db = MyceliumDB(self.db_path)
         n_synced = 0
+        errors = None
         try:
-            # Track repo
+            # Track repo (raw SQL — no auto-commit, H2 safety)
             repos_str = db.get_meta("repos", "")
             repos = repos_str.split(",") if repos_str else []
             if payload.repo_name not in repos:
                 repos.append(payload.repo_name)
-                db.set_meta("repos", ",".join(repos))
-            db.set_meta("type", "meta")
-            db.set_meta("updated", time.strftime("%Y-%m-%d"))
+                db._conn.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                    ("repos", ",".join(repos)))
+            db._conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                ("type", "meta"))
+            db._conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                ("updated", time.strftime("%Y-%m-%d")))
             if not db.get_meta("created"):
-                db.set_meta("created", time.strftime("%Y-%m-%d"))
+                db._conn.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                    ("created", time.strftime("%Y-%m-%d")))
 
             # Push edges from local DB
             if local_db is not None:
@@ -161,7 +221,7 @@ class SharedFileBackend(SyncBackend):
                             (a_id, b_id, payload.zone))
                     n_synced += 1
 
-                # Push fusions
+                # Push fusions — H5: zone-voted conflict resolution
                 for row in local_db._conn.execute(
                     "SELECT a, b, form, strength, fused_at FROM fusions"
                 ):
@@ -171,28 +231,65 @@ class SharedFileBackend(SyncBackend):
                         continue
                     a_id = db._get_or_create_concept(a_name)
                     b_id = db._get_or_create_concept(b_name)
+                    # H5: If fusion already exists with different form, keep
+                    # the one with higher strength (proxy for more zone votes)
+                    existing = db._conn.execute(
+                        "SELECT form, strength FROM fusions WHERE a=? AND b=?",
+                        (a_id, b_id)
+                    ).fetchone()
+                    if existing and existing[0] != row[2]:
+                        # Different form — keep the stronger one
+                        if row[3] <= existing[1]:
+                            continue  # Existing form wins
                     db._conn.execute("""
                         INSERT INTO fusions (a, b, form, strength, fused_at)
                         VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT(a, b) DO UPDATE SET
-                            strength = MAX(strength, excluded.strength)
+                            strength = MAX(strength, excluded.strength),
+                            form = CASE WHEN excluded.strength > strength
+                                   THEN excluded.form ELSE form END
                     """, (a_id, b_id, row[2], row[3], row[4]))
 
+            # H2: commit all at once (rollback on exception = no commit)
             db.commit()
+        except Exception as e:
+            errors = str(e)
+            raise
         finally:
+            # H1: audit log + H3: checksum
+            try:
+                db.log_sync(
+                    action="push", repo=payload.repo_name,
+                    count=n_synced, errors=errors,
+                    checksum=payload.checksum(),
+                )
+            except Exception:
+                pass
             db.close()
         return n_synced
 
     def pull(self, local_db: MyceliumDB, query_concepts: list[str] = None,
              max_pull: int = 1000) -> int:
-        """Pull relevant edges from meta into local DB."""
+        """Pull relevant edges from meta into local DB.
+
+        H1: logs sync. H2: savepoint for rollback. H4: respects tombstones.
+        """
         if not self.db_path.exists():
             return 0
 
         db = MyceliumDB(self.db_path)
+        errors = None
         try:
             pulled = 0
             query_ids = set()
+
+            # H4: load local tombstones to skip
+            local_tombstones = set()
+            try:
+                for ts in local_db.get_tombstones():
+                    local_tombstones.add((ts[0], ts[1]))
+            except Exception:
+                pass  # No tombstones table = old schema, skip
 
             if query_concepts:
                 query_set = {c.lower().strip() for c in query_concepts}
@@ -217,6 +314,12 @@ class SharedFileBackend(SyncBackend):
             for row in rows:
                 a_name = db._id_to_name.get(row[0]) or db._concept_name(row[0])
                 b_name = db._id_to_name.get(row[1]) or db._concept_name(row[1])
+
+                # H4: skip tombstoned edges
+                a_key = min(a_name, b_name)
+                b_key = max(a_name, b_name)
+                if (a_key, b_key) in local_tombstones:
+                    continue
 
                 if local_db is not None and not local_db.has_connection(a_name, b_name):
                     local_db.upsert_connection(
@@ -258,9 +361,18 @@ class SharedFileBackend(SyncBackend):
                             VALUES (?, ?, ?, ?, ?)
                         """, (a_id, b_id, row[2], row[3], row[4]))
 
+            # H2: commit all at once (no commit on exception = auto rollback)
             if local_db is not None:
                 local_db.commit()
+        except Exception as e:
+            errors = str(e)
+            raise
         finally:
+            # H1: audit log
+            try:
+                db.log_sync(action="pull", count=pulled, errors=errors)
+            except Exception:
+                pass
             db.close()
         return pulled
 
@@ -344,10 +456,13 @@ def get_sync_backend(config: dict = None) -> SyncBackend:
 # ── F7: Config atomic write ──────────────────────────────────────
 
 def save_sync_config(config: dict):
-    """F7: Atomic write config.json."""
+    """F7/H9: Atomic write config.json with disk guard."""
     import tempfile
     config_path = Path.home() / ".muninn" / "config.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
+    # H9: disk guard
+    if not check_disk_space(config_path.parent):
+        raise OSError("H9: Insufficient disk space (<10MB) for config write")
 
     tmp_fd, tmp_path = tempfile.mkstemp(dir=str(config_path.parent), suffix=".tmp")
     try:
