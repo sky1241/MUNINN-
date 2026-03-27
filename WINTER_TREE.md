@@ -2,24 +2,25 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-27. Engine: 17874 lignes, 12 fichiers + bridge_hook.py 107L. Tests: 110 fichiers, 1103 tests, 0 FAIL.
+> Mis a jour: 2026-03-27. Engine: 19736 lignes, 11 fichiers. Tests: 1069 PASS, 0 FAIL, 7 SKIP.
+> Plan Phase 0-8: 71/71 briques complete.
 
 ## Architecture
 
 ```
-        [80 test files, 607 tests]     +5 Cime (validation)
+        [1069 tests, 0 FAIL]           +5 Cime (validation)
        /    \
     [.mn]  [.mn]                       +4 Feuilles (memoire vivante)
       |      |
    [tree.json]                         +2 Branches (metadata arbre)
       |
-   [muninn.py 7654L]                   +1 Tronc (moteur principal)
+   [muninn.py 7941L]                   +1 Tronc (moteur principal)
       |
-   [mycelium.py 2709L + db 1078L]      0 SOL — champignon vivant (SQLite)
+   [mycelium.py 2873L + db 1207L]      0 SOL — champignon vivant (SQLite)
       |
-   [_secrets.py 61L]                  -0.5 Filtrage secrets partage
+   [sync_backend.py 1128L]           -0.5 Sync federe (SharedFile/Git/TLS)
       |
-   [vault.py 389L + sync_tls.py 313L] -1 Sous-sol — securite
+   [vault.py 389L + sync_tls.py 600L] -1 Sous-sol — securite + reseau
       |
    [forge.py 2048L + cube.py 3264L]   -2 Fondations — debug + resilience
       |
@@ -28,16 +29,16 @@
 
 ---
 
-## muninn.py — Moteur Principal (7654 lignes)
+## muninn.py — Moteur Principal (7941 lignes)
 
 ### Globals & Config (1-191)
 | Fonction | Lignes | Role |
 |----------|--------|------|
 | UNIVERSAL_RULES | 54-64 | Dict FR->EN compact (done, wip, fail...) |
-| _SECRET_PATTERNS | 135-169 | Regex detection secrets (GitHub PAT, AWS, API keys, FR: cle/mdp/passphrase) |
-| _redact_secrets_text (import) | 41 | X1: import from _secrets.py, applied at all 4 entry points |
-| _safe_path | 172-182 | Sanitize paths display (max 3 segments) |
-| load_codebook / get_codebook | 98-123 / 185-190 | Charge rules compression (universal + mycelium) |
+| _SECRET_PATTERNS | 136-171 | Regex detection secrets (GitHub PAT, AWS, API keys, FR: cle/mdp/passphrase) |
+| _COMPILED_SECRET_PATTERNS | 174 | P10: compiled regex cache (module-level, one-time) |
+| _safe_path | 177-187 | Sanitize paths display (max 3 segments) |
+| load_codebook / get_codebook | 98-123 / 189-194 | Charge rules compression (universal + mycelium) |
 
 ### Scan Repo (195-354)
 | scan_repo | 195-353 | R5: auto-genere codebook local (frequent words, entities, paths) |
@@ -257,15 +258,16 @@ Imported by: muninn.py (4 entry points), mycelium.py (observe_text defense), myc
 
 ---
 
-## mycelium_db.py — Backend SQLite (1078 lignes)
+## mycelium_db.py — Backend SQLite (1207 lignes)
 
 ### Schema & Init (67-145)
-- Tables: concepts (id, name), edges (a, b, count, first_seen, last_seen), fusions (a, b, form, strength), edge_zones (a, b, zone)
+- Tables: concepts, edges, fusions, edge_zones, sync_log (H1), tombstones (H4)
 - Pragmas: WAL mode, FK, mmap 100MB, cache 8MB
 - X3: 4 composite indexes (edge_zones_ab, edges_last_seen_count, edges_b_a, fusions_ab)
-- X4: PRAGMA user_version schema versioning (SCHEMA_VERSION=2) + idempotent migration
-- X2: UTC epoch — datetime.now(timezone.utc).date()
-- X5: days_to_date() fallback returns UTC today, not hardcoded date
+- X4: PRAGMA user_version schema versioning (SCHEMA_VERSION=3) + idempotent migration
+- H1: sync_log table (timestamp, user, repo, action, count, errors, checksum)
+- H4: tombstones table (a, b, deleted_at, deleted_by)
+- P9: cleanup_old_tombstones(30d) — TTL for tombstone table
 
 ### CRUD (134-618)
 | Methode | Lignes | Role |
@@ -414,14 +416,40 @@ Imported by: muninn.py (4 entry points), mycelium.py (observe_text defense), myc
 
 ---
 
-## sync_tls.py — Sync TLS (313 lignes)
+## sync_backend.py — Sync Federe (1128 lignes)
+
+| Classe/Fonction | Lignes | Role |
+|-----------------|--------|------|
+| check_disk_space | 24-35 | H9: guard espace disque (10MB min) |
+| SyncEdge/SyncFusion/SyncPayload | 41-95 | F1/F5: dataclasses sync + JSON serialization + SHA256 checksum |
+| SyncBackend (ABC) | 100-128 | F1: interface abstraite push/pull/status |
+| SharedFileBackend | 132-397 | F2: sync via SQLite partage (NAS/OneDrive) |
+| SharedFileBackend._retry_with_backoff | 166-178 | P1: exponential backoff + jitter (120 users NAS) |
+| get_sync_backend (factory) | 432-464 | F3: factory shared_file/git/tls + env var override |
+| GitBackend | 471-733 | G1-G5: sync via git repo (local/remote), CRDT merge, delta sync |
+| save_sync_config | 737-757 | F7: atomic write config.json |
+| sync_metrics | 760-788 | P4: observability — edge/fusion counts + sync log |
+| migrate_backend | 793-840 | I2: backend-to-backend migration + verification |
+| verify_hooks | 846-893 | I3: verify 5 call sites + payload roundtrip |
+| sync_doctor | 899-945 | I4: backend health + meta integrity + disk space |
+| export_meta_json | 951-993 | I5: full meta dump to JSON |
+| import_meta_json | 996-1040 | I5: import meta from JSON backup |
+
+---
+
+## sync_tls.py — Sync TLS (600 lignes)
 
 | Classe/Fonction | Lignes | Role |
 |-----------------|--------|------|
 | generate_certs | 42-92 | RSA 2048 self-signed, 365 jours |
 | RateLimiter | 124-143 | Token bucket per-IP |
-| SyncServer | 149-263 | TLS 1.3, mTLS optionnel, dispatch push/pull/ping |
-| SyncClient | 269-313 | Client TLS, verify configurable |
+| SyncServer | 149-310 | TLS 1.3, mTLS, dispatch push/pull/ping |
+| SyncServer._merge_push | 266-319 | T1: CRDT merge (MAX count, MIN first_seen, key normalization) |
+| SyncServer._query_pull | 321-361 | T1: real data return with concept filtering |
+| SyncServer._check_acl | 363-380 | T4: extract CN from client cert, check allowed_users |
+| TLSBackend | 413-545 | T2: SyncBackend implementation via SyncClient |
+| serve_cli | 550-590 | T3: argparse CLI for server startup |
+| SyncClient | 383-412 | Client TLS, verify configurable |
 
 ---
 

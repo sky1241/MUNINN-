@@ -1,7 +1,71 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 7654 + mycelium.py 2709 + cube.py 3264 + mycelium_db.py 1078 + _secrets.py 61 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 17859 total + bridge_hook.py 107
-Tests: 110 files, 1103 tests, 0 FAIL.
+Engine: muninn.py 7941 + mycelium.py 2873 + cube.py 3264 + mycelium_db.py 1207 + sync_backend.py 1128 + sync_tls.py 600 + forge.py 2048 + vault.py 389 + sentiment.py 154 + tokenizer.py 43 + wal_monitor.py 89 = 19736 total
+Tests: 1069 PASS, 0 FAIL, 7 SKIP.
+
+---
+
+## Phase 4 — Backend TLS (2026-03-27) [DONE]
+
+4 briques, 14 tests. SyncServer real CRDT merge + TLSBackend class.
+
+- **T1**: SyncServer._merge_push()/_query_pull() — real CRDT merge (MAX count, MIN first_seen, MAX last_seen) with key normalization.
+- **T2**: TLSBackend class — implements SyncBackend via SyncClient. push/pull/status methods.
+- **T3**: serve_cli() — argparse CLI with --host/--port/--cert/--key/--meta-db/--allowed-users/--generate-certs. __main__ guard.
+- **T4**: Auth ACL — _check_acl() extracts CN from client cert, checks against allowed_users list.
+
+---
+
+## Phase 5 — Integration (2026-03-27) [DONE]
+
+5 briques, 20 tests. CLI sync commands + migration + doctor.
+
+- **I1**: CLI `muninn sync [status|backend=TYPE|migrate|export|import|verify-hooks|doctor]`.
+- **I2**: migrate_backend() — backend-to-backend migration with row count verification.
+- **I3**: verify_hooks() — factory load, payload roundtrip, config, mycelium import checks.
+- **I4**: sync_doctor() — backend health, meta DB integrity, schema version, disk space, last sync.
+- **I5**: export_meta_json()/import_meta_json() — full meta dump/restore for backup.
+
+---
+
+## Phase 6 — Scale + Performance (2026-03-27) [DONE]
+
+10 briques, 23 tests. Concurrent access + performance optimizations.
+
+- **P1**: Exponential backoff + jitter (MAX_RETRIES=5, BASE_DELAY=100ms) for concurrent NAS access.
+- **P2**: cleanup_orphan_zones() — delete zone entries for removed edges.
+- **P3**: growth_stats() + vacuum_if_needed() — monitoring + periodic VACUUM.
+- **P4**: sync_metrics() — edge/fusion/concept counts + sync log summary.
+- **P5**: _id_to_name cache verified global (already O(1), no change needed).
+- **P6**: Batch deletes in decay() — executemany() replaces per-row DELETE loop.
+- **P7**: Single-pass detect_zones — eliminated double edge table scan.
+- **P8**: NCD cap — top-20 coldest branches in _sleep_consolidate (O(n^2) -> O(400)).
+- **P9**: cleanup_old_tombstones(30d) — TTL for tombstones table.
+- **P10**: _COMPILED_SECRET_PATTERNS — compile regex once at module load.
+
+---
+
+## Phase 7 — Intelligence (2026-03-27) [DONE]
+
+8 briques, 17 tests. Adaptive thresholds + auto-operations.
+
+- **A1**: Adaptive fusion threshold — max(2, sqrt(n_concepts) * 0.4).
+- **A2**: Adaptive decay half-life — scales with sessions/day (15-90 day range).
+- **A3**: Orphan concept auto-cleanup — DELETE concepts without edges when >20%.
+- **A4**: Auto-vacuum when decay() > 10s — PRAGMA optimize + VACUUM.
+- **A5**: Adaptive spreading hops — 1 if dense (>10 avg degree), 3 if sparse (<3), 2 default.
+- **A6**: Boot pre-warm by git diff — load modified file concepts into query.
+- **A7**: Auto-backup before destructive prune — .muninn/backups/prune_before_*.tar.gz (keeps 5).
+- **A8**: Prune warning at boot — warns when >45% branches are cold.
+
+---
+
+## Phase 8 — Cleanup (2026-03-27) [DONE]
+
+2 briques, 7 tests. Legacy removal + tmp cleanup.
+
+- **C1**: cleanup_legacy_tree() — remove memory/tree.json when .muninn/tree/ exists.
+- **C2**: cleanup_tmp_files() — remove orphaned .tmp files older than 1 hour.
 
 ---
 
