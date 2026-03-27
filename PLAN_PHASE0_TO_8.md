@@ -31,15 +31,15 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 1 — Fondation (7 briques)
 
-- [ ] **F1** SyncBackend ABC — interface push/pull/status/migrate + SyncPayload dataclass [S]
-- [ ] **F2** SharedFileBackend — extraire sync actuel de mycelium.py dans classe propre [M]
-- [ ] **F3** Factory + Config — lire config -> retourner le bon backend, retro-compatible [S]
-- [ ] **F4** Rewiring Mycelium — sync_to_meta()/pull_from_meta() deleguent au backend [M]
-- [ ] **F5** SyncPayload serializer — export/import delta (edges+fusions+zones) en JSON [S]
-- [ ] **F6** Env var MUNINN_META_PATH override (CI/Docker) [XS]
-- [ ] **F7** Config atomic write — tempfile+replace pour config.json partout [S]
+- [x] **F1** SyncBackend ABC — interface push/pull/status/migrate + SyncPayload dataclass [S]
+- [x] **F2** SharedFileBackend — extraire sync actuel de mycelium.py dans classe propre [M]
+- [x] **F3** Factory + Config — lire config -> retourner le bon backend, retro-compatible [S]
+- [x] **F4** Rewiring Mycelium — sync_to_meta()/pull_from_meta() deleguent au backend [M]
+- [x] **F5** SyncPayload serializer — export/import delta (edges+fusions+zones) en JSON [S]
+- [x] **F6** Env var MUNINN_META_PATH override (CI/Docker) [XS]
+- [x] **F7** Config atomic write — tempfile+replace pour config.json partout [S]
 
-**Tests Phase 1**: ~25 tests (2 repos + shared meta -> sync roundtrip)
+**Tests Phase 1**: 25 tests (25 PASS, 0 FAIL)
 
 ---
 

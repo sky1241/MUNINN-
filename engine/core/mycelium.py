@@ -2107,18 +2107,18 @@ class Mycelium:
         return Mycelium._load_meta_dir() / "meta_mycelium.db"
 
     def sync_to_meta(self):
-        """Push local connections to the shared meta-mycelium.
+        """F4: Push local connections to the shared meta-mycelium.
 
-        S1 (TIER 3): Writes to SQLite meta_mycelium.db.
-        Falls back to JSON meta_mycelium.json for backward compat.
+        Delegates to SyncBackend (F1-F3). Default: SharedFileBackend.
+        Falls back to legacy code for dict mode (JSON mycelium).
 
-        Merge strategy:
-        - counts: take max (not sum, to avoid inflation on repeated syncs)
-        - zones: union
-        - first_seen: earliest
-        - last_seen: latest
-        - fusions: merge if exists in meta, add if new
+        Merge strategy: MAX(count), MIN(first_seen), MAX(last_seen), union(zones).
         """
+        try:
+            from sync_backend import get_sync_backend, SyncPayload
+        except ImportError:
+            from .sync_backend import get_sync_backend, SyncPayload
+
         meta_db_p = self.meta_db_path()
         meta_json_p = self.meta_path()
         meta_db_p.parent.mkdir(exist_ok=True)
@@ -2131,119 +2131,77 @@ class Mycelium:
             except Exception as e:
                 print(f"WARNING: meta migration failed: {e}", file=sys.stderr)
 
-        db = MyceliumDB(meta_db_p)
-        n_synced = 0
-        try:
-            # Track repo
-            repos_str = db.get_meta("repos", "")
-            repos = repos_str.split(",") if repos_str else []
-            if self.repo_path.name not in repos:
-                repos.append(self.repo_path.name)
-                db.set_meta("repos", ",".join(repos))
-            db.set_meta("type", "meta")
-            db.set_meta("updated", time.strftime("%Y-%m-%d"))
-            if not db.get_meta("created"):
-                db.set_meta("created", time.strftime("%Y-%m-%d"))
+        if self._db is not None:
+            # F4: Delegate to backend
+            backend = get_sync_backend()
+            payload = SyncPayload(
+                repo_name=self.repo_path.name,
+                zone=self.zone or self.repo_path.name,
+            )
+            return backend.push(payload, self._db)
+        else:
+            # Legacy dict mode — direct sync (unchanged)
+            db = MyceliumDB(meta_db_p)
+            n_synced = 0
+            try:
+                repos_str = db.get_meta("repos", "")
+                repos = repos_str.split(",") if repos_str else []
+                if self.repo_path.name not in repos:
+                    repos.append(self.repo_path.name)
+                    db.set_meta("repos", ",".join(repos))
+                db.set_meta("type", "meta")
+                db.set_meta("updated", time.strftime("%Y-%m-%d"))
+                if not db.get_meta("created"):
+                    db.set_meta("created", time.strftime("%Y-%m-%d"))
 
-            # Merge connections
-            zone = self.zone
+                zone = self.zone
+                local_conns = self.data["connections"]
+                n_synced = len(local_conns)
+                for key, conn in local_conns.items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    a_id = db._get_or_create_concept(a)
+                    b_id = db._get_or_create_concept(b)
+                    fs = date_to_days(conn.get("first_seen", "2026-01-01"))
+                    ls = date_to_days(conn.get("last_seen", "2026-01-01"))
+                    db._conn.execute("""
+                        INSERT INTO edges (a, b, count, first_seen, last_seen)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(a, b) DO UPDATE SET
+                            count = MAX(count, excluded.count),
+                            first_seen = MIN(first_seen, excluded.first_seen),
+                            last_seen = MAX(last_seen, excluded.last_seen)
+                    """, (a_id, b_id, conn["count"], fs, ls))
+                    db._conn.execute(
+                        "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                        (a_id, b_id, zone))
 
-            with db._conn:
-                if self._db is not None:
-                    # Lazy mode: stream from local SQLite
-                    local_id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-                    n_synced = 0
-                    for row in self._db._conn.execute(
-                        "SELECT a, b, count, first_seen, last_seen FROM edges"
-                    ):
-                        a_name = local_id_to_name.get(row[0], "")
-                        b_name = local_id_to_name.get(row[1], "")
-                        if not a_name or not b_name:
-                            continue
-                        a_id = db._get_or_create_concept(a_name)
-                        b_id = db._get_or_create_concept(b_name)
-                        db._conn.execute("""
-                            INSERT INTO edges (a, b, count, first_seen, last_seen)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(a, b) DO UPDATE SET
-                                count = MAX(count, excluded.count),
-                                first_seen = MIN(first_seen, excluded.first_seen),
-                                last_seen = MAX(last_seen, excluded.last_seen)
-                        """, (a_id, b_id, row[2], row[3], row[4]))
-                        db._conn.execute(
-                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                            (a_id, b_id, zone)
-                        )
-                        n_synced += 1
-
-                    # Merge fusions from local DB
-                    for row in self._db._conn.execute(
-                        "SELECT a, b, form, strength, fused_at FROM fusions"
-                    ):
-                        a_name = local_id_to_name.get(row[0], "")
-                        b_name = local_id_to_name.get(row[1], "")
-                        if not a_name or not b_name:
-                            continue
-                        a_id = db._get_or_create_concept(a_name)
-                        b_id = db._get_or_create_concept(b_name)
-                        db._conn.execute("""
-                            INSERT INTO fusions (a, b, form, strength, fused_at)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(a, b) DO UPDATE SET
-                                strength = MAX(strength, excluded.strength)
-                        """, (a_id, b_id, row[2], row[3], row[4]))
-                else:
-                    # Dict mode: iterate self.data
-                    local_conns = self.data["connections"]
-                    n_synced = len(local_conns)
-                    for key, conn in local_conns.items():
-                        parts = key.split("|")
-                        if len(parts) != 2:
-                            continue
-                        a, b = parts
-                        a_id = db._get_or_create_concept(a)
-                        b_id = db._get_or_create_concept(b)
-                        fs = date_to_days(conn.get("first_seen", "2026-01-01"))
-                        ls = date_to_days(conn.get("last_seen", "2026-01-01"))
-                        db._conn.execute("""
-                            INSERT INTO edges (a, b, count, first_seen, last_seen)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(a, b) DO UPDATE SET
-                                count = MAX(count, excluded.count),
-                                first_seen = MIN(first_seen, excluded.first_seen),
-                                last_seen = MAX(last_seen, excluded.last_seen)
-                        """, (a_id, b_id, conn["count"], fs, ls))
-                        db._conn.execute(
-                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                            (a_id, b_id, zone)
-                        )
-
-                    # Merge fusions
-                    local_fusions = self.data.get("fusions", {})
-                    for key, fusion in local_fusions.items():
-                        parts = key.split("|")
-                        if len(parts) != 2:
-                            continue
-                        a, b = parts
-                        a_id = db._get_or_create_concept(a)
-                        b_id = db._get_or_create_concept(b)
-                        fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
-                        db._conn.execute("""
-                            INSERT INTO fusions (a, b, form, strength, fused_at)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(a, b) DO UPDATE SET
-                                strength = MAX(strength, excluded.strength)
-                        """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
-        finally:
-            db.close()
-
-        return n_synced
+                local_fusions = self.data.get("fusions", {})
+                for key, fusion in local_fusions.items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a, b = parts
+                    a_id = db._get_or_create_concept(a)
+                    b_id = db._get_or_create_concept(b)
+                    fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
+                    db._conn.execute("""
+                        INSERT INTO fusions (a, b, form, strength, fused_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(a, b) DO UPDATE SET
+                            strength = MAX(strength, excluded.strength)
+                    """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
+            finally:
+                db.close()
+            return n_synced
 
     def pull_from_meta(self, query_concepts: list[str] = None, max_pull: int = 1000):
-        """Pull relevant connections from meta-mycelium into local.
+        """F4: Pull relevant connections from meta-mycelium into local.
 
-        S1 (TIER 3): Reads from SQLite meta_mycelium.db.
-        Falls back to JSON for backward compat.
+        Delegates to SyncBackend (F1-F3) when in SQLite mode.
+        Falls back to legacy code for dict mode (JSON mycelium).
 
         If query_concepts given, only pulls connections involving those concepts.
         Otherwise pulls top connections by count.
@@ -2252,7 +2210,16 @@ class Mycelium:
         meta_db_p = self.meta_db_path()
         meta_json_p = self.meta_path()
 
-        # Try SQLite first, then JSON fallback
+        # F4: Delegate to backend for SQLite mode
+        if self._db is not None and meta_db_p.exists():
+            try:
+                from sync_backend import get_sync_backend
+            except ImportError:
+                from .sync_backend import get_sync_backend
+            backend = get_sync_backend()
+            return backend.pull(self._db, query_concepts, max_pull)
+
+        # Legacy: dict mode or JSON fallback
         if meta_db_p.exists():
             return self._pull_from_meta_sqlite(query_concepts, max_pull)
         elif meta_json_p.exists():
