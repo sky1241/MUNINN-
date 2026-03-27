@@ -47,7 +47,7 @@ def days_to_date(days) -> str:
         try:
             days = int(days)
         except (ValueError, TypeError):
-            return "2026-01-01"
+            return datetime.now(timezone.utc).date().strftime("%Y-%m-%d")
     dt = _EPOCH_REF + timedelta(days=int(days))
     return dt.strftime("%Y-%m-%d")
 
@@ -74,6 +74,7 @@ class MyceliumDB:
         self._conn.execute("PRAGMA mmap_size=100000000")
         self._conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
         self._setup_tables()
+        self._migrate_schema()
         self._wal_monitor = WALMonitor(self._conn)
         self._concept_cache = {}  # name -> id (in-memory for fast lookups)
         self._load_concept_cache()
@@ -120,8 +121,34 @@ class MyceliumDB:
             CREATE INDEX IF NOT EXISTS idx_fusions_b ON fusions(b);
             CREATE INDEX IF NOT EXISTS idx_fusions_strength ON fusions(strength);
             CREATE INDEX IF NOT EXISTS idx_edge_zones_zone ON edge_zones(zone);
+            -- X3: Composite indexes for sync/decay/zone queries
+            CREATE INDEX IF NOT EXISTS idx_edge_zones_ab ON edge_zones(a, b);
+            CREATE INDEX IF NOT EXISTS idx_edges_last_seen_count ON edges(last_seen, count);
+            CREATE INDEX IF NOT EXISTS idx_edges_b_a ON edges(b, a);
+            CREATE INDEX IF NOT EXISTS idx_fusions_ab ON fusions(a, b, strength);
         """)
         c.commit()
+
+    # X4: Current schema version — bump when schema changes
+    SCHEMA_VERSION = 2  # v1=original, v2=composite indexes
+
+    def _migrate_schema(self):
+        """X4: Idempotent schema migration using PRAGMA user_version."""
+        current = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if current >= self.SCHEMA_VERSION:
+            return  # Already up to date
+
+        # Mark migration start in meta table
+        self._conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('_migration_in_progress', '1')")
+        self._conn.commit()
+
+        # Future migrations go here as: if current < N: ...
+
+        # Set version and clear migration flag
+        self._conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
+        self._conn.execute("DELETE FROM meta WHERE key = '_migration_in_progress'")
+        self._conn.commit()
 
     def _load_concept_cache(self):
         """Load concept name->id and id->name mappings into memory (~100KB for 10K concepts)."""

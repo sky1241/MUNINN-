@@ -853,7 +853,7 @@ class Mycelium:
                 new_count = count / (2 ** periods)
 
                 if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
-                    saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
+                    saturation_loss = self.SATURATION_BETA * new_count * new_count
                     new_count = max(1, new_count - saturation_loss)
 
                 if new_count < 0.01:
@@ -890,7 +890,7 @@ class Mycelium:
                     periods = age_days // days
                     new_count = conn["count"] / (2 ** periods)
                     if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
-                        saturation_loss = int(self.SATURATION_BETA * new_count * new_count)
+                        saturation_loss = self.SATURATION_BETA * new_count * new_count
                         new_count = max(1, new_count - saturation_loss)
                     if new_count < 0.01:
                         dead.append(key)
