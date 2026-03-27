@@ -7164,6 +7164,57 @@ def scrub_secrets(target_path: Path, dry_run: bool = False) -> dict:
     return stats
 
 
+# ── X1b: Purge secrets from mycelium databases ──────────────────
+
+def purge_secrets_db(repo_path: Path = None):
+    """X1b: Scan mycelium.db + meta_mycelium.db for secret concepts and delete them.
+
+    Removes any concept whose name matches a secret pattern, along with
+    all its edges, fusions, and edge_zones.
+    """
+    from mycelium_db import MyceliumDB
+
+    total = 0
+
+    # 1. Local mycelium.db
+    local_db = (repo_path or Path(".")) / ".muninn" / "mycelium.db"
+    if local_db.exists():
+        db = MyceliumDB(local_db)
+        n = db.purge_secret_concepts()
+        total += n
+        db.close()
+        if n:
+            print(f"  Purged {n} secret concept(s) from {local_db}")
+        else:
+            print(f"  No secrets found in {local_db}")
+
+    # 2. Meta mycelium (cross-repo)
+    meta_db = Path.home() / ".muninn" / "meta_mycelium.db"
+    # Check config for custom meta_path
+    config_path = Path.home() / ".muninn" / "config.json"
+    if config_path.exists():
+        try:
+            cfg = json.loads(config_path.read_text(encoding="utf-8"))
+            mp = cfg.get("meta_path")
+            if mp:
+                meta_db = Path(mp) / "meta_mycelium.db"
+        except Exception:
+            pass
+
+    if meta_db.exists():
+        db = MyceliumDB(meta_db)
+        n = db.purge_secret_concepts()
+        total += n
+        db.close()
+        if n:
+            print(f"  Purged {n} secret concept(s) from {meta_db}")
+        else:
+            print(f"  No secrets found in {meta_db}")
+
+    print(f"\n  Total purged: {total} concept(s)")
+    return total
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -7174,7 +7225,7 @@ def main():
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
-        "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub",
+        "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -7517,6 +7568,12 @@ def main():
                 print(f"    {e}")
         if dry and stats["secrets_found"] > 0:
             print(f"\n  Run with --force to redact {stats['secrets_found']} secret(s)")
+        return
+
+    if args.command == "purge-secrets":
+        repo = Path(args.file or ".").resolve()
+        print("=== MUNINN PURGE-SECRETS — cleaning mycelium databases ===")
+        purge_secrets_db(repo)
         return
 
     if args.command == "quarantine":

@@ -666,6 +666,45 @@ class MyceliumDB:
         self._conn.commit()
         self._wal_monitor.on_write()
 
+    def purge_secret_concepts(self) -> int:
+        """X1b: Remove concepts that match secret patterns.
+
+        Deletes the concept + all its edges, fusions, and edge_zones.
+        Returns the number of purged concepts.
+        """
+        try:
+            from ._secrets import _COMPILED_PATTERNS
+        except ImportError:
+            from _secrets import _COMPILED_PATTERNS
+
+        # Find contaminated concept IDs
+        purge_ids = []
+        for cid, name in list(self._id_to_name.items()):
+            for pat in _COMPILED_PATTERNS:
+                if pat.search(name):
+                    purge_ids.append(cid)
+                    break
+
+        if not purge_ids:
+            return 0
+
+        # Delete in cascade: edges, fusions, edge_zones, then concepts
+        placeholders = ",".join("?" * len(purge_ids))
+        self._conn.execute(f"DELETE FROM edges WHERE a IN ({placeholders}) OR b IN ({placeholders})",
+                           purge_ids + purge_ids)
+        self._conn.execute(f"DELETE FROM fusions WHERE a IN ({placeholders}) OR b IN ({placeholders})",
+                           purge_ids + purge_ids)
+        self._conn.execute(f"DELETE FROM edge_zones WHERE a IN ({placeholders}) OR b IN ({placeholders})",
+                           purge_ids + purge_ids)
+        self._conn.execute(f"DELETE FROM concepts WHERE id IN ({placeholders})", purge_ids)
+        self._conn.commit()
+
+        # Rebuild caches
+        self._load_concept_cache()
+        self._wal_monitor.on_write()
+
+        return len(purge_ids)
+
     def close(self):
         """Close the database connection and checkpoint WAL."""
         try:
