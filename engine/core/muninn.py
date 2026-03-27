@@ -4059,6 +4059,21 @@ def prune(dry_run: bool = True):
         cold_branch_data = [(name, nodes[name]) for name, _ in cold if name in nodes]
         consolidated = _sleep_consolidate(cold_branch_data, nodes)
 
+        # MYCELIUM DECAY — clean dead connections during prune (like the tree)
+        # decay() was never called before, causing unbounded growth (14.9M edges, 1.3GB).
+        try:
+            if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
+            from mycelium import Mycelium
+            m_decay = Mycelium(_REPO_PATH or Path("."))
+            dead_edges = m_decay.decay()
+            if dead_edges > 0:
+                m_decay.save()
+                print(f"  MYCELIUM DECAY: {dead_edges} dead connections removed")
+            else:
+                print(f"  MYCELIUM DECAY: 0 dead (all connections healthy)")
+        except Exception as e:
+            print(f"  MYCELIUM DECAY skipped: {e}", file=sys.stderr)
+
         # H1: Mode trip — psilocybine exploration during sleep
         # Create dream connections between distant clusters (BARE Wave model)
         try:
