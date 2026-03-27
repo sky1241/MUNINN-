@@ -2120,7 +2120,8 @@ class Mycelium:
         # Auto-migrate JSON meta to SQLite if needed
         if meta_json_p.exists() and not meta_db_p.exists():
             try:
-                MyceliumDB.migrate_from_json(meta_json_p, meta_db_p)
+                migrated_db = MyceliumDB.migrate_from_json(meta_json_p, meta_db_p)
+                migrated_db.close()  # X8: close returned handle
             except Exception as e:
                 print(f"WARNING: meta migration failed: {e}", file=sys.stderr)
 

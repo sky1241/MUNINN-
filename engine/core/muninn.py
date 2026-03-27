@@ -162,7 +162,7 @@ _SECRET_PATTERNS = [
     r'(?:mongodb(?:\+srv)?|postgresql|mysql|redis|amqp)://[^\s]*:[^\s@]+@[^\s]+',  # DB connection strings
     # --- Generic ---
     r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # PEM private keys
-    r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',  # OAuth Bearer tokens
+    r'Bearer\s+[A-Za-z0-9\-._~+/]{20,}=*',  # X12: OAuth Bearer tokens (min 20 chars to avoid false positive prose)
     r'token[=:]\s*\S{20,}',        # Generic token= or token:
     r'password[=:]\s*\S+',         # Generic password= or password:
     r'secret[=:]\s*\S{10,}',       # Generic secret= or secret:
@@ -994,42 +994,9 @@ def compress_line(line) -> str:
         _placeholders[placeholder] = span
         result = result.replace(span, placeholder, 1)
 
-    # L2: Filler word removal — these carry zero information in memory notes
-    _FILLER = [
-        # Articles & determiners (case-insensitive safe ones)
-        r"\bthe\b",
-        r"\ble\b", r"\bla\b", r"\bles\b", r"\bun\b", r"\bune\b", r"\bdes\b",
-        # Connectors & filler verbs
-        r"\bwas\b", r"\bwere\b", r"\bis\b", r"\bare\b", r"\bbeen\b",
-        r"\bwhich\b", r"\bthat\b", r"\bthis\b",
-        r"\bby\b", r"\bof\b", r"\bfor\b", r"\bin\b", r"\bon\b", r"\bat\b",
-        r"\bto\b", r"\bwith\b", r"\bfrom\b", r"\binto\b",
-        r"\band\b", r"\bbut\b", r"\bor\b",
-        # Verbose phrases (longest first)
-        r"\bapproximately\b", r"\bcurrently\b", r"\bproperly\b",
-        r"\bcorresponds to\b", r"\binstead of\b",
-        r"\bbased on\b", r"\bin order to\b",
-        r"\bnow\b", r"\balso\b", r"\bjust\b", r"\bstill\b",
-        # Common verbal tics
-        r"\bbasically\b", r"\bactually\b", r"\bessentially\b",
-        r"\bobviously\b", r"\bsimply\b", r"\breally\b", r"\bprobably\b",
-        # French fillers
-        r"\best\b", r"\bqui\b", r"\bque\b", r"\bdans\b", r"\bavec\b",
-        r"\bpour\b", r"\bplus\b", r"\btout\b", r"\bmais\b",
-    ]
-    for filler in _FILLER:
-        result = re.sub(filler, "", result, flags=re.IGNORECASE)
-    # "a"/"an": case-sensitive, only as English articles (before a word, not standalone "a" in math/code)
-    result = re.sub(r"\ba (?=[a-z])", "", result)
-    result = re.sub(r"\ban (?=[a-z])", "", result)
-
-    # L2b: Learned fillers from mycelium (words in 10+ connections, never fused)
-    for filler_word in cb.get("learned_fillers", []):
-        result = re.sub(rf"\b{re.escape(filler_word)}\b", "", result, flags=re.IGNORECASE)
-
-    # L2 post-pass: restore protected spans
-    for placeholder, original_span in _placeholders.items():
-        result = result.replace(placeholder, original_span)
+    # X11: L3 BEFORE L2 — phrase collapsing must run before filler removal,
+    # otherwise L2 strips words like "in", "to", "of" that are part of L3 patterns
+    # (e.g. "in order to" -> "to" becomes broken if "in" and "to" are removed first)
 
     # L3: Common phrase collapsing
     _PHRASES = [
@@ -1079,6 +1046,43 @@ def compress_line(line) -> str:
             result = re.sub(rf"\b{re.escape(long_form)}\b", short_form, result,
                           count=1, flags=re.IGNORECASE)
             _result_lower = result.lower()
+
+    # L2: Filler word removal — these carry zero information in memory notes
+    _FILLER = [
+        # Articles & determiners (case-insensitive safe ones)
+        r"\bthe\b",
+        r"\ble\b", r"\bla\b", r"\bles\b", r"\bun\b", r"\bune\b", r"\bdes\b",
+        # Connectors & filler verbs
+        r"\bwas\b", r"\bwere\b", r"\bis\b", r"\bare\b", r"\bbeen\b",
+        r"\bwhich\b", r"\bthat\b", r"\bthis\b",
+        r"\bby\b", r"\bof\b", r"\bfor\b", r"\bin\b", r"\bon\b", r"\bat\b",
+        r"\bto\b", r"\bwith\b", r"\bfrom\b", r"\binto\b",
+        r"\band\b", r"\bbut\b", r"\bor\b",
+        # Verbose phrases (longest first)
+        r"\bapproximately\b", r"\bcurrently\b", r"\bproperly\b",
+        r"\bcorresponds to\b", r"\binstead of\b",
+        r"\bbased on\b", r"\bin order to\b",
+        r"\bnow\b", r"\balso\b", r"\bjust\b", r"\bstill\b",
+        # Common verbal tics
+        r"\bbasically\b", r"\bactually\b", r"\bessentially\b",
+        r"\bobviously\b", r"\bsimply\b", r"\breally\b", r"\bprobably\b",
+        # French fillers
+        r"\best\b", r"\bqui\b", r"\bque\b", r"\bdans\b", r"\bavec\b",
+        r"\bpour\b", r"\bplus\b", r"\btout\b", r"\bmais\b",
+    ]
+    for filler in _FILLER:
+        result = re.sub(filler, "", result, flags=re.IGNORECASE)
+    # "a"/"an": case-sensitive, only as English articles (before a word, not standalone "a" in math/code)
+    result = re.sub(r"\ba (?=[a-z])", "", result)
+    result = re.sub(r"\ban (?=[a-z])", "", result)
+
+    # L2b: Learned fillers from mycelium (words in 10+ connections, never fused)
+    for filler_word in cb.get("learned_fillers", []):
+        result = re.sub(rf"\b{re.escape(filler_word)}\b", "", result, flags=re.IGNORECASE)
+
+    # L2 post-pass: restore protected spans
+    for placeholder, original_span in _placeholders.items():
+        result = result.replace(placeholder, original_span)
 
     # L4: Compress large numbers
     def shorten_number(m):
@@ -1474,7 +1478,7 @@ def _resolve_contradictions(text: str) -> str:
 # Regex patterns for detecting novel (project-specific) content
 _NOVEL_PATTERNS = [
     re.compile(r'\d{4}[-/]\d{2}[-/]\d{2}'),                    # dates
-    re.compile(r'[a-f0-9]{7,40}'),                               # commit hashes
+    re.compile(r'\b[a-f0-9]{7,40}\b'),                             # X13: commit hashes (word boundary to avoid false positives)
     re.compile(r'x\d+\.?\d*'),                                   # ratios (x4.1, x19.4)
     re.compile(r'\$\d+'),                                        # costs ($0.024)
     re.compile(r'\d+\.?\d*[KMBkm](?:\b|$)'),                    # quantities (348M, 65K)
@@ -3690,7 +3694,7 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
             "max_lines": 150,
             "tags": _final_tags[:max(10, len(_sole_tags))],  # keep ALL sole-carriers even if >10
             "temperature": 0.1,  # warm enough to not get immediately pruned
-            "access_count": sum(nodes.get(m, {}).get("access_count", 0) for m in members),
+            "access_count": max(nodes.get(m, {}).get("access_count", 0) for m in members),  # X9: max not sum, prevents immortalization
             "last_access": max(nodes.get(m, {}).get("last_access", time.strftime("%Y-%m-%d")) for m in members),
             "created": time.strftime("%Y-%m-%d"),
             "usefulness": round(max(nodes.get(m, {}).get("usefulness", 0.5) for m in members), 3),
