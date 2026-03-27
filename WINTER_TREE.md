@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-27. Engine: 17688 lignes, 11 fichiers + bridge_hook.py 107L. Tests: 105 fichiers, 918 tests, 0 FAIL.
+> Mis a jour: 2026-03-27. Engine: 17874 lignes, 12 fichiers + bridge_hook.py 107L. Tests: 110 fichiers, 1103 tests, 0 FAIL.
 
 ## Architecture
 
@@ -13,9 +13,11 @@
       |      |
    [tree.json]                         +2 Branches (metadata arbre)
       |
-   [muninn.py 7581L]                   +1 Tronc (moteur principal)
+   [muninn.py 7654L]                   +1 Tronc (moteur principal)
       |
-   [mycelium.py 2695L + db 1012L]      0 SOL — champignon vivant (SQLite)
+   [mycelium.py 2709L + db 1078L]      0 SOL — champignon vivant (SQLite)
+      |
+   [_secrets.py 61L]                  -0.5 Filtrage secrets partage
       |
    [vault.py 389L + sync_tls.py 313L] -1 Sous-sol — securite
       |
@@ -26,13 +28,14 @@
 
 ---
 
-## muninn.py — Moteur Principal (7581 lignes)
+## muninn.py — Moteur Principal (7654 lignes)
 
 ### Globals & Config (1-191)
 | Fonction | Lignes | Role |
 |----------|--------|------|
 | UNIVERSAL_RULES | 54-64 | Dict FR->EN compact (done, wip, fail...) |
 | _SECRET_PATTERNS | 135-169 | Regex detection secrets (GitHub PAT, AWS, API keys, FR: cle/mdp/passphrase) |
+| _redact_secrets_text (import) | 41 | X1: import from _secrets.py, applied at all 4 entry points |
 | _safe_path | 172-182 | Sanitize paths display (max 3 segments) |
 | load_codebook / get_codebook | 98-123 / 185-190 | Charge rules compression (universal + mycelium) |
 
@@ -65,7 +68,7 @@
 | _kicomp_filter | 783-855 | Drop lignes basse-densite si overflow budget |
 | _ncd | 860-877 | Normalized Compression Distance (zlib, 0=identique, 1=different) |
 | _tfidf_relevance | 887-941 | TF-IDF cosine similarity query vs documents |
-| compress_line | 946-1145 | Pipeline: L1 markdown, L2 fillers, L3 phrases, L4 numbers, L5 rules, L6 mycelium, L7 kv |
+| compress_line | 946-1145 | Pipeline: L1 markdown, **L3 phrases** (X11: before L2), L2 fillers, L4 numbers, L5 rules, L6 mycelium, L7 kv |
 | extract_facts | 1147-1253 | Extraction nombres, dates, identifiers, kv, code patterns |
 | tag_memory_type | 1255-1266 | Tags P14: D>/B>/F>/E>/A> |
 | compress_section | 1268-1388 | Compresse section (P14 tags + P26 line dedup + P27 read dedup) |
@@ -168,14 +171,27 @@
 | _SCRUB_EXTENSIONS | 7032-7037 | Extensions cibles: .jsonl, .json, .md, .mn, .txt, .log, .csv, .yaml, .yml, .toml, .ini, .cfg, .env, .py, .js, .ts, .sh, .bash, .zsh, .ps1 |
 | _TRIGGER_VALUE_PATTERNS | 7039-7046 | Keyword+value redaction: cle/key/password/mdp/secret/token + value |
 | scrub_secrets | 7048-7128 | Universal secret redaction (dry-run/force). Protected files: .credentials.json, .env, settings.json, config.json |
+| purge_secrets_db | ~7170-7215 | X1b: purge secret concepts from mycelium.db + meta_mycelium.db |
 
-### Live Injection & CLI (6789-7535)
-| inject_memory | 6789-6877 | B7: injection live fait -> branche + mycelium |
-| main | 6882-7535 | CLI argparse: init/status/doctor/boot/feed/prune/recall/bridge/inject/scrub/... |
+### Live Injection & CLI (6789-7600+)
+| inject_memory | 6789-6877 | B7: injection live fait -> branche + mycelium (X1: redact before observe) |
+| main | 6882-7600+ | CLI argparse: init/status/doctor/boot/feed/prune/recall/bridge/inject/scrub/purge-secrets/... |
 
 ---
 
-## mycelium.py — Champignon Vivant (2695 lignes)
+## _secrets.py — Shared Secret Redaction (61 lignes)
+
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| _SECRET_PATTERNS | 10-40 | 26 compiled regex patterns (same as muninn.py) |
+| _COMPILED_PATTERNS | 42 | Pre-compiled for performance |
+| redact_secrets_text | 45-55 | X1: redact secrets from text string, returns cleaned text |
+
+Imported by: muninn.py (4 entry points), mycelium.py (observe_text defense), mycelium_db.py (purge_secret_concepts)
+
+---
+
+## mycelium.py — Champignon Vivant (2709 lignes)
 
 ### Init & Load (60-271)
 | Methode | Lignes | Role |
@@ -190,7 +206,7 @@
 | Methode | Lignes | Role |
 |---------|--------|------|
 | observe | 283-435 | Enregistre co-occurrences, DELTA MODE (skip paires deja vues cette session), congestion detect (decay d'urgence si batch > 2s), V6A arousal boost + _check_fusions |
-| observe_text | 437-485 | Extrait concepts du texte, chunk par paragraphes |
+| observe_text | 437-485 | Extrait concepts du texte, chunk par paragraphes. **X1: defense-in-depth secret redaction** |
 | observe_latex | 487-514 | Chunk par \section/\begin pour arXiv |
 | observe_with_concepts | 516-547 | Observe avec liste externe (OpenAlex 65K) |
 | start_session | 1229-1233 | Reset _session_seen (delta tracking) + session counter |
@@ -228,7 +244,7 @@
 ### Sync & Federation (2034-2390)
 | Methode | Lignes | Role |
 |---------|--------|------|
-| _load_meta_dir | 2038-2055 | Config meta_path: ~/.muninn/config.json -> shared dir (NAS/OneDrive) |
+| _load_meta_dir | 2038-2055 | Config meta_path: ~/.muninn/config.json -> shared dir (NAS/OneDrive). **X14: path validation (traversal, type, symlink)** |
 | meta_path / meta_db_path | 2057-2065 | Chemin meta-mycelium configurable (defaut ~/.muninn/) |
 | sync_to_meta | 2067-2195 | Push local -> meta-mycelium partage (SQLite) |
 | pull_from_meta | 2197-2215 | Pull connections pertinentes depuis meta |
@@ -241,11 +257,15 @@
 
 ---
 
-## mycelium_db.py — Backend SQLite (1012 lignes)
+## mycelium_db.py — Backend SQLite (1078 lignes)
 
-### Schema & Init (67-132)
+### Schema & Init (67-145)
 - Tables: concepts (id, name), edges (a, b, count, first_seen, last_seen), fusions (a, b, form, strength), edge_zones (a, b, zone)
-- Pragmas: WAL mode, FK, mmap 64MB, page_size 4096
+- Pragmas: WAL mode, FK, mmap 100MB, cache 8MB
+- X3: 4 composite indexes (edge_zones_ab, edges_last_seen_count, edges_b_a, fusions_ab)
+- X4: PRAGMA user_version schema versioning (SCHEMA_VERSION=2) + idempotent migration
+- X2: UTC epoch — datetime.now(timezone.utc).date()
+- X5: days_to_date() fallback returns UTC today, not hardcoded date
 
 ### CRUD (134-618)
 | Methode | Lignes | Role |
@@ -260,6 +280,7 @@
 
 ### Migration (679-781)
 | migrate_from_json | 679-781 | [static] JSON -> SQLite, batch 5K rows, rename .bak |
+| purge_secret_concepts | ~670 | X1b: scan concept names vs 26 secret patterns, cascade delete |
 
 ### ConceptTranslator S4 (803-1012)
 | Methode | Lignes | Role |
@@ -467,8 +488,9 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | WAL checkpoints | wal_monitor.py | 70-89 |
 | Spaced repetition | muninn.py | 521-570 (_ebbinghaus_recall) |
 | Path security | muninn.py | 503-510 (_safe_tree_path), 172-182 (_safe_path) |
-| Secret filtering | muninn.py | 135-169 (_SECRET_PATTERNS) |
+| Secret filtering | muninn.py | 135-169 (_SECRET_PATTERNS), _secrets.py (shared) |
 | Secret scrub (files) | muninn.py | 7032-7128 (scrub_secrets), CLI: `muninn scrub <path>` |
+| Secret purge (DB) | mycelium_db.py | ~670 (purge_secret_concepts), muninn.py ~7170 (purge_secrets_db), CLI: `muninn purge-secrets` |
 | Secret sentinel (live) | bridge_hook.py | 17-66 (Shannon entropy + 3 levels) |
 
 ## Constantes critiques

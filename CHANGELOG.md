@@ -1,11 +1,42 @@
-# MUNINN — Winter Tree (Baobab)
+# MUNINN — Changelog
 
-Type: Baobab (gros tronc, petites branches)
-Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security + WAL Monitor + Quarantine + Cube Benchmark
-Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor+scrub+sentinel) + WAL Monitor + Cube Quarantine + Cube Benchmark 6 langages + Mycelium Health (delta+decay+congestion+timeout). AUDIT 12 passes + Passe 15: 90+ bugs fixes. Feed chunked+resumable+graceful timeout.
-Engine: muninn.py 7581 + mycelium.py 2695 + cube.py 3264 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 17645 total + bridge_hook.py 107
-Tests: 105 files, 918 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
-Cube Benchmark: 1046 cubes, 6 langages, 291/811 (35.9%) NCD<0.3 cycle 1, 9 SHA exact — Sonnet single pass.
+Engine: muninn.py 7654 + mycelium.py 2709 + cube.py 3264 + mycelium_db.py 1078 + _secrets.py 61 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 17859 total + bridge_hook.py 107
+Tests: 110 files, 1103 tests, 0 FAIL.
+
+---
+
+## Phase 0 — Fixes Immediats (2026-03-27) [DONE]
+
+17 briques, 42 tests, 6 commits. Securite + bugs + hardening.
+
+### Security
+- **X1**: Secret scrub 7 entry points + defense in observe_text(). New `_secrets.py` shared module (26 compiled patterns). Belt-and-suspenders: redact at call sites AND inside observe_text().
+- **X1b**: Purge existing secrets from mycelium.db + meta_mycelium.db. Found 16 real secrets in meta DB. CLI: `muninn purge-secrets`.
+- **X12**: Bearer regex minimum 20 chars (no false positive on "Bearer of bad news").
+- **X13**: Hex pattern word boundaries (no false positive on "cafe", "facade").
+- **X14**: Config path validation — traversal `..` rejected, type check, symlink guard.
+- **X15**: install_hooks() atomic write via tempfile + os.replace.
+
+### Bug Fixes
+- **X2**: UTC epoch — `datetime.now(timezone.utc).date()` partout (no timezone drift, no deprecation).
+- **X5**: `days_to_date()` fallback returns UTC today, not hardcoded "2026-01-01".
+- **X6**: Saturation loss = float (was int, crashed count=1000 to 1).
+- **X8**: DB handle leak — close return value from `migrate_from_json()` in sync_to_meta.
+- **X9**: `access_count = max(members)` in consolidation (was sum, caused immortalization).
+- **X11**: L3 phrase collapsing now runs BEFORE L2 filler removal ("in order to" → "to" works).
+
+### Database Hardening
+- **X3**: 4 composite indexes (edge_zones_ab, edges_last_seen_count, edges_b_a, fusions_ab).
+- **X4**: PRAGMA user_version schema versioning (v2) + idempotent migration with flag.
+
+### Already Fixed (regression guards)
+- **X7**: Feed progress write order verified (save before progress).
+- **X10**: CAST already removed from decay queries.
+- **X16**: Learned fillers already disabled (returns empty list).
+
+---
+
+## Pre-Phase 0 (up to 2026-03-27)
 
 ## Anatomie
 
