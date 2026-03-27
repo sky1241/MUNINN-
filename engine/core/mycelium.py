@@ -54,8 +54,8 @@ if sys.stdout.encoding != "utf-8":
 class Mycelium:
     """A living co-occurrence network that grows with each session."""
 
-    FUSION_THRESHOLD = 5      # co-occur N times -> fuse into one block
-    DECAY_HALF_LIFE = 30      # days before connection strength halves
+    FUSION_THRESHOLD = 5      # co-occur N times -> fuse into one block (base; A1 adapts)
+    DECAY_HALF_LIFE = 30      # days before connection strength halves (base; A2 adapts)
     MAX_CONNECTIONS = 0        # 0 = no limit (adapts to available RAM)
     MIN_CONCEPT_LEN = 3       # ignore tiny words
     IMMORTAL_ZONE_THRESHOLD = 3  # connection in N+ zones = skip decay
@@ -847,11 +847,14 @@ class Mycelium:
 
         Connections that haven't been reinforced decay over time.
         Dead connections (count drops to 0) are removed.
+        A4: Auto-vacuum if decay takes > 10s.
         """
         if days is None:
             days = self.DECAY_HALF_LIFE
         if days <= 0:
             return 0
+
+        _decay_start = time.time()
 
         if self._db is not None:
             # SQL-native decay: process in batches via cursor
@@ -907,6 +910,9 @@ class Mycelium:
                     "DELETE FROM edge_zones WHERE a=? AND b=?", dead_ids)
             self._db._conn.commit()
             self._adj_cache = None  # M10 fix: invalidate after decay
+            # A4: Auto-vacuum if decay took > 10s
+            if time.time() - _decay_start > 10.0:
+                self.vacuum_if_needed()
             return len(dead_ids)
         else:
             # Fallback: in-memory dict
@@ -940,6 +946,79 @@ class Mycelium:
                     del self.data["fusions"][key]
             self._adj_cache = None  # M10 fix: invalidate after decay
             return len(dead)
+
+    def adaptive_fusion_threshold(self) -> int:
+        """A1: Adaptive fusion threshold — max(2, sqrt(n_concepts) * 0.4).
+
+        Small mycelium (few concepts) = low threshold (fuse aggressively).
+        Large mycelium = higher threshold (avoid noise fusions).
+        """
+        import math
+        if self._db is not None:
+            n = len(self._db._concept_cache)
+        else:
+            concepts = set()
+            for key in self.data.get("connections", {}):
+                parts = key.split("|")
+                if len(parts) == 2:
+                    concepts.update(parts)
+            n = len(concepts)
+        return max(2, int(math.sqrt(n) * 0.4))
+
+    def adaptive_decay_half_life(self) -> int:
+        """A2: Adaptive decay half-life — scales with sessions/day.
+
+        Active repos (many sessions) = faster decay (more turnover).
+        Inactive repos = slower decay (preserve knowledge).
+        """
+        session_count = self.data.get("session_count", 0)
+        created = self.data.get("created", "")
+        if not created or session_count <= 0:
+            return self.DECAY_HALF_LIFE
+
+        try:
+            from datetime import datetime
+            created_date = datetime.strptime(created, "%Y-%m-%d")
+            days_active = max(1, (datetime.now() - created_date).days)
+            sessions_per_day = session_count / days_active
+            # More sessions = faster decay; fewer sessions = slower decay
+            # Scale: 0.1 sessions/day -> 60 days, 1/day -> 30 days, 5/day -> 15 days
+            adaptive = max(15, int(self.DECAY_HALF_LIFE / max(0.5, sessions_per_day)))
+            return min(adaptive, 90)  # Cap at 90 days
+        except (ValueError, ZeroDivisionError):
+            return self.DECAY_HALF_LIFE
+
+    def cleanup_orphan_concepts(self) -> int:
+        """A3: Auto-cleanup concepts without edges when orphans > 20%.
+
+        Returns number of orphaned concepts removed.
+        """
+        if self._db is None:
+            return 0
+        try:
+            total = len(self._db._concept_cache)
+            if total == 0:
+                return 0
+            # Count orphans (concepts not referenced in any edge)
+            orphan_count = self._db._conn.execute("""
+                SELECT COUNT(*) FROM concepts
+                WHERE id NOT IN (SELECT a FROM edges UNION SELECT b FROM edges)
+            """).fetchone()[0]
+
+            if orphan_count / total < 0.2:
+                return 0  # Below 20% threshold
+
+            result = self._db._conn.execute("""
+                DELETE FROM concepts
+                WHERE id NOT IN (SELECT a FROM edges UNION SELECT b FROM edges)
+            """)
+            removed = result.rowcount
+            if removed > 0:
+                self._db._conn.commit()
+                self._db._load_concept_cache()  # Refresh caches
+            return removed
+        except Exception:
+            return 0
 
     def cleanup_orphan_zones(self) -> int:
         """P2: Delete zone entries whose edges no longer exist.
@@ -1122,7 +1201,34 @@ class Mycelium:
             related.sort(key=lambda x: x[1], reverse=True)
             return related[:top_n]
 
-    def spread_activation(self, seeds: list[str], hops: int = 2,
+    def adaptive_hops(self) -> int:
+        """A5: Adaptive spreading activation hops — 1 if dense, 3 if sparse.
+
+        Dense network (many edges per concept) = fewer hops to avoid flooding.
+        Sparse network = more hops to reach relevant concepts.
+        """
+        if self._db is not None:
+            n_edges = self._db.connection_count()
+            n_concepts = len(self._db._concept_cache)
+        else:
+            n_edges = len(self.data.get("connections", {}))
+            concepts = set()
+            for key in self.data.get("connections", {}):
+                parts = key.split("|")
+                if len(parts) == 2:
+                    concepts.update(parts)
+            n_concepts = len(concepts)
+
+        if n_concepts == 0:
+            return 2
+        avg_degree = n_edges / max(n_concepts, 1)
+        if avg_degree > 10:
+            return 1  # Dense — 1 hop to avoid flooding
+        elif avg_degree < 3:
+            return 3  # Sparse — need more hops to reach
+        return 2  # Default
+
+    def spread_activation(self, seeds: list[str], hops: int = None,
                           decay: float = 0.5, top_n: int = 20) -> list[tuple[str, float]]:
         """Spreading activation through the semantic network (Collins & Loftus 1975).
 
@@ -1132,7 +1238,7 @@ class Mycelium:
 
         Args:
             seeds: starting concepts (e.g. query words)
-            hops: how many steps to propagate (2 = neighbors of neighbors)
+            hops: how many steps to propagate (None = A5 adaptive, 2 = default)
             decay: activation multiplier per hop (0.5 = halves each step)
             top_n: max concepts to return
 
@@ -1140,6 +1246,9 @@ class Mycelium:
             list of (concept, activation) sorted by activation descending.
             Seeds themselves are excluded from results.
         """
+        # A5: Adaptive hops if not explicitly set
+        if hops is None:
+            hops = self.adaptive_hops()
         # Use cached adjacency (built once, reused by transitive_inference too).
         # S3: Penalize hub concepts at query time (not in cache — seed-dependent).
         raw_adj = self._build_adj_cache()

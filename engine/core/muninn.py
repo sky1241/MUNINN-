@@ -2434,6 +2434,25 @@ def boot(query: str = "") -> str:
     root_text = read_node("root", _tree=tree)
     loaded = [("root", root_text)]
 
+    # A6: Boot pre-warm by git diff — load concepts from modified files
+    if _REPO_PATH:
+        try:
+            r = subprocess.run(
+                ["git", "diff", "--name-only", "HEAD~1"],
+                cwd=str(_REPO_PATH), capture_output=True, text=True, timeout=5
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                diff_files = r.stdout.strip().split("\n")
+                diff_concepts = set()
+                for f in diff_files[:20]:
+                    # Extract concept-like words from file paths
+                    parts = re.findall(r'[a-zA-Z]{3,}', f.replace("/", " ").replace("\\", " "))
+                    diff_concepts.update(p.lower() for p in parts if len(p) >= 4)
+                if diff_concepts and not query:
+                    query = " ".join(list(diff_concepts)[:10])
+        except Exception:
+            pass  # git not available or no commits
+
     # P23: Auto-continue — if no query, use last session's concepts
     if not query and _REPO_PATH:
         index_path = _REPO_PATH / ".muninn" / "session_index.json"
@@ -3029,6 +3048,20 @@ def boot(query: str = "") -> str:
     total_tokens = token_count(full_text)
     if total_tokens > BUDGET["max_loaded_tokens"]:
         full_text = _kicomp_filter(full_text, BUDGET["max_loaded_tokens"])
+
+    # A8: Prune warning — warn if many dead branches
+    try:
+        branches = {k: v for k, v in nodes.items() if k != "root"}
+        if branches:
+            cold_count = sum(1 for v in branches.values()
+                             if _ebbinghaus_recall(v) < 0.1)
+            pct = cold_count / len(branches) * 100
+            if pct > 45:
+                full_text += (f"\n\n[MUNINN] {pct:.0f}% branches are cold "
+                              f"({cold_count}/{len(branches)}). "
+                              f"Consider running: muninn prune --force")
+    except Exception:
+        pass
 
     return full_text
 
@@ -3933,11 +3966,39 @@ def _light_prune():
     return removed
 
 
+def _auto_backup_tree():
+    """A7: Auto-backup tree before destructive prune.
+
+    Creates .muninn/backups/prune_before_<timestamp>.tar.gz
+    """
+    if not _REPO_PATH:
+        return
+    backup_dir = _REPO_PATH / ".muninn" / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"prune_before_{ts}.tar.gz"
+    try:
+        import tarfile
+        with tarfile.open(str(backup_path), "w:gz") as tar:
+            tar.add(str(TREE_DIR), arcname="tree")
+        print(f"  A7: Tree backed up to {backup_path.name}", file=sys.stderr)
+        # Keep only last 5 backups
+        backups = sorted(backup_dir.glob("prune_before_*.tar.gz"))
+        for old in backups[:-5]:
+            old.unlink()
+    except Exception as e:
+        print(f"  A7: Backup failed: {e}", file=sys.stderr)
+
+
 def prune(dry_run: bool = True):
     """R4: promote hot, demote cold, kill dead. Uses temperature score."""
     tree = load_tree()
     nodes = tree["nodes"]
     refresh_tree_metadata(tree)
+
+    # A7: Auto-backup before destructive prune
+    if not dry_run:
+        _auto_backup_tree()
 
     branches = {n: d for n, d in nodes.items() if n != "root"}
     if not branches:

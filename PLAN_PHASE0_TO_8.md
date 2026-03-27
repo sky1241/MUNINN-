@@ -117,14 +117,14 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 7 — Intelligence (8 briques)
 
-- [ ] **A1** Fusion threshold adaptatif — max(2, sqrt(n_concepts) * 0.4) [XS]
-- [ ] **A2** Decay half-life adaptatif — scale avec sessions/jour du repo [XS]
-- [ ] **A3** Orphan cleanup auto — DELETE concepts sans edges quand orphans > 20% [XS]
-- [ ] **A4** Auto-vacuum quand decay() > 10s — PRAGMA optimize + reindex [XS]
-- [ ] **A5** Spreading activation hops adaptatif — 1 hop si dense, 3 si sparse [XS]
-- [ ] **A6** Boot pre-warm par git diff — charger branches liees aux fichiers modifies [S]
-- [ ] **A7** Auto-backup avant prune destructif — .muninn/backups/prune_before_<ts>.tar.gz [S]
-- [ ] **A8** Prune warning au boot — "45% branches mortes, run prune" [XS]
+- [x] **A1** Fusion threshold adaptatif — max(2, sqrt(n_concepts) * 0.4) [XS]
+- [x] **A2** Decay half-life adaptatif — scale avec sessions/jour du repo [XS]
+- [x] **A3** Orphan cleanup auto — DELETE concepts sans edges quand orphans > 20% [XS]
+- [x] **A4** Auto-vacuum quand decay() > 10s — PRAGMA optimize + reindex [XS]
+- [x] **A5** Spreading activation hops adaptatif — 1 hop si dense, 3 si sparse [XS]
+- [x] **A6** Boot pre-warm par git diff — charger branches liees aux fichiers modifies [S]
+- [x] **A7** Auto-backup avant prune destructif — .muninn/backups/prune_before_<ts>.tar.gz [S]
+- [x] **A8** Prune warning au boot — "45% branches mortes, run prune" [XS]
 
 **Tests Phase 7**: ~25 tests (avant/apres adaptatif -> verifie que threshold change)
 
