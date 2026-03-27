@@ -5552,13 +5552,17 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path,
             progress[file_key] = {"offset": offset + fed, "size": file_size}
             _atomic_json_write(progress_path, progress)
 
-            # GRACEFUL TIMEOUT: save progress and exit if time budget exceeded.
-            # Next cycle (15 min later) resumes from this offset. Always progresses.
-            if time.time() - _t_start > max_seconds:
-                _timed_out = True
-                print(f"  TIMEOUT: fed {fed} messages in {max_seconds:.0f}s, "
-                      f"saving at {offset + fed}/{len(texts)} ({jsonl_path.name})")
-                break
+        # GRACEFUL TIMEOUT: check EVERY message (not just at chunk boundaries).
+        # On a 1.3GB DB, a single observe_text can take minutes — we must check
+        # after each message or the timeout is useless.
+        if time.time() - _t_start > max_seconds:
+            m.save()
+            progress[file_key] = {"offset": offset + fed, "size": file_size}
+            _atomic_json_write(progress_path, progress)
+            _timed_out = True
+            print(f"  TIMEOUT: fed {fed} messages in {max_seconds:.0f}s, "
+                  f"saving at {offset + fed}/{len(texts)} ({jsonl_path.name})")
+            break
 
     # Final save
     m.save()

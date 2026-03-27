@@ -101,21 +101,22 @@ class TestFeedTimeout:
     def test_full_completion_after_multiple_timeouts(self, tmp_path):
         """Multiple timed-out calls should eventually complete all messages."""
         repo = _make_repo(tmp_path)
-        jsonl = _make_transcript(tmp_path, n_messages=120)
+        jsonl = _make_transcript(tmp_path, n_messages=10)
         import muninn
         muninn._REPO_PATH = repo
         muninn._refresh_tree_paths()
 
-        # Keep calling with 0s timeout until all messages are fed
+        # With 0s timeout, each call processes 1 message then times out.
+        # After 10+ calls, all 10 messages should be processed.
         total_fed = 0
-        max_rounds = 10
+        max_rounds = 15  # a few extra for safety
         for _ in range(max_rounds):
             count, _ = muninn.feed_from_transcript(jsonl, repo, max_seconds=0.0)
-            if count >= 120:
+            if count >= 10:
                 total_fed = count
                 break
             total_fed = count
-        assert total_fed >= 120, f"Should complete after multiple rounds, got {total_fed}"
+        assert total_fed >= 10, f"Should complete after multiple rounds, got {total_fed}"
 
     def test_progress_file_format(self, tmp_path):
         """Progress file should have correct structure."""
