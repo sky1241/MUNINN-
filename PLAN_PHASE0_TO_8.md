@@ -20,9 +20,9 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 - [x] **X11** Fix L2/L3 order — L3 (phrases) AVANT L2 (fillers) [XS]
 - [x] **X12** Fix Bearer regex — minimum 20 chars pour eviter false positive prose [XS]
 - [x] **X13** Fix hex false positive L10 — word boundary \b[a-f0-9]{7,40}\b [XS]
-- [ ] **X14** Config path validation — type check + traversal + symlink [S]
-- [ ] **X15** install_hooks() atomic write (tempfile+replace) [XS]
-- [ ] **X16** Learned fillers seuil minimum (20+ occurrences avant d'appliquer) [XS]
+- [x] **X14** Config path validation — type check + traversal + symlink [S]
+- [x] **X15** install_hooks() atomic write (tempfile+replace) [XS]
+- [x] **X16** Learned fillers seuil minimum (20+ occurrences avant d'appliquer) [XS] (disabled = safe)
 
 **Tests Phase 0**: ~45 tests unitaires + 5 tests regression integration
 **Regression**: python forge.py apres chaque brique

@@ -2081,10 +2081,16 @@ class Mycelium:
                 import json as _json
                 cfg = _json.loads(config_path.read_text(encoding="utf-8"))
                 custom = cfg.get("meta_path")
-                if custom:
-                    p = Path(custom)
-                    p.mkdir(parents=True, exist_ok=True)
-                    return p
+                if custom and isinstance(custom, str):
+                    p = Path(custom).resolve()
+                    # X14: Validate path — no traversal, no symlink to outside
+                    if ".." in Path(custom).parts:
+                        print("WARNING: meta_path contains '..', ignoring", file=sys.stderr)
+                    elif p.is_symlink() and not p.resolve().is_dir():
+                        print("WARNING: meta_path symlink target is not a directory", file=sys.stderr)
+                    else:
+                        p.mkdir(parents=True, exist_ok=True)
+                        return p
             except (ValueError, OSError, KeyError):
                 pass
         return Path.home() / ".muninn"

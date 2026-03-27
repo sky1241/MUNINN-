@@ -5147,8 +5147,19 @@ def install_hooks(repo_path: Path):
         print(f"  Hooks already up-to-date (UserPromptSubmit + PreCompact + SessionEnd + Stop)")
     else:
         existing["hooks"] = existing_hooks
-        with open(settings_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=2, ensure_ascii=False)
+        # X15: Atomic write — tempfile + replace to prevent corruption
+        import tempfile as _tmpmod
+        tmp_fd, tmp_path = _tmpmod.mkstemp(dir=str(settings_path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, str(settings_path))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
         print(f"  Hooks installed: {' + '.join(installed)}")
 
     # Register repo in ~/.muninn/repos.json for P20c cross-repo discovery
