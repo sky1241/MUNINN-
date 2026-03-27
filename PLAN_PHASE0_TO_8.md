@@ -65,13 +65,13 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 
 ## Phase 3 — Backend Git (5 briques)
 
-- [ ] **G1** GitBackend core — push/pull via bare repo git local [L]
-- [ ] **G2** Conflict CRDT — merge automatique sur conflit git (MAX count, union zones) [S]
-- [ ] **G3** Auto-init — muninn sync --init-git /path cree le repo [S]
-- [ ] **G4** Remote support — clone/fetch/push vers Gitea/GitLab/SSH [M]
-- [ ] **G5** Delta sync — exporter que les edges avec last_seen >= last_sync_day [M]
+- [x] **G1** GitBackend core — push/pull via bare repo git local [L]
+- [x] **G2** Conflict CRDT — merge automatique sur conflit git (MAX count, union zones) [S]
+- [x] **G3** Auto-init — muninn sync --init-git /path cree le repo [S]
+- [x] **G4** Remote support — clone/fetch/push vers Gitea/GitLab/SSH [M]
+- [x] **G5** Delta sync — exporter que les edges avec last_seen >= last_sync_day [M]
 
-**Tests Phase 3**: ~20 tests (bare git repo + clone + push/pull -> CRDT merge)
+**Tests Phase 3**: 18 tests (18 PASS, 0 FAIL)
 
 ---
 

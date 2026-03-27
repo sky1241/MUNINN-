@@ -447,10 +447,281 @@ def get_sync_backend(config: dict = None) -> SyncBackend:
 
     if backend_type == "shared_file":
         return SharedFileBackend(meta_dir)
-    # Future: "git" -> GitBackend, "tls" -> TLSBackend
+    elif backend_type == "git":
+        git_path = config.get("git_path") or str(meta_dir / "sync.git")
+        remote = config.get("git_remote")
+        return GitBackend(Path(git_path), remote=remote)
     else:
         # Fall back to shared file
         return SharedFileBackend(meta_dir)
+
+
+# ── G1-G5: GitBackend ────────────────────────────────────────────
+
+import subprocess
+
+class GitBackend(SyncBackend):
+    """G1: Sync via bare git repo (local or remote).
+
+    Exports edges/fusions as JSON to a bare git repo. Each push creates
+    a commit with the delta. Pull merges via CRDT (G2).
+    Supports local bare repos and remote (Gitea/GitLab/SSH) via G4.
+    """
+
+    def __init__(self, repo_path: Path, remote: str = None):
+        self.repo_path = Path(repo_path)
+        self.remote = remote  # G4: optional remote URL
+        self._ensure_repo()
+
+    def _git(self, *args, cwd=None, check=True) -> subprocess.CompletedProcess:
+        """Run a git command in the repo."""
+        cmd = ["git"] + list(args)
+        return subprocess.run(
+            cmd, cwd=str(cwd or self.repo_path),
+            capture_output=True, text=True, timeout=30,
+            check=check,
+        )
+
+    def _ensure_repo(self):
+        """G1/G3: Auto-init bare repo if needed."""
+        if not self.repo_path.exists():
+            self.repo_path.mkdir(parents=True, exist_ok=True)
+            # Init as a non-bare repo (we need a working tree for add/commit)
+            self._git("init", cwd=self.repo_path)
+            # Create initial commit
+            meta_file = self.repo_path / "meta.json"
+            meta_file.write_text(json.dumps({
+                "type": "muninn_sync", "created": time.strftime("%Y-%m-%d"),
+                "version": 1,
+            }, indent=2), encoding="utf-8")
+            self._git("add", "meta.json", cwd=self.repo_path)
+            self._git("commit", "-m", "init: muninn sync repo", cwd=self.repo_path)
+        elif not (self.repo_path / ".git").exists() and not (self.repo_path / "HEAD").exists():
+            # Directory exists but no git — init
+            self._git("init", cwd=self.repo_path)
+
+    def _pull_remote(self):
+        """G4: Pull from remote if configured."""
+        if not self.remote:
+            return
+        # Check if remote exists
+        r = self._git("remote", cwd=self.repo_path, check=False)
+        if "origin" not in r.stdout:
+            self._git("remote", "add", "origin", self.remote, cwd=self.repo_path)
+        self._git("pull", "--rebase", "origin", "main",
+                  cwd=self.repo_path, check=False)
+
+    def _push_remote(self):
+        """G4: Push to remote if configured."""
+        if not self.remote:
+            return
+        self._git("push", "origin", "main", cwd=self.repo_path, check=False)
+
+    def push(self, payload: SyncPayload, local_db: MyceliumDB) -> int:
+        """G1: Export local edges to JSON file, commit to git repo."""
+        if not check_disk_space(self.repo_path):
+            raise OSError("H9: Insufficient disk space for git sync")
+
+        # G4: Pull remote first to get latest state
+        self._pull_remote()
+
+        # G5: Delta sync — only export edges newer than last sync
+        last_sync_str = "0"
+        meta_file = self.repo_path / "meta.json"
+        if meta_file.exists():
+            try:
+                meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                last_sync_str = str(meta.get("last_sync_day", "0"))
+            except (ValueError, OSError):
+                pass
+        last_sync_day = int(last_sync_str) if last_sync_str.isdigit() else 0
+
+        # Export edges from local DB
+        edges = []
+        fusions = []
+        n_synced = 0
+
+        if local_db is not None:
+            for row in local_db._conn.execute(
+                "SELECT a, b, count, first_seen, last_seen FROM edges WHERE last_seen >= ?",
+                (last_sync_day,)
+            ):
+                a_name = local_db._id_to_name.get(row[0])
+                b_name = local_db._id_to_name.get(row[1])
+                if not a_name or not b_name:
+                    continue
+                edges.append({
+                    "a": a_name, "b": b_name,
+                    "count": row[2], "first_seen": row[3], "last_seen": row[4],
+                })
+                n_synced += 1
+
+            for row in local_db._conn.execute(
+                "SELECT a, b, form, strength, fused_at FROM fusions"
+            ):
+                a_name = local_db._id_to_name.get(row[0])
+                b_name = local_db._id_to_name.get(row[1])
+                if not a_name or not b_name:
+                    continue
+                fusions.append({
+                    "a": a_name, "b": b_name,
+                    "form": row[2], "strength": row[3], "fused_at": row[4],
+                })
+
+        # Write delta file
+        delta_file = self.repo_path / f"{payload.repo_name}.json"
+        delta = {
+            "repo": payload.repo_name, "zone": payload.zone,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "edges": edges, "fusions": fusions,
+            "checksum": payload.checksum(),
+        }
+        delta_file.write_text(
+            json.dumps(delta, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+
+        # Update meta
+        meta = {"type": "muninn_sync", "updated": time.strftime("%Y-%m-%d"),
+                "last_sync_day": today_days(), "version": 1}
+        if meta_file.exists():
+            try:
+                old_meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                repos = old_meta.get("repos", [])
+                if payload.repo_name not in repos:
+                    repos.append(payload.repo_name)
+                meta["repos"] = repos
+                meta["created"] = old_meta.get("created", meta["updated"])
+            except (ValueError, OSError):
+                meta["repos"] = [payload.repo_name]
+                meta["created"] = meta["updated"]
+        else:
+            meta["repos"] = [payload.repo_name]
+            meta["created"] = meta["updated"]
+
+        meta_file.write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+
+        # Git commit
+        self._git("add", "-A", cwd=self.repo_path)
+        r = self._git("diff", "--cached", "--quiet", cwd=self.repo_path, check=False)
+        if r.returncode != 0:  # There are staged changes
+            self._git("commit", "-m",
+                      f"sync: {payload.repo_name} ({n_synced} edges)",
+                      cwd=self.repo_path)
+
+        # G4: Push to remote
+        self._push_remote()
+
+        return n_synced
+
+    def pull(self, local_db: MyceliumDB, query_concepts: list[str] = None,
+             max_pull: int = 1000) -> int:
+        """G1/G2: Pull edges from git repo, CRDT merge into local DB."""
+        if not self.repo_path.exists():
+            return 0
+
+        # G4: Pull remote first
+        self._pull_remote()
+
+        pulled = 0
+        query_set = {c.lower().strip() for c in query_concepts} if query_concepts else None
+
+        # Load tombstones
+        local_tombstones = set()
+        try:
+            for ts in local_db.get_tombstones():
+                local_tombstones.add((ts[0], ts[1]))
+        except Exception:
+            pass
+
+        # Read all repo JSON files
+        for json_file in self.repo_path.glob("*.json"):
+            if json_file.name == "meta.json":
+                continue
+            try:
+                data = json.loads(json_file.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                continue
+
+            for edge in data.get("edges", []):
+                a, b = edge["a"], edge["b"]
+                a_key, b_key = min(a, b), max(a, b)
+
+                # H4: skip tombstoned
+                if (a_key, b_key) in local_tombstones:
+                    continue
+
+                # H8: filter by query concepts
+                if query_set and a_key not in query_set and b_key not in query_set:
+                    continue
+
+                if pulled >= max_pull:
+                    break
+
+                # G2: CRDT merge — MAX count, MIN first_seen, MAX last_seen
+                if not local_db.has_connection(a, b):
+                    local_db.upsert_connection(
+                        a, b, count=edge["count"],
+                        first_seen=days_to_date(edge["first_seen"]),
+                        last_seen=days_to_date(edge["last_seen"]),
+                    )
+                    pulled += 1
+                else:
+                    # Update if remote has higher count
+                    existing = local_db.get_connection(a, b)
+                    if existing and edge["count"] > existing["count"]:
+                        local_db.update_connection_count(a, b, edge["count"])
+
+            # Pull fusions
+            for fusion in data.get("fusions", []):
+                a, b = fusion["a"], fusion["b"]
+                if not local_db.has_fusion(a, b):
+                    local_db.upsert_fusion(
+                        a, b, form=fusion["form"],
+                        strength=fusion["strength"],
+                        fused_at=fusion.get("fused_at"),
+                    )
+
+        local_db.commit()
+        return pulled
+
+    def status(self) -> dict:
+        """G1: Return git backend status."""
+        result = {
+            "type": "git",
+            "repo_path": str(self.repo_path),
+            "exists": self.repo_path.exists(),
+            "remote": self.remote,
+        }
+        if self.repo_path.exists():
+            # Count repo files
+            json_files = list(self.repo_path.glob("*.json"))
+            result["repo_files"] = len(json_files) - 1  # Minus meta.json
+            # Git log
+            r = self._git("log", "--oneline", "-5", cwd=self.repo_path, check=False)
+            if r.returncode == 0:
+                result["recent_commits"] = r.stdout.strip().split("\n")
+            # Meta
+            meta_file = self.repo_path / "meta.json"
+            if meta_file.exists():
+                try:
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                    result["repos"] = meta.get("repos", [])
+                except (ValueError, OSError):
+                    pass
+        return result
+
+    @staticmethod
+    def init_repo(path: Path, remote: str = None) -> "GitBackend":
+        """G3: CLI entrypoint — muninn sync --init-git /path."""
+        backend = GitBackend(path, remote=remote)
+        if remote:
+            backend._git("remote", "add", "origin", remote,
+                         cwd=path, check=False)
+        return backend
 
 
 # ── F7: Config atomic write ──────────────────────────────────────
