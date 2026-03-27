@@ -335,8 +335,10 @@ class Mycelium:
                 if not hasattr(self, '_session_seen'):
                     self._session_seen = set()
                 _batch_size = 5000
+                _congestion_checked = getattr(self, '_congestion_checked', False)
                 for batch_start in range(0, len(pairs), _batch_size):
                     batch = pairs[batch_start:batch_start + _batch_size]
+                    _t0 = time.time() if not _congestion_checked else 0
                     with self._db._conn:
                         for a_key, b_key in batch:
                             a_id = self._db._get_or_create_concept(a_key)
@@ -356,6 +358,23 @@ class Mycelium:
                                     "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                                     (a_id, b_id, self.zone))
                             self._session_seen.add(pair_key)
+                    # CONGESTION DETECTION: if first batch takes > 2s, the DB is
+                    # too large. Run emergency decay to unclog before continuing.
+                    if not _congestion_checked:
+                        _batch_elapsed = time.time() - _t0
+                        self._congestion_checked = True
+                        _congestion_checked = True
+                        if _batch_elapsed > 2.0:
+                            print(f"  CONGESTION: batch took {_batch_elapsed:.1f}s, "
+                                  f"running emergency decay", file=sys.stderr)
+                            try:
+                                dead = self.decay()
+                                if dead > 0:
+                                    self.save()
+                                    print(f"  EMERGENCY DECAY: {dead} dead edges removed",
+                                          file=sys.stderr)
+                            except Exception as e:
+                                print(f"  EMERGENCY DECAY failed: {e}", file=sys.stderr)
                 # WAL guard: checkpoint if WAL > 50MB (prevents 300MB+ WAL buildup)
                 if not getattr(self, '_wal_check_count', 0) % 50:
                     try:
