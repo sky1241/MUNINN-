@@ -320,24 +320,30 @@ class Mycelium:
         else:
             e_a = 1.0
 
-        # Record all pairs — direct SQL upsert (lazy mode)
-        # Batched commits every 5000 pairs to prevent WAL from growing unbounded
+        # Record pairs — DELTA MODE: skip pairs already upserted this session.
+        # On a 14.9M edge DB, skipping known pairs avoids ~90% of slow upserts.
+        # _session_seen tracks (a_id, b_id) pairs already written this session.
         if self._db is not None:
             pairs = []
             for i in range(len(clean)):
                 for j in range(i + 1, len(clean)):
-                    pairs.append((clean[i], clean[j]))
+                    a_key = min(clean[i], clean[j])
+                    b_key = max(clean[i], clean[j])
+                    pairs.append((a_key, b_key))
             if pairs:
                 td = today_days()
+                if not hasattr(self, '_session_seen'):
+                    self._session_seen = set()
                 _batch_size = 5000
                 for batch_start in range(0, len(pairs), _batch_size):
                     batch = pairs[batch_start:batch_start + _batch_size]
                     with self._db._conn:
-                        for ca, cb in batch:
-                            a_key = min(ca, cb)
-                            b_key = max(ca, cb)
+                        for a_key, b_key in batch:
                             a_id = self._db._get_or_create_concept(a_key)
                             b_id = self._db._get_or_create_concept(b_key)
+                            pair_key = (a_id, b_id)
+                            if pair_key in self._session_seen:
+                                continue  # Delta: already upserted this session
                             self._db._conn.execute("""
                                 INSERT INTO edges (a, b, count, first_seen, last_seen)
                                 VALUES (?, ?, ?, ?, ?)
@@ -349,6 +355,7 @@ class Mycelium:
                                 self._db._conn.execute(
                                     "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                                     (a_id, b_id, self.zone))
+                            self._session_seen.add(pair_key)
                 # WAL guard: checkpoint if WAL > 50MB (prevents 300MB+ WAL buildup)
                 if not getattr(self, '_wal_check_count', 0) % 50:
                     try:
@@ -1203,6 +1210,7 @@ class Mycelium:
     def start_session(self):
         """Mark the beginning of a new session."""
         self.data["session_count"] = self.data.get("session_count", 0) + 1
+        self._session_seen = set()  # Reset delta tracking for new session
 
     def detect_zones(self, k: int = None) -> dict[str, list[str]]:
         """P20.5+6: Laplacien spectral clustering — detect semantic zones.
