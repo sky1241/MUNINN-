@@ -38,6 +38,7 @@ if sys.stdout.encoding != "utf-8":
 MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
 from tokenizer import count_tokens, token_count
+from _secrets import redact_secrets_text as _redact_secrets_text
 try:
     from sentiment import score_sentiment, score_session
     _HAS_SENTIMENT = True
@@ -4629,7 +4630,7 @@ def bootstrap_mycelium(repo_path: Path):
             try:
                 text = f.read_text(encoding="utf-8", errors="ignore")
                 if len(text) < 50_000:
-                    m.observe_text(text)
+                    m.observe_text(_redact_secrets_text(text))
                     file_count += 1
             except (PermissionError, OSError):
                 continue
@@ -5537,7 +5538,7 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path,
     _t_start = time.time()
     _timed_out = False
     for i in range(offset, len(texts)):
-        text = texts[i]
+        text = _redact_secrets_text(texts[i])
         # V6A: Score arousal per message for emotional tagging
         msg_arousal = 0.0
         if _HAS_SENTIMENT:
@@ -6966,7 +6967,7 @@ def ingest(filepath: Path, repo_path: Path):
     for f in files_to_ingest:
         content = f.read_text(encoding="utf-8", errors="replace")
         if content.strip():
-            m.observe_text(content)
+            m.observe_text(_redact_secrets_text(content))
     m.save()
 
     # Refresh tree
@@ -7057,7 +7058,7 @@ def inject_memory(fact: str, repo_path: Path = None):
             sys.path.insert(0, _CORE_DIR)
         from mycelium import Mycelium
         m = Mycelium(repo)
-        m.observe_text(fact)
+        m.observe_text(_redact_secrets_text(fact))
         m.save()
     except Exception:
         pass  # Mycelium feed is best-effort

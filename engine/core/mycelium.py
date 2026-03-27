@@ -42,6 +42,11 @@ except ImportError:
     except ImportError:
         ConceptTranslator = None  # type: ignore[assignment,misc]
 
+try:
+    from ._secrets import redact_secrets_text as _redact_secrets_text
+except ImportError:
+    from _secrets import redact_secrets_text as _redact_secrets_text  # type: ignore[no-redef]
+
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
@@ -463,6 +468,8 @@ class Mycelium:
         all concepts (no cap).
         V6A: arousal param passed to observe() for emotional tagging.
         """
+        # X1: Defense-in-depth — redact secrets before extracting concepts
+        text = _redact_secrets_text(text)
         # Split into chunks (paragraphs / double-newline blocks)
         if not text:
             return
