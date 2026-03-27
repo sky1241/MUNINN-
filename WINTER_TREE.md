@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-21. Engine: 17572 lignes, 11 fichiers + bridge_hook.py 107L. Tests: 101 fichiers, 683 tests, 0 FAIL.
+> Mis a jour: 2026-03-27. Engine: 17688 lignes, 11 fichiers + bridge_hook.py 107L. Tests: 105 fichiers, 918 tests, 0 FAIL.
 
 ## Architecture
 
@@ -13,9 +13,9 @@
       |      |
    [tree.json]                         +2 Branches (metadata arbre)
       |
-   [muninn.py 7535L]                   +1 Tronc (moteur principal)
+   [muninn.py 7581L]                   +1 Tronc (moteur principal)
       |
-   [mycelium.py 2627L + db 1012L]      0 SOL — champignon vivant (SQLite)
+   [mycelium.py 2695L + db 1012L]      0 SOL — champignon vivant (SQLite)
       |
    [vault.py 389L + sync_tls.py 313L] -1 Sous-sol — securite
       |
@@ -26,7 +26,7 @@
 
 ---
 
-## muninn.py — Moteur Principal (7535 lignes)
+## muninn.py — Moteur Principal (7581 lignes)
 
 ### Globals & Config (1-191)
 | Fonction | Lignes | Role |
@@ -117,7 +117,7 @@
 | _light_prune | 3794-3836 | Prune rapide hot/cold/dead sans recompression |
 
 ### Prune (3838-4218)
-| prune | 3838-4218 | **R4**: elagage complet — hot/cold/dead, sleep consolidation, optimal forgetting L9, dust removal, fact regen, dreams H1/H2 |
+| prune | 3867-4260 | **R4**: elagage complet — hot/cold/dead, sleep consolidation, **MYCELIUM DECAY** (4062-4075), optimal forgetting L9, dust removal, fact regen, dreams H1/H2 |
 
 ### Diagnostics (4223-4554)
 | Fonction | Lignes | Role |
@@ -134,14 +134,14 @@
 | generate_root_mn | 4662-4788 | Genere root.mn depuis fichiers scannes |
 | install_hooks | 4984-5044 | Installe hooks Claude Code (PreCompact, SessionEnd, Stop) |
 
-### Transcript Parsing & Feed (5116-5762)
+### Transcript Parsing & Feed (5116-5800)
 | Fonction | Lignes | Role |
 |----------|--------|------|
 | _compress_code_blocks | 5116-5146 | P17: compresse blocs code (garde signatures, drop bodies) |
 | parse_transcript | 5253-5384 | Parse JSONL/JSON/MD, L0 tool strip, P28 tics, P27 read dedup |
-| feed_from_transcript | 5386-5449 | Feed mycelium + compress |
-| _semantic_rle | 5451-5545 | Collapse boucles debug/retry (detecte lignes quasi-identiques) |
-| compress_transcript | 5547-5760 | Pipeline complet transcript -> .mn |
+| feed_from_transcript | 5492-5570 | Feed mycelium, **GRACEFUL TIMEOUT** (check every msg, save progress + exit at 60s), resumable via feed_progress.json |
+| _semantic_rle | 5573-5667 | Collapse boucles debug/retry (detecte lignes quasi-identiques) |
+| compress_transcript | 5669-5800 | Pipeline complet transcript -> .mn |
 
 ### Session Index & Errors (5762-6170)
 | Fonction | Lignes | Role |
@@ -175,7 +175,7 @@
 
 ---
 
-## mycelium.py — Champignon Vivant (2627 lignes)
+## mycelium.py — Champignon Vivant (2695 lignes)
 
 ### Init & Load (60-271)
 | Methode | Lignes | Role |
@@ -189,10 +189,11 @@
 ### Observation (277-522)
 | Methode | Lignes | Role |
 |---------|--------|------|
-| observe | 277-410 | Enregistre co-occurrences avec V6A arousal boost + _check_fusions |
-| observe_text | 412-460 | Extrait concepts du texte, chunk par paragraphes |
-| observe_latex | 462-489 | Chunk par \section/\begin pour arXiv |
-| observe_with_concepts | 491-522 | Observe avec liste externe (OpenAlex 65K) |
+| observe | 283-435 | Enregistre co-occurrences, DELTA MODE (skip paires deja vues cette session), congestion detect (decay d'urgence si batch > 2s), V6A arousal boost + _check_fusions |
+| observe_text | 437-485 | Extrait concepts du texte, chunk par paragraphes |
+| observe_latex | 487-514 | Chunk par \section/\begin pour arXiv |
+| observe_with_concepts | 516-547 | Observe avec liste externe (OpenAlex 65K) |
+| start_session | 1229-1233 | Reset _session_seen (delta tracking) + session counter |
 
 ### Fusion & Decay (524-903)
 | Methode | Lignes | Role |
@@ -443,9 +444,9 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | Boot/chargement memoire | muninn.py | 2329-2942 (boot), 368-376 (budget) |
 | Arbre load/save | muninn.py | 434-485 (load/save), 401-431 (init) |
 | Elagage/prune | muninn.py | 3838-4218 |
-| Feed transcript | muninn.py | 5253-5384 (parse), 5547-5760 (compress), 6252-6328 (hook) |
+| Feed transcript | muninn.py | 5253-5384 (parse), 5492-5570 (feed+timeout), 5669-5800 (compress), 6426-6504 (hook) |
 | Injection live | muninn.py | 6789-6877 |
-| Co-occurrences | mycelium.py | 277-410 (observe), 524-609 (fusions) |
+| Co-occurrences | mycelium.py | 283-435 (observe, delta+congestion), 549-634 (fusions) |
 | Spreading activation | mycelium.py | 984-1074 |
 | Zones/clusters | mycelium.py | 1188-1342 |
 | Blind spots | mycelium.py | 1511-1639 |
@@ -480,13 +481,27 @@ Integre dans: CubeStore.__init__ (cube.py) et MyceliumDB.__init__ (mycelium_db.p
 | DEGREE_FILTER_PERCENTILE | 0.05 (top 5%) | mycelium.py | ~650 |
 | LOCK MAX_AGE_SECONDS | 3600 (1h) | muninn.py | 6202 |
 | LOCK HEARTBEAT_STALE | 120s | muninn.py | 6201 |
-| WAL auto-checkpoint | 50MB | mycelium.py | ~345 |
+| WAL auto-checkpoint | 50MB | mycelium.py | ~375 |
+| FEED_TIMEOUT max_seconds | 60s | muninn.py | 5492 |
+| CONGESTION_THRESHOLD | 2.0s | mycelium.py | ~370 |
 | WAL check_every | 50 commits | wal_monitor.py | 19 |
 | WAL emergency_threshold | 50000 pages (~200MB) | wal_monitor.py | 25 |
 | PBKDF2 iterations | 600K | vault.py | 58 |
 | AES nonce size | 12 bytes | vault.py | 68 |
 | TLS minimum version | 1.3 | sync_tls.py | ~38 |
 | TARGET_TOKENS (cube) | 4K | cube.py | ~337 |
+
+## Mycelium Health System (2026-03-27)
+
+**Problem**: MuninnWatch crash loop since 2026-03-21. Mycelium grew to 14.9M edges / 1.3GB. observe_text() too slow, process killed by timeout every 15 min. Tree empty (0 branches), session index frozen.
+
+**4 briques fix**:
+1. **Delta observe** (mycelium.py:323-358): _session_seen set skips pairs already upserted this session. ~90% write reduction.
+2. **Decay in prune** (muninn.py:4062-4075): decay() wired into prune(). Was NEVER called before — dead code. Removes edges with count < 0.01 after DECAY_HALF_LIFE days.
+3. **Congestion detect** (mycelium.py:366-382): First batch timed. If > 2s, emergency decay() runs inline. Checked once per instance.
+4. **Graceful timeout** (muninn.py:5555-5568): feed_from_transcript checks time after EVERY message (not just every 50). Saves progress to feed_progress.json and exits cleanly. Next cycle resumes. Always progresses.
+
+**Key insight**: decay() had 0 effect (all edges < 21 days old). Real bottleneck = DB size (1.3GB) makes individual upserts slow. Delta mode + timeout = the actual fix.
 
 ## Audit Debug (2026-03-18)
 

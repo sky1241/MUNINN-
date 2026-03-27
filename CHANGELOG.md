@@ -2,9 +2,9 @@
 
 Type: Baobab (gros tronc, petites branches)
 Phase: PRODUCTION-READY — pipeline complet, 3 TIERs + Security + WAL Monitor + Quarantine + Cube Benchmark
-Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor+scrub+sentinel) + WAL Monitor + Cube Quarantine + Cube Benchmark 6 langages. AUDIT 12 passes + Passe 15: 90+ bugs fixes. Feed chunked+resumable.
-Engine: muninn.py 7535 + mycelium.py 2668 + cube.py 3264 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 17572 total + bridge_hook.py 107
-Tests: 101 files, 683 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
+Etat: 60+ briques + TIER 1-3 + HUGINN + Bio-Vectors (16 impl) + Immune (3) + Security (vault+TLS+doctor+scrub+sentinel) + WAL Monitor + Cube Quarantine + Cube Benchmark 6 langages + Mycelium Health (delta+decay+congestion+timeout). AUDIT 12 passes + Passe 15: 90+ bugs fixes. Feed chunked+resumable+graceful timeout.
+Engine: muninn.py 7581 + mycelium.py 2695 + cube.py 3264 + mycelium_db.py 1012 + forge.py 2048 + vault.py 389 + sync_tls.py 313 + sentiment.py 154 + tokenizer.py 43 + watchdog.py 57 + wal_monitor.py 89 = 17645 total + bridge_hook.py 107
+Tests: 105 files, 918 tests, 0 FAIL (3 skipped). Intelligence framework: 6-layer adaptive.
 Cube Benchmark: 1046 cubes, 6 langages, 291/811 (35.9%) NCD<0.3 cycle 1, 9 SHA exact — Sonnet single pass.
 
 ## Anatomie
