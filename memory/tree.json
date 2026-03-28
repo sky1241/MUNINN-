@@ -18,10 +18,12 @@
       "max_lines": 100,
       "children": [
         "b00",
-        "b01"
+        "b01",
+        "b03",
+        "b04"
       ],
-      "last_access": "2026-03-12",
-      "access_count": 47,
+      "last_access": "2026-03-28",
+      "access_count": 51,
       "tags": [
         "muninn",
         "compression",
@@ -40,10 +42,10 @@
         "2026-03-12",
         "2026-03-12",
         "2026-03-12",
-        "2026-03-12",
-        "2026-03-12",
-        "2026-03-12",
-        "2026-03-12"
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28"
       ]
     },
     "b00": {
@@ -52,8 +54,8 @@
       "lines": 44,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-16",
-      "access_count": 0,
+      "last_access": "2026-03-28",
+      "access_count": 4,
       "tags": [
         "bloc",
         "blocs",
@@ -67,7 +69,13 @@
         "pypi"
       ],
       "hash": "46bbd04a",
-      "temperature": 0.82
+      "temperature": 0.82,
+      "access_history": [
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28"
+      ]
     },
     "b01": {
       "type": "branch",
@@ -75,8 +83,8 @@
       "lines": 5,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-16",
-      "access_count": 0,
+      "last_access": "2026-03-28",
+      "access_count": 4,
       "tags": [
         "aussi",
         "comment",
@@ -88,7 +96,13 @@
         "stripe"
       ],
       "hash": "26ea5cb4",
-      "temperature": 0.8
+      "temperature": 0.8,
+      "access_history": [
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28"
+      ]
     },
     "b0002": {
       "type": "branch",
@@ -101,12 +115,50 @@
         "live_inject",
         "injection"
       ],
-      "access_count": 1,
+      "access_count": 5,
       "last_access": "2026-03-28",
       "usefulness": 1.0,
       "temperature": 0.8,
-      "hash": "a441f8d6"
+      "hash": "a441f8d6",
+      "access_history": [
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28",
+        "2026-03-28"
+      ]
+    },
+    "b03": {
+      "type": "branch",
+      "file": "b03.mn",
+      "lines": 6,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-28",
+      "access_count": 0,
+      "tags": [
+        "debug",
+        "recovery"
+      ],
+      "hash": "c92f1802",
+      "temperature": 0.8,
+      "valence": -0.3,
+      "arousal": 0.6,
+      "danger_score": 0.42
+    },
+    "b04": {
+      "type": "branch",
+      "file": "b04.mn",
+      "lines": 12,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-03-28",
+      "access_count": 0,
+      "tags": [
+        "implementation"
+      ],
+      "hash": "e3b2fc3c",
+      "temperature": 0.8
     }
   },
-  "updated": "2026-03-28"
+  "updated": "2026-03-29"
 }

@@ -1,0 +1,6 @@
+## Debug hell
+E> crash in module X
+D> retry fix debug traceback
+## Recovery
+D> finally fixed
+B> tests pass
