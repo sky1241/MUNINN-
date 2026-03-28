@@ -142,6 +142,9 @@ class NeuronMapWidget(QWidget):
         self._anim_progress = 0.0
         self._anim_duration = 0.3  # 300ms
 
+        # Search matches (B-UI-25)
+        self._search_matches: set[str] = set()  # neuron IDs matching search
+
         # Interaction state
         self._hovered: Optional[Neuron] = None
         self._selected: set[int] = set()
@@ -469,6 +472,13 @@ class NeuronMapWidget(QWidget):
             # B-UI-03: Color by degree (not status)
             color = _degree_color(n.degree, self._max_degree)
             color.setAlpha(alpha)
+
+            # Search match: orange ring (B-UI-25)
+            if self._search_matches and n.id in self._search_matches:
+                match_color = QColor(255, 165, 0, min(alpha, 180))
+                p.setPen(QPen(match_color, 2))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawEllipse(sp, radius * 2.2, radius * 2.2)
 
             # Selected: halo
             if i in self._selected:

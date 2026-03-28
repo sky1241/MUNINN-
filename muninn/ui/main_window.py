@@ -115,6 +115,12 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.main_splitter)
 
+        # Navi fairy guide (B-UI-14/15) — overlay on neuron panel
+        from muninn.ui.navi import NaviWidget
+        self._navi = NaviWidget(self.neuron_panel)
+        self._navi.show()
+        self._navi.show_first_launch()
+
         # Command palette (overlay, initially hidden)
         from muninn.ui.command_palette import CommandPalette
         self._command_palette = CommandPalette(self)
@@ -194,6 +200,44 @@ class MainWindow(QMainWindow):
     def _on_mode_changed(self, mode):
         """Handle solo/forest toggle."""
         self.status_mode.setText(mode.upper())
+        if mode == "forest":
+            self._load_forest()
+        else:
+            # Back to solo: reload current scan
+            pass
+
+    def _load_forest(self):
+        """Load meta-mycelium into neuron map (B-UI-17)."""
+        from pathlib import Path
+        meta_path = Path.home() / ".muninn" / "meta_mycelium.db"
+        if not meta_path.exists():
+            if hasattr(self, '_navi'):
+                self._navi.show_context_help("no_forest")
+            return
+
+        from muninn.ui.forest import MetaMyceliumWorker
+        from PyQt6.QtCore import QThread
+
+        self._forest_thread = QThread()
+        self._forest_worker = MetaMyceliumWorker(str(meta_path))
+        self._forest_worker.moveToThread(self._forest_thread)
+        self._forest_thread.started.connect(self._forest_worker.run)
+        self._forest_worker.finished.connect(self._on_forest_loaded)
+        self._forest_worker.error.connect(
+            lambda msg: self.status_bar.showMessage(f"Forest: {msg}", 5000)
+        )
+        self.register_worker("forest", self._forest_worker, self._forest_thread)
+        self._forest_thread.start()
+
+    def _on_forest_loaded(self, results):
+        """Handle forest data loaded from meta-mycelium."""
+        if not results:
+            self.status_bar.showMessage("Forest: no data found", 3000)
+            return
+        self.status_bar.showMessage(f"Forest: {len(results)} concepts loaded", 3000)
+        # Notify tray if available
+        if self._tray:
+            self._tray.notify("Muninn", f"Forest loaded: {len(results)} concepts")
 
     def _on_palette_action(self, callback_name):
         """Execute command palette action."""
@@ -245,9 +289,32 @@ class MainWindow(QMainWindow):
             self._scan_folder(folder)
 
     def _scan_folder(self, path: str):
-        """Scan a folder and load results."""
-        # TODO: B-UI-22 scan worker in QThread
-        pass
+        """Scan a folder and load results (B-UI-22)."""
+        import subprocess
+        import sys
+        import tempfile
+        import json
+
+        self.status_bar.showMessage(f"Scanning {path}...", 10000)
+        try:
+            # Run muninn scan and capture JSON output
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
+                tmp_path = tmp.name
+            result = subprocess.run(
+                [sys.executable, "-m", "muninn", "scan", path, "--output", tmp_path],
+                capture_output=True, text=True, timeout=60
+            )
+            if result.returncode == 0:
+                from pathlib import Path
+                if Path(tmp_path).exists():
+                    self.load_scan(tmp_path)
+                    self.status_bar.showMessage(f"Loaded: {path}", 3000)
+                    if self._tray:
+                        self._tray.notify("Muninn", f"Scan complete: {path}")
+            else:
+                self.status_bar.showMessage(f"Scan failed: {result.stderr[:80]}", 5000)
+        except Exception as e:
+            self.status_bar.showMessage(f"Scan error: {e}", 5000)
 
     def _on_neuron_selected(self, neuron):
         """Handle neuron selection from map."""
@@ -352,6 +419,13 @@ class MainWindow(QMainWindow):
         self.tree_panel.load_tree(family, data)
         self.status_repo.setText(data.get("name", path.stem))
         self._update_status()
+
+        # Feed search bar with neuron list (B-UI-25)
+        self._search_bar.set_neurons(self.neuron_panel.neurons)
+
+        # Navi context update
+        if hasattr(self, '_navi'):
+            self._navi.show_context_help("neuron_loaded")
 
     def _build_status_bar(self):
         """Status bar: repo name, neuron count, mode, zoom %."""

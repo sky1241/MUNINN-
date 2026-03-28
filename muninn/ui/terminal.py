@@ -223,8 +223,42 @@ class TerminalWidget(QWidget):
                 "  (text)   — Ask the LLM",
                 color=TEXT_SECONDARY,
             )
+        elif cmd == "/scan":
+            self._run_scan()
+        elif cmd == "/status":
+            self._run_status()
         else:
             self._append_text(f"Unknown command: {cmd}", color="#EF4444")
+
+    def _run_scan(self):
+        """Run muninn scan on current repo."""
+        import subprocess
+        import sys
+        self._append_text("Scanning repo...", color=TEXT_SECONDARY)
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "muninn", "scan", "."],
+                capture_output=True, text=True, timeout=30, cwd="."
+            )
+            if result.returncode == 0:
+                self._append_text(result.stdout.strip() or "Scan complete.", color="#32CD32")
+            else:
+                self._append_text(result.stderr.strip() or "Scan failed.", color="#EF4444")
+        except Exception as e:
+            self._append_text(f"Scan error: {e}", color="#EF4444")
+
+    def _run_status(self):
+        """Run muninn status."""
+        import subprocess
+        import sys
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "muninn", "status"],
+                capture_output=True, text=True, timeout=10, cwd="."
+            )
+            self._append_text(result.stdout.strip() or "No status available.", color=TEXT_SECONDARY)
+        except Exception as e:
+            self._append_text(f"Status error: {e}", color="#EF4444")
 
     def _start_llm(self, prompt: str):
         """Launch LLM query in background thread (R3, B-UI-20)."""
