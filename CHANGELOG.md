@@ -5,23 +5,45 @@ Tests: 1210 PASS, 0 FAIL, 3 SKIP.
 
 ---
 
+## UI Audit Fix — Full Feature Implementation (2026-03-28) [DONE]
+
+Deep audit + fix of all UI briques. Every missing feature from the battleplan now implemented.
+
+**Fixes applied:**
+- B-UI-03: Laplacian spectral layout via QThread worker (scipy eigsh), degree-based color gradient, color legend
+- B-UI-04: Animated zoom-to-fit (300ms ease-out via QTimer)
+- B-UI-05: KD-tree O(log n) hit testing (scipy cKDTree, graceful fallback)
+- B-UI-07: Bezier curves (quadTo), LOD (hide < zoom 0.3), frustum culling, max 5000 edges, edge click detection
+- B-UI-10: Pixmap cache for background scaling (R6), invalidated on load/resize
+- B-UI-11: 200ms center animation on highlight + cross-fade (QGraphicsOpacityEffect)
+- B-UI-12: LOC field added to detail panel
+- B-UI-13: last_modified + zone fields in extended info
+- B-UI-14: PNG bubble frame (node_tooltip_frame_blue.png), lazy loaded
+- B-UI-15: Scan button rendered in bubble, French text ("Hey! Scanne un repo!")
+- neuron_map.py: closeEvent (R4) cancels Laplacian thread, neighbor cache O(1), hovered glow ring
+- workers.py: NEW — LaplacianWorker(QObject) with scipy.sparse, spring fallback, grid fallback
+
+**95 tests PASS** (26 neuron + 13 tree + 12 detail + 14 navi + 8 theme + 9 window + 6 bootstrap + 7 classifier).
+
+---
+
 ## UI Phase 0-5 Implementation (2026-03-28) [DONE]
 
-Desktop PyQt6 interface — 16 briques, 8 modules, 75 tests PASS.
+Desktop PyQt6 interface — 16 briques, 9 modules, 95 tests PASS.
 
-**UI modules (2253 lines, excl. reference imports):**
+**UI modules (~3000 lines, excl. reference imports):**
 
 | Brique | Fichier | Lignes | Description |
 |--------|---------|--------|-------------|
 | B-UI-00 | `muninn/ui/__init__.py` | 62 | Package + load_fonts() + PyInstaller paths |
 | B-UI-00b | `muninn/ui/theme.py` | 314 | QSS cyberpunk, Material dark, QPalette, load_theme() cached |
 | B-UI-01 | `muninn/ui/main_window.py` | 219 | MainWindow 4 panels, splitters, status bar, worker registry (R13) |
-| B-UI-02..07 | `muninn/ui/neuron_map.py` | 651 | NeuronMap: points, shapes, zoom, drag, hover+dim, select, edges |
-| B-UI-08..10 | `muninn/ui/tree_view.py` | 328 | TreeView: QPainter natif, glow rings, click, background template |
+| B-UI-02..07 | `muninn/ui/neuron_map.py` | 961 | NeuronMap: Laplacian layout, degree colors, bezier edges, KD-tree, animated zoom |
+| B-UI-03 | `muninn/ui/workers.py` | 211 | LaplacianWorker QThread: scipy eigsh, spring/grid fallback |
+| B-UI-08..11 | `muninn/ui/tree_view.py` | 380 | TreeView: QPainter, pixmap cache, center anim, cross-fade, glow rings |
 | B-UI-09 | `muninn/ui/classifier.py` | 159 | Auto-classify scan -> 6 familles, 5 metriques, pure Python |
-| B-UI-11 | (in tree_view) | — | Bidirectional highlight neuron<->tree |
-| B-UI-12..13 | `muninn/ui/detail_panel.py` | 249 | DetailPanel: info, neighbors (clickable), files, cross-fade |
-| B-UI-14..15 | `muninn/ui/navi.py` | 271 | Navi fairy: pulsing orb, wings, lerp, contextual help, first launch |
+| B-UI-12..13 | `muninn/ui/detail_panel.py` | 280 | DetailPanel: LOC, zone, last_modified, neighbors, files, cross-fade |
+| B-UI-14..15 | `muninn/ui/navi.py` | 300 | Navi fairy: PNG bubble, scan button, French text, lerp, contextual help |
 
 **Reference imports (from sky1241/tree):**
 - `_tree_engine.py` (4915L) — engine/classifier reference
@@ -33,11 +55,9 @@ Desktop PyQt6 interface — 16 briques, 8 modules, 75 tests PASS.
 - Templates: 6 families (baobab, buisson, conifere, feuillu, liane, palmier)
 - Assets: node_info_panel, tooltip frames
 
-**Rules applied:** R1 ownership, R4 closeEvent, R5 repaint throttle, R7 main entry, R8 empty state, R9 clipboard retry, R11 AA toggle, R13 worker registry, R14 geometry safe, R15 mouse throttle.
+**Rules applied:** R1 ownership, R3 QThread worker pattern, R4 closeEvent, R5 repaint throttle, R6 paint cache, R7 main entry, R8 empty state, R9 clipboard retry, R11 AA toggle, R12 cancel old worker, R13 worker registry, R14 geometry safe, R15 mouse throttle.
 
 **Bugs pre-mortem addressed:** #5 lazy QPixmap, #19 QSS minimal, #36 handleWidth, #39b min panel size, #39d pan bounds, #39e elided text, #44 QPixmapCache clear, #45 QPalette, #46 no border-image, #54 setSizes in showEvent, #57 screen detach.
-
-**75 tests PASS** (6 bootstrap + 8 theme + 9 window + 16 neuron + 10 tree + 7 classifier + 8 detail + 11 navi).
 
 **Design:** 60-30-10 color rule, WCAG AA, spacing base 4px, 4 shapes for daltonism, reduce motion support.
 

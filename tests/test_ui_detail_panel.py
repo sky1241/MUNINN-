@@ -143,3 +143,69 @@ def test_no_neighbors_shows_none(qtbot):
     })
 
     assert w._neighbors_layout.count() == 1  # (none) label
+
+
+# --- B-UI-12: LOC field ---
+
+def test_loc_field(qtbot):
+    """LOC field shows when present."""
+    from muninn.ui.detail_panel import DetailPanel
+    w = DetailPanel()
+    qtbot.addWidget(w)
+    w.show()
+
+    w.show_neuron({
+        "label": "Engine",
+        "id": "engine",
+        "status": "done",
+        "loc": 1509,
+    })
+    assert w._loc_label.isVisible()
+    assert "1509" in w._loc_label.text()
+
+
+def test_loc_hidden_when_absent(qtbot):
+    """LOC field hidden when not provided."""
+    from muninn.ui.detail_panel import DetailPanel
+    w = DetailPanel()
+    qtbot.addWidget(w)
+    w.show()
+
+    w.show_neuron({"label": "X", "id": "x", "status": "todo"})
+    assert not w._loc_label.isVisible()
+
+
+# --- B-UI-13: last_modified + zone ---
+
+def test_last_modified_field(qtbot):
+    """Last modified shows when present."""
+    from muninn.ui.detail_panel import DetailPanel
+    w = DetailPanel()
+    qtbot.addWidget(w)
+    w.show()
+
+    w.show_neuron({
+        "label": "Core",
+        "id": "core",
+        "status": "done",
+        "last_modified": "2026-03-27",
+    })
+    assert w._last_modified_label.isVisible()
+    assert "2026-03-27" in w._last_modified_label.text()
+
+
+def test_zone_field(qtbot):
+    """Zone shows when present."""
+    from muninn.ui.detail_panel import DetailPanel
+    w = DetailPanel()
+    qtbot.addWidget(w)
+    w.show()
+
+    w.show_neuron({
+        "label": "Mycelium",
+        "id": "myc",
+        "status": "wip",
+        "zone": "engine/core",
+    })
+    assert w._zone_label.isVisible()
+    assert "engine/core" in w._zone_label.text()

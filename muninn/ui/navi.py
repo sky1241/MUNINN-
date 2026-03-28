@@ -26,15 +26,15 @@ from muninn.ui.theme import (
 from muninn.ui import _ASSETS_DIR
 
 
-# Contextual help texts (B-UI-15)
+# Contextual help texts (B-UI-15) — French
 HELP_TEXTS = {
-    "neuron_map": "This is the neuron map. Each point is a concept in your code. Connected points share dependencies.",
-    "tree_view": "This is your project's botanical tree. The shape reveals your architecture pattern.",
-    "detail_panel": "Click a neuron to see its details here: neighbors, files, temperature.",
-    "terminal": "The terminal. Run Muninn commands or chat with the LLM.",
-    "first_launch": "Hey! I'm Navi. Scan a repo to get started!",
-    "no_data": "No data loaded yet. Try scanning a repo!",
-    "scan_button": "Click here to scan a repo and populate the map.",
+    "neuron_map": "La carte neuronale. Chaque point est un concept de ton code. Les connexions montrent les dependances.",
+    "tree_view": "L'arbre botanique de ton projet. Sa forme revele le pattern d'architecture.",
+    "detail_panel": "Clique un neurone pour voir ses details ici: voisins, fichiers, temperature.",
+    "terminal": "Le terminal. Lance des commandes Muninn ou discute avec le LLM.",
+    "first_launch": "Hey! Scanne un repo pour commencer!",
+    "no_data": "Pas de donnees chargees. Scanne un repo!",
+    "scan_button": "Clique ici pour scanner un repo et remplir la carte.",
 }
 
 
@@ -98,6 +98,9 @@ class NaviWidget(QWidget):
 
         # Orb size
         self._orb_radius = 12
+
+        # B-UI-15: Scan button rect (set during paint)
+        self._scan_btn_rect: Optional[QRectF] = None
 
     def _tick(self):
         """Main animation tick (16ms)."""
@@ -231,13 +234,20 @@ class NaviWidget(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(QPointF(cx, cy), r, r)
 
+    def _load_bubble_frame(self):
+        """Lazy-load PNG bubble frame (B-UI-14)."""
+        if self._bubble_frame is None:
+            frame_path = _ASSETS_DIR / "node_tooltip_frame_blue.png"
+            if frame_path.exists():
+                self._bubble_frame = QPixmap(str(frame_path))
+
     def _paint_bubble(self, p: QPainter):
-        """Draw the dialogue bubble near the orb."""
+        """Draw the dialogue bubble near the orb (B-UI-14: PNG frame)."""
         cx, cy = self._pos.x(), self._pos.y()
 
         # Bubble position (above the orb)
-        bubble_w = 220
-        bubble_h = 80
+        bubble_w = 240
+        bubble_h = 100 if self._bubble_button_visible else 80
         bx = cx - bubble_w / 2
         by = cy - self._orb_radius * 3 - bubble_h
 
@@ -245,20 +255,57 @@ class NaviWidget(QWidget):
         bx = max(8, min(self.width() - bubble_w - 8, bx))
         by = max(8, by)
 
-        # Background
-        p.setPen(QPen(QColor(0, 220, 255, 100), 1))
-        p.setBrush(QBrush(QColor(BG_2DP)))
         rect = QRectF(bx, by, bubble_w, bubble_h)
-        p.drawRoundedRect(rect, 12, 12)
+
+        # B-UI-14: Use PNG frame if available, else fallback to rounded rect
+        self._load_bubble_frame()
+        if self._bubble_frame and not self._bubble_frame.isNull():
+            scaled_frame = self._bubble_frame.scaled(
+                int(bubble_w), int(bubble_h),
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            p.drawPixmap(int(bx), int(by), scaled_frame)
+        else:
+            p.setPen(QPen(QColor(0, 220, 255, 100), 1))
+            p.setBrush(QBrush(QColor(BG_2DP)))
+            p.drawRoundedRect(rect, 12, 12)
 
         # Text
         p.setPen(QColor(TEXT_PRIMARY))
         font = QFont(FONT_BODY, 11)
         p.setFont(font)
-        text_rect = QRectF(bx + 12, by + 8, bubble_w - 24, bubble_h - 16)
+        text_rect = QRectF(bx + 12, by + 8, bubble_w - 24, bubble_h - (40 if self._bubble_button_visible else 16))
         p.drawText(text_rect,
                    Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
                    self._bubble_text)
+
+        # B-UI-15: Scan button in bubble
+        if self._bubble_button_visible:
+            btn_w, btn_h = 120, 24
+            btn_x = bx + (bubble_w - btn_w) / 2
+            btn_y = by + bubble_h - btn_h - 8
+            # Button background
+            p.setPen(QPen(QColor(0, 220, 255), 1))
+            p.setBrush(QBrush(QColor(0, 220, 255, 40)))
+            p.drawRoundedRect(QRectF(btn_x, btn_y, btn_w, btn_h), 6, 6)
+            # Button text
+            p.setPen(QColor(ACCENT_CYAN_HEX))
+            p.setFont(QFont(FONT_BODY, 10))
+            p.drawText(QRectF(btn_x, btn_y, btn_w, btn_h),
+                       Qt.AlignmentFlag.AlignCenter, "Scanner un repo")
+            # Store button rect for click detection
+            self._scan_btn_rect = QRectF(btn_x, btn_y, btn_w, btn_h)
+
+    def mousePressEvent(self, event):
+        """Handle click on scan button (B-UI-15)."""
+        if (event.button() == Qt.MouseButton.LeftButton
+                and self._bubble_button_visible
+                and self._scan_btn_rect is not None
+                and self._scan_btn_rect.contains(event.position())):
+            self.scan_requested.emit()
+            self.dismiss_first_launch()
+        super().mousePressEvent(event)
 
     # --- Public ---
 

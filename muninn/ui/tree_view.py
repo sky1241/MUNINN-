@@ -1,15 +1,15 @@
 """Muninn UI — Botanical Tree View Widget.
 
 B-UI-08: Placeholder image (QPixmap lazy loaded).
-B-UI-10: QPainter native rendering with clickable nodes.
-B-UI-11: Bidirectional highlight (neuron map <-> tree).
+B-UI-10: QPainter native rendering with clickable nodes + pixmap cache (R6).
+B-UI-11: Bidirectional highlight (neuron map <-> tree) + 200ms center animation + cross-fade.
 
 Rules: R1 (ownership), R5 (repaint throttle), R6 (cache QPixmap, HiDPI),
 R8 (empty state), bug #5 (lazy QPixmap), bug #39e (elided text).
 """
 
-import json
 import math
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +18,8 @@ from PyQt6.QtGui import (
     QPainter, QPen, QColor, QBrush, QFont, QFontMetrics,
     QPixmap, QPainterPath,
 )
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget, QGraphicsOpacityEffect
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
 
 from muninn.ui.theme import (
     BG_0DP, BG_1DP, ACCENT_CYAN_HEX, ACCENT_GREEN, SUCCESS, WARNING, ERROR,
@@ -57,6 +58,8 @@ class TreeViewWidget(QWidget):
 
     Shows a background template image with interactive nodes drawn on top.
     Supports click-to-select and bidirectional highlighting with neuron map.
+    B-UI-10: Pixmap cache for background scaling (R6).
+    B-UI-11: 200ms center animation + cross-fade on selection change.
     """
 
     # Signals
@@ -76,10 +79,35 @@ class TreeViewWidget(QWidget):
         self._family: str = ""
         self._bg_pixmap: Optional[QPixmap] = None  # Lazy loaded (bug #5)
 
+        # R6: Pixmap cache — scaled version cached at last widget size
+        self._bg_cache: Optional[QPixmap] = None
+        self._bg_cache_size: tuple[int, int] = (0, 0)
+
         # Highlight state (B-UI-11)
         self._highlighted_id: Optional[str] = None
         self._secondary_ids: set[str] = set()
         self._selected_id: Optional[str] = None
+
+        # B-UI-11: Center animation (200ms ease-in-out)
+        self._center_anim_timer = QTimer(self)
+        self._center_anim_timer.setInterval(16)
+        self._center_anim_timer.timeout.connect(self._center_anim_tick)
+        self._center_offset_x = 0.0
+        self._center_offset_y = 0.0
+        self._center_target_x = 0.0
+        self._center_target_y = 0.0
+        self._center_start_x = 0.0
+        self._center_start_y = 0.0
+        self._center_anim_progress = 0.0
+        self._center_anim_duration = 0.2  # 200ms
+
+        # B-UI-11: Cross-fade opacity
+        self._opacity_effect = QGraphicsOpacityEffect(self)
+        self._opacity_effect.setOpacity(1.0)
+        self.setGraphicsEffect(self._opacity_effect)
+        self._fade_anim = QPropertyAnimation(self._opacity_effect, b"opacity", self)
+        self._fade_anim.setDuration(200)
+        self._fade_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
         # R5: repaint throttle
         self._repaint_timer = QTimer(self)
@@ -139,12 +167,14 @@ class TreeViewWidget(QWidget):
         self.update()
 
     def _load_background(self, family: str):
-        """Lazy load background QPixmap (bug #5)."""
+        """Lazy load background QPixmap (bug #5). Invalidate cache."""
         bg_path = _TEMPLATES_DIR / f"{family}_final.png"
         if bg_path.exists():
             self._bg_pixmap = QPixmap(str(bg_path))
         else:
             self._bg_pixmap = None
+        self._bg_cache = None
+        self._bg_cache_size = (0, 0)
 
     def _load_positions(self, family: str, count: int) -> list[tuple[float, float]]:
         """Load node positions from template positions file."""
@@ -170,6 +200,39 @@ class TreeViewWidget(QWidget):
 
         return positions
 
+    # --- B-UI-11: Center animation ---
+
+    def _center_on_node(self, node: TreeNode):
+        """Animate centering on a node (200ms ease-in-out)."""
+        # Target offset to center node in widget
+        w, h = self.width(), self.height()
+        self._center_target_x = w / 2 - node.x * w
+        self._center_target_y = h / 2 - node.y * h
+        self._center_start_x = self._center_offset_x
+        self._center_start_y = self._center_offset_y
+        self._center_anim_progress = 0.0
+        self._center_anim_timer.start()
+
+    def _center_anim_tick(self):
+        """Tick for center animation (200ms)."""
+        self._center_anim_progress += 0.016 / self._center_anim_duration
+        if self._center_anim_progress >= 1.0:
+            self._center_anim_progress = 1.0
+            self._center_anim_timer.stop()
+        # Ease-in-out cubic
+        t = self._center_anim_progress
+        t = t * t * (3 - 2 * t)
+        self._center_offset_x = self._center_start_x + t * (self._center_target_x - self._center_start_x)
+        self._center_offset_y = self._center_start_y + t * (self._center_target_y - self._center_start_y)
+        self.update()
+
+    def _cross_fade(self):
+        """Trigger cross-fade animation (200ms)."""
+        self._fade_anim.stop()
+        self._fade_anim.setStartValue(0.3)
+        self._fade_anim.setEndValue(1.0)
+        self._fade_anim.start()
+
     # --- Paint ---
 
     def paintEvent(self, event):
@@ -184,16 +247,19 @@ class TreeViewWidget(QWidget):
             p.end()
             return
 
-        # Background image
+        # R6: Background image with pixmap cache
         if self._bg_pixmap and not self._bg_pixmap.isNull():
-            scaled = self._bg_pixmap.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (self.width() - scaled.width()) // 2
-            y = (self.height() - scaled.height()) // 2
-            p.drawPixmap(x, y, scaled)
+            cur_size = (self.width(), self.height())
+            if self._bg_cache is None or self._bg_cache_size != cur_size:
+                self._bg_cache = self._bg_pixmap.scaled(
+                    self.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                self._bg_cache_size = cur_size
+            x = (self.width() - self._bg_cache.width()) // 2
+            y = (self.height() - self._bg_cache.height()) // 2
+            p.drawPixmap(x, y, self._bg_cache)
 
         # Draw nodes
         self._paint_nodes(p)
@@ -295,12 +361,21 @@ class TreeViewWidget(QWidget):
     def highlight_concept(self, concept_id: str, secondary_ids: Optional[set[str]] = None):
         """Highlight a concept (from neuron map selection).
 
+        B-UI-11: Center animation on primary node + cross-fade.
         Args:
             concept_id: primary concept to highlight (full halo)
             secondary_ids: secondary concepts (outline only)
         """
+        changed = (concept_id != self._highlighted_id)
         self._highlighted_id = concept_id
         self._secondary_ids = secondary_ids or set()
+        if changed:
+            self._cross_fade()
+            # Center on primary node
+            for n in self._nodes:
+                if n.id == concept_id:
+                    self._center_on_node(n)
+                    break
         self.update()
 
     def clear_highlight(self):

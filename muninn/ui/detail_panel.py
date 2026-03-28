@@ -88,12 +88,13 @@ class DetailPanel(QWidget):
         info_layout.setSpacing(4)
 
         self._level_label = QLabel()
+        self._loc_label = QLabel()  # B-UI-12: LOC field
         self._depth_label = QLabel()
         self._confidence_label = QLabel()
         self._entry_label = QLabel()
         self._entry_label.setFont(QFont(FONT_CODE, 12))
 
-        for lbl in [self._level_label, self._depth_label,
+        for lbl in [self._level_label, self._loc_label, self._depth_label,
                      self._confidence_label, self._entry_label]:
             lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
             info_layout.addWidget(lbl)
@@ -116,6 +117,16 @@ class DetailPanel(QWidget):
         self._temp_label = QLabel()
         self._temp_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
         ext_layout.addWidget(self._temp_label)
+
+        # B-UI-13: Last modified
+        self._last_modified_label = QLabel()
+        self._last_modified_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
+        ext_layout.addWidget(self._last_modified_label)
+
+        # B-UI-13: Zone
+        self._zone_label = QLabel()
+        self._zone_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
+        ext_layout.addWidget(self._zone_label)
 
         # Neighbors section
         neighbors_header = QLabel("Neighbors")
@@ -191,6 +202,15 @@ class DetailPanel(QWidget):
         )
 
         self._level_label.setText(f"Level: {neuron_data.get('level', 'N/A')}")
+
+        # B-UI-12: LOC field
+        loc = neuron_data.get("loc")
+        if loc is not None:
+            self._loc_label.setText(f"LOC: {loc}")
+            self._loc_label.show()
+        else:
+            self._loc_label.hide()
+
         self._depth_label.setText(f"Depth: {neuron_data.get('depth', 'N/A')}")
         self._confidence_label.setText(
             f"Confidence: {neuron_data.get('confidence', 'N/A')}%"
@@ -205,6 +225,22 @@ class DetailPanel(QWidget):
             self._temp_label.show()
         else:
             self._temp_label.hide()
+
+        # B-UI-13: Last modified
+        last_mod = neuron_data.get("last_modified")
+        if last_mod:
+            self._last_modified_label.setText(f"Last modified: {last_mod}")
+            self._last_modified_label.show()
+        else:
+            self._last_modified_label.hide()
+
+        # B-UI-13: Zone
+        zone = neuron_data.get("zone")
+        if zone:
+            self._zone_label.setText(f"Zone: {zone}")
+            self._zone_label.show()
+        else:
+            self._zone_label.hide()
 
         # Clear and rebuild neighbors
         self._clear_layout(self._neighbors_layout)

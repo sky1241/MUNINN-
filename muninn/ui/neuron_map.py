@@ -1,13 +1,14 @@
 """Muninn UI — Neuron Map Widget.
 
 B-UI-02: Static points from scan JSON.
-B-UI-03: Laplacian spectral layout (QThread).
-B-UI-04: Zoom + drag.
-B-UI-05: Hover + tooltip + dimming.
+B-UI-03: Laplacian spectral layout (QThread worker).
+B-UI-04: Zoom + drag + animated zoom-to-fit (300ms).
+B-UI-05: Hover + tooltip + dimming + KD-tree O(log n).
 B-UI-06: Selection.
-B-UI-07: Edges.
+B-UI-07: Edges (bezier, batch, LOD, edge click).
 
-Rules: R1 (ownership), R5 (repaint throttle), R6 (paint perf), R11 (AA),
+Rules: R1 (ownership), R3 (worker pattern), R5 (repaint throttle),
+R6 (paint perf), R11 (AA), R12 (cancel old worker),
 R15 (mouse throttle), bug #39b (min size), bug #39d (pan bounds),
 bug #39e (elided text).
 """
@@ -21,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from PyQt6.QtCore import (
-    Qt, QPointF, QRectF, QTimer, pyqtSignal,
+    Qt, QPointF, QRectF, QLineF, QTimer, QThread, pyqtSignal,
 )
 from PyQt6.QtGui import (
     QPainter, QPen, QColor, QBrush, QFont, QFontMetrics,
@@ -30,7 +31,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QWidget, QToolTip
 
 from muninn.ui.theme import (
-    BG_0DP, ACCENT_CYAN_HEX, ACCENT_GREEN, TEXT_PRIMARY,
+    BG_0DP, BG_1DP, ACCENT_CYAN_HEX, ACCENT_GREEN, TEXT_PRIMARY,
     TEXT_SECONDARY, TEXT_DISABLED, FONT_BODY, FONT_CODE,
 )
 
@@ -46,25 +47,23 @@ class Neuron:
     confidence: int = 0
     depth: int = 0
     depends: list = field(default_factory=list)
-    # Layout position (set by Laplacian or random)
     x: float = 0.0
     y: float = 0.0
-    # Computed
     degree: int = 0
-    category: str = ""  # for shape: R=circle, F=diamond, I=triangle, B=square
+    category: str = ""
 
 
-# Shape constants for daltonism support (bug #38 in UX rules)
+# Shape constants for daltonism support
 SHAPE_CIRCLE = "circle"
 SHAPE_DIAMOND = "diamond"
 SHAPE_TRIANGLE = "triangle"
 SHAPE_SQUARE = "square"
 
 LEVEL_SHAPES = {
-    "R": SHAPE_CIRCLE,    # Root/runtime
-    "F": SHAPE_DIAMOND,   # Feature
-    "I": SHAPE_TRIANGLE,  # Infrastructure
-    "B": SHAPE_SQUARE,    # Build
+    "R": SHAPE_CIRCLE,
+    "F": SHAPE_DIAMOND,
+    "I": SHAPE_TRIANGLE,
+    "B": SHAPE_SQUARE,
 }
 
 STATUS_COLORS = {
@@ -74,18 +73,43 @@ STATUS_COLORS = {
     "skip": QColor(128, 128, 128),
 }
 
+# B-UI-03: Degree-based color gradient (cold blue -> cyan -> orange -> red)
+DEGREE_GRADIENT = [
+    (0.0, QColor(70, 130, 180)),    # steel blue (cold)
+    (0.25, QColor(0, 180, 220)),    # cyan
+    (0.5, QColor(0, 220, 180)),     # teal
+    (0.75, QColor(255, 180, 50)),   # orange
+    (1.0, QColor(255, 80, 50)),     # red-orange (hot)
+]
+
+
+def _degree_color(degree: int, max_degree: int) -> QColor:
+    """Interpolate color from degree gradient."""
+    if max_degree <= 0:
+        return DEGREE_GRADIENT[0][1]
+    t = min(degree / max(max_degree, 1), 1.0)
+    # Find segment
+    for i in range(len(DEGREE_GRADIENT) - 1):
+        t0, c0 = DEGREE_GRADIENT[i]
+        t1, c1 = DEGREE_GRADIENT[i + 1]
+        if t0 <= t <= t1:
+            f = (t - t0) / (t1 - t0) if t1 > t0 else 0
+            return QColor(
+                int(c0.red() + f * (c1.red() - c0.red())),
+                int(c0.green() + f * (c1.green() - c0.green())),
+                int(c0.blue() + f * (c1.blue() - c0.blue())),
+            )
+    return DEGREE_GRADIENT[-1][1]
+
 
 class NeuronMapWidget(QWidget):
-    """Custom QPainter widget displaying neurons as colored points.
+    """Custom QPainter widget displaying neurons as colored points."""
 
-    Supports: static points (B-UI-02), zoom/drag (B-UI-04), hover (B-UI-05),
-    selection (B-UI-06), edges (B-UI-07).
-    """
-
-    # Signals
-    neuron_hovered = pyqtSignal(object)   # Neuron or None
-    neuron_selected = pyqtSignal(object)  # Neuron or None
+    neuron_hovered = pyqtSignal(object)
+    neuron_selected = pyqtSignal(object)
     neuron_deselected = pyqtSignal()
+    layout_started = pyqtSignal()
+    layout_finished = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -97,16 +121,30 @@ class NeuronMapWidget(QWidget):
 
         # Data
         self._neurons: list[Neuron] = []
-        self._edges: list[tuple[int, int, float]] = []  # (idx_a, idx_b, weight)
+        self._edges: list[tuple[int, int, float]] = []
+        self._neighbor_cache: dict[int, set[int]] = {}  # idx -> set of neighbor idx
 
         # View transform
         self._zoom = 1.0
         self._pan_x = 0.0
         self._pan_y = 0.0
 
+        # B-UI-04: Animated zoom-to-fit state
+        self._anim_timer = QTimer(self)
+        self._anim_timer.setInterval(16)
+        self._anim_timer.timeout.connect(self._anim_tick)
+        self._anim_start_zoom = 1.0
+        self._anim_target_zoom = 1.0
+        self._anim_start_pan_x = 0.0
+        self._anim_start_pan_y = 0.0
+        self._anim_target_pan_x = 0.0
+        self._anim_target_pan_y = 0.0
+        self._anim_progress = 0.0
+        self._anim_duration = 0.3  # 300ms
+
         # Interaction state
         self._hovered: Optional[Neuron] = None
-        self._selected: set[int] = set()  # indices into _neurons
+        self._selected: set[int] = set()
         self._dragging = False
         self._drag_start = QPointF()
         self._pan_start_x = 0.0
@@ -124,7 +162,7 @@ class NeuronMapWidget(QWidget):
         # R5: repaint throttle
         self._repaint_timer = QTimer(self)
         self._repaint_timer.setSingleShot(True)
-        self._repaint_timer.setInterval(16)  # 60fps max
+        self._repaint_timer.setInterval(16)
         self._repaint_timer.timeout.connect(self.update)
 
         # R15: mouse throttle
@@ -136,11 +174,29 @@ class NeuronMapWidget(QWidget):
         # R11: AA toggle during pan
         self._aa_enabled = True
 
-        # KD-tree (built on demand, B-UI-05)
+        # B-UI-05: KD-tree (scipy.spatial.cKDTree)
         self._kdtree = None
+        self._kdtree_screen_coords = None  # array of screen coords for KD-tree
+
+        # B-UI-03: Laplacian worker (R3, R12)
+        self._lap_thread: Optional[QThread] = None
+        self._lap_worker = None
+        self._layout_computing = False
+
+        # B-UI-07: edge rendering
+        self._max_visible_edges = 5000
+        self._edge_lod_threshold = 0.3  # hide edges below this zoom
 
         # Empty state
         self._empty = True
+
+        # Max degree (for color gradient)
+        self._max_degree = 1
+
+    def closeEvent(self, event):  # R4: cleanup
+        self._cancel_laplacian()
+        self._anim_timer.stop()
+        super().closeEvent(event)
 
     # --- Data loading ---
 
@@ -180,17 +236,10 @@ class NeuronMapWidget(QWidget):
             neuron.category = LEVEL_SHAPES.get(neuron.level, SHAPE_CIRCLE)
             self._neurons.append(neuron)
 
-        # Build edges from depends
         self._build_edges()
+        self._compute_degrees()
 
-        # Compute degrees
-        for n in self._neurons:
-            n.degree = 0
-        for ia, ib, w in self._edges:
-            self._neurons[ia].degree += 1
-            self._neurons[ib].degree += 1
-
-        # Initial layout: random positions (replaced by Laplacian in B-UI-03)
+        # Random layout first (instant), then launch Laplacian in background
         self._layout_random()
 
         self._empty = False
@@ -201,11 +250,16 @@ class NeuronMapWidget(QWidget):
         self._history_pos = -1
         self.update()
 
+        # B-UI-03: launch Laplacian layout in QThread
+        self._start_laplacian()
+
     def load_neurons(self, neurons: list[Neuron]):
         """Load neurons directly (for testing or programmatic use)."""
         self._neurons = neurons
         self._empty = len(neurons) == 0
         if not self._empty:
+            self._build_edges()
+            self._compute_degrees()
             self._layout_random()
         self._cache_dirty = True
         self._kdtree = None
@@ -225,26 +279,120 @@ class NeuronMapWidget(QWidget):
                     if key not in seen:
                         seen.add(key)
                         self._edges.append((key[0], key[1], 1.0))
+        # Build neighbor cache for fast lookup
+        self._neighbor_cache.clear()
+        for ia, ib, _ in self._edges:
+            self._neighbor_cache.setdefault(ia, set()).add(ib)
+            self._neighbor_cache.setdefault(ib, set()).add(ia)
+
+    def _compute_degrees(self):
+        """Compute degree for each neuron."""
+        for n in self._neurons:
+            n.degree = 0
+        for ia, ib, w in self._edges:
+            self._neurons[ia].degree += 1
+            self._neurons[ib].degree += 1
+        self._max_degree = max((n.degree for n in self._neurons), default=1)
 
     def _layout_random(self):
         """Assign random positions in [0.1, 0.9] normalized space."""
-        rng = random.Random(42)  # deterministic
+        rng = random.Random(42)
         w, h = self.width() or 400, self.height() or 400
         margin = 0.1
         for n in self._neurons:
             n.x = (margin + rng.random() * (1 - 2 * margin)) * w
             n.y = (margin + rng.random() * (1 - 2 * margin)) * h
 
+    # --- B-UI-03: Laplacian spectral layout (QThread) ---
+
+    def _start_laplacian(self):
+        """Launch Laplacian layout in background thread (R3, R12)."""
+        if len(self._neurons) < 3:
+            return  # Guard < 3 nodes
+
+        # R12: cancel old worker before launching new one
+        self._cancel_laplacian()
+
+        try:
+            from muninn.ui.workers import LaplacianWorker
+        except ImportError:
+            return  # scipy not available
+
+        self._lap_thread = QThread()
+        self._lap_worker = LaplacianWorker(
+            self._neurons, self._edges, top_n=1000
+        )
+        # R3: moveToThread BEFORE connect
+        self._lap_worker.moveToThread(self._lap_thread)
+        self._lap_thread.started.connect(self._lap_worker.run)
+        self._lap_worker.finished.connect(self._on_laplacian_done)
+        self._lap_worker.error.connect(self._on_laplacian_error)
+        self._lap_worker.finished.connect(self._lap_thread.quit)
+
+        self._layout_computing = True
+        self.layout_started.emit()
+        self._lap_thread.start()
+
+    def _cancel_laplacian(self):
+        """Cancel running Laplacian worker (R12)."""
+        if self._lap_worker is not None:
+            self._lap_worker._stop = True
+        if self._lap_thread is not None and self._lap_thread.isRunning():
+            self._lap_thread.quit()
+            self._lap_thread.wait(1000)
+        self._lap_worker = None
+        self._lap_thread = None
+        self._layout_computing = False
+
+    def _on_laplacian_done(self, positions):
+        """Apply Laplacian layout positions."""
+        self._layout_computing = False
+        w, h = self.width() or 400, self.height() or 400
+        for i, (px, py) in enumerate(positions):
+            if i < len(self._neurons):
+                self._neurons[i].x = px * w
+                self._neurons[i].y = py * h
+        self._cache_dirty = True
+        self._kdtree = None
+        self.layout_finished.emit()
+        self.update()
+
+    def _on_laplacian_error(self, msg):
+        """Laplacian failed, keep random layout."""
+        self._layout_computing = False
+        self.layout_finished.emit()
+
+    # --- B-UI-05: KD-tree ---
+
+    def _build_kdtree(self):
+        """Build KD-tree from current screen positions."""
+        if not self._neurons:
+            self._kdtree = None
+            return
+        try:
+            from scipy.spatial import cKDTree
+            import numpy as np
+            coords = []
+            for n in self._neurons:
+                sp = self._world_to_screen(n.x, n.y)
+                coords.append([sp.x(), sp.y()])
+            self._kdtree_screen_coords = np.array(coords)
+            self._kdtree = cKDTree(self._kdtree_screen_coords)
+        except ImportError:
+            self._kdtree = None  # scipy not available, fallback to O(n)
+
+    def _invalidate_kdtree(self):
+        """Mark KD-tree as stale (needs rebuild on next hover)."""
+        self._kdtree = None
+
     # --- Coordinate transforms ---
 
     def _world_to_screen(self, wx: float, wy: float) -> QPointF:
-        """Convert world coords to screen coords."""
         sx = (wx - self._pan_x) * self._zoom + self.width() / 2
         sy = (wy - self._pan_y) * self._zoom + self.height() / 2
         return QPointF(sx, sy)
 
     def _screen_to_world(self, sx: float, sy: float) -> tuple[float, float]:
-        """Convert screen coords to world coords."""
         wx = (sx - self.width() / 2) / self._zoom + self._pan_x
         wy = (sy - self.height() / 2) / self._zoom + self._pan_y
         return wx, wy
@@ -256,7 +404,6 @@ class NeuronMapWidget(QWidget):
         if self._aa_enabled:
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Background
         p.fillRect(self.rect(), QColor(BG_0DP))
 
         if self._empty:
@@ -264,47 +411,63 @@ class NeuronMapWidget(QWidget):
             p.end()
             return
 
-        # Draw edges (B-UI-07, simplified here)
         self._paint_edges(p)
-
-        # Draw neurons
         self._paint_neurons(p)
+        self._paint_legend(p)
 
-        # Rectangle selection overlay
         if self._rect_selecting:
             p.setPen(QPen(QColor(ACCENT_CYAN_HEX), 1, Qt.PenStyle.DashLine))
             p.setBrush(QColor(0, 220, 255, 30))
             r = QRectF(self._rect_start, self._rect_end).normalized()
             p.drawRect(r)
 
+        if self._layout_computing:
+            p.setPen(QColor(ACCENT_CYAN_HEX))
+            p.setFont(QFont(FONT_BODY, 12))
+            p.drawText(QRectF(self.width() - 160, 8, 150, 24),
+                       Qt.AlignmentFlag.AlignRight, "Computing layout...")
+
         p.end()
 
     def _paint_empty(self, p: QPainter):
-        """Draw empty state message."""
         p.setPen(QColor(TEXT_SECONDARY))
-        font = QFont(FONT_BODY, 16)
-        p.setFont(font)
+        p.setFont(QFont(FONT_BODY, 16))
         p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
                    "No data loaded.\nScan a repo first!")
 
     def _paint_neurons(self, p: QPainter):
-        """Draw all neuron points with shapes based on category."""
+        """Draw neurons with degree-based colors and category shapes."""
         radius = max(4, 6 * self._zoom)
         font = QFont(FONT_BODY, max(8, int(10 * self._zoom)))
         fm = QFontMetrics(font)
         p.setFont(font)
 
+        # Precompute hovered neuron index for fast neighbor lookup
+        hovered_idx = None
+        if self._hovered:
+            for i, n in enumerate(self._neurons):
+                if n is self._hovered:
+                    hovered_idx = i
+                    break
+
+        viewport = self.rect()
+
         for i, n in enumerate(self._neurons):
             sp = self._world_to_screen(n.x, n.y)
 
+            # Frustum culling: skip off-screen neurons
+            if not viewport.contains(sp.toPoint()):
+                continue
+
             # Dimming: if something is hovered, dim non-neighbors
             alpha = 255
-            if self._hovered and n is not self._hovered:
-                if not self._is_neighbor(n, self._hovered):
+            if hovered_idx is not None and i != hovered_idx:
+                neighbors = self._neighbor_cache.get(hovered_idx, set())
+                if i not in neighbors:
                     alpha = 51  # 20%
 
-            color = STATUS_COLORS.get(n.status, QColor(ACCENT_GREEN))
-            color = QColor(color)
+            # B-UI-03: Color by degree (not status)
+            color = _degree_color(n.degree, self._max_degree)
             color.setAlpha(alpha)
 
             # Selected: halo
@@ -315,12 +478,19 @@ class NeuronMapWidget(QWidget):
                 p.setBrush(QBrush(halo_color))
                 p.drawEllipse(sp, radius * 2, radius * 2)
 
-            # Draw shape based on category
+            # Hovered: glow
+            if i == hovered_idx:
+                glow = QColor(ACCENT_CYAN_HEX)
+                glow.setAlpha(100)
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QBrush(glow))
+                p.drawEllipse(sp, radius * 1.8, radius * 1.8)
+
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QBrush(color))
             self._draw_shape(p, sp, radius, n.category)
 
-            # Label (only if zoom > 0.5 and not too many neurons)
+            # Label
             if self._zoom > 0.5 and len(self._neurons) < 200:
                 label_color = QColor(TEXT_PRIMARY)
                 label_color.setAlpha(alpha)
@@ -330,7 +500,6 @@ class NeuronMapWidget(QWidget):
                 p.drawText(QPointF(sp.x() + radius + 4, sp.y() + 4), elided)
 
     def _draw_shape(self, p: QPainter, center: QPointF, r: float, shape: str):
-        """Draw a neuron shape at center with radius r."""
         cx, cy = center.x(), center.y()
         if shape == SHAPE_DIAMOND:
             path = QPainterPath()
@@ -349,76 +518,145 @@ class NeuronMapWidget(QWidget):
             p.drawPath(path)
         elif shape == SHAPE_SQUARE:
             p.drawRect(QRectF(cx - r * 0.7, cy - r * 0.7, r * 1.4, r * 1.4))
-        else:  # circle (default)
+        else:
             p.drawEllipse(center, r, r)
 
     def _paint_edges(self, p: QPainter):
-        """Draw edges between connected neurons."""
+        """Draw edges with bezier curves, LOD, batch, frustum culling."""
         if not self._edges:
             return
-        pen = QPen(QColor(255, 255, 255, 38), max(1, self._zoom))
-        p.setPen(pen)
 
+        # B-UI-07: LOD — hide edges at very low zoom
+        if self._zoom < self._edge_lod_threshold:
+            return
+
+        viewport = QRectF(self.rect())
+        n_neurons = len(self._neurons)
+
+        # Sort by weight, take top edges (max 5000)
+        visible_edges = []
         for ia, ib, w in self._edges:
-            if ia >= len(self._neurons) or ib >= len(self._neurons):
+            if ia >= n_neurons or ib >= n_neurons:
                 continue
             na, nb = self._neurons[ia], self._neurons[ib]
             sa = self._world_to_screen(na.x, na.y)
             sb = self._world_to_screen(nb.x, nb.y)
-            p.drawLine(sa, sb)
+            # Frustum culling: skip if both endpoints off-screen
+            if not viewport.contains(sa.toPoint()) and not viewport.contains(sb.toPoint()):
+                continue
+            visible_edges.append((sa, sb, w, ia, ib))
+            if len(visible_edges) >= self._max_visible_edges:
+                break
 
-    def _is_neighbor(self, a: Neuron, b: Neuron) -> bool:
-        """Check if two neurons are connected."""
-        ia = self._neurons.index(a) if a in self._neurons else -1
-        ib = self._neurons.index(b) if b in self._neurons else -1
-        if ia < 0 or ib < 0:
-            return False
-        key = (min(ia, ib), max(ia, ib))
-        return any((ea, eb) == key for ea, eb, _ in self._edges)
+        if not visible_edges:
+            return
+
+        # B-UI-07: Batch bezier curves
+        for sa, sb, w, ia, ib in visible_edges:
+            # Alpha proportional to weight
+            alpha = min(int(20 + w * 18), 80)
+            # Thickness = log(weight + 1)
+            thickness = max(0.5, math.log(w + 1) * self._zoom)
+            pen = QPen(QColor(255, 255, 255, alpha), thickness)
+            p.setPen(pen)
+
+            # Bezier curve (control point offset perpendicular to midpoint)
+            mx = (sa.x() + sb.x()) / 2
+            my = (sa.y() + sb.y()) / 2
+            dx = sb.x() - sa.x()
+            dy = sb.y() - sa.y()
+            dist = math.hypot(dx, dy)
+            # Offset proportional to distance (curved feel)
+            offset = min(dist * 0.15, 30)
+            if dist > 1:
+                nx, ny = -dy / dist, dx / dist
+            else:
+                nx, ny = 0, 0
+            cx_pt = mx + nx * offset
+            cy_pt = my + ny * offset
+
+            path = QPainterPath()
+            path.moveTo(sa)
+            path.quadTo(QPointF(cx_pt, cy_pt), sb)
+            p.drawPath(path)
+
+    def _paint_legend(self, p: QPainter):
+        """B-UI-03: Color legend (bottom-left, small, discreet)."""
+        if not self._neurons or self._max_degree <= 0:
+            return
+
+        x0, y0 = 12, self.height() - 60
+        bar_w, bar_h = 100, 8
+
+        p.setPen(Qt.PenStyle.NoPen)
+        # Draw gradient bar
+        for i in range(bar_w):
+            t = i / bar_w
+            c = _degree_color(int(t * self._max_degree), self._max_degree)
+            p.setBrush(QBrush(c))
+            p.drawRect(QRectF(x0 + i, y0, 1, bar_h))
+
+        # Labels
+        p.setPen(QColor(TEXT_SECONDARY))
+        font = QFont(FONT_CODE, 9)
+        p.setFont(font)
+        p.drawText(QPointF(x0, y0 + bar_h + 14), "0")
+        p.drawText(QPointF(x0 + bar_w - 20, y0 + bar_h + 14), str(self._max_degree))
+        p.drawText(QPointF(x0, y0 - 4), "Degree")
 
     # --- Zoom + Drag (B-UI-04) ---
 
     def wheelEvent(self, event):
-        """Zoom centered on cursor position."""
         pos = event.position()
         old_wx, old_wy = self._screen_to_world(pos.x(), pos.y())
 
         delta = event.angleDelta().y()
         factor = 1.15 if delta > 0 else 1 / 1.15
-        new_zoom = self._zoom * factor
-        new_zoom = max(0.1, min(20.0, new_zoom))  # Clamp
+        new_zoom = max(0.1, min(20.0, self._zoom * factor))
         self._zoom = new_zoom
 
-        # Adjust pan so cursor stays on same world point
         new_wx, new_wy = self._screen_to_world(pos.x(), pos.y())
         self._pan_x -= (new_wx - old_wx)
         self._pan_y -= (new_wy - old_wy)
 
         self._clamp_pan()
         self._cache_dirty = True
+        self._invalidate_kdtree()
         self._schedule_repaint()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            # Check if clicking on a neuron
             hit = self._hit_test(event.position())
             if hit is not None:
                 self._handle_neuron_click(hit, event.modifiers())
             else:
-                # Start drag or rect select
-                if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                # Check edge click (B-UI-07)
+                edge_hit = self._hit_test_edge(event.position())
+                if edge_hit is not None:
+                    ia, ib = edge_hit
+                    self._selected = {ia, ib}
+                    self._push_history()
+                    self.neuron_selected.emit(self._neurons[ia])
+                    self._cache_dirty = True
+                    self.update()
+                elif event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
                     self._rect_selecting = True
                     self._rect_start = event.position()
                     self._rect_end = event.position()
                 else:
+                    # Deselect on empty click
+                    if self._selected:
+                        self._selected.clear()
+                        self.neuron_deselected.emit()
+                        self._cache_dirty = True
+                        self.update()
                     self._dragging = True
                     self._drag_start = event.position()
                     self._pan_start_x = self._pan_x
                     self._pan_start_y = self._pan_y
-                    self._aa_enabled = False  # R11
+                    self._aa_enabled = False
 
     def mouseMoveEvent(self, event):
-        # R15: throttle
         now = time.monotonic()
         if now - self._last_hover_time < 0.008:
             return
@@ -431,19 +669,18 @@ class NeuronMapWidget(QWidget):
             self._pan_y = self._pan_start_y - dy
             self._clamp_pan()
             self._cache_dirty = True
+            self._invalidate_kdtree()
             self._schedule_repaint()
         elif self._rect_selecting:
             self._rect_end = event.position()
             self._schedule_repaint()
         else:
-            # Hover detection
             hit = self._hit_test(event.position())
             if hit != self._hovered:
                 self._hovered = hit
                 self.neuron_hovered.emit(hit)
                 self._schedule_repaint()
 
-                # Tooltip
                 if hit:
                     neighbors = self._get_neighbor_labels(hit, 3)
                     tip = f"<b>{hit.label}</b><br>Degree: {hit.degree}"
@@ -457,7 +694,7 @@ class NeuronMapWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self._dragging:
                 self._dragging = False
-                self._aa_enabled = True  # R11
+                self._aa_enabled = True
                 self._cache_dirty = True
                 self.update()
             elif self._rect_selecting:
@@ -466,23 +703,22 @@ class NeuronMapWidget(QWidget):
                 self.update()
 
     def mouseDoubleClickEvent(self, event):
-        """Double-click: reset view or open file."""
         hit = self._hit_test(event.position())
         if hit and hit.entry:
             from PyQt6.QtGui import QDesktopServices
             from PyQt6.QtCore import QUrl
             QDesktopServices.openUrl(QUrl.fromLocalFile(hit.entry))
         elif hit is None:
-            # Reset zoom/pan
             self._zoom = 1.0
             self._pan_x = 0.0
             self._pan_y = 0.0
             self._cache_dirty = True
+            self._invalidate_kdtree()
             self.update()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_0 and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            self._zoom_to_fit()
+            self._zoom_to_fit_animated()
         elif event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             self._copy_selection()
         elif event.key() == Qt.Key.Key_Left and event.modifiers() & Qt.KeyboardModifier.AltModifier:
@@ -493,10 +729,22 @@ class NeuronMapWidget(QWidget):
     # --- Hit testing ---
 
     def _hit_test(self, screen_pos: QPointF) -> Optional[Neuron]:
-        """Find neuron under screen position. O(n) for now, KD-tree in B-UI-05."""
+        """Find neuron under screen position. Uses KD-tree if available."""
         if not self._neurons:
             return None
         hit_radius = max(8, 10 * self._zoom)
+
+        # Try KD-tree first (B-UI-05)
+        if self._kdtree is None:
+            self._build_kdtree()
+
+        if self._kdtree is not None:
+            dist, idx = self._kdtree.query([screen_pos.x(), screen_pos.y()])
+            if dist < hit_radius and idx < len(self._neurons):
+                return self._neurons[idx]
+            return None
+
+        # Fallback O(n)
         best = None
         best_dist = float("inf")
         for n in self._neurons:
@@ -509,33 +757,59 @@ class NeuronMapWidget(QWidget):
                 best_dist = dist
         return best
 
+    def _hit_test_edge(self, screen_pos: QPointF) -> Optional[tuple[int, int]]:
+        """B-UI-07: Find edge near screen position."""
+        if not self._edges:
+            return None
+        hit_radius = max(6, 8 * self._zoom)
+        sx, sy = screen_pos.x(), screen_pos.y()
+        n_neurons = len(self._neurons)
+
+        for ia, ib, w in self._edges:
+            if ia >= n_neurons or ib >= n_neurons:
+                continue
+            sa = self._world_to_screen(self._neurons[ia].x, self._neurons[ia].y)
+            sb = self._world_to_screen(self._neurons[ib].x, self._neurons[ib].y)
+            # Point-to-segment distance
+            dist = self._point_to_segment_dist(sx, sy, sa.x(), sa.y(), sb.x(), sb.y())
+            if dist < hit_radius:
+                return (ia, ib)
+        return None
+
+    @staticmethod
+    def _point_to_segment_dist(px, py, ax, ay, bx, by) -> float:
+        """Distance from point (px,py) to line segment (ax,ay)-(bx,by)."""
+        dx, dy = bx - ax, by - ay
+        if dx == 0 and dy == 0:
+            return math.hypot(px - ax, py - ay)
+        t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+        proj_x = ax + t * dx
+        proj_y = ay + t * dy
+        return math.hypot(px - proj_x, py - proj_y)
+
     def _get_neighbor_labels(self, neuron: Neuron, max_n: int = 3) -> list[str]:
-        """Get labels of neighbors of a neuron."""
-        idx = self._neurons.index(neuron) if neuron in self._neurons else -1
-        if idx < 0:
+        idx = None
+        for i, n in enumerate(self._neurons):
+            if n is neuron:
+                idx = i
+                break
+        if idx is None:
             return []
-        neighbors = []
-        for ia, ib, _ in self._edges:
-            if ia == idx and ib < len(self._neurons):
-                neighbors.append(self._neurons[ib].label)
-            elif ib == idx and ia < len(self._neurons):
-                neighbors.append(self._neurons[ia].label)
-        return neighbors[:max_n]
+        neighbor_indices = self._neighbor_cache.get(idx, set())
+        labels = [self._neurons[j].label for j in neighbor_indices if j < len(self._neurons)]
+        return labels[:max_n]
 
     # --- Selection (B-UI-06) ---
 
     def _handle_neuron_click(self, neuron: Neuron, modifiers):
-        """Handle click on a neuron."""
         idx = self._neurons.index(neuron)
         if modifiers & Qt.KeyboardModifier.ShiftModifier:
-            # Multi-select
             if idx in self._selected:
                 self._selected.discard(idx)
             else:
                 self._selected.add(idx)
         else:
             if idx in self._selected and len(self._selected) == 1:
-                # Deselect
                 self._selected.clear()
                 self.neuron_deselected.emit()
             else:
@@ -547,7 +821,6 @@ class NeuronMapWidget(QWidget):
         self.update()
 
     def _select_in_rect(self):
-        """Select all neurons inside the selection rectangle."""
         r = QRectF(self._rect_start, self._rect_end).normalized()
         self._selected.clear()
         for i, n in enumerate(self._neurons):
@@ -562,8 +835,6 @@ class NeuronMapWidget(QWidget):
             self.neuron_deselected.emit()
 
     def _push_history(self):
-        """Push current selection to history stack."""
-        # Truncate forward history
         self._selection_history = self._selection_history[:self._history_pos + 1]
         self._selection_history.append(set(self._selected))
         self._history_pos = len(self._selection_history) - 1
@@ -585,7 +856,6 @@ class NeuronMapWidget(QWidget):
     # --- Clipboard (R9) ---
 
     def _copy_selection(self):
-        """Copy selected neuron names to clipboard (R9 retry loop)."""
         if not self._selected:
             return
         names = [self._neurons[i].label for i in sorted(self._selected)]
@@ -602,7 +872,7 @@ class NeuronMapWidget(QWidget):
     # --- View helpers ---
 
     def _zoom_to_fit(self):
-        """Zoom to show all neurons (Ctrl+0)."""
+        """Instant zoom to fit (used internally)."""
         if not self._neurons:
             return
         xs = [n.x for n in self._neurons]
@@ -616,10 +886,48 @@ class NeuronMapWidget(QWidget):
         self._zoom = min(self.width() / (dx * 1.2), self.height() / (dy * 1.2))
         self._zoom = max(0.1, min(20.0, self._zoom))
         self._cache_dirty = True
+        self._invalidate_kdtree()
+        self.update()
+
+    def _zoom_to_fit_animated(self):
+        """B-UI-04: Animated zoom-to-fit (300ms ease-out)."""
+        if not self._neurons:
+            return
+        xs = [n.x for n in self._neurons]
+        ys = [n.y for n in self._neurons]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        dx = max_x - min_x or 1
+        dy = max_y - min_y or 1
+
+        self._anim_start_zoom = self._zoom
+        self._anim_start_pan_x = self._pan_x
+        self._anim_start_pan_y = self._pan_y
+        self._anim_target_pan_x = (min_x + max_x) / 2
+        self._anim_target_pan_y = (min_y + max_y) / 2
+        self._anim_target_zoom = min(self.width() / (dx * 1.2), self.height() / (dy * 1.2))
+        self._anim_target_zoom = max(0.1, min(20.0, self._anim_target_zoom))
+        self._anim_progress = 0.0
+        self._anim_timer.start()
+
+    def _anim_tick(self):
+        """Tick for zoom-to-fit animation."""
+        self._anim_progress += 16.0 / (self._anim_duration * 1000)
+        if self._anim_progress >= 1.0:
+            self._anim_progress = 1.0
+            self._anim_timer.stop()
+
+        # Ease-out: t' = 1 - (1-t)^2
+        t = 1 - (1 - self._anim_progress) ** 2
+
+        self._zoom = self._anim_start_zoom + t * (self._anim_target_zoom - self._anim_start_zoom)
+        self._pan_x = self._anim_start_pan_x + t * (self._anim_target_pan_x - self._anim_start_pan_x)
+        self._pan_y = self._anim_start_pan_y + t * (self._anim_target_pan_y - self._anim_start_pan_y)
+        self._cache_dirty = True
+        self._invalidate_kdtree()
         self.update()
 
     def _clamp_pan(self):
-        """Clamp pan to bounding box + 20% margin (bug #39d)."""
         if not self._neurons:
             return
         xs = [n.x for n in self._neurons]
@@ -632,7 +940,6 @@ class NeuronMapWidget(QWidget):
         self._pan_y = max(min_y - margin_y, min(max_y + margin_y, self._pan_y))
 
     def _schedule_repaint(self):
-        """R5: throttled repaint."""
         if not self._repaint_timer.isActive():
             self._repaint_timer.start()
 
@@ -649,3 +956,7 @@ class NeuronMapWidget(QWidget):
     @property
     def zoom_level(self) -> float:
         return self._zoom
+
+    @property
+    def is_computing_layout(self) -> bool:
+        return self._layout_computing

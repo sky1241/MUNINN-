@@ -163,3 +163,57 @@ def test_highlight_paint_no_crash(qtbot):
     w.load_tree("feuillu", scan, positions=[(0.3, 0.3), (0.7, 0.7)])
     w.highlight_concept("A", secondary_ids={"B"})
     w.repaint()  # Force paint with highlights
+
+
+# --- B-UI-10: Pixmap cache ---
+
+def test_pixmap_cache_invalidated_on_load(qtbot):
+    """Background pixmap cache is invalidated on tree load (R6)."""
+    from muninn.ui.tree_view import TreeViewWidget
+    w = TreeViewWidget()
+    qtbot.addWidget(w)
+    w.resize(400, 400)
+
+    # Set a fake cache
+    w._bg_cache_size = (200, 200)
+    # Load tree => should invalidate cache
+    scan = {"nodes": [{"id": "A", "label": "A", "status": "done"}]}
+    w.load_tree("feuillu", scan, positions=[(0.5, 0.5)])
+    assert w._bg_cache_size == (0, 0)  # Cache invalidated
+    assert w._bg_cache is None
+
+
+# --- B-UI-11: Center animation ---
+
+def test_center_animation_starts(qtbot):
+    """Highlighting a concept starts center animation."""
+    from muninn.ui.tree_view import TreeViewWidget
+    w = TreeViewWidget()
+    qtbot.addWidget(w)
+    w.resize(400, 400)
+
+    scan = {"nodes": [
+        {"id": "A", "label": "Alpha"},
+        {"id": "B", "label": "Beta"},
+    ]}
+    w.load_tree("feuillu", scan, positions=[(0.2, 0.2), (0.8, 0.8)])
+    w.highlight_concept("A")
+    assert w._center_anim_timer.isActive()
+    w._center_anim_timer.stop()
+
+
+def test_cross_fade_on_highlight_change(qtbot):
+    """Cross-fade triggers when highlight changes."""
+    from muninn.ui.tree_view import TreeViewWidget
+    w = TreeViewWidget()
+    qtbot.addWidget(w)
+    w.resize(400, 400)
+
+    scan = {"nodes": [
+        {"id": "A", "label": "Alpha"},
+        {"id": "B", "label": "Beta"},
+    ]}
+    w.load_tree("feuillu", scan, positions=[(0.2, 0.2), (0.8, 0.8)])
+    w.highlight_concept("A")
+    # Opacity should start at 0.3 (fading in)
+    assert w._opacity_effect.opacity() < 1.0 or w._fade_anim.state() != 0

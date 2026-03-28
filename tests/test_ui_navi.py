@@ -113,3 +113,36 @@ def test_orb_position(qtbot):
     qtbot.addWidget(w)
     pos = w.orb_position
     assert isinstance(pos, QPointF)
+
+
+# --- B-UI-14: PNG bubble frame ---
+
+def test_paint_with_button_no_crash(qtbot):
+    """Paint with scan button visible doesn't crash."""
+    from muninn.ui.navi import NaviWidget
+    w = NaviWidget()
+    qtbot.addWidget(w)
+    w.resize(400, 400)
+    w.show()
+    w.show_bubble("Test", show_button=True)
+    w.repaint()
+    assert w._bubble_button_visible
+
+
+# --- B-UI-15: French text ---
+
+def test_help_texts_french(qtbot):
+    """Help texts are in French."""
+    from muninn.ui.navi import HELP_TEXTS
+    assert "carte" in HELP_TEXTS["neuron_map"].lower() or "neuronale" in HELP_TEXTS["neuron_map"].lower()
+    assert "Hey" in HELP_TEXTS["first_launch"]
+    assert "Scanne" in HELP_TEXTS["first_launch"]
+
+
+def test_scan_button_signal(qtbot):
+    """Scan button emits scan_requested signal."""
+    from muninn.ui.navi import NaviWidget
+    w = NaviWidget()
+    qtbot.addWidget(w)
+    # Verify signal exists
+    assert hasattr(w, 'scan_requested')

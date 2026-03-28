@@ -2,10 +2,10 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. UI: 2253 lignes, 8 fichiers. Tests: 1285 PASS (1210 engine + 75 UI), 0 FAIL.
+> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. UI: ~3000 lignes, 9 fichiers. Tests: 1305 PASS (1210 engine + 95 UI), 0 FAIL.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
-> UI: Phase 0-5 DONE — 16 briques (B-UI-00..15), PyQt6+pytest-qt, 75 tests PASS.
+> UI: Phase 0-5 DONE + AUDIT FIX — 16 briques (B-UI-00..15), PyQt6+pytest-qt, 95 tests PASS.
 
 ## Architecture
 
@@ -33,7 +33,7 @@
       |
    [wal_monitor 109L + tokenizer 43L]      -3 Racines — infrastructure
       |
-   muninn/ui/ 2253L (8 fichiers)            -4 Interface — desktop PyQt6
+   muninn/ui/ ~3000L (9 fichiers)           -4 Interface — desktop PyQt6
 ```
 
 ---
@@ -449,9 +449,9 @@ Multi-language lexicons for cube reconstruction (B15).
 
 ---
 
-## muninn/ui/ — Interface Desktop PyQt6 (2253 lignes, 8 fichiers)
+## muninn/ui/ — Interface Desktop PyQt6 (~3000 lignes, 9 fichiers)
 
-Phase 0-5 implementees (B-UI-00 a B-UI-15). 75 tests PASS.
+Phase 0-5 + audit fix. 95 tests PASS.
 
 ### __init__.py (62L) — Package + Fonts
 | Element | Lignes | Role |
@@ -479,32 +479,41 @@ Phase 0-5 implementees (B-UI-00 a B-UI-15). 75 tests PASS.
 | closeEvent | 157-165 | Cancel workers, save, accept |
 | main() | 168-219 | R7 entry: HiDPI, Fusion, excepthook, fonts |
 
-### neuron_map.py (651L) — Carte Neurones
+### neuron_map.py (~960L) — Carte Neurones
 | Element | Lignes | Role |
 |---------|--------|------|
-| Neuron dataclass | 35-55 | id, label, x, y, degree, category |
-| LEVEL_SHAPES | 60-70 | circle/diamond/triangle/square (daltonisme) |
-| load_scan() | 115-170 | Parse scan JSON, build edges, random layout |
-| paintEvent | 195-230 | Background, edges, neurons, rect overlay |
-| _paint_neurons | 235-290 | Shapes, dimming 20%, labels (elided), halos |
-| wheelEvent | 300-320 | Zoom on cursor, clamp [0.1, 20] |
-| mousePressEvent | 322-340 | Click neuron, start drag, start rect select |
-| mouseMoveEvent | 342-380 | R15 throttle 8ms, hover, tooltip riche |
-| _handle_neuron_click | 420-445 | Select, Shift+multi, deselect |
-| _select_in_rect | 447-460 | Rectangle selection |
-| _history_back/forward | 468-485 | Alt+Left/Right navigation |
-| _copy_selection | 490-500 | Ctrl+C clipboard R9 retry |
-| _zoom_to_fit | 505-520 | Ctrl+0 fit all nodes |
+| Neuron dataclass | 39-54 | id, label, x, y, degree, category |
+| DEGREE_GRADIENT + _degree_color | 77-102 | B-UI-03: cold blue -> red gradient |
+| load_scan() | 202-253 | Parse scan JSON, build edges, launch Laplacian |
+| _start_laplacian() | 307-333 | B-UI-03: QThread worker (R3, R12) |
+| _build_kdtree() | 366-381 | B-UI-05: scipy cKDTree O(log n) |
+| paintEvent | 406-420 | Background, edges, neurons, legend |
+| _paint_edges() | 430-490 | B-UI-07: bezier quadTo, LOD, frustum culling, max 5000 |
+| _paint_legend() | 530-560 | B-UI-03: degree color legend bottom-left |
+| _hit_test_edge() | 764-781 | B-UI-07: edge click detection |
+| _zoom_to_fit_animated() | 880-910 | B-UI-04: 300ms ease-out animation |
+| _anim_tick() | 912-930 | Animated zoom tick |
+| closeEvent | 197-200 | R4: cancel Laplacian + stop anim timer |
 
-### tree_view.py (328L) — Arbre Botanique
+### workers.py (~210L) — QThread Workers
 | Element | Lignes | Role |
 |---------|--------|------|
-| TreeNode | 35-50 | id, label, status, x, y, radius |
-| load_tree() | 75-120 | Load from scan + positions file |
-| paintEvent | 135-170 | Background pixmap + nodes |
-| _paint_nodes | 172-220 | Glow rings (done/wip/todo), highlight, labels |
-| highlight_concept() | 250-265 | B-UI-11 bidirectional highlight |
-| hit test + click | 230-248 | Node selection, double-click open file |
+| LaplacianWorker | 12-210 | B-UI-03: scipy eigsh spectral layout |
+| Top-N filtering | 50-67 | Degree-based, N=1000 |
+| _spring_layout | 165-198 | Fallback if eigsh fails |
+| _grid_layout | 200-210 | Fallback for disconnected graphs |
+
+### tree_view.py (~380L) — Arbre Botanique
+| Element | Lignes | Role |
+|---------|--------|------|
+| TreeNode | 38-52 | id, label, status, x, y, radius |
+| load_tree() | 95-139 | Load from scan + positions file |
+| _center_on_node() | 175-185 | B-UI-11: 200ms center animation |
+| _cross_fade() | 193-197 | B-UI-11: 200ms opacity cross-fade |
+| paintEvent | 200-240 | R6: pixmap cache + nodes |
+| _paint_nodes | 260-310 | Glow rings (done/wip/todo), highlight, labels |
+| highlight_concept() | 340-360 | B-UI-11: center anim + cross-fade |
+| hit test + click | 310-340 | Node selection, double-click open file |
 
 ### classifier.py (159L) — Auto-Classification
 | Element | Lignes | Role |
@@ -514,29 +523,31 @@ Phase 0-5 implementees (B-UI-00 a B-UI-15). 75 tests PASS.
 | classify_repo() | 68-140 | Score 6 familles, domain hints, stats hints |
 | classify_scan_file() | 143-150 | Convenience: file path -> family |
 
-### detail_panel.py (249L) — Panel Details
+### detail_panel.py (~280L) — Panel Details
 | Element | Lignes | Role |
 |---------|--------|------|
-| ClickableLabel | 18-30 | QLabel with clicked signal |
-| DetailPanel._build_ui | 50-120 | Title, status, info, neighbors, files |
-| show_empty() | 122-128 | R8 empty state |
-| show_neuron() | 130-200 | B-UI-12 basic + B-UI-13 extended info |
-| Cross-fade | 45-48 | QGraphicsOpacityEffect 200ms |
+| ClickableLabel | 24-36 | QLabel with clicked signal |
+| DetailPanel._build_ui | 66-155 | Title, status, LOC, info, zone, neighbors, files |
+| show_empty() | 157-163 | R8 empty state |
+| show_neuron() | 165-265 | B-UI-12 basic (LOC) + B-UI-13 extended (zone, last_modified) |
+| Cross-fade | 54-61 | QGraphicsOpacityEffect 200ms |
 
-### navi.py (271L) — Fee Guide Navi
+### navi.py (~300L) — Fee Guide Navi
 | Element | Lignes | Role |
 |---------|--------|------|
-| HELP_TEXTS | 25-35 | Contextual help dict (7 contexts) |
-| _reduce_motion_enabled | 38-48 | Windows SPI_GETCLIENTAREAANIMATION |
-| _tick() | 85-105 | 16ms lerp + idle float oscillation |
-| _paint_orb | 130-180 | Radial gradient glow + wings + core |
-| _paint_bubble | 182-210 | Dialogue bubble with rounded rect |
-| show_context_help | 115-125 | B-UI-15 contextual guide |
-| show_first_launch | 127-132 | "Hey! Scan a repo!" |
+| HELP_TEXTS | 29-38 | Contextual help dict (7 contexts, FRENCH) |
+| _reduce_motion_enabled | 41-51 | Windows SPI_GETCLIENTAREAANIMATION |
+| _tick() | 102-125 | 16ms lerp + idle float oscillation |
+| _paint_orb | 184-232 | Radial gradient glow + wings + core |
+| _load_bubble_frame | 234-238 | B-UI-14: lazy load PNG frame |
+| _paint_bubble | 240-290 | B-UI-14: PNG frame + B-UI-15: scan button |
+| mousePressEvent | 292-300 | B-UI-15: scan button click -> scan_requested signal |
+| show_context_help | 145-154 | B-UI-15 contextual guide |
+| show_first_launch | 156-159 | "Hey! Scanne un repo!" |
 
 ---
 
-## Tests (1285 PASS)
+## Tests (1305 PASS)
 
 ### Fichiers tests (par module)
 | Fichier | Tests | Scope |
@@ -550,5 +561,5 @@ Phase 0-5 implementees (B-UI-00 a B-UI-15). 75 tests PASS.
 | test_phase*.py (7 files) | ~120 | Phase 1-7 audit |
 | test_x*.py (2 files) | ~26 | X3-X16 bug fixes |
 | test_quarantine*.py (2 files) | ~25 | Quarantine system |
-| test_ui_*.py (7 files) | 75 | UI Phase 0-5: bootstrap, theme, window, neuron, tree, classifier, detail, navi |
+| test_ui_*.py (8 files) | 95 | UI Phase 0-5: bootstrap, theme, window, neuron(26), tree(13), classifier, detail(12), navi(14) |
 | Others | ~745 | Mycelium, feed, sync, vault, doctor, decay, etc. |
