@@ -14,7 +14,7 @@
     "root": {
       "type": "root",
       "file": "root.mn",
-      "lines": 29,
+      "lines": 28,
       "max_lines": 100,
       "children": [
         "b00",
@@ -51,7 +51,7 @@
     "b00": {
       "type": "branch",
       "file": "b00.mn",
-      "lines": 44,
+      "lines": 43,
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-28",
@@ -80,7 +80,7 @@
     "b01": {
       "type": "branch",
       "file": "b01.mn",
-      "lines": 5,
+      "lines": 4,
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-28",
@@ -107,7 +107,7 @@
     "b0002": {
       "type": "branch",
       "file": "b0002.mn",
-      "lines": 3,
+      "lines": 29,
       "max_lines": 150,
       "children": [],
       "parent": "root",
@@ -130,7 +130,7 @@
     "b03": {
       "type": "branch",
       "file": "b03.mn",
-      "lines": 6,
+      "lines": 5,
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-28",
@@ -148,7 +148,7 @@
     "b04": {
       "type": "branch",
       "file": "b04.mn",
-      "lines": 12,
+      "lines": 11,
       "max_lines": 150,
       "children": [],
       "last_access": "2026-03-28",
