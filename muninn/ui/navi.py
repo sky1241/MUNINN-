@@ -35,6 +35,8 @@ HELP_TEXTS = {
     "first_launch": "Hey! Scanne un repo pour commencer!",
     "no_data": "Pas de donnees chargees. Scanne un repo!",
     "scan_button": "Clique ici pour scanner un repo et remplir la carte.",
+    "neuron_loaded": "Repo charge! Clique un neurone pour explorer. Ctrl+F pour chercher.",
+    "no_forest": "Pas de meta-mycelium. Lance 'muninn feed' sur plusieurs repos d'abord.",
 }
 
 
