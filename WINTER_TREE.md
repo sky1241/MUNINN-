@@ -2,14 +2,15 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. Tests: 1210 PASS, 0 FAIL, 3 SKIP.
+> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. UI: 2253 lignes, 8 fichiers. Tests: 1285 PASS (1210 engine + 75 UI), 0 FAIL.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
+> UI: Phase 0-5 DONE — 16 briques (B-UI-00..15), PyQt6+pytest-qt, 75 tests PASS.
 
 ## Architecture
 
 ```
-        [1294 tests, 0 FAIL]                +5 Cime (validation)
+        [1285 tests, 0 FAIL]                +5 Cime (validation)
        /    \
     [.mn]  [.mn]                            +4 Feuilles (memoire vivante)
       |      |
@@ -31,6 +32,8 @@
      cube_analysis.py 1759L (analyse+CLI)
       |
    [wal_monitor 109L + tokenizer 43L]      -3 Racines — infrastructure
+      |
+   muninn/ui/ 2253L (8 fichiers)            -4 Interface — desktop PyQt6
 ```
 
 ---
@@ -446,7 +449,94 @@ Multi-language lexicons for cube reconstruction (B15).
 
 ---
 
-## Tests (1294 PASS)
+## muninn/ui/ — Interface Desktop PyQt6 (2253 lignes, 8 fichiers)
+
+Phase 0-5 implementees (B-UI-00 a B-UI-15). 75 tests PASS.
+
+### __init__.py (62L) — Package + Fonts
+| Element | Lignes | Role |
+|---------|--------|------|
+| _FONTS_DIR, _ASSETS_DIR... | 10-17 | Paths (PyInstaller support) |
+| load_fonts() | 32-48 | Load TTF into QFontDatabase |
+| get_font_families() | 51-62 | Verify loaded families |
+
+### theme.py (314L) — QSS Cyberpunk
+| Element | Lignes | Role |
+|---------|--------|------|
+| Color tokens | 14-30 | BG_0DP..ERROR, Material dark elevation |
+| load_theme() | 43-50 | Cached QSS string |
+| _build_qss() | 53-260 | Full QSS (minimal selectors, no border-image) |
+| get_palette() | 263-285 | QPalette for dynamic colors (avoids GDI leak) |
+
+### main_window.py (219L) — MainWindow 4 Panels
+| Element | Lignes | Role |
+|---------|--------|------|
+| PlaceholderPanel | 18-27 | Temp widget with min 200x150 |
+| MainWindow.__init__ | 30-50 | Splitters, status bar, autosave 60s |
+| _build_ui() | 52-80 | Nested QSplitters, handleWidth(6) |
+| register/cancel_worker | 100-120 | Worker registry R13 |
+| save/restore_state | 123-155 | QSettings, geometry safe R14 |
+| closeEvent | 157-165 | Cancel workers, save, accept |
+| main() | 168-219 | R7 entry: HiDPI, Fusion, excepthook, fonts |
+
+### neuron_map.py (651L) — Carte Neurones
+| Element | Lignes | Role |
+|---------|--------|------|
+| Neuron dataclass | 35-55 | id, label, x, y, degree, category |
+| LEVEL_SHAPES | 60-70 | circle/diamond/triangle/square (daltonisme) |
+| load_scan() | 115-170 | Parse scan JSON, build edges, random layout |
+| paintEvent | 195-230 | Background, edges, neurons, rect overlay |
+| _paint_neurons | 235-290 | Shapes, dimming 20%, labels (elided), halos |
+| wheelEvent | 300-320 | Zoom on cursor, clamp [0.1, 20] |
+| mousePressEvent | 322-340 | Click neuron, start drag, start rect select |
+| mouseMoveEvent | 342-380 | R15 throttle 8ms, hover, tooltip riche |
+| _handle_neuron_click | 420-445 | Select, Shift+multi, deselect |
+| _select_in_rect | 447-460 | Rectangle selection |
+| _history_back/forward | 468-485 | Alt+Left/Right navigation |
+| _copy_selection | 490-500 | Ctrl+C clipboard R9 retry |
+| _zoom_to_fit | 505-520 | Ctrl+0 fit all nodes |
+
+### tree_view.py (328L) — Arbre Botanique
+| Element | Lignes | Role |
+|---------|--------|------|
+| TreeNode | 35-50 | id, label, status, x, y, radius |
+| load_tree() | 75-120 | Load from scan + positions file |
+| paintEvent | 135-170 | Background pixmap + nodes |
+| _paint_nodes | 172-220 | Glow rings (done/wip/todo), highlight, labels |
+| highlight_concept() | 250-265 | B-UI-11 bidirectional highlight |
+| hit test + click | 230-248 | Node selection, double-click open file |
+
+### classifier.py (159L) — Auto-Classification
+| Element | Lignes | Role |
+|---------|--------|------|
+| ScanMetrics | 15-25 | concentration, depth, breadth, dispersion, external_deps |
+| extract_metrics() | 28-65 | 5 metriques depuis scan JSON |
+| classify_repo() | 68-140 | Score 6 familles, domain hints, stats hints |
+| classify_scan_file() | 143-150 | Convenience: file path -> family |
+
+### detail_panel.py (249L) — Panel Details
+| Element | Lignes | Role |
+|---------|--------|------|
+| ClickableLabel | 18-30 | QLabel with clicked signal |
+| DetailPanel._build_ui | 50-120 | Title, status, info, neighbors, files |
+| show_empty() | 122-128 | R8 empty state |
+| show_neuron() | 130-200 | B-UI-12 basic + B-UI-13 extended info |
+| Cross-fade | 45-48 | QGraphicsOpacityEffect 200ms |
+
+### navi.py (271L) — Fee Guide Navi
+| Element | Lignes | Role |
+|---------|--------|------|
+| HELP_TEXTS | 25-35 | Contextual help dict (7 contexts) |
+| _reduce_motion_enabled | 38-48 | Windows SPI_GETCLIENTAREAANIMATION |
+| _tick() | 85-105 | 16ms lerp + idle float oscillation |
+| _paint_orb | 130-180 | Radial gradient glow + wings + core |
+| _paint_bubble | 182-210 | Dialogue bubble with rounded rect |
+| show_context_help | 115-125 | B-UI-15 contextual guide |
+| show_first_launch | 127-132 | "Hey! Scan a repo!" |
+
+---
+
+## Tests (1285 PASS)
 
 ### Fichiers tests (par module)
 | Fichier | Tests | Scope |
@@ -460,4 +550,5 @@ Multi-language lexicons for cube reconstruction (B15).
 | test_phase*.py (7 files) | ~120 | Phase 1-7 audit |
 | test_x*.py (2 files) | ~26 | X3-X16 bug fixes |
 | test_quarantine*.py (2 files) | ~25 | Quarantine system |
+| test_ui_*.py (7 files) | 75 | UI Phase 0-5: bootstrap, theme, window, neuron, tree, classifier, detail, navi |
 | Others | ~745 | Mycelium, feed, sync, vault, doctor, decay, etc. |
