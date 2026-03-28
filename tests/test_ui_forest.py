@@ -44,7 +44,7 @@ class TestForestToggle:
         assert toggle._btn.text() == "FOREST"
 
     def test_fixed_height(self, toggle):
-        assert toggle.fixedHeight() == 36 or toggle.maximumHeight() == 36
+        assert toggle.maximumHeight() == 36
 
 
 class TestZoneColors:
