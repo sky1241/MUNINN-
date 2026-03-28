@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
         # Navi fairy guide (B-UI-14/15) — overlay on neuron panel
         from muninn.ui.navi import NaviWidget
         self._navi = NaviWidget(self.neuron_panel)
+        self._navi.scan_requested.connect(self._scan_folder_dialog)
         self._navi.show()
         self._navi.show_first_launch()
 
@@ -414,7 +415,7 @@ class MainWindow(QMainWindow):
         family = data.get("family", "feuillu")
         from muninn.ui.classifier import classify_repo
         if not family or family == "unknown":
-            family = classify_repo(data)
+            family = classify_repo(data).get("family", "feuillu")
 
         self.tree_panel.load_tree(family, data)
         self.status_repo.setText(data.get("name", path.stem))
