@@ -23,11 +23,11 @@ All 32 briques implemented. 9 new modules, main_window fully wired.
 | B-UI-30 | `muninn/ui/system_tray.py` | Tray icon: Show/Quit menu, double-click restore, notifications |
 | B-UI-32 | `muninn/ui/about_dialog.py` | About: version, credits, themed |
 
-**main_window.py rewritten (~430 lines):** search bar + forest toggle toolbar, command palette overlay, all extras wired (_install_extras), palette action dispatch, scan folder dialog, drag-drop.
+**main_window.py rewritten (572 lines):** search bar + forest toggle toolbar, Navi fairy overlay, command palette, all extras wired (_install_extras), forest MetaMyceliumWorker, palette action dispatch, scan folder via subprocess, drag-drop.
 
 **Tests:** 6 new test files (forest 12, search 11, shortcuts 7, command_palette 10, context_menu 12, extras 10 = 62 tests). All UI tests guarded with `pytest.importorskip("PyQt6")`.
 
-**Total: 557+ tests PASS, 0 FAIL** (UI tests skip gracefully without PyQt6).
+**Total: 152 UI tests PASS (PyQt6 6.10.2), 719+ engine tests PASS, 0 FAIL ours.**
 
 ---
 

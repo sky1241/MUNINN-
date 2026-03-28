@@ -2,10 +2,10 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. UI: ~5500 lignes, 18 fichiers. Tests: 1370+ PASS (1210 engine + 157 UI), 0 FAIL.
+> Mis a jour: 2026-03-29. Engine: 18557 lignes, 14 fichiers. UI: 4470 lignes (+5197 ref), 20 fichiers. Tests: 1370+ PASS (719 engine + 152 UI + reste), 0 FAIL ours.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
-> UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6+pytest-qt, ~157 UI tests (skip sans PyQt6).
+> UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
 
 ## Architecture
 
@@ -33,7 +33,7 @@
       |
    [wal_monitor 109L + tokenizer 43L]      -3 Racines — infrastructure
       |
-   muninn/ui/ ~5500L (18 fichiers)          -4 Interface — desktop PyQt6
+   muninn/ui/ ~4470L (18 fichiers, +5197 ref) -4 Interface — desktop PyQt6
 ```
 
 ---
@@ -449,9 +449,9 @@ Multi-language lexicons for cube reconstruction (B15).
 
 ---
 
-## muninn/ui/ — Interface Desktop PyQt6 (~5500 lignes, 18 fichiers)
+## muninn/ui/ — Interface Desktop PyQt6 (~4470 lignes + 5197 ref, 18+2 fichiers)
 
-Phase 0-9 COMPLETE. 32 briques. ~157 UI tests (skip sans PyQt6).
+Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 
 ### __init__.py (62L) — Package + Fonts
 | Element | Lignes | Role |
@@ -468,19 +468,23 @@ Phase 0-9 COMPLETE. 32 briques. ~157 UI tests (skip sans PyQt6).
 | _build_qss() | 53-260 | Full QSS (minimal selectors, no border-image) |
 | get_palette() | 263-285 | QPalette for dynamic colors (avoids GDI leak) |
 
-### main_window.py (~430L) — MainWindow Fully Wired
+### main_window.py (572L) — MainWindow Fully Wired
 | Element | Lignes | Role |
 |---------|--------|------|
-| MainWindow.__init__ | 39-57 | Splitters, status bar, autosave 60s, _install_extras |
-| _build_ui() | 58-120 | Search bar + forest toggle toolbar, command palette overlay |
-| _install_extras() | 115-155 | Shortcuts, context menus, drag-drop, search/forest wiring, tray |
-| _on_palette_action() | 175-195 | Dispatch 12 command palette actions |
-| _wire_signals() | 95-112 | All panel signals: neuron/tree/detail bidirectional |
-| _on_neuron_selected() | 200-230 | Tree highlight + detail panel + status bar |
-| register/cancel_worker | 240-260 | Worker registry R13 |
-| save/restore_state | 265-310 | QSettings, geometry safe R14 |
-| closeEvent | 305-315 | Cancel workers, save, accept |
-| main() | 320-430 | R7 entry: HiDPI, Fusion, excepthook, fonts |
+| MainWindow.__init__ | 39-59 | Splitters, status bar, autosave 60s, _install_extras |
+| _build_ui() | 61-131 | Search bar + forest toggle toolbar, Navi overlay, command palette |
+| _wire_signals() | 133-156 | All panel signals: neuron/tree/detail bidirectional |
+| _install_extras() | 158-183 | Shortcuts, context menus, drag-drop, search/forest/palette wiring, tray |
+| _on_search_changed/confirmed/cleared | 184-200 | Search -> neuron map highlight (B-UI-25) |
+| _on_mode_changed + _load_forest | 201-240 | Forest toggle -> MetaMyceliumWorker QThread (B-UI-17) |
+| _on_palette_action() | 243-268 | Dispatch 12 command palette actions |
+| _scan_folder() | 290-310 | Run muninn scan via subprocess, load results (B-UI-22) |
+| _on_neuron_selected() | 320-350 | Tree highlight + detail panel + status bar |
+| load_scan() | 400-430 | Load scan JSON + feed search bar + Navi context |
+| register/cancel_worker | 440-460 | Worker registry R13 |
+| save/restore_state | 465-510 | QSettings, geometry safe R14 |
+| closeEvent | 510-520 | Cancel workers, save, accept |
+| main() | 525-572 | R7 entry: HiDPI, Fusion, excepthook, fonts |
 
 ### neuron_map.py (~960L) — Carte Neurones
 | Element | Lignes | Role |
@@ -548,7 +552,7 @@ Phase 0-9 COMPLETE. 32 briques. ~157 UI tests (skip sans PyQt6).
 | show_context_help | 145-154 | B-UI-15 contextual guide |
 | show_first_launch | 156-159 | "Hey! Scanne un repo!" |
 
-### terminal.py (~270L) — Terminal + LLM Streaming
+### terminal.py (363L) — Terminal + LLM Streaming
 | Element | Lignes | Role |
 |---------|--------|------|
 | TerminalWidget | 20-180 | B-UI-19: QTextEdit(read-only) + QLineEdit, cmd history, /clear, /help |
