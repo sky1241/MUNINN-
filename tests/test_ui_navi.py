@@ -1,6 +1,8 @@
 """Tests for B-UI-14 + B-UI-15: Navi fairy guide."""
 
 import pytest
+
+pytest.importorskip("PyQt6", reason="PyQt6 required for UI tests")
 from PyQt6.QtCore import QPointF
 
 

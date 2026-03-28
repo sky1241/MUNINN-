@@ -1,6 +1,8 @@
 """Tests for B-UI-01: MainWindow with 4-panel layout."""
 
 import pytest
+
+pytest.importorskip("PyQt6", reason="PyQt6 required for UI tests")
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSplitter
 
@@ -113,3 +115,74 @@ def test_close_event(qtbot):
     w.show()
     w.close()
     assert not w._autosave_timer.isActive()
+
+
+# --- Signal wiring ---
+
+def test_real_widgets_wired(qtbot):
+    """Real widgets are used (not all placeholders)."""
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import NeuronMapWidget
+    from muninn.ui.tree_view import TreeViewWidget
+    from muninn.ui.detail_panel import DetailPanel
+    w = MainWindow()
+    qtbot.addWidget(w)
+    assert isinstance(w.neuron_panel, NeuronMapWidget)
+    assert isinstance(w.tree_panel, TreeViewWidget)
+    assert isinstance(w.detail_panel, DetailPanel)
+
+
+def test_neuron_select_updates_detail(qtbot):
+    """Selecting a neuron updates detail panel."""
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import Neuron
+    w = MainWindow()
+    qtbot.addWidget(w)
+    w.show()
+
+    neurons = [
+        Neuron(id="a", label="Alpha", status="done", depends=["b"]),
+        Neuron(id="b", label="Beta", status="wip"),
+    ]
+    w.neuron_panel.load_neurons(neurons)
+    w.neuron_panel._handle_neuron_click(
+        w.neuron_panel.neurons[0], Qt.KeyboardModifier.NoModifier
+    )
+    # Detail panel should show Alpha's info
+    assert w.detail_panel._title.text() == "Alpha"
+
+
+def test_neuron_select_highlights_tree(qtbot):
+    """Selecting a neuron highlights in tree (bidirectional B-UI-11)."""
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import Neuron
+    w = MainWindow()
+    qtbot.addWidget(w)
+
+    neurons = [Neuron(id="a", label="A"), Neuron(id="b", label="B")]
+    w.neuron_panel.load_neurons(neurons)
+
+    scan = {"nodes": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]}
+    w.tree_panel.load_tree("feuillu", scan, positions=[(0.3, 0.3), (0.7, 0.7)])
+
+    w.neuron_panel._handle_neuron_click(
+        w.neuron_panel.neurons[0], Qt.KeyboardModifier.NoModifier
+    )
+    assert w.tree_panel._highlighted_id == "a"
+
+
+def test_load_scan_integration(qtbot):
+    """load_scan populates both neuron map and tree."""
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui import _SCANS_DIR
+    w = MainWindow()
+    qtbot.addWidget(w)
+    w.show()
+
+    scan_file = _SCANS_DIR / "infernal-wheel.json"
+    if scan_file.exists():
+        w.load_scan(str(scan_file))
+        w.neuron_panel._cancel_laplacian()  # Cleanup thread
+        assert len(w.neuron_panel.neurons) > 0
+        assert len(w.tree_panel.nodes) > 0
+        assert w.status_repo.text() != "No repo"

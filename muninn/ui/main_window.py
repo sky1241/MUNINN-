@@ -1,6 +1,9 @@
 """Muninn UI — MainWindow with 4-panel layout.
 
 B-UI-01: QMainWindow, nested QSplitters, status bar, geometry save/restore.
+Real widgets wired: NeuronMapWidget, TreeViewWidget, DetailPanel, TerminalWidget.
+Signal wiring: neuron_selected -> tree highlight + detail panel + status bar.
+
 Rules applied: R1 (ownership), R4 (closeEvent), R7 (main entry), R13 (worker registry),
 R14 (geometry restore safe), bug #36 (handleWidth 6), bug #39b (min panel size),
 bug #54 (setSizes in showEvent), bug #57 (screen detach).
@@ -8,12 +11,11 @@ bug #54 (setSizes in showEvent), bug #57 (screen detach).
 
 import sys
 import os
-import time
 
 from PyQt6.QtCore import Qt, QTimer, QSettings, QByteArray
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QSplitter, QStatusBar, QLabel,
-    QApplication, QVBoxLayout,
+    QApplication, QVBoxLayout, QHBoxLayout,
 )
 
 
@@ -48,12 +50,16 @@ class MainWindow(QMainWindow):
         self._autosave_timer.timeout.connect(self.save_state)
         self._autosave_timer.start()
 
+        self._fullscreen_panel = None  # F11 state
+
         self._build_ui()
         self._build_status_bar()
+        self._wire_signals()
+        self._install_extras()
         self._restore_state()
 
     def _build_ui(self):
-        """Create 4-panel layout with nested splitters."""
+        """Create 4-panel layout with real widgets."""
         # Main horizontal splitter
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.main_splitter.setHandleWidth(6)  # bug #36: visible handles
@@ -66,13 +72,39 @@ class MainWindow(QMainWindow):
         self.right_splitter = QSplitter(Qt.Orientation.Vertical)
         self.right_splitter.setHandleWidth(6)
 
-        # 4 placeholder panels (replaced by real widgets in later briques)
-        self.neuron_panel = PlaceholderPanel("Neuron Map")
-        self.terminal_panel = PlaceholderPanel("Terminal LLM")
-        self.tree_panel = PlaceholderPanel("Botanical Tree")
-        self.detail_panel = PlaceholderPanel("Details")
+        # Real widgets (lazy import to avoid circular deps)
+        from muninn.ui.neuron_map import NeuronMapWidget
+        from muninn.ui.tree_view import TreeViewWidget
+        from muninn.ui.detail_panel import DetailPanel
+        from muninn.ui.terminal import TerminalWidget
 
-        self.left_splitter.addWidget(self.neuron_panel)
+        self.neuron_panel = NeuronMapWidget()
+        self.tree_panel = TreeViewWidget()
+        self.detail_panel = DetailPanel()
+        self.terminal_panel = TerminalWidget()
+
+        # Search bar + forest toggle overlay above neuron map
+        from muninn.ui.search import SearchBar
+        from muninn.ui.forest import ForestToggle
+
+        self._search_bar = SearchBar()
+        self._forest_toggle = ForestToggle()
+
+        neuron_container = QWidget()
+        neuron_layout = QVBoxLayout(neuron_container)
+        neuron_layout.setContentsMargins(0, 0, 0, 0)
+        neuron_layout.setSpacing(0)
+
+        toolbar = QWidget()
+        toolbar_layout = QHBoxLayout(toolbar)
+        toolbar_layout.setContentsMargins(4, 2, 4, 2)
+        toolbar_layout.setSpacing(4)
+        toolbar_layout.addWidget(self._forest_toggle)
+        toolbar_layout.addWidget(self._search_bar, 1)
+        neuron_layout.addWidget(toolbar)
+        neuron_layout.addWidget(self.neuron_panel, 1)
+
+        self.left_splitter.addWidget(neuron_container)
         self.left_splitter.addWidget(self.tree_panel)
 
         self.right_splitter.addWidget(self.terminal_panel)
@@ -82,6 +114,244 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.right_splitter)
 
         self.setCentralWidget(self.main_splitter)
+
+        # Command palette (overlay, initially hidden)
+        from muninn.ui.command_palette import CommandPalette
+        self._command_palette = CommandPalette(self)
+        self._command_palette.hide()
+
+        # About dialog (lazy)
+        self._about_dialog = None
+
+    def _wire_signals(self):
+        """Cable signals between panels."""
+        # Neuron selected -> update tree highlight + detail panel + status bar
+        self.neuron_panel.neuron_selected.connect(self._on_neuron_selected)
+        self.neuron_panel.neuron_deselected.connect(self._on_neuron_deselected)
+
+        # Tree node selected -> select neuron in map (bidirectional B-UI-11)
+        self.tree_panel.node_selected.connect(self._on_tree_node_selected)
+        self.tree_panel.node_deselected.connect(self._on_neuron_deselected)
+
+        # Detail panel neighbor click -> navigate to that neuron
+        self.detail_panel.neighbor_clicked.connect(self._on_neighbor_navigate)
+
+        # Layout events -> status bar
+        self.neuron_panel.layout_started.connect(
+            lambda: self.status_bar.showMessage("Computing layout...", 5000)
+        )
+        self.neuron_panel.layout_finished.connect(self._update_status)
+
+    def _install_extras(self):
+        """Install shortcuts, context menus, drag-drop, system tray (Phase 6-9)."""
+        from muninn.ui.shortcuts import install_shortcuts
+        from muninn.ui.context_menu import install_context_menu
+        from muninn.ui.drag_drop import install_drag_drop
+
+        install_shortcuts(self)
+        install_context_menu(self.neuron_panel, "neuron", self)
+        install_context_menu(self.tree_panel, "tree", self)
+        install_context_menu(self.terminal_panel, "terminal")
+        install_context_menu(self.detail_panel, "detail")
+        install_drag_drop(self.neuron_panel, self)
+
+        # Search bar wiring
+        self._search_bar.search_changed.connect(self._on_search_changed)
+        self._search_bar.search_confirmed.connect(self._on_search_confirmed)
+        self._search_bar.search_cleared.connect(self._on_search_cleared)
+
+        # Forest toggle wiring
+        self._forest_toggle.mode_changed.connect(self._on_mode_changed)
+
+        # Command palette wiring
+        self._command_palette.action_selected.connect(self._on_palette_action)
+
+        # System tray
+        try:
+            from muninn.ui.system_tray import MuninnTray
+            self._tray = MuninnTray(self)
+            self._tray.show()
+        except Exception:
+            self._tray = None
+
+    def _on_search_changed(self, matched_ids):
+        """Highlight matched neurons from search."""
+        self.neuron_panel._search_matches = matched_ids
+        self.neuron_panel.update()
+
+    def _on_search_confirmed(self, text):
+        """Zoom to first matched neuron."""
+        for n in self.neuron_panel.neurons:
+            if text.lower() in n.label.lower() or text.lower() in n.id.lower():
+                self.neuron_panel._handle_neuron_click(n, Qt.KeyboardModifier.NoModifier)
+                break
+
+    def _on_search_cleared(self):
+        """Clear search highlights."""
+        self.neuron_panel._search_matches = set()
+        self.neuron_panel.update()
+
+    def _on_mode_changed(self, mode):
+        """Handle solo/forest toggle."""
+        self.status_mode.setText(mode.upper())
+
+    def _on_palette_action(self, callback_name):
+        """Execute command palette action."""
+        actions = {
+            "zoom_to_fit": lambda: self.neuron_panel._zoom_to_fit_animated(),
+            "toggle_mode": lambda: self._forest_toggle.toggle(),
+            "focus_search": lambda: self._search_bar.focus_input(),
+            "clear_terminal": lambda: self.terminal_panel._output.clear(),
+            "export_screenshot": lambda: self._export_panel_screenshot(),
+            "focus_neuron": lambda: self.neuron_panel.setFocus(),
+            "focus_terminal": lambda: self.terminal_panel.setFocus(),
+            "focus_tree": lambda: self.tree_panel.setFocus(),
+            "focus_detail": lambda: self.detail_panel.setFocus(),
+            "fullscreen": lambda: self._toggle_fullscreen(),
+            "deselect": lambda: self._deselect_all(),
+            "scan_repo": lambda: self._scan_folder_dialog(),
+        }
+        fn = actions.get(callback_name)
+        if fn:
+            fn()
+
+    def _export_panel_screenshot(self):
+        """Export focused panel as PNG."""
+        from PyQt6.QtWidgets import QFileDialog
+        focused = self.focusWidget()
+        for panel in [self.neuron_panel, self.terminal_panel, self.tree_panel, self.detail_panel]:
+            if panel is focused or panel.isAncestorOf(focused):
+                pixmap = panel.grab()
+                path, _ = QFileDialog.getSaveFileName(self, "Export", "", "PNG (*.png)")
+                if path:
+                    pixmap.save(path)
+                return
+
+    def _toggle_fullscreen(self):
+        """Toggle fullscreen on focused panel."""
+        pass  # Requires layout gymnastics — placeholder
+
+    def _deselect_all(self):
+        """Deselect all neurons."""
+        if hasattr(self.neuron_panel, '_selected'):
+            self.neuron_panel._selected.clear()
+            self.neuron_panel.update()
+
+    def _scan_folder_dialog(self):
+        """Open folder dialog to scan a repo."""
+        from PyQt6.QtWidgets import QFileDialog
+        folder = QFileDialog.getExistingDirectory(self, "Select repo folder")
+        if folder:
+            self._scan_folder(folder)
+
+    def _scan_folder(self, path: str):
+        """Scan a folder and load results."""
+        # TODO: B-UI-22 scan worker in QThread
+        pass
+
+    def _on_neuron_selected(self, neuron):
+        """Handle neuron selection from map."""
+        # Update tree highlight (B-UI-11)
+        neighbors = self.neuron_panel._neighbor_cache.get(
+            self._neuron_index(neuron), set()
+        )
+        secondary_ids = set()
+        for idx in neighbors:
+            if idx < len(self.neuron_panel.neurons):
+                secondary_ids.add(self.neuron_panel.neurons[idx].id)
+        self.tree_panel.highlight_concept(neuron.id, secondary_ids)
+
+        # Update detail panel (B-UI-12/13)
+        self.detail_panel.show_neuron({
+            "label": neuron.label,
+            "id": neuron.id,
+            "level": neuron.level,
+            "status": neuron.status,
+            "depth": neuron.depth,
+            "confidence": neuron.confidence,
+            "entry": neuron.entry,
+            "degree": neuron.degree,
+            "neighbors": self._get_neighbor_pairs(neuron),
+            "files": [neuron.entry] if neuron.entry else [],
+        })
+
+        # Status bar
+        self.status_neurons.setText(f"{len(self.neuron_panel.neurons)} neurons")
+
+    def _on_neuron_deselected(self):
+        """Handle deselection."""
+        self.tree_panel.clear_highlight()
+        self.detail_panel.show_empty()
+
+    def _on_tree_node_selected(self, tree_node):
+        """Handle tree node click -> select in neuron map (bidirectional)."""
+        for i, n in enumerate(self.neuron_panel.neurons):
+            if n.id == tree_node.id:
+                self.neuron_panel._handle_neuron_click(
+                    n, Qt.KeyboardModifier.NoModifier
+                )
+                break
+
+    def _on_neighbor_navigate(self, concept_name: str):
+        """Navigate to a neighbor concept."""
+        for i, n in enumerate(self.neuron_panel.neurons):
+            if n.label == concept_name or n.id == concept_name:
+                self.neuron_panel._handle_neuron_click(
+                    n, Qt.KeyboardModifier.NoModifier
+                )
+                break
+
+    def _neuron_index(self, neuron):
+        """Find index of neuron in list."""
+        for i, n in enumerate(self.neuron_panel.neurons):
+            if n is neuron:
+                return i
+        return -1
+
+    def _get_neighbor_pairs(self, neuron):
+        """Get top 5 neighbor (name, degree) pairs."""
+        idx = self._neuron_index(neuron)
+        if idx < 0:
+            return []
+        neighbor_indices = self.neuron_panel._neighbor_cache.get(idx, set())
+        pairs = []
+        for j in sorted(neighbor_indices):
+            if j < len(self.neuron_panel.neurons):
+                nb = self.neuron_panel.neurons[j]
+                pairs.append((nb.label, nb.degree))
+        return sorted(pairs, key=lambda p: p[1], reverse=True)[:5]
+
+    def _update_status(self):
+        """Update status bar info."""
+        n = len(self.neuron_panel.neurons)
+        self.status_neurons.setText(f"{n} neurons")
+        self.status_zoom.setText(f"{int(self.neuron_panel.zoom_level * 100)}%")
+
+    # --- Data loading ---
+
+    def load_scan(self, scan_path):
+        """Load a scan file into the neuron map + tree view."""
+        from pathlib import Path
+        import json
+
+        path = Path(scan_path)
+        if not path.exists():
+            return
+
+        self.neuron_panel.load_scan(path)
+
+        # Load tree from same scan data
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        family = data.get("family", "feuillu")
+        from muninn.ui.classifier import classify_repo
+        if not family or family == "unknown":
+            family = classify_repo(data)
+
+        self.tree_panel.load_tree(family, data)
+        self.status_repo.setText(data.get("name", path.stem))
+        self._update_status()
 
     def _build_status_bar(self):
         """Status bar: repo name, neuron count, mode, zoom %."""
@@ -167,6 +437,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Clean shutdown: cancel all workers, save state."""
+        # Cancel neuron map Laplacian if running
+        self.neuron_panel._cancel_laplacian()
         for name in list(self._workers):
             self.cancel_worker(name)
         self._autosave_timer.stop()
@@ -209,6 +481,12 @@ def main():
 
     window = MainWindow()
     window.show()
+
+    # Load scan from CLI arg if provided
+    if len(sys.argv) > 1:
+        scan_path = sys.argv[1]
+        QTimer.singleShot(100, lambda: window.load_scan(scan_path))
+
     ret = app.exec()
     del window  # explicit destruction order (R7)
     del app

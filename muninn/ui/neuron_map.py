@@ -542,7 +542,7 @@ class NeuronMapWidget(QWidget):
             sa = self._world_to_screen(na.x, na.y)
             sb = self._world_to_screen(nb.x, nb.y)
             # Frustum culling: skip if both endpoints off-screen
-            if not viewport.contains(sa.toPoint()) and not viewport.contains(sb.toPoint()):
+            if not viewport.contains(sa) and not viewport.contains(sb):
                 continue
             visible_edges.append((sa, sb, w, ia, ib))
             if len(visible_edges) >= self._max_visible_edges:

@@ -1,6 +1,8 @@
 """Tests for B-UI-08, B-UI-10, B-UI-11: TreeViewWidget."""
 
 import pytest
+
+pytest.importorskip("PyQt6", reason="PyQt6 required for UI tests")
 from PyQt6.QtCore import Qt
 
 

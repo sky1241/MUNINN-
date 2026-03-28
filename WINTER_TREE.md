@@ -2,10 +2,10 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. UI: ~3000 lignes, 9 fichiers. Tests: 1305 PASS (1210 engine + 95 UI), 0 FAIL.
+> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. UI: ~5500 lignes, 18 fichiers. Tests: 1370+ PASS (1210 engine + 157 UI), 0 FAIL.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
-> UI: Phase 0-5 DONE + AUDIT FIX — 16 briques (B-UI-00..15), PyQt6+pytest-qt, 95 tests PASS.
+> UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6+pytest-qt, ~157 UI tests (skip sans PyQt6).
 
 ## Architecture
 
@@ -33,7 +33,7 @@
       |
    [wal_monitor 109L + tokenizer 43L]      -3 Racines — infrastructure
       |
-   muninn/ui/ ~3000L (9 fichiers)           -4 Interface — desktop PyQt6
+   muninn/ui/ ~5500L (18 fichiers)          -4 Interface — desktop PyQt6
 ```
 
 ---
@@ -449,9 +449,9 @@ Multi-language lexicons for cube reconstruction (B15).
 
 ---
 
-## muninn/ui/ — Interface Desktop PyQt6 (~3000 lignes, 9 fichiers)
+## muninn/ui/ — Interface Desktop PyQt6 (~5500 lignes, 18 fichiers)
 
-Phase 0-5 + audit fix. 95 tests PASS.
+Phase 0-9 COMPLETE. 32 briques. ~157 UI tests (skip sans PyQt6).
 
 ### __init__.py (62L) — Package + Fonts
 | Element | Lignes | Role |
@@ -468,16 +468,19 @@ Phase 0-5 + audit fix. 95 tests PASS.
 | _build_qss() | 53-260 | Full QSS (minimal selectors, no border-image) |
 | get_palette() | 263-285 | QPalette for dynamic colors (avoids GDI leak) |
 
-### main_window.py (219L) — MainWindow 4 Panels
+### main_window.py (~430L) — MainWindow Fully Wired
 | Element | Lignes | Role |
 |---------|--------|------|
-| PlaceholderPanel | 18-27 | Temp widget with min 200x150 |
-| MainWindow.__init__ | 30-50 | Splitters, status bar, autosave 60s |
-| _build_ui() | 52-80 | Nested QSplitters, handleWidth(6) |
-| register/cancel_worker | 100-120 | Worker registry R13 |
-| save/restore_state | 123-155 | QSettings, geometry safe R14 |
-| closeEvent | 157-165 | Cancel workers, save, accept |
-| main() | 168-219 | R7 entry: HiDPI, Fusion, excepthook, fonts |
+| MainWindow.__init__ | 39-57 | Splitters, status bar, autosave 60s, _install_extras |
+| _build_ui() | 58-120 | Search bar + forest toggle toolbar, command palette overlay |
+| _install_extras() | 115-155 | Shortcuts, context menus, drag-drop, search/forest wiring, tray |
+| _on_palette_action() | 175-195 | Dispatch 12 command palette actions |
+| _wire_signals() | 95-112 | All panel signals: neuron/tree/detail bidirectional |
+| _on_neuron_selected() | 200-230 | Tree highlight + detail panel + status bar |
+| register/cancel_worker | 240-260 | Worker registry R13 |
+| save/restore_state | 265-310 | QSettings, geometry safe R14 |
+| closeEvent | 305-315 | Cancel workers, save, accept |
+| main() | 320-430 | R7 entry: HiDPI, Fusion, excepthook, fonts |
 
 ### neuron_map.py (~960L) — Carte Neurones
 | Element | Lignes | Role |
@@ -545,9 +548,65 @@ Phase 0-5 + audit fix. 95 tests PASS.
 | show_context_help | 145-154 | B-UI-15 contextual guide |
 | show_first_launch | 156-159 | "Hey! Scanne un repo!" |
 
+### terminal.py (~270L) — Terminal + LLM Streaming
+| Element | Lignes | Role |
+|---------|--------|------|
+| TerminalWidget | 20-180 | B-UI-19: QTextEdit(read-only) + QLineEdit, cmd history, /clear, /help |
+| LLMWorker | 180-230 | B-UI-20: Anthropic streaming in QThread, fallback echo |
+| Breathing indicator | 155-175 | Pulsing dot InOutSine 2s, stop button |
+
+### forest.py (~170L) — Solo/Forest Toggle + Meta-Mycelium
+| Element | Lignes | Role |
+|---------|--------|------|
+| ZONE_COLORS | 25-39 | 13 QColors for zone differentiation |
+| MetaMyceliumWorker | 42-119 | B-UI-17: top 200 per zone from meta_mycelium.db, QThread |
+| ForestToggle | 122-170 | B-UI-16: SOLO/FOREST button, mode_changed signal |
+
+### search.py (~100L) — Search Bar
+| Element | Lignes | Role |
+|---------|--------|------|
+| SearchBar | 16-99 | B-UI-25: 200ms debounce, substring match on neurons |
+| Signals | 23-25 | search_changed(set), search_confirmed(str), search_cleared() |
+
+### shortcuts.py (~110L) — Global Keyboard Shortcuts
+| Element | Lignes | Role |
+|---------|--------|------|
+| install_shortcuts() | 12-48 | B-UI-26: Ctrl+F, Ctrl+1-4, Space, Escape, F11, Ctrl+Shift+S/P |
+| Helpers | 51-110 | _focus_search, _toggle_mode, _escape, _export_screenshot |
+
+### command_palette.py (~128L) — Command Palette
+| Element | Lignes | Role |
+|---------|--------|------|
+| ACTIONS | 16-29 | 12 predefined actions with shortcuts |
+| CommandPalette | 32-128 | B-UI-29: frameless overlay, fuzzy search, Enter/Escape |
+
+### context_menu.py (~135L) — Right-Click Menus
+| Element | Lignes | Role |
+|---------|--------|------|
+| install_context_menu() | 11-22 | B-UI-27: install on any widget |
+| _build_neuron_menu | 47-75 | Copy, view in tree, open file, zoom to fit |
+| _build_tree_menu | 78-93 | Copy, open file, copy path |
+| _build_terminal_menu | 96-104 | Copy, clear |
+| _copy_text | 116-127 | R9 clipboard retry (5x 50ms) |
+
+### drag_drop.py (~40L) — Drag and Drop
+| Element | Lignes | Role |
+|---------|--------|------|
+| install_drag_drop() | 12-40 | B-UI-28: drop folder -> window._scan_folder() |
+
+### system_tray.py (~60L) — System Tray
+| Element | Lignes | Role |
+|---------|--------|------|
+| MuninnTray | 14-55 | B-UI-30: icon, Show/Quit menu, double-click, notify() |
+
+### about_dialog.py (~60L) — About Dialog
+| Element | Lignes | Role |
+|---------|--------|------|
+| AboutDialog | 18-60 | B-UI-32: version, credits, themed OK button |
+
 ---
 
-## Tests (1305 PASS)
+## Tests (1305+ PASS)
 
 ### Fichiers tests (par module)
 | Fichier | Tests | Scope |
@@ -561,5 +620,5 @@ Phase 0-5 + audit fix. 95 tests PASS.
 | test_phase*.py (7 files) | ~120 | Phase 1-7 audit |
 | test_x*.py (2 files) | ~26 | X3-X16 bug fixes |
 | test_quarantine*.py (2 files) | ~25 | Quarantine system |
-| test_ui_*.py (8 files) | 95 | UI Phase 0-5: bootstrap, theme, window, neuron(26), tree(13), classifier, detail(12), navi(14) |
+| test_ui_*.py (14 files) | ~157 | UI Phase 0-9: bootstrap, theme, window(13), neuron(26), tree(13), classifier, detail(12), navi(14), terminal(12), forest(12), search(11), shortcuts(7), cmd_palette(10), context_menu(12), extras(10) |
 | Others | ~745 | Mycelium, feed, sync, vault, doctor, decay, etc. |

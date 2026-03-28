@@ -1,6 +1,8 @@
 """Tests for B-UI-12 + B-UI-13: DetailPanel."""
 
 import pytest
+
+pytest.importorskip("PyQt6", reason="PyQt6 required for UI tests")
 from PyQt6.QtCore import Qt
 
 

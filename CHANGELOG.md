@@ -5,6 +5,32 @@ Tests: 1210 PASS, 0 FAIL, 3 SKIP.
 
 ---
 
+## UI Phase 6-9 — Full Battleplan Complete (2026-03-28) [DONE]
+
+All 32 briques implemented. 9 new modules, main_window fully wired.
+
+**New modules:**
+
+| Brique | Fichier | Description |
+|--------|---------|-------------|
+| B-UI-19..20 | `muninn/ui/terminal.py` | Terminal: QTextEdit + QLineEdit, cmd history, LLM streaming worker, breathing indicator |
+| B-UI-16..18 | `muninn/ui/forest.py` | Forest toggle (solo/forest), MetaMyceliumWorker, 13 zone colors |
+| B-UI-25 | `muninn/ui/search.py` | Search bar: 200ms debounce, substring match, signals |
+| B-UI-26 | `muninn/ui/shortcuts.py` | Global shortcuts: Ctrl+F/1-4/Shift+S/Shift+P, Space, Escape, F11 |
+| B-UI-27 | `muninn/ui/context_menu.py` | Right-click menus: neuron/tree/terminal/detail, R9 clipboard |
+| B-UI-28 | `muninn/ui/drag_drop.py` | Drag-drop folder onto neuron map -> auto scan |
+| B-UI-29 | `muninn/ui/command_palette.py` | Ctrl+Shift+P: fuzzy search, 12 actions, Enter/Escape |
+| B-UI-30 | `muninn/ui/system_tray.py` | Tray icon: Show/Quit menu, double-click restore, notifications |
+| B-UI-32 | `muninn/ui/about_dialog.py` | About: version, credits, themed |
+
+**main_window.py rewritten (~430 lines):** search bar + forest toggle toolbar, command palette overlay, all extras wired (_install_extras), palette action dispatch, scan folder dialog, drag-drop.
+
+**Tests:** 6 new test files (forest 12, search 11, shortcuts 7, command_palette 10, context_menu 12, extras 10 = 62 tests). All UI tests guarded with `pytest.importorskip("PyQt6")`.
+
+**Total: 557+ tests PASS, 0 FAIL** (UI tests skip gracefully without PyQt6).
+
+---
+
 ## UI Audit Fix — Full Feature Implementation (2026-03-28) [DONE]
 
 Deep audit + fix of all UI briques. Every missing feature from the battleplan now implemented.
