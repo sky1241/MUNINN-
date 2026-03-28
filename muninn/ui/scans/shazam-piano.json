@@ -1,0 +1,390 @@
+{
+  "idea": "[scanned] shazam-piano",
+  "domain": "audio",
+  "family": "palmier",
+  "family_name": "Palmier",
+  "family_emoji": "🌴",
+  "date": "2026-02-24T23:26:19.837064",
+  "phase": "MATURE",
+  "scanned_from": "https://github.com/sky1241/shazam-piano",
+  "scale": {
+    "lines": 36061,
+    "factor": 1.7,
+    "category": "grand arbre",
+    "height_px": 532,
+    "data_mb": 60.79137420654297,
+    "density": 1.47,
+    "trunk_width": 1.47,
+    "data_category": "normal",
+    "label": "🌲 Grand Arbre (36k lignes, 60Mo data)"
+  },
+  "stats": {
+    "total_files": 350,
+    "total_code_lines": 36061,
+    "data_weight_mb": 60.8,
+    "languages": {
+      "Dart": 30208,
+      "Python": 3098,
+      "PowerShell": 932,
+      "C++": 661,
+      "CMake": 497,
+      "Shell": 306,
+      "Makefile": 118,
+      "Swift": 98,
+      "C": 90,
+      "HTML": 30,
+      "Dockerfile": 19,
+      "Kotlin": 3,
+      "Objective-C": 1
+    },
+    "biggest_file": {
+      "path": "app/lib/presentation/pages/practice/mic_engine.dart",
+      "lines": 4501,
+      "lang": "Dart"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Flutter/Dart",
+      "status": "done",
+      "entry": "pubspec.yaml",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R2",
+      "level": "R",
+      "label": "Python deps",
+      "status": "done",
+      "entry": "requirements.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R3",
+      "level": "R",
+      "label": "Python project config",
+      "status": "done",
+      "entry": "pyproject.toml",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R4",
+      "level": "R",
+      "label": "Java/Kotlin Gradle",
+      "status": "done",
+      "entry": "build.gradle",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R5",
+      "level": "R",
+      "label": "C/C++ CMake",
+      "status": "done",
+      "entry": "CMakeLists.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R6",
+      "level": "R",
+      "label": "Make build system",
+      "status": "done",
+      "entry": "Makefile",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R7",
+      "level": "R",
+      "label": "Swift/iOS",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "A1",
+      "level": "R",
+      "label": "Docker Compose (microservices)",
+      "status": "done",
+      "entry": "docker-compose.yml",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -2
+    },
+    {
+      "id": "A2",
+      "level": "R",
+      "label": "Docker containerisation",
+      "status": "done",
+      "entry": "Dockerfile",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -2
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence projet",
+      "status": "done",
+      "entry": "LICENSE",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -4
+    },
+    {
+      "id": "P2",
+      "level": "R",
+      "label": "Security policy",
+      "status": "done",
+      "entry": "SECURITY.md",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -4
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "GitHub Actions CI",
+      "status": "done",
+      "entry": ".github/workflows/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : Dart (30208 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : app/lib/presentation/pages/practice/mic_engine.dart (~4501L, Dart)",
+      "status": "done",
+      "entry": "app/lib/presentation/pages/practice/mic_engine.dart",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "app/ (127f, ~30946L, Dart, Kotlin)",
+      "status": "done",
+      "entry": "app/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b1",
+      "level": "b",
+      "label": "app/lib/ (93f, ~27120L)",
+      "status": "done",
+      "entry": "app/lib/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b2",
+      "level": "b",
+      "label": "app/test/ (14f, ~3216L)",
+      "status": "done",
+      "entry": "app/test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b3",
+      "level": "b",
+      "label": "app/windows/ (9f, ~485L)",
+      "status": "done",
+      "entry": "app/windows/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b4",
+      "level": "b",
+      "label": "app/macos/ (4f, ~79L)",
+      "status": "done",
+      "entry": "app/macos/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b5",
+      "level": "b",
+      "label": "app/ios/ (3f, ~17L)",
+      "status": "done",
+      "entry": "app/ios/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "backend/ (13f, ~3092L, Python)",
+      "status": "done",
+      "entry": "backend/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "scripts/ (12f, ~1150L, PowerShell, Shell)",
+      "status": "done",
+      "entry": "scripts/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B4",
+      "level": "B",
+      "label": "_archive_debug_sessions/ (2f, ~70L, PowerShell)",
+      "status": "done",
+      "entry": "_archive_debug_sessions/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B5",
+      "level": "B",
+      "label": "packages/ (3f, ~60L, C/C++ header, Dart)",
+      "status": "done",
+      "entry": "packages/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b6",
+      "level": "b",
+      "label": "packages/record_linux_stub/ (3f, ~60L)",
+      "status": "done",
+      "entry": "packages/record_linux_stub/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1",
+        "P2"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Pivot — architecture",
+      "ids": [
+        "A1",
+        "A2"
+      ],
+      "action": "Définir les contraintes de niveau -2",
+      "bio": "Racines verticales ~2cm depuis les latérales. Stockage eau + énergie. Souvent perdues à maturité"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tronc — LE chemin unique",
+      "ids": [
+        "T1"
+      ],
+      "action": "Construire LE pipeline unique — le protéger à tout prix",
+      "bio": "Un seul méristème. Si il meurt, le palmier meurt."
+    },
+    {
+      "phase": 4,
+      "name": "Rameaux — sous-features",
+      "ids": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5",
+        "b6"
+      ],
+      "action": "Implémenter rameaux — sous-features",
+      "bio": "Subdivisions des branches, <4 ans. Les plus flexibles, se plient au vent, premiers à casser"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

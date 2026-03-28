@@ -1,0 +1,103 @@
+{
+  "idea": "[scanned] CtrlYSV",
+  "domain": "tool_cli",
+  "family": "palmier",
+  "family_name": "Palmier",
+  "family_emoji": "🌴",
+  "date": "2026-02-15T18:14:42.050863",
+  "phase": "CROISSANCE",
+  "scanned_from": "https://github.com/sky1241/CtrlYSV",
+  "scale": {
+    "lines": 0,
+    "factor": 0.5,
+    "category": "graine",
+    "height_px": 200,
+    "data_mb": 0,
+    "density": 1.0,
+    "trunk_width": 1.0,
+    "label": "🌰 Graine (0 lignes)"
+  },
+  "stats": {
+    "total_files": 0,
+    "total_code_lines": 0,
+    "data_weight_mb": 0,
+    "languages": {},
+    "biggest_file": {
+      "path": "",
+      "lines": 0,
+      "lang": ""
+    }
+  },
+  "nodes": [
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests/CI — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence/Legal — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0,
+      "depth": -4
+    },
+    {
+      "id": "F1",
+      "level": "F",
+      "label": "README — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 3,
+      "name": "Feuilles — output riche",
+      "ids": [
+        "F1"
+      ],
+      "action": "Output riche au sommet du pipeline unique",
+      "bio": "Les palmes sont grandes et complexes — tout l'output est au sommet"
+    },
+    {
+      "phase": 4,
+      "name": "Feuilles — UI/outputs",
+      "ids": [
+        "F1"
+      ],
+      "action": "Implémenter feuilles — ui/outputs",
+      "bio": "5% de la masse totale mais produisent 100% de l'énergie via photosynthèse"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné"
+}

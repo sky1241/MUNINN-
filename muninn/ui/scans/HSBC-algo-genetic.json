@@ -1,0 +1,379 @@
+{
+  "idea": "[scanned] HSBC-algo-genetic",
+  "domain": "trading",
+  "family": "conifere",
+  "family_name": "Conifère",
+  "family_emoji": "🌲",
+  "date": "2026-02-24T23:26:21.705998",
+  "phase": "MATURE",
+  "scanned_from": "https://github.com/sky1241/HSBC-algo-genetic",
+  "scale": {
+    "lines": 310511,
+    "factor": 2.54,
+    "category": "titan",
+    "height_px": 706,
+    "data_mb": 363.10221099853516,
+    "density": 1.69,
+    "trunk_width": 1.69,
+    "data_category": "dense",
+    "label": "⛰️ Titan (310k lignes, 363Mo data)"
+  },
+  "stats": {
+    "total_files": 9960,
+    "total_code_lines": 310511,
+    "data_weight_mb": 363.1,
+    "languages": {
+      "HTML": 271552,
+      "Python": 36861,
+      "PowerShell": 2071,
+      "Batchfile": 27
+    },
+    "biggest_file": {
+      "path": "ichimoku_pipeline_web_v4_8_fixed.py",
+      "lines": 4036,
+      "lang": "Python"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Python deps",
+      "status": "done",
+      "entry": "requirements.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R2",
+      "level": "R",
+      "label": "Python package",
+      "status": "done",
+      "entry": "setup.py",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence projet",
+      "status": "done",
+      "entry": "LICENSE",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -4
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests (dossier test/)",
+      "status": "done",
+      "entry": "test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "C2",
+      "level": "C",
+      "label": "Tests (dossier tests/)",
+      "status": "done",
+      "entry": "tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : HTML (271552 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "M2",
+      "level": "R",
+      "label": "Langage secondaire : Python (36861 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : ichimoku_pipeline_web_v4_8_fixed.py (~4036L, Python)",
+      "status": "done",
+      "entry": "ichimoku_pipeline_web_v4_8_fixed.py",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "scripts/ (133f, ~20009L, PowerShell, Python)",
+      "status": "done",
+      "entry": "scripts/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b1",
+      "level": "b",
+      "label": "scripts/analysis/ (88f, ~11919L)",
+      "status": "done",
+      "entry": "scripts/analysis/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b2",
+      "level": "b",
+      "label": "scripts/production/ (21f, ~3748L)",
+      "status": "done",
+      "entry": "scripts/production/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b3",
+      "level": "b",
+      "label": "scripts/experimental/ (18f, ~3487L)",
+      "status": "done",
+      "entry": "scripts/experimental/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b4",
+      "level": "b",
+      "label": "scripts/archived/ (6f, ~855L)",
+      "status": "done",
+      "entry": "scripts/archived/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "src/ (35f, ~7705L, Python)",
+      "status": "done",
+      "entry": "src/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b5",
+      "level": "b",
+      "label": "src/spectral/ (10f, ~2554L)",
+      "status": "done",
+      "entry": "src/spectral/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b6",
+      "level": "b",
+      "label": "src/ichimoku/ (7f, ~281L)",
+      "status": "done",
+      "entry": "src/ichimoku/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "outputs/ (10f, ~2280L, Python)",
+      "status": "done",
+      "entry": "outputs/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B4",
+      "level": "B",
+      "label": "binance_bot/ (27f, ~1872L, PowerShell, Python)",
+      "status": "done",
+      "entry": "binance_bot/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b7",
+      "level": "b",
+      "label": "binance_bot/services/ (7f, ~590L)",
+      "status": "done",
+      "entry": "binance_bot/services/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b8",
+      "level": "b",
+      "label": "binance_bot/bot/ (5f, ~370L)",
+      "status": "done",
+      "entry": "binance_bot/bot/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b9",
+      "level": "b",
+      "label": "binance_bot/routines/ (3f, ~198L)",
+      "status": "done",
+      "entry": "binance_bot/routines/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b10",
+      "level": "b",
+      "label": "binance_bot/tests/ (2f, ~63L)",
+      "status": "done",
+      "entry": "binance_bot/tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B5",
+      "level": "B",
+      "label": "optimizers/ (5f, ~979L, Python)",
+      "status": "done",
+      "entry": "optimizers/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B6",
+      "level": "B",
+      "label": "tests/ (5f, ~392L, Python)",
+      "status": "done",
+      "entry": "tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B7",
+      "level": "B",
+      "label": "creation_de_la_cle/ (1f, ~45L, Python)",
+      "status": "done",
+      "entry": "creation_de_la_cle/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1",
+        "M2"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1",
+        "R2"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tronc — pipeline principal",
+      "ids": [
+        "T1"
+      ],
+      "action": "Construire le pipeline end-to-end minimal",
+      "bio": "Le leader terminal pousse en premier (contrôle apical)"
+    },
+    {
+      "phase": 3,
+      "name": "Branches — modules subordonnés",
+      "ids": [
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6",
+        "B7"
+      ],
+      "action": "Ajouter les modules UN PAR UN, toujours subordonnés au tronc",
+      "bio": "Les latérales ne dépassent jamais le leader"
+    },
+    {
+      "phase": 4,
+      "name": "Rameaux — sous-features",
+      "ids": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5",
+        "b6",
+        "b7",
+        "b8",
+        "b9",
+        "b10"
+      ],
+      "action": "Implémenter rameaux — sous-features",
+      "bio": "Subdivisions des branches, <4 ans. Les plus flexibles, se plient au vent, premiers à casser"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1",
+        "C2"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

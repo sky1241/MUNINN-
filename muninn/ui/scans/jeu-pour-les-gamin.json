@@ -1,0 +1,457 @@
+{
+  "idea": "[scanned] jeu-pour-les-gamin",
+  "domain": "mobile_app",
+  "family": "feuillu",
+  "family_name": "Feuillu",
+  "family_emoji": "🍁",
+  "date": "2026-02-24T23:26:23.477258",
+  "phase": "MATURE",
+  "scanned_from": "https://github.com/sky1241/jeu-pour-les-gamin",
+  "scale": {
+    "lines": 126781,
+    "factor": 2.15,
+    "category": "géant",
+    "height_px": 625,
+    "data_mb": 268.61095428466797,
+    "density": 1.66,
+    "trunk_width": 1.66,
+    "data_category": "dense",
+    "label": "🏔️ Géant (126k lignes, 268Mo data)"
+  },
+  "stats": {
+    "total_files": 6286,
+    "total_code_lines": 126781,
+    "data_weight_mb": 268.6,
+    "languages": {
+      "C++": 110005,
+      "Scheme": 5181,
+      "Java": 5180,
+      "Squirrel": 2127,
+      "CMake": 1537,
+      "C#": 1237,
+      "Shell": 396,
+      "Python": 364,
+      "C": 285,
+      "Perl": 187,
+      "Nix": 122,
+      "GLSL": 88,
+      "AppleScript": 39,
+      "Ruby": 23,
+      "Makefile": 7,
+      "Batchfile": 3
+    },
+    "biggest_file": {
+      "path": "src/object/player.cpp",
+      "lines": 2341,
+      "lang": "C++"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Java/Kotlin Gradle",
+      "status": "done",
+      "entry": "build.gradle",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R2",
+      "level": "R",
+      "label": "C/C++ CMake",
+      "status": "done",
+      "entry": "CMakeLists.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R3",
+      "level": "R",
+      "label": "Make build system",
+      "status": "done",
+      "entry": "Makefile",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence projet",
+      "status": "done",
+      "entry": "LICENSE",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -4
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests (dossier test/)",
+      "status": "done",
+      "entry": "test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "C2",
+      "level": "C",
+      "label": "Tests (dossier tests/)",
+      "status": "done",
+      "entry": "tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : C++ (110005 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : src/object/player.cpp (~2341L, C++)",
+      "status": "done",
+      "entry": "src/object/player.cpp",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "src/ (477f, ~75404L, C/C++ header, C++)",
+      "status": "done",
+      "entry": "src/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b1",
+      "level": "b",
+      "label": "src/object/ (95f, ~17015L)",
+      "status": "done",
+      "entry": "src/object/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b2",
+      "level": "b",
+      "label": "src/supertux/ (105f, ~16549L)",
+      "status": "done",
+      "entry": "src/supertux/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b3",
+      "level": "b",
+      "label": "src/badguy/ (66f, ~11591L)",
+      "status": "done",
+      "entry": "src/badguy/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b4",
+      "level": "b",
+      "label": "src/editor/ (25f, ~7188L)",
+      "status": "done",
+      "entry": "src/editor/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b5",
+      "level": "b",
+      "label": "src/video/ (41f, ~5300L)",
+      "status": "done",
+      "entry": "src/video/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "mk/ (14f, ~5444L, C/C++ header, Shell)",
+      "status": "done",
+      "entry": "mk/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b6",
+      "level": "b",
+      "label": "mk/android/ (11f, ~5187L)",
+      "status": "done",
+      "entry": "mk/android/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b7",
+      "level": "b",
+      "label": "mk/emscripten/ (2f, ~254L)",
+      "status": "done",
+      "entry": "mk/emscripten/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b8",
+      "level": "b",
+      "label": "mk/cppcheck/ (1f, ~3L)",
+      "status": "done",
+      "entry": "mk/cppcheck/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "tools/ (25f, ~2691L, Ruby, C#)",
+      "status": "done",
+      "entry": "tools/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b9",
+      "level": "b",
+      "label": "tools/tilemanager/ (6f, ~1234L)",
+      "status": "done",
+      "entry": "tools/tilemanager/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b10",
+      "level": "b",
+      "label": "tools/scripting_docs_gen/ (4f, ~825L)",
+      "status": "done",
+      "entry": "tools/scripting_docs_gen/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b11",
+      "level": "b",
+      "label": "tools/darwin/ (1f, ~6L)",
+      "status": "done",
+      "entry": "tools/darwin/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B4",
+      "level": "B",
+      "label": "external/ (9f, ~2036L, C/C++ header, C)",
+      "status": "done",
+      "entry": "external/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b12",
+      "level": "b",
+      "label": "external/obstack/ (2f, ~800L)",
+      "status": "done",
+      "entry": "external/obstack/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b13",
+      "level": "b",
+      "label": "external/partio_zip/ (1f, ~634L)",
+      "status": "done",
+      "entry": "external/partio_zip/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b14",
+      "level": "b",
+      "label": "external/findlocale/ (3f, ~437L)",
+      "status": "done",
+      "entry": "external/findlocale/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b15",
+      "level": "b",
+      "label": "external/SDL_SavePNG/ (3f, ~165L)",
+      "status": "done",
+      "entry": "external/SDL_SavePNG/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B5",
+      "level": "B",
+      "label": "tests/ (17f, ~816L, C++)",
+      "status": "done",
+      "entry": "tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b16",
+      "level": "b",
+      "label": "tests/unit/ (17f, ~816L)",
+      "status": "done",
+      "entry": "tests/unit/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B6",
+      "level": "B",
+      "label": "data/ (2f, ~22L, Shell)",
+      "status": "done",
+      "entry": "data/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b17",
+      "level": "b",
+      "label": "data/sounds/ (2f, ~22L)",
+      "status": "done",
+      "entry": "data/sounds/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tronc — core minimal",
+      "ids": [
+        "T1"
+      ],
+      "action": "Core minimal — il va perdre la dominance face aux branches",
+      "bio": "Le tronc du feuillu se perd parmi les branches (forme décurrente)"
+    },
+    {
+      "phase": 3,
+      "name": "Branches — modules en parallèle",
+      "ids": [
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6"
+      ],
+      "action": "Modules en parallèle — SURVEILLER la co-dominance",
+      "bio": "⚠️ Si une branche dépasse le tronc = risque de rupture"
+    },
+    {
+      "phase": 4,
+      "name": "Rameaux — sous-features",
+      "ids": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5",
+        "b6",
+        "b7",
+        "b8",
+        "b9",
+        "b10",
+        "b11",
+        "b12",
+        "b13",
+        "b14",
+        "b15",
+        "b16",
+        "b17"
+      ],
+      "action": "Implémenter rameaux — sous-features",
+      "bio": "Subdivisions des branches, <4 ans. Les plus flexibles, se plient au vent, premiers à casser"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1",
+        "C2"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

@@ -1,0 +1,33 @@
+# Positions feuillu scalees 1024x1536
+# CENTER_X=512, SOL_Y=720
+iC1      Tests / CI             x= 512  y=  78
+iC2      Release / CD           x= 433  y= 107
+iC3      Monitoring             x= 589  y= 107
+iF1      API endpoints          x= 378  y= 207
+iF2      UI composants          x= 512  y= 192
+iF3      Exports / CLI          x= 644  y= 207
+iF4      Webhooks               x= 311  y= 242
+ib1      Sub-mod 1              x= 367  y= 307
+ib2      Sub-mod 2              x= 283  y= 342
+ib3      Sub-mod 3              x= 512  y= 300
+ib4      Sub-mod 4              x= 661  y= 307
+ib5      Sub-mod 5              x= 739  y= 342
+ib6      Sub-mod 6              x= 428  y= 328
+iB1      Module A               x= 405  y= 485
+iB2      Module B               x= 305  y= 528
+iB3      Module C               x= 512  y= 471
+iB4      Module D               x= 616  y= 485
+iB5      Module E               x= 716  y= 528
+iT1      Core engine            x= 512  y= 650
+iR11     Framework web          x= 578  y= 766
+iR12     Framework data         x= 444  y= 773
+iR13     Framework test         x= 644  y= 803
+iR21     Archi DB               x= 622  y= 936
+iR22     Archi API              x= 394  y= 949
+iR31     Contrainte 1           x= 666  y=1086
+iR32     Contrainte 2           x= 355  y=1099
+iR33     Contrainte 3           x= 720  y=1111
+iR41     Licence                x= 705  y=1244
+iR42     Conformite             x= 317  y=1256
+iR51     Algorithmes            x= 742  y=1394
+iR52     Hardware               x= 283  y=1406

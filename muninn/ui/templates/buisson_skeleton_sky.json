@@ -1,0 +1,312 @@
+{
+  "family": "buisson",
+  "imgSize": [
+    1024,
+    1536
+  ],
+  "solY": 723,
+  "nodes": [
+    {
+      "id": "R-1111",
+      "x": 516,
+      "y": 768,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C121"
+    },
+    {
+      "id": "R-1112",
+      "x": 756,
+      "y": 839,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "R-1111"
+    },
+    {
+      "id": "R-2113",
+      "x": 288,
+      "y": 884,
+      "lk": "R-2",
+      "label": "Nouveau nœud",
+      "pid": "R-1111"
+    },
+    {
+      "id": "R-2114",
+      "x": 736,
+      "y": 926,
+      "lk": "R-2",
+      "label": "Nouveau nœud",
+      "pid": "R-3116"
+    },
+    {
+      "id": "R-3115",
+      "x": 194,
+      "y": 1008,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-4117"
+    },
+    {
+      "id": "R-3116",
+      "x": 782,
+      "y": 1011,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "R-4117",
+      "x": 186,
+      "y": 1115,
+      "lk": "R-4",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "R-4118",
+      "x": 818,
+      "y": 1104,
+      "lk": "R-4",
+      "label": "Nouveau nœud",
+      "pid": "R-5120"
+    },
+    {
+      "id": "R-5119",
+      "x": 220,
+      "y": 1220,
+      "lk": "R-5",
+      "label": "Nouveau nœud",
+      "pid": "R-4117"
+    },
+    {
+      "id": "R-5120",
+      "x": 835,
+      "y": 1234,
+      "lk": "R-5",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "C121",
+      "x": 519,
+      "y": 497,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": "F128"
+    },
+    {
+      "id": "C122",
+      "x": 440,
+      "y": 508,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": "C123"
+    },
+    {
+      "id": "C123",
+      "x": 336,
+      "y": 536,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": "F126"
+    },
+    {
+      "id": "C124",
+      "x": 590,
+      "y": 524,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": "C121"
+    },
+    {
+      "id": "C125",
+      "x": 736,
+      "y": 548,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": "C124"
+    },
+    {
+      "id": "F126",
+      "x": 290,
+      "y": 440,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "b131"
+    },
+    {
+      "id": "F127",
+      "x": 415,
+      "y": 404,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C122"
+    },
+    {
+      "id": "F128",
+      "x": 511,
+      "y": 401,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "F129",
+      "x": 609,
+      "y": 421,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "b133"
+    },
+    {
+      "id": "F130",
+      "x": 840,
+      "y": 446,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C125"
+    },
+    {
+      "id": "b131",
+      "x": 285,
+      "y": 311,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "B134"
+    },
+    {
+      "id": "b132",
+      "x": 525,
+      "y": 277,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F128"
+    },
+    {
+      "id": "b133",
+      "x": 655,
+      "y": 274,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "B134",
+      "x": 400,
+      "y": 110,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "B135",
+      "x": 618,
+      "y": 124,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": "b133"
+    }
+  ],
+  "connections": [
+    {
+      "from": "B134",
+      "to": "b131"
+    },
+    {
+      "from": "b131",
+      "to": "F126"
+    },
+    {
+      "from": "F126",
+      "to": "C123"
+    },
+    {
+      "from": "C122",
+      "to": "C121"
+    },
+    {
+      "from": "C124",
+      "to": "C125"
+    },
+    {
+      "from": "C125",
+      "to": "F130"
+    },
+    {
+      "from": "C124",
+      "to": "F129"
+    },
+    {
+      "from": "b133",
+      "to": "F129"
+    },
+    {
+      "from": "b133",
+      "to": "B135"
+    },
+    {
+      "from": "F128",
+      "to": "C121"
+    },
+    {
+      "from": "F128",
+      "to": "b132"
+    },
+    {
+      "from": "R-2113",
+      "to": "R-3115"
+    },
+    {
+      "from": "R-4117",
+      "to": "R-3115"
+    },
+    {
+      "from": "R-4117",
+      "to": "R-5119"
+    },
+    {
+      "from": "R-1111",
+      "to": "R-1112"
+    },
+    {
+      "from": "R-1112",
+      "to": "R-1111"
+    },
+    {
+      "from": "R-1111",
+      "to": "R-2114"
+    },
+    {
+      "from": "R-3116",
+      "to": "R-2114"
+    },
+    {
+      "from": "R-3116",
+      "to": "R-4118"
+    },
+    {
+      "from": "R-5120",
+      "to": "R-4118"
+    },
+    {
+      "from": "C123",
+      "to": "C122"
+    },
+    {
+      "from": "C121",
+      "to": "R-1111"
+    },
+    {
+      "from": "R-1111",
+      "to": "R-2113"
+    },
+    {
+      "from": "C121",
+      "to": "C124"
+    },
+    {
+      "from": "C122",
+      "to": "F127"
+    }
+  ]
+}

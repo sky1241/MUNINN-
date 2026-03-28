@@ -1,0 +1,284 @@
+{
+  "family": "baobab",
+  "imgSize": [
+    1024,
+    1536
+  ],
+  "solY": 895,
+  "nodes": [
+    {
+      "id": "R-11",
+      "x": 336,
+      "y": 957,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "R-12",
+      "x": 618,
+      "y": 960,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "R-13",
+      "x": 703,
+      "y": 997,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "R-24",
+      "x": 316,
+      "y": 1056,
+      "lk": "R-2",
+      "label": "Nouveau nœud",
+      "pid": "R-11"
+    },
+    {
+      "id": "R-25",
+      "x": 762,
+      "y": 1062,
+      "lk": "R-2",
+      "label": "Nouveau nœud",
+      "pid": "R-12"
+    },
+    {
+      "id": "R-36",
+      "x": 189,
+      "y": 1121,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-24"
+    },
+    {
+      "id": "R-37",
+      "x": 945,
+      "y": 1127,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-25"
+    },
+    {
+      "id": "R-48",
+      "x": 293,
+      "y": 1206,
+      "lk": "R-4",
+      "label": "Nouveau nœud",
+      "pid": "R-36"
+    },
+    {
+      "id": "R-49",
+      "x": 731,
+      "y": 1208,
+      "lk": "R-4",
+      "label": "Nouveau nœud",
+      "pid": "R-38"
+    },
+    {
+      "id": "R-510",
+      "x": 352,
+      "y": 1347,
+      "lk": "R-5",
+      "label": "Nouveau nœud",
+      "pid": "R-48"
+    },
+    {
+      "id": "R-511",
+      "x": 683,
+      "y": 1333,
+      "lk": "R-5",
+      "label": "Nouveau nœud",
+      "pid": "R-49"
+    },
+    {
+      "id": "C12",
+      "x": 513,
+      "y": 743,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "F13",
+      "x": 412,
+      "y": 484,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "F14",
+      "x": 595,
+      "y": 484,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "F15",
+      "x": 674,
+      "y": 563,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "b17",
+      "x": 336,
+      "y": 370,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F13"
+    },
+    {
+      "id": "b18",
+      "x": 601,
+      "y": 359,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F14"
+    },
+    {
+      "id": "b19",
+      "x": 739,
+      "y": 404,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F15"
+    },
+    {
+      "id": "B20",
+      "x": 299,
+      "y": 257,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": "b17"
+    },
+    {
+      "id": "B21",
+      "x": 674,
+      "y": 254,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": "b18"
+    },
+    {
+      "id": "T22",
+      "x": 432,
+      "y": 144,
+      "lk": "T",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "T23",
+      "x": 592,
+      "y": 144,
+      "lk": "T",
+      "label": "Nouveau nœud",
+      "pid": "C12"
+    },
+    {
+      "id": "R-38",
+      "x": 785,
+      "y": 1130,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-25"
+    }
+  ],
+  "connections": [
+    {
+      "from": "C12",
+      "to": "T22"
+    },
+    {
+      "from": "C12",
+      "to": "T23"
+    },
+    {
+      "from": "C12",
+      "to": "F13"
+    },
+    {
+      "from": "C12",
+      "to": "F14"
+    },
+    {
+      "from": "C12",
+      "to": "F15"
+    },
+    {
+      "from": "F13",
+      "to": "b17"
+    },
+    {
+      "from": "F14",
+      "to": "b18"
+    },
+    {
+      "from": "F15",
+      "to": "b19"
+    },
+    {
+      "from": "b17",
+      "to": "B20"
+    },
+    {
+      "from": "b18",
+      "to": "B21"
+    },
+    {
+      "from": "C12",
+      "to": "R-11"
+    },
+    {
+      "from": "C12",
+      "to": "R-12"
+    },
+    {
+      "from": "C12",
+      "to": "R-13"
+    },
+    {
+      "from": "R-11",
+      "to": "R-24"
+    },
+    {
+      "from": "R-12",
+      "to": "R-25"
+    },
+    {
+      "from": "R-24",
+      "to": "R-36"
+    },
+    {
+      "from": "R-25",
+      "to": "R-37"
+    },
+    {
+      "from": "R-36",
+      "to": "R-48"
+    },
+    {
+      "from": "R-48",
+      "to": "R-510"
+    },
+    {
+      "from": "R-49",
+      "to": "R-511"
+    },
+    {
+      "from": "R-25",
+      "to": "R-38"
+    },
+    {
+      "from": "R-38",
+      "to": "R-49"
+    }
+  ]
+}

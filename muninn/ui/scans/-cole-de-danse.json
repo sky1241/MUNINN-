@@ -1,0 +1,99 @@
+{
+  "idea": "[scanned] -cole-de-danse",
+  "domain": "web_app",
+  "family": "palmier",
+  "family_name": "Palmier",
+  "family_emoji": "🌴",
+  "date": "2026-02-24T23:26:24.012178",
+  "phase": "CROISSANCE",
+  "scanned_from": "https://github.com/sky1241/-cole-de-danse",
+  "scale": {
+    "lines": 1753,
+    "factor": 1.05,
+    "category": "pousse",
+    "height_px": 341,
+    "data_mb": 2.6050033569335938,
+    "density": 1.08,
+    "trunk_width": 1.08,
+    "data_category": "léger",
+    "label": "🌱 Pousse (1k lignes, 2Mo data)"
+  },
+  "stats": {
+    "total_files": 16,
+    "total_code_lines": 1753,
+    "data_weight_mb": 2.6,
+    "languages": {
+      "HTML": 1753
+    },
+    "biggest_file": {
+      "path": "",
+      "lines": 0,
+      "lang": ""
+    }
+  },
+  "nodes": [
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : HTML (1753 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests/CI — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence/Legal — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0,
+      "depth": -4
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

@@ -1,0 +1,19 @@
+# Positions palmier scalees 1024x1536
+# CENTER_X=512, SOL_Y=885
+iC1      Tests / CI             x= 512  y=  50
+iF1      API endpoints          x= 389  y= 139
+iF2      UI composants          x= 512  y= 121
+iF3      Exports / CLI          x= 635  y= 139
+iF4      Webhooks               x= 333  y= 193
+iF5      Events                 x= 691  y= 193
+iT1      Stipe unique           x= 512  y= 659
+iR11     Framework web          x= 578  y= 922
+iR12     Framework data         x= 446  y= 929
+iR21     Archi DB               x= 616  y=1049
+iR22     Archi API              x= 409  y=1058
+iR31     Contrainte 1           x= 655  y=1167
+iR32     Contrainte 2           x= 372  y=1176
+iR41     Licence                x= 689  y=1283
+iR42     Conformite             x= 339  y=1294
+iR51     Algorithmes            x= 722  y=1400
+iR52     Hardware               x= 305  y=1410

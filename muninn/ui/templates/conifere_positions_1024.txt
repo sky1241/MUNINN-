@@ -1,0 +1,30 @@
+# Positions conifere scalees 1024x1536
+# CENTER_X=512, SOL_Y=890
+iC1      Tests / CI             x= 529  y= 107
+iC2      Release / CD           x= 495  y= 118
+iF1      API endpoints          x= 561  y= 244
+iF2      UI composants          x= 464  y= 253
+iF3      Exports / CLI          x= 598  y= 298
+iB1      Module A               x= 544  y= 612
+iB2      Module B               x= 480  y= 621
+iB3      Module C               x= 572  y= 716
+iB4      Module D               x= 453  y= 725
+ib1      Sub-mod 1              x= 578  y= 406
+ib2      Sub-mod 2              x= 616  y= 460
+ib3      Sub-mod 3              x= 444  y= 415
+ib4      Sub-mod 4              x= 409  y= 468
+ib5      Sub-mod 5              x= 644  y= 522
+ib6      Sub-mod 6              x= 383  y= 532
+iT1      Core pipeline          x= 512  y= 860
+iR11     Framework web          x= 561  y= 923
+iR12     Framework data         x= 464  y= 931
+iR13     Framework test         x= 605  y= 956
+iR21     Archi DB               x= 609  y=1049
+iR22     Archi API              x= 416  y=1059
+iR31     Contrainte 1           x= 644  y=1159
+iR32     Contrainte 2           x= 383  y=1169
+iR33     Contrainte 3           x= 697  y=1178
+iR41     Licence                x= 680  y=1279
+iR42     Conformite             x= 347  y=1287
+iR51     Algorithmes            x= 716  y=1395
+iR52     Hardware               x= 309  y=1404

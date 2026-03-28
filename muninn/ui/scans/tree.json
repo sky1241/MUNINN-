@@ -1,0 +1,185 @@
+{
+  "idea": "[scanned] tree",
+  "domain": "audio",
+  "family": "buisson",
+  "family_name": "Buisson",
+  "family_emoji": "🌿",
+  "date": "2026-02-24T23:26:24.478642",
+  "phase": "CROISSANCE",
+  "scanned_from": "https://github.com/sky1241/tree",
+  "scale": {
+    "lines": 13385,
+    "factor": 1.53,
+    "category": "grand arbre",
+    "height_px": 504,
+    "data_mb": 216.1632308959961,
+    "density": 1.64,
+    "trunk_width": 1.64,
+    "data_category": "dense",
+    "label": "🌲 Grand Arbre (13k lignes, 216Mo data)"
+  },
+  "stats": {
+    "total_files": 140,
+    "total_code_lines": 13385,
+    "data_weight_mb": 216.2,
+    "languages": {
+      "Python": 7987,
+      "HTML": 5025,
+      "PowerShell": 367,
+      "Shell": 6
+    },
+    "biggest_file": {
+      "path": "scripts/engine.py",
+      "lines": 4785,
+      "lang": "Python"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Python package",
+      "status": "done",
+      "entry": "setup.py",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence projet",
+      "status": "done",
+      "entry": "LICENSE",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -4
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : Python (7987 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "M2",
+      "level": "R",
+      "label": "Langage secondaire : HTML (5025 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : scripts/engine.py (~4785L, Python)",
+      "status": "done",
+      "entry": "scripts/engine.py",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "scripts/ (7f, ~6295L, PowerShell, Python)",
+      "status": "done",
+      "entry": "scripts/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "v3/ (1f, ~272L, PowerShell)",
+      "status": "done",
+      "entry": "v3/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "hooks/ (3f, ~89L, PowerShell, Shell)",
+      "status": "done",
+      "entry": "hooks/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests/CI — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1",
+        "M2"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tiges — lancer en parallèle",
+      "ids": [
+        "B1",
+        "B2",
+        "B3"
+      ],
+      "action": "Lancer plusieurs tiges indépendantes — PAS de hiérarchie",
+      "bio": "Le buisson n'a pas de tronc dominant. Redondance = résilience."
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

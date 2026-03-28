@@ -1,0 +1,440 @@
+{
+  "idea": "[scanned] fck-translation-",
+  "domain": "mobile_app",
+  "family": "feuillu",
+  "family_name": "Feuillu",
+  "family_emoji": "🍁",
+  "date": "2026-02-24T23:26:22.634957",
+  "phase": "CROISSANCE",
+  "scanned_from": "https://github.com/sky1241/fck-translation-",
+  "scale": {
+    "lines": 6615,
+    "factor": 1.17,
+    "category": "arbre",
+    "height_px": 428,
+    "data_mb": 85.2583999633789,
+    "density": 1.55,
+    "trunk_width": 1.55,
+    "data_category": "normal",
+    "label": "🌳 Arbre (6k lignes, 85Mo data)"
+  },
+  "stats": {
+    "total_files": 284,
+    "total_code_lines": 6615,
+    "data_weight_mb": 85.3,
+    "languages": {
+      "Dart": 4134,
+      "PowerShell": 1093,
+      "C++": 629,
+      "CMake": 497,
+      "HTML": 110,
+      "Swift": 66,
+      "Kotlin": 50,
+      "C": 35,
+      "Objective-C": 1
+    },
+    "biggest_file": {
+      "path": "lib/features/chat/presentation/chat_controller.dart",
+      "lines": 514,
+      "lang": "Dart"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Flutter/Dart",
+      "status": "done",
+      "entry": "pubspec.yaml",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R2",
+      "level": "R",
+      "label": "C/C++ CMake",
+      "status": "done",
+      "entry": "CMakeLists.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R3",
+      "level": "R",
+      "label": "Swift/iOS",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests (dossier test/)",
+      "status": "done",
+      "entry": "test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "C2",
+      "level": "C",
+      "label": "GitHub Actions CI",
+      "status": "done",
+      "entry": ".github/workflows/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : Dart (4134 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "M2",
+      "level": "R",
+      "label": "Langage secondaire : PowerShell (1093 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : lib/features/chat/presentation/chat_controller.dart (~514L, Dart)",
+      "status": "done",
+      "entry": "lib/features/chat/presentation/chat_controller.dart",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "lib/ (46f, ~4499L, Dart)",
+      "status": "done",
+      "entry": "lib/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b1",
+      "level": "b",
+      "label": "lib/features/ (29f, ~3385L)",
+      "status": "done",
+      "entry": "lib/features/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b2",
+      "level": "b",
+      "label": "lib/core/ (15f, ~1013L)",
+      "status": "done",
+      "entry": "lib/core/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "tools/ (8f, ~544L, Dart, PowerShell)",
+      "status": "done",
+      "entry": "tools/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "windows/ (9f, ~485L, C/C++ header, C++)",
+      "status": "done",
+      "entry": "windows/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b3",
+      "level": "b",
+      "label": "windows/runner/ (8f, ~478L)",
+      "status": "done",
+      "entry": "windows/runner/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b4",
+      "level": "b",
+      "label": "windows/flutter/ (1f, ~7L)",
+      "status": "done",
+      "entry": "windows/flutter/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B4",
+      "level": "B",
+      "label": "scripts/ (6f, ~468L, PowerShell)",
+      "status": "done",
+      "entry": "scripts/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B5",
+      "level": "B",
+      "label": "test/ (3f, ~123L, Dart)",
+      "status": "done",
+      "entry": "test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B6",
+      "level": "B",
+      "label": "android/ (2f, ~49L, Kotlin)",
+      "status": "done",
+      "entry": "android/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b5",
+      "level": "b",
+      "label": "android/app/ (2f, ~49L)",
+      "status": "done",
+      "entry": "android/app/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B7",
+      "level": "B",
+      "label": "macos/ (4f, ~47L, Swift)",
+      "status": "done",
+      "entry": "macos/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b6",
+      "level": "b",
+      "label": "macos/Flutter/ (1f, ~24L)",
+      "status": "done",
+      "entry": "macos/Flutter/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b7",
+      "level": "b",
+      "label": "macos/Runner/ (2f, ~16L)",
+      "status": "done",
+      "entry": "macos/Runner/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b8",
+      "level": "b",
+      "label": "macos/RunnerTests/ (1f, ~7L)",
+      "status": "done",
+      "entry": "macos/RunnerTests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B8",
+      "level": "B",
+      "label": "demo/ (3f, ~42L, PowerShell)",
+      "status": "done",
+      "entry": "demo/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B9",
+      "level": "B",
+      "label": "docs/ (1f, ~32L, PowerShell)",
+      "status": "done",
+      "entry": "docs/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b9",
+      "level": "b",
+      "label": "docs/PLAYBOOK/ (1f, ~32L)",
+      "status": "done",
+      "entry": "docs/PLAYBOOK/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B10",
+      "level": "B",
+      "label": "ios/ (3f, ~17L, C/C++ header, Swift)",
+      "status": "done",
+      "entry": "ios/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b10",
+      "level": "b",
+      "label": "ios/Runner/ (2f, ~10L)",
+      "status": "done",
+      "entry": "ios/Runner/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b11",
+      "level": "b",
+      "label": "ios/RunnerTests/ (1f, ~7L)",
+      "status": "done",
+      "entry": "ios/RunnerTests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence/Legal — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0,
+      "depth": -4
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1",
+        "M2"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tronc — core minimal",
+      "ids": [
+        "T1"
+      ],
+      "action": "Core minimal — il va perdre la dominance face aux branches",
+      "bio": "Le tronc du feuillu se perd parmi les branches (forme décurrente)"
+    },
+    {
+      "phase": 3,
+      "name": "Branches — modules en parallèle",
+      "ids": [
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6",
+        "B7",
+        "B8",
+        "B9",
+        "B10"
+      ],
+      "action": "Modules en parallèle — SURVEILLER la co-dominance",
+      "bio": "⚠️ Si une branche dépasse le tronc = risque de rupture"
+    },
+    {
+      "phase": 4,
+      "name": "Rameaux — sous-features",
+      "ids": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5",
+        "b6",
+        "b7",
+        "b8",
+        "b9",
+        "b10",
+        "b11"
+      ],
+      "action": "Implémenter rameaux — sous-features",
+      "bio": "Subdivisions des branches, <4 ans. Les plus flexibles, se plient au vent, premiers à casser"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1",
+        "C2"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

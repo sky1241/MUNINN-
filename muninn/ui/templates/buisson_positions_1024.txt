@@ -1,0 +1,27 @@
+# Positions buisson scalees 1024x1536
+# CENTER_X=512, SOL_Y=730
+iC1      Tests / CI             x= 422  y=  79
+iC2      Release / CD           x= 600  y=  86
+iF1      API endpoints          x= 344  y= 187
+iF2      UI composants          x= 512  y= 180
+iF3      Exports / CLI          x= 677  y= 187
+ib1      Sub-mod 1              x= 333  y= 296
+ib2      Sub-mod 2              x= 433  y= 303
+ib3      Sub-mod 3              x= 512  y= 289
+ib4      Sub-mod 4              x= 589  y= 296
+ib5      Sub-mod 5              x= 689  y= 303
+iB1      Tige A                 x= 344  y= 499
+iB2      Tige B                 x= 439  y= 492
+iB3      Tige C                 x= 512  y= 485
+iB4      Tige D                 x= 585  y= 492
+iB5      Tige E                 x= 680  y= 499
+iR11     Dep principale         x= 512  y= 776
+iR12     Framework test         x= 622  y= 799
+iR21     Archi DB               x= 600  y= 940
+iR22     Archi API              x= 424  y= 951
+iR31     Contrainte 1           x= 639  y=1088
+iR32     Contrainte 2           x= 386  y=1099
+iR41     Licence                x= 675  y=1239
+iR42     Conformite             x= 350  y=1252
+iR51     Algorithmes            x= 711  y=1390
+iR52     Hardware               x= 313  y=1403

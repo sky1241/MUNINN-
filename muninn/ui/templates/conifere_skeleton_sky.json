@@ -1,0 +1,344 @@
+{
+  "family": "conifere",
+  "imgSize": [
+    1024,
+    1536
+  ],
+  "solY": 1073,
+  "nodes": [
+    {
+      "id": "R-124",
+      "x": 412,
+      "y": 1118,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "R-125",
+      "x": 643,
+      "y": 1121,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "R-126",
+      "x": 739,
+      "y": 1149,
+      "lk": "R-1",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "R-227",
+      "x": 307,
+      "y": 1197,
+      "lk": "R-2",
+      "label": "Nouveau nœud",
+      "pid": "R-124"
+    },
+    {
+      "id": "R-228",
+      "x": 643,
+      "y": 1203,
+      "lk": "R-2",
+      "label": "Nouveau nœud",
+      "pid": "R-125"
+    },
+    {
+      "id": "R-329",
+      "x": 208,
+      "y": 1271,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-227"
+    },
+    {
+      "id": "R-330",
+      "x": 703,
+      "y": 1273,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-228"
+    },
+    {
+      "id": "R-331",
+      "x": 866,
+      "y": 1285,
+      "lk": "R-3",
+      "label": "Nouveau nœud",
+      "pid": "R-228"
+    },
+    {
+      "id": "R-432",
+      "x": 121,
+      "y": 1350,
+      "lk": "R-4",
+      "label": "Nouveau nœud",
+      "pid": "R-329"
+    },
+    {
+      "id": "R-433",
+      "x": 883,
+      "y": 1372,
+      "lk": "R-4",
+      "label": "Nouveau nœud",
+      "pid": "R-330"
+    },
+    {
+      "id": "R-534",
+      "x": 132,
+      "y": 1437,
+      "lk": "R-5",
+      "label": "Nouveau nœud",
+      "pid": "R-432"
+    },
+    {
+      "id": "R-535",
+      "x": 787,
+      "y": 1457,
+      "lk": "R-5",
+      "label": "Nouveau nœud",
+      "pid": "R-433"
+    },
+    {
+      "id": "C36",
+      "x": 516,
+      "y": 937,
+      "lk": "C",
+      "label": "Nouveau nœud",
+      "pid": null
+    },
+    {
+      "id": "F37",
+      "x": 463,
+      "y": 737,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "F38",
+      "x": 471,
+      "y": 669,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "F39",
+      "x": 584,
+      "y": 743,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "F40",
+      "x": 587,
+      "y": 672,
+      "lk": "F",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "b42",
+      "x": 234,
+      "y": 587,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F37"
+    },
+    {
+      "id": "b43",
+      "x": 827,
+      "y": 565,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F39"
+    },
+    {
+      "id": "b44",
+      "x": 302,
+      "y": 511,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F38"
+    },
+    {
+      "id": "b45",
+      "x": 384,
+      "y": 466,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F38"
+    },
+    {
+      "id": "b46",
+      "x": 748,
+      "y": 505,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F40"
+    },
+    {
+      "id": "b47",
+      "x": 677,
+      "y": 446,
+      "lk": "b",
+      "label": "Nouveau nœud",
+      "pid": "F40"
+    },
+    {
+      "id": "B48",
+      "x": 395,
+      "y": 344,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": "b45"
+    },
+    {
+      "id": "B49",
+      "x": 612,
+      "y": 313,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": "b47"
+    },
+    {
+      "id": "B50",
+      "x": 683,
+      "y": 356,
+      "lk": "B",
+      "label": "Nouveau nœud",
+      "pid": "b43"
+    },
+    {
+      "id": "T51",
+      "x": 457,
+      "y": 144,
+      "lk": "T",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    },
+    {
+      "id": "T52",
+      "x": 564,
+      "y": 144,
+      "lk": "T",
+      "label": "Nouveau nœud",
+      "pid": "C36"
+    }
+  ],
+  "connections": [
+    {
+      "from": "C36",
+      "to": "F37"
+    },
+    {
+      "from": "C36",
+      "to": "F38"
+    },
+    {
+      "from": "C36",
+      "to": "F39"
+    },
+    {
+      "from": "C36",
+      "to": "F40"
+    },
+    {
+      "from": "C36",
+      "to": "T51"
+    },
+    {
+      "from": "C36",
+      "to": "T52"
+    },
+    {
+      "from": "F37",
+      "to": "b42"
+    },
+    {
+      "from": "F38",
+      "to": "b44"
+    },
+    {
+      "from": "F38",
+      "to": "b45"
+    },
+    {
+      "from": "F39",
+      "to": "b43"
+    },
+    {
+      "from": "F40",
+      "to": "b46"
+    },
+    {
+      "from": "F40",
+      "to": "b47"
+    },
+    {
+      "from": "b45",
+      "to": "B48"
+    },
+    {
+      "from": "b47",
+      "to": "B49"
+    },
+    {
+      "from": "b43",
+      "to": "B50"
+    },
+    {
+      "from": "C36",
+      "to": "R-124"
+    },
+    {
+      "from": "C36",
+      "to": "R-125"
+    },
+    {
+      "from": "C36",
+      "to": "R-126"
+    },
+    {
+      "from": "R-124",
+      "to": "R-227"
+    },
+    {
+      "from": "R-125",
+      "to": "R-228"
+    },
+    {
+      "from": "R-228",
+      "to": "R-331"
+    },
+    {
+      "from": "R-227",
+      "to": "R-329"
+    },
+    {
+      "from": "R-228",
+      "to": "R-330"
+    },
+    {
+      "from": "R-329",
+      "to": "R-432"
+    },
+    {
+      "from": "R-330",
+      "to": "R-433"
+    },
+    {
+      "from": "R-432",
+      "to": "R-534"
+    },
+    {
+      "from": "R-433",
+      "to": "R-535"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+# Positions liane scalees 1024x1536
+# CENTER_X=512, SOL_Y=815
+iC1      Tests / CI             x= 512  y=  82
+iC2      Release / CD           x= 478  y= 107
+iF1      API endpoints          x= 444  y= 221
+iF2      UI composants          x= 578  y= 230
+iF3      Exports / CLI          x= 400  y= 271
+ib1      Vrille 1               x= 461  y= 369
+ib2      Vrille 2               x= 561  y= 377
+ib3      Vrille 3               x= 422  y= 426
+iB1      Fork A                 x= 478  y= 565
+iB2      Fork B                 x= 544  y= 573
+iT1      Tige principale        x= 512  y= 754
+iR11     Framework web          x= 555  y= 868
+iR12     Framework data         x= 469  y= 875
+iR21     Archi DB               x= 589  y=1012
+iR22     Archi API              x= 439  y=1022
+iR31     Contrainte 1           x= 622  y=1141
+iR32     Contrainte 2           x= 405  y=1151
+iR41     Licence                x= 655  y=1275
+iR42     Conformite             x= 372  y=1285
+iR51     Algorithmes            x= 689  y=1404
+iR52     Hardware               x= 339  y=1414

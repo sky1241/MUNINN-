@@ -1,0 +1,25 @@
+# Positions baobab scalees 1024x1536
+# CENTER_X=512, SOL_Y=930
+iC1      Tests / CI             x= 512  y=  78
+iC2      Release / CD           x= 489  y=  97
+iF1      API endpoints          x= 555  y= 153
+iF2      UI composants          x= 466  y= 163
+ib1      Sub-mod 1              x= 550  y= 220
+ib2      Sub-mod 2              x= 475  y= 229
+ib3      Sub-mod 3              x= 589  y= 248
+iB1      Module A               x= 544  y= 305
+iB2      Module B               x= 480  y= 314
+iB3      Module C               x= 583  y= 352
+iT1      Core engine            x= 512  y= 654
+iR11     Framework web          x= 589  y= 966
+iR12     Framework data         x= 435  y= 972
+iR13     Framework test         x= 631  y= 989
+iR21     Archi DB               x= 639  y=1076
+iR22     Archi API              x= 389  y=1085
+iR31     Contrainte 1           x= 683  y=1186
+iR32     Contrainte 2           x= 344  y=1194
+iR33     Contrainte 3           x= 727  y=1204
+iR41     Licence                x= 722  y=1296
+iR42     Conformite             x= 298  y=1306
+iR51     Algorithmes            x= 761  y=1403
+iR52     Hardware               x= 261  y=1412

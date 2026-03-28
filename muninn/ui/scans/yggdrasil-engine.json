@@ -1,0 +1,290 @@
+{
+  "idea": "[scanned] yggdrasil-engine",
+  "domain": "audio",
+  "family": "conifere",
+  "family_name": "Conifère",
+  "family_emoji": "🌲",
+  "date": "2026-02-24T23:26:19.228931",
+  "phase": "MATURE",
+  "scanned_from": "https://github.com/sky1241/yggdrasil-engine",
+  "scale": {
+    "lines": 92209,
+    "factor": 2.08,
+    "category": "géant",
+    "height_px": 614,
+    "data_mb": 3.3311386108398438,
+    "density": 1.1,
+    "trunk_width": 1.1,
+    "data_category": "léger",
+    "label": "🏔️ Géant (92k lignes, 3Mo data)"
+  },
+  "stats": {
+    "total_files": 251,
+    "total_code_lines": 92209,
+    "data_weight_mb": 3.3,
+    "languages": {
+      "HTML": 67177,
+      "Python": 25014,
+      "PowerShell": 10,
+      "Shell": 8
+    },
+    "biggest_file": {
+      "path": "viz/three.min.js",
+      "lines": 15086,
+      "lang": "JavaScript"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Python deps",
+      "status": "done",
+      "entry": "requirements.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence projet",
+      "status": "done",
+      "entry": "LICENSE",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -4
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests (dossier test/)",
+      "status": "done",
+      "entry": "test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "C2",
+      "level": "C",
+      "label": "Tests (dossier tests/)",
+      "status": "done",
+      "entry": "tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : HTML (67177 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "M2",
+      "level": "R",
+      "label": "Langage secondaire : Python (25014 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : viz/three.min.js (~15086L, JavaScript)",
+      "status": "done",
+      "entry": "viz/three.min.js",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "engine/ (40f, ~21786L, Python)",
+      "status": "done",
+      "entry": "engine/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b1",
+      "level": "b",
+      "label": "engine/pipeline/ (7f, ~10554L)",
+      "status": "done",
+      "entry": "engine/pipeline/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b2",
+      "level": "b",
+      "label": "engine/topology/ (9f, ~3102L)",
+      "status": "done",
+      "entry": "engine/topology/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b3",
+      "level": "b",
+      "label": "engine/mining/ (4f, ~2334L)",
+      "status": "done",
+      "entry": "engine/mining/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b4",
+      "level": "b",
+      "label": "engine/analysis/ (8f, ~2296L)",
+      "status": "done",
+      "entry": "engine/analysis/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b5",
+      "level": "b",
+      "label": "engine/vizgen/ (5f, ~2133L)",
+      "status": "done",
+      "entry": "engine/vizgen/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "viz/ (1f, ~15086L, JavaScript)",
+      "status": "done",
+      "entry": "viz/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "tests/ (4f, ~1934L, Python)",
+      "status": "done",
+      "entry": "tests/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B4",
+      "level": "B",
+      "label": "blind_test/ (6f, ~1094L, Python)",
+      "status": "done",
+      "entry": "blind_test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B5",
+      "level": "B",
+      "label": "hooks/ (2f, ~18L, PowerShell, Shell)",
+      "status": "done",
+      "entry": "hooks/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1",
+        "M2"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tronc — pipeline principal",
+      "ids": [
+        "T1"
+      ],
+      "action": "Construire le pipeline end-to-end minimal",
+      "bio": "Le leader terminal pousse en premier (contrôle apical)"
+    },
+    {
+      "phase": 3,
+      "name": "Branches — modules subordonnés",
+      "ids": [
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5"
+      ],
+      "action": "Ajouter les modules UN PAR UN, toujours subordonnés au tronc",
+      "bio": "Les latérales ne dépassent jamais le leader"
+    },
+    {
+      "phase": 4,
+      "name": "Rameaux — sous-features",
+      "ids": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5"
+      ],
+      "action": "Implémenter rameaux — sous-features",
+      "bio": "Subdivisions des branches, <4 ans. Les plus flexibles, se plient au vent, premiers à casser"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1",
+        "C2"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}

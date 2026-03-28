@@ -1,0 +1,320 @@
+{
+  "idea": "[scanned] infernal-wheel",
+  "domain": "audio",
+  "family": "feuillu",
+  "family_name": "Feuillu",
+  "family_emoji": "🍁",
+  "date": "2026-02-24T23:26:20.389036",
+  "phase": "CROISSANCE",
+  "scanned_from": "https://github.com/sky1241/infernal-wheel",
+  "scale": {
+    "lines": 22396,
+    "factor": 1.59,
+    "category": "grand arbre",
+    "height_px": 515,
+    "data_mb": 2.012847900390625,
+    "density": 1.06,
+    "trunk_width": 1.06,
+    "data_category": "léger",
+    "label": "🌲 Grand Arbre (22k lignes, 2Mo data)"
+  },
+  "stats": {
+    "total_files": 253,
+    "total_code_lines": 22396,
+    "data_weight_mb": 2.0,
+    "languages": {
+      "PowerShell": 11409,
+      "Dart": 4765,
+      "Python": 1971,
+      "Kotlin": 1955,
+      "Swift": 1240,
+      "C++": 483,
+      "Monkey C": 263,
+      "CMake": 262,
+      "HTML": 30,
+      "C": 18
+    },
+    "biggest_file": {
+      "path": "hellwell/dashboard/Dashboard.Page.ps1",
+      "lines": 4792,
+      "lang": "PowerShell"
+    }
+  },
+  "nodes": [
+    {
+      "id": "R1",
+      "level": "R",
+      "label": "Flutter/Dart",
+      "status": "done",
+      "entry": "pubspec.yaml",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R2",
+      "level": "R",
+      "label": "C/C++ CMake",
+      "status": "done",
+      "entry": "CMakeLists.txt",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "R3",
+      "level": "R",
+      "label": "Swift/iOS",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -1
+    },
+    {
+      "id": "M1",
+      "level": "R",
+      "label": "Langage principal : PowerShell (11409 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "M2",
+      "level": "R",
+      "label": "Langage secondaire : Dart (4765 lignes)",
+      "status": "done",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 80,
+      "depth": -5
+    },
+    {
+      "id": "T1",
+      "level": "T",
+      "label": "Core : hellwell/dashboard/Dashboard.Page.ps1 (~4792L, PowerShell)",
+      "status": "done",
+      "entry": "hellwell/dashboard/Dashboard.Page.ps1",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B1",
+      "level": "B",
+      "label": "hellwell/ (8f, ~11088L, PowerShell)",
+      "status": "done",
+      "entry": "hellwell/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b1",
+      "level": "b",
+      "label": "hellwell/dashboard/ (2f, ~6300L)",
+      "status": "done",
+      "entry": "hellwell/dashboard/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b2",
+      "level": "b",
+      "label": "hellwell/engine/ (1f, ~373L)",
+      "status": "done",
+      "entry": "hellwell/engine/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B2",
+      "level": "B",
+      "label": "infernal-app/ (43f, ~5234L, C/C++ header, Dart)",
+      "status": "done",
+      "entry": "infernal-app/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b3",
+      "level": "b",
+      "label": "infernal-app/lib/ (33f, ~4723L)",
+      "status": "done",
+      "entry": "infernal-app/lib/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b4",
+      "level": "b",
+      "label": "infernal-app/windows/ (9f, ~485L)",
+      "status": "done",
+      "entry": "infernal-app/windows/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b5",
+      "level": "b",
+      "label": "infernal-app/test/ (1f, ~26L)",
+      "status": "done",
+      "entry": "infernal-app/test/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B3",
+      "level": "B",
+      "label": "trilateration/ (22f, ~5160L, Python, Swift)",
+      "status": "done",
+      "entry": "trilateration/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b6",
+      "level": "b",
+      "label": "trilateration/wear-os-app/ (9f, ~1953L)",
+      "status": "done",
+      "entry": "trilateration/wear-os-app/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "b7",
+      "level": "b",
+      "label": "trilateration/apple-watch-app/ (7f, ~1237L)",
+      "status": "done",
+      "entry": "trilateration/apple-watch-app/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "B4",
+      "level": "B",
+      "label": "infernal-migration/ (1f, ~142L, PowerShell)",
+      "status": "done",
+      "entry": "infernal-migration/",
+      "depends": [],
+      "desc": "",
+      "confidence": 80
+    },
+    {
+      "id": "C1",
+      "level": "C",
+      "label": "Tests/CI — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0
+    },
+    {
+      "id": "P1",
+      "level": "R",
+      "label": "Licence/Legal — ABSENT",
+      "status": "todo",
+      "entry": "~",
+      "depends": [],
+      "desc": "",
+      "confidence": 0,
+      "depth": -4
+    }
+  ],
+  "build_order": [
+    {
+      "phase": 0,
+      "name": "Mycorhizes — lois physiques",
+      "ids": [
+        "M1",
+        "M2"
+      ],
+      "action": "Identifier les lois physiques/math immuables du projet",
+      "bio": "Sans mycorhizes, rien ne pousse. Sans comprendre les lois, rien ne marche."
+    },
+    {
+      "phase": 1,
+      "name": "Poils — contraintes légales",
+      "ids": [
+        "P1"
+      ],
+      "action": "Définir les contraintes de niveau -4",
+      "bio": "Extensions microscopiques de l'épiderme. Cuticule très fine. Filtrent TOUT ce qui entre"
+    },
+    {
+      "phase": 1,
+      "name": "Structurelles — stack technique",
+      "ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "action": "Définir les contraintes de niveau -1",
+      "bio": "5-15 racines principales, jusqu'à 30cm diamètre. Spread = 2-4x couronne. 80-90% dans top 60cm"
+    },
+    {
+      "phase": 2,
+      "name": "Tronc — core minimal",
+      "ids": [
+        "T1"
+      ],
+      "action": "Core minimal — il va perdre la dominance face aux branches",
+      "bio": "Le tronc du feuillu se perd parmi les branches (forme décurrente)"
+    },
+    {
+      "phase": 3,
+      "name": "Branches — modules en parallèle",
+      "ids": [
+        "B1",
+        "B2",
+        "B3",
+        "B4"
+      ],
+      "action": "Modules en parallèle — SURVEILLER la co-dominance",
+      "bio": "⚠️ Si une branche dépasse le tronc = risque de rupture"
+    },
+    {
+      "phase": 4,
+      "name": "Rameaux — sous-features",
+      "ids": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5",
+        "b6",
+        "b7"
+      ],
+      "action": "Implémenter rameaux — sous-features",
+      "bio": "Subdivisions des branches, <4 ans. Les plus flexibles, se plient au vent, premiers à casser"
+    },
+    {
+      "phase": 5,
+      "name": "Cime — tests et déploiement",
+      "ids": [
+        "C1"
+      ],
+      "action": "Implémenter cime — tests et déploiement",
+      "bio": "Bourgeons terminaux, méristèmes apicaux — produisent les auxines qui contrôlent TOUTE la croissance"
+    }
+  ],
+  "next_step": "Vérifier l'arbre scanné",
+  "scan_method": "github_api"
+}
