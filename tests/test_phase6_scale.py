@@ -217,7 +217,8 @@ class TestP8NCDCap:
     def test_sleep_consolidate_cap(self):
         """P8: _sleep_consolidate has MAX_NCD_BRANCHES cap."""
         import muninn
-        src = Path(muninn.__file__).read_text(encoding="utf-8")
+        _mdir = Path(muninn.__file__).parent
+        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         assert "MAX_NCD_BRANCHES" in src
         assert "20" in src  # Cap value
 

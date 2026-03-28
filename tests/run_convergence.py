@@ -45,7 +45,7 @@ def run_convergence(file_path, lang, provider, max_cycles=5):
     db_path = os.path.join(tmp, "cube_conv.db")
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
-    cubes = subdivide_file(content=content, file_path=file_path, target_tokens=88)
+    cubes = subdivide_file(content=content, file_path=file_path, target_tokens=112)
     store = CubeStore(db_path)
     for cube in cubes:
         store.save_cube(cube)

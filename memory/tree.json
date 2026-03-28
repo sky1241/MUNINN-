@@ -89,7 +89,24 @@
       ],
       "hash": "26ea5cb4",
       "temperature": 0.8
+    },
+    "b0002": {
+      "type": "branch",
+      "file": "b0002.mn",
+      "lines": 3,
+      "max_lines": 150,
+      "children": [],
+      "parent": "root",
+      "tags": [
+        "live_inject",
+        "injection"
+      ],
+      "access_count": 1,
+      "last_access": "2026-03-28",
+      "usefulness": 1.0,
+      "temperature": 0.8,
+      "hash": "a441f8d6"
     }
   },
-  "updated": "2026-03-16"
+  "updated": "2026-03-28"
 }

@@ -156,9 +156,13 @@ def test_x6_1_saturation_float_not_int():
 
 def test_x7_1_feed_progress_order():
     """Verify feed progress code writes save() BEFORE progress file (source inspection)."""
-    muninn_path = os.path.join(os.path.dirname(__file__), "..", "engine", "core", "muninn.py")
-    with open(muninn_path, encoding="utf-8") as f:
-        source = f.read()
+    muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
+    source = ""
+    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+        _mp = os.path.join(muninn_dir, _mf)
+        if os.path.exists(_mp):
+            with open(_mp, encoding="utf-8") as f:
+                source += f.read() + "\n"
 
     # Find the checkpoint block: FEED_CHUNK_SIZE ... m.save() ... _atomic_json_write
     lines = source.split('\n')

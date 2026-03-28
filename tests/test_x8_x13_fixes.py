@@ -43,9 +43,13 @@ def test_x8_1_migrate_returns_closeable():
 
 def test_x9_1_access_count_max_not_sum():
     """Consolidated branch access_count uses max(members), not sum."""
-    muninn_path = os.path.join(os.path.dirname(__file__), "..", "engine", "core", "muninn.py")
-    with open(muninn_path, encoding="utf-8") as f:
-        source = f.read()
+    muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
+    source = ""
+    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+        _mp = os.path.join(muninn_dir, _mf)
+        if os.path.exists(_mp):
+            with open(_mp, encoding="utf-8") as f:
+                source += f.read() + "\n"
 
     # Find the consolidation code
     assert 'max(nodes.get(m, {}).get("access_count"' in source, \
@@ -78,9 +82,13 @@ def test_x11_1_in_order_to_compressed():
 
 def test_x11_2_l3_before_l2_in_source():
     """L3 appears before L2 in source code."""
-    muninn_path = os.path.join(os.path.dirname(__file__), "..", "engine", "core", "muninn.py")
-    with open(muninn_path, encoding="utf-8") as f:
-        lines = f.readlines()
+    muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
+    lines = []
+    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+        _mp = os.path.join(muninn_dir, _mf)
+        if os.path.exists(_mp):
+            with open(_mp, encoding="utf-8") as f:
+                lines.extend(f.readlines())
 
     l3_line = None
     l2_line = None
@@ -116,9 +124,13 @@ def test_x12_2_bearer_matches_real_token():
 def test_x13_1_hex_no_false_positive():
     """Hex pattern does NOT match normal words like 'cafe' or 'facade'."""
     # Check _NOVEL_PATTERNS in muninn.py
-    muninn_path = os.path.join(os.path.dirname(__file__), "..", "engine", "core", "muninn.py")
-    with open(muninn_path, encoding="utf-8") as f:
-        source = f.read()
+    muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
+    source = ""
+    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+        _mp = os.path.join(muninn_dir, _mf)
+        if os.path.exists(_mp):
+            with open(_mp, encoding="utf-8") as f:
+                source += f.read() + "\n"
 
     # Find the hex pattern line
     match = re.search(r"re\.compile\(r'(.*?[a-f0-9].*?7,40.*?)'\)", source)

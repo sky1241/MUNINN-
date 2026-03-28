@@ -44,3 +44,17 @@ include = ["engine*"]
 
 [tool.setuptools.package-data]
 "engine.core" = ["*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "phase: Debug audit phases (phase1-phase4)",
+    "tier: Architecture tiers (tier1-tier3)",
+    "cube: Cube engine bricks (b1-b39)",
+    "scanner: Code scanners and analysis",
+    "audit: Audit and hardening tests",
+    "slow: Tests that hit external APIs or take >10s",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

@@ -76,6 +76,8 @@ class Mycelium:
         self._high_degree_cache = None  # Cached high-degree concepts (reset on save)
         self._adj_cache = None  # Cached adjacency list {concept: [(neighbor, weight)]}
         self._adj_cache_max_weight = 0.0  # max edge weight for normalization
+        self._session_seen = set()  # Delta observe: skip already-upserted pairs
+        self._congestion_checked = False  # Congestion detection flag
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -107,7 +109,8 @@ class Mycelium:
                         self.db_path.unlink()
                     except PermissionError:
                         pass  # Windows: file locked, skip cleanup
-            except Exception:
+            except (sqlite3.Error, OSError) as e:
+                print(f"WARNING: mycelium DB check failed: {e}", file=sys.stderr)
                 if not self.mycelium_path.exists():
                     return self._load_from_sqlite()
                 try:
@@ -120,7 +123,7 @@ class Mycelium:
             try:
                 self._migrate_json_to_sqlite()
                 return self._load_from_sqlite()
-            except Exception as e:
+            except (sqlite3.Error, OSError, json.JSONDecodeError, ValueError) as e:
                 print(f"WARNING: SQLite migration failed, falling back to JSON: {e}",
                       file=sys.stderr)
                 # Fallback: load JSON directly
@@ -152,7 +155,7 @@ class Mycelium:
         """
         try:
             self._db = MyceliumDB(self.db_path)
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             print(f"WARNING: corrupted mycelium DB, recreating: {e}", file=sys.stderr)
             try:
                 self.db_path.unlink(missing_ok=True)
@@ -196,64 +199,61 @@ class Mycelium:
             if ConceptTranslator:
                 translator = ConceptTranslator.get()
                 translator.flush_pending()
-        except Exception:
-            pass
+        except (AttributeError, sqlite3.Error):
+            pass  # ConceptTranslator not available or flush failed
 
         if self._db is not None:
             # Lazy mode: data is already in SQLite, just update meta + commit
-            with self._db._conn:
-                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                       ("version", str(self.data.get("version", 1))))
-                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                       ("repo", str(self.data.get("repo", self.repo_path.name))))
-                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                       ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
-                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                       ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
-                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                       ("session_count", str(self.data.get("session_count", 0))))
-                self._db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                       ("migration_complete", "1"))
-            # WAL auto-checkpoint: prevent WAL from growing unbounded
-            try:
-                self._db._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-            except Exception:
-                pass
+            with self._db.transaction() as conn:
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                             ("version", str(self.data.get("version", 1))))
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                             ("repo", str(self.data.get("repo", self.repo_path.name))))
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                             ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                             ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                             ("session_count", str(self.data.get("session_count", 0))))
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                             ("migration_complete", "1"))
+            # WAL auto-checkpoint
+            self._db.checkpoint_wal()
         else:
             # Fallback: no DB yet (fresh install), create and write everything
             db = MyceliumDB(self.db_path)
             try:
                 conns = self.data.get("connections", {})
                 fusions = self.data.get("fusions", {})
-                with db._conn:
-                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                     ("version", str(self.data.get("version", 1))))
-                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                     ("repo", str(self.data.get("repo", self.repo_path.name))))
-                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                     ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
-                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                     ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
-                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                     ("session_count", str(self.data.get("session_count", 0))))
-                    db._conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                                     ("migration_complete", "1"))
+                with db.transaction() as conn:
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("version", str(self.data.get("version", 1))))
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("repo", str(self.data.get("repo", self.repo_path.name))))
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("created", str(self.data.get("created", time.strftime("%Y-%m-%d")))))
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("updated", str(self.data.get("updated", time.strftime("%Y-%m-%d")))))
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("session_count", str(self.data.get("session_count", 0))))
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 ("migration_complete", "1"))
                     td = today_days()
-                    for key, conn in conns.items():
+                    for key, edge_data in conns.items():
                         parts = key.split("|")
                         if len(parts) != 2:
                             continue
                         a, b = parts
                         a_id = db._get_or_create_concept(a)
                         b_id = db._get_or_create_concept(b)
-                        fs = date_to_days(conn.get("first_seen", "2026-01-01"))
-                        ls = date_to_days(conn.get("last_seen", "2026-01-01"))
-                        db._conn.execute(
+                        fs = date_to_days(edge_data.get("first_seen", "2026-01-01"))
+                        ls = date_to_days(edge_data.get("last_seen", "2026-01-01"))
+                        conn.execute(
                             "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
                             "VALUES (?, ?, ?, ?, ?)",
-                            (a_id, b_id, conn.get("count", 1), fs, ls))
-                        for zone in conn.get("zones", []):
-                            db._conn.execute(
+                            (a_id, b_id, edge_data.get("count", 1), fs, ls))
+                        for zone in edge_data.get("zones", []):
+                            conn.execute(
                                 "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                                 (a_id, b_id, zone))
                     for key, fusion in fusions.items():
@@ -264,7 +264,7 @@ class Mycelium:
                         a_id = db._get_or_create_concept(a)
                         b_id = db._get_or_create_concept(b)
                         fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
-                        db._conn.execute(
+                        conn.execute(
                             "INSERT OR REPLACE INTO fusions (a, b, form, strength, fused_at) "
                             "VALUES (?, ?, ?, ?, ?)",
                             (a_id, b_id, fusion.get("form", f"{a}+{b}"), fusion.get("strength", 1), fa))
@@ -277,7 +277,7 @@ class Mycelium:
         if self._db is not None:
             try:
                 self._db.close()
-            except Exception:
+            except (sqlite3.Error, AttributeError):
                 pass
             self._db = None
 
@@ -310,7 +310,7 @@ class Mycelium:
             if ConceptTranslator:
                 translator = ConceptTranslator.get()
                 clean = translator.normalize_concepts(clean)
-        except Exception:
+        except (AttributeError, TypeError):
             pass  # Graceful: no tiktoken/anthropic = no translation
 
         clean = list(set(clean))  # deduplicate
@@ -337,21 +337,19 @@ class Mycelium:
                     pairs.append((a_key, b_key))
             if pairs:
                 td = today_days()
-                if not hasattr(self, '_session_seen'):
-                    self._session_seen = set()
                 _batch_size = 5000
-                _congestion_checked = getattr(self, '_congestion_checked', False)
+                _congestion_checked = self._congestion_checked
                 for batch_start in range(0, len(pairs), _batch_size):
                     batch = pairs[batch_start:batch_start + _batch_size]
                     _t0 = time.time() if not _congestion_checked else 0
-                    with self._db._conn:
+                    with self._db.transaction() as conn:
                         for a_key, b_key in batch:
                             a_id = self._db._get_or_create_concept(a_key)
                             b_id = self._db._get_or_create_concept(b_key)
                             pair_key = (a_id, b_id)
                             if pair_key in self._session_seen:
                                 continue  # Delta: already upserted this session
-                            self._db._conn.execute("""
+                            conn.execute("""
                                 INSERT INTO edges (a, b, count, first_seen, last_seen)
                                 VALUES (?, ?, ?, ?, ?)
                                 ON CONFLICT(a, b) DO UPDATE SET
@@ -359,7 +357,7 @@ class Mycelium:
                                     last_seen = ?
                             """, (a_id, b_id, e_a, td, td, e_a, td))
                             if self.federated:
-                                self._db._conn.execute(
+                                conn.execute(
                                     "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                                     (a_id, b_id, self.zone))
                             self._session_seen.add(pair_key)
@@ -378,15 +376,15 @@ class Mycelium:
                                     self.save()
                                     print(f"  EMERGENCY DECAY: {dead} dead edges removed",
                                           file=sys.stderr)
-                            except Exception as e:
+                            except (sqlite3.Error, OSError, ValueError) as e:
                                 print(f"  EMERGENCY DECAY failed: {e}", file=sys.stderr)
                 # WAL guard: checkpoint if WAL > 50MB (prevents 300MB+ WAL buildup)
                 if not getattr(self, '_wal_check_count', 0) % 50:
                     try:
                         wal_path = str(self.db_path) + "-wal"
                         if os.path.exists(wal_path) and os.path.getsize(wal_path) > 50_000_000:
-                            self._db._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-                    except Exception:
+                            self._db.checkpoint_wal()
+                    except (sqlite3.OperationalError, OSError):
                         pass
                 self._wal_check_count = getattr(self, '_wal_check_count', 0) + 1
         else:
@@ -423,9 +421,11 @@ class Mycelium:
                     cid = self._db._concept_cache.get(concept)
                     if cid is None:
                         continue
-                    for row in self._db._conn.execute(
-                        "SELECT a, b FROM fusions WHERE a=? OR b=?", (cid, cid)
-                    ):
+                    with self._db._lock:
+                        fusion_rows = self._db._conn.execute(
+                            "SELECT a, b FROM fusions WHERE a=? OR b=?", (cid, cid)
+                        ).fetchall()
+                    for row in fusion_rows:
                         a_name = id_to_name.get(row[0], "")
                         b_name = id_to_name.get(row[1], "")
                         if a_name and b_name:
@@ -448,6 +448,8 @@ class Mycelium:
 
         # M10 fix: invalidate adjacency cache after adding edges
         self._adj_cache = None
+        # Audit fix: invalidate degree cache — degree distribution changes after observe
+        self._high_degree_cache = None
 
         if self.federated:
             self._invalidate_zone_cache()
@@ -588,54 +590,54 @@ class Mycelium:
         if self._db is not None:
             # Lazy mode: only check observed pairs, not all edges
             if observed_pairs:
-                for a, b in observed_pairs:
-                    if a in high_degree_concepts or b in high_degree_concepts:
-                        continue
-                    conn = self._db.get_connection(a, b)
-                    if conn and conn["count"] >= self.FUSION_THRESHOLD:
-                        a_key, b_key = min(a, b), max(a, b)
-                        a_id = self._db._concept_cache.get(a_key)
-                        b_id = self._db._concept_cache.get(b_key)
-                        if a_id is not None and b_id is not None:
-                            self._db._conn.execute("""
-                                INSERT INTO fusions (a, b, form, strength, fused_at)
-                                VALUES (?, ?, ?, ?, ?)
-                                ON CONFLICT(a, b) DO UPDATE SET strength = ?
-                            """, (a_id, b_id, f"{a_key}+{b_key}",
-                                  conn["count"], today_days(), conn["count"]))
-                self._db._conn.commit()
+                with self._db.transaction() as txn:
+                    for a, b in observed_pairs:
+                        if a in high_degree_concepts or b in high_degree_concepts:
+                            continue
+                        edge = self._db.get_connection(a, b)
+                        if edge and edge["count"] >= self.FUSION_THRESHOLD:
+                            a_key, b_key = min(a, b), max(a, b)
+                            a_id = self._db._concept_cache.get(a_key)
+                            b_id = self._db._concept_cache.get(b_key)
+                            if a_id is not None and b_id is not None:
+                                txn.execute("""
+                                    INSERT INTO fusions (a, b, form, strength, fused_at)
+                                    VALUES (?, ?, ?, ?, ?)
+                                    ON CONFLICT(a, b) DO UPDATE SET strength = ?
+                                """, (a_id, b_id, f"{a_key}+{b_key}",
+                                      edge["count"], today_days(), edge["count"]))
             else:
                 # Full scan — only on explicit call (save, etc.)
-                id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-                if high_degree_concepts:
-                    hd_ids = {self._db._concept_cache.get(c) for c in high_degree_concepts}
-                    hd_ids.discard(None)
-                    if hd_ids:
-                        for row in self._db._conn.execute("SELECT a, b FROM fusions").fetchall():
-                            if row[0] in hd_ids or row[1] in hd_ids:
-                                self._db._conn.execute(
-                                    "DELETE FROM fusions WHERE a=? AND b=?", (row[0], row[1]))
-                # Remove stale fusions (edge dropped below threshold or edge deleted)
-                self._db._conn.execute("""
-                    DELETE FROM fusions WHERE NOT EXISTS (
-                        SELECT 1 FROM edges e WHERE e.a = fusions.a AND e.b = fusions.b
-                        AND e.count >= ?
-                    )
-                """, (self.FUSION_THRESHOLD,))
-                for row in self._db._conn.execute(
-                        "SELECT a, b, count FROM edges WHERE count >= ?",
-                        (self.FUSION_THRESHOLD,)):
-                    a_id, b_id, count = row
-                    a_name = id_to_name.get(a_id, "")
-                    b_name = id_to_name.get(b_id, "")
-                    if a_name in high_degree_concepts or b_name in high_degree_concepts:
-                        continue
-                    self._db._conn.execute("""
-                        INSERT INTO fusions (a, b, form, strength, fused_at)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(a, b) DO UPDATE SET strength = ?
-                    """, (a_id, b_id, f"{a_name}+{b_name}", count, today_days(), count))
-                self._db._conn.commit()
+                with self._db.transaction() as txn:
+                    id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                    if high_degree_concepts:
+                        hd_ids = {self._db._concept_cache.get(c) for c in high_degree_concepts}
+                        hd_ids.discard(None)
+                        if hd_ids:
+                            for row in txn.execute("SELECT a, b FROM fusions").fetchall():
+                                if row[0] in hd_ids or row[1] in hd_ids:
+                                    txn.execute(
+                                        "DELETE FROM fusions WHERE a=? AND b=?", (row[0], row[1]))
+                    # Remove stale fusions (edge dropped below threshold or edge deleted)
+                    txn.execute("""
+                        DELETE FROM fusions WHERE NOT EXISTS (
+                            SELECT 1 FROM edges e WHERE e.a = fusions.a AND e.b = fusions.b
+                            AND e.count >= ?
+                        )
+                    """, (self.FUSION_THRESHOLD,))
+                    for row in txn.execute(
+                            "SELECT a, b, count FROM edges WHERE count >= ?",
+                            (self.FUSION_THRESHOLD,)):
+                        a_id, b_id, count = row
+                        a_name = id_to_name.get(a_id, "")
+                        b_name = id_to_name.get(b_id, "")
+                        if a_name in high_degree_concepts or b_name in high_degree_concepts:
+                            continue
+                        txn.execute("""
+                            INSERT INTO fusions (a, b, form, strength, fused_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET strength = ?
+                        """, (a_id, b_id, f"{a_name}+{b_name}", count, today_days(), count))
         else:
             # Fallback: in-memory dict
             conns = self.data["connections"]
@@ -669,7 +671,9 @@ class Mycelium:
         max_w = 0.0
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+            with self._db._lock:
+                rows = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
+            for row in rows:
                 a_name = id_to_name.get(row[0], "")
                 b_name = id_to_name.get(row[1], "")
                 if not a_name or not b_name:
@@ -714,7 +718,7 @@ class Mycelium:
                     import math
                     adjusted = self.DEGREE_FILTER_PERCENTILE / math.sqrt(n_repos)
                     return max(0.005, adjusted)  # Floor at 0.5%
-        except Exception:
+        except (sqlite3.OperationalError, ValueError):
             pass
         return self.DEGREE_FILTER_PERCENTILE
 
@@ -731,39 +735,40 @@ class Mycelium:
             if n < 50:
                 return set()
             # SQL-native 2-step: find threshold, then filter
-            row = self._db._conn.execute(
-                "SELECT COUNT(*) FROM concepts").fetchone()
-            n_concepts = row[0] if row else 0
-            if n_concepts < 20:
-                return set()
-            cutoff = max(1, int(n_concepts * pct))
+            with self._db._lock:
+                row = self._db._conn.execute(
+                    "SELECT COUNT(*) FROM concepts").fetchone()
+                n_concepts = row[0] if row else 0
+                if n_concepts < 20:
+                    return set()
+                cutoff = max(1, int(n_concepts * pct))
 
-            # Step 1: threshold = degree at the cutoff position
-            row = self._db._conn.execute("""
-                SELECT degree FROM (
-                    SELECT SUM(cnt) as degree FROM (
+                # Step 1: threshold = degree at the cutoff position
+                row = self._db._conn.execute("""
+                    SELECT degree FROM (
+                        SELECT SUM(cnt) as degree FROM (
+                            SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
+                            UNION ALL
+                            SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
+                        ) GROUP BY concept_id
+                        ORDER BY degree DESC
+                    ) LIMIT 1 OFFSET ?
+                """, (cutoff,)).fetchone()
+                threshold = max(row[0] if row else 20, 20)
+
+                # Step 2: only fetch concepts above threshold (HAVING = fast)
+                id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                result = set()
+                for row in self._db._conn.execute("""
+                    SELECT concept_id, SUM(cnt) as degree FROM (
                         SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
                         UNION ALL
                         SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
                     ) GROUP BY concept_id
-                    ORDER BY degree DESC
-                ) LIMIT 1 OFFSET ?
-            """, (cutoff,)).fetchone()
-            threshold = max(row[0] if row else 20, 20)
-
-            # Step 2: only fetch concepts above threshold (HAVING = fast)
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            result = set()
-            for row in self._db._conn.execute("""
-                SELECT concept_id, SUM(cnt) as degree FROM (
-                    SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
-                    UNION ALL
-                    SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
-                ) GROUP BY concept_id
-                HAVING degree >= ?
-            """, (threshold,)):
-                name = self._db._id_to_name.get(row[0]) or self._db._concept_name(row[0])
-                result.add(name)
+                    HAVING degree >= ?
+                """, (threshold,)):
+                    name = self._db._id_to_name.get(row[0]) or self._db._concept_name(row[0])
+                    result.add(name)
             return result
         else:
             conns = self.data["connections"]
@@ -839,7 +844,7 @@ class Mycelium:
                 self.MAX_CONNECTIONS = target
                 self._prune_weakest()
                 self.MAX_CONNECTIONS = 0
-        except Exception:
+        except (OSError, MemoryError):
             pass  # Can't check RAM = don't prune
 
     def decay(self, days: int = None):
@@ -862,53 +867,53 @@ class Mycelium:
             cutoff = td - days
             dead_ids = []
 
-            for row in self._db._conn.execute(
-                    "SELECT a, b, count, last_seen FROM edges WHERE last_seen < ?",
-                    (cutoff,)).fetchall():
-                a_id, b_id, count, last_seen = row
-                age_days = td - last_seen
+            with self._db.transaction() as txn:
+                for row in txn.execute(
+                        "SELECT a, b, count, last_seen FROM edges WHERE last_seen < ?",
+                        (cutoff,)).fetchall():
+                    a_id, b_id, count, last_seen = row
+                    age_days = td - last_seen
 
-                # P20.4: immortal connections (3+ zones) skip decay
-                if self.federated:
-                    nz_row = self._db._conn.execute(
-                        "SELECT COUNT(*) FROM edge_zones WHERE a=? AND b=?",
-                        (a_id, b_id)).fetchone()
-                    nz = nz_row[0] if nz_row else 0
-                    if nz >= self.IMMORTAL_ZONE_THRESHOLD:
-                        continue
+                    # P20.4: immortal connections (3+ zones) skip decay
+                    if self.federated:
+                        nz_row = txn.execute(
+                            "SELECT COUNT(*) FROM edge_zones WHERE a=? AND b=?",
+                            (a_id, b_id)).fetchone()
+                        nz = nz_row[0] if nz_row else 0
+                        if nz >= self.IMMORTAL_ZONE_THRESHOLD:
+                            continue
 
-                periods = age_days // days
-                new_count = count / (2 ** periods)
+                    periods = age_days // days
+                    new_count = count / (2 ** periods)
 
-                if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
-                    saturation_loss = self.SATURATION_BETA * new_count * new_count
-                    new_count = max(1, new_count - saturation_loss)
+                    if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
+                        saturation_loss = self.SATURATION_BETA * new_count * new_count
+                        new_count = max(1, new_count - saturation_loss)
 
-                if new_count < 0.01:
-                    dead_ids.append((a_id, b_id))
-                else:
-                    self._db._conn.execute(
-                        "UPDATE edges SET count=? WHERE a=? AND b=?",
-                        (new_count, a_id, b_id))
+                    if new_count < 0.01:
+                        dead_ids.append((a_id, b_id))
+                    else:
+                        txn.execute(
+                            "UPDATE edges SET count=? WHERE a=? AND b=?",
+                            (new_count, a_id, b_id))
 
-            # P6: Batch deletes with executemany() instead of loop
-            if dead_ids:
-                td = today_days()
-                # H4: record tombstones before deletion
-                try:
-                    self._db._conn.executemany(
-                        "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
-                        "VALUES (?, ?, ?, ?)",
-                        [(a_id, b_id, td, "decay") for a_id, b_id in dead_ids])
-                except Exception:
-                    pass  # Old schema without tombstones table
-                self._db._conn.executemany(
-                    "DELETE FROM edges WHERE a=? AND b=?", dead_ids)
-                self._db._conn.executemany(
-                    "DELETE FROM fusions WHERE a=? AND b=?", dead_ids)
-                self._db._conn.executemany(
-                    "DELETE FROM edge_zones WHERE a=? AND b=?", dead_ids)
-            self._db._conn.commit()
+                # P6: Batch deletes with executemany() instead of loop
+                if dead_ids:
+                    td = today_days()
+                    # H4: record tombstones before deletion
+                    try:
+                        txn.executemany(
+                            "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
+                            "VALUES (?, ?, ?, ?)",
+                            [(a_id, b_id, td, "decay") for a_id, b_id in dead_ids])
+                    except sqlite3.OperationalError:
+                        pass  # Old schema without tombstones table
+                    txn.executemany(
+                        "DELETE FROM edges WHERE a=? AND b=?", dead_ids)
+                    txn.executemany(
+                        "DELETE FROM fusions WHERE a=? AND b=?", dead_ids)
+                    txn.executemany(
+                        "DELETE FROM edge_zones WHERE a=? AND b=?", dead_ids)
             self._adj_cache = None  # M10 fix: invalidate after decay
             # A4: Auto-vacuum if decay took > 10s
             if time.time() - _decay_start > 10.0:
@@ -1000,24 +1005,25 @@ class Mycelium:
             if total == 0:
                 return 0
             # Count orphans (concepts not referenced in any edge)
-            orphan_count = self._db._conn.execute("""
-                SELECT COUNT(*) FROM concepts
-                WHERE id NOT IN (SELECT a FROM edges UNION SELECT b FROM edges)
-            """).fetchone()[0]
+            with self._db.transaction() as txn:
+                orphan_count = txn.execute("""
+                    SELECT COUNT(*) FROM concepts
+                    WHERE id NOT IN (SELECT a FROM edges UNION SELECT b FROM edges)
+                """).fetchone()[0]
 
-            if orphan_count / total < 0.2:
-                return 0  # Below 20% threshold
+                if orphan_count / total < 0.2:
+                    return 0  # Below 20% threshold
 
-            result = self._db._conn.execute("""
-                DELETE FROM concepts
-                WHERE id NOT IN (SELECT a FROM edges UNION SELECT b FROM edges)
-            """)
-            removed = result.rowcount
+                result = txn.execute("""
+                    DELETE FROM concepts
+                    WHERE id NOT IN (SELECT a FROM edges UNION SELECT b FROM edges)
+                """)
+                removed = result.rowcount
             if removed > 0:
-                self._db._conn.commit()
                 self._db._load_concept_cache()  # Refresh caches
             return removed
-        except Exception:
+        except sqlite3.OperationalError as e:
+            print(f"WARNING: cleanup_orphan_concepts failed: {e}", file=sys.stderr)
             return 0
 
     def cleanup_orphan_zones(self) -> int:
@@ -1028,17 +1034,17 @@ class Mycelium:
         if self._db is None:
             return 0
         try:
-            result = self._db._conn.execute("""
-                DELETE FROM edge_zones
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM edges WHERE edges.a = edge_zones.a AND edges.b = edge_zones.b
-                )
-            """)
-            removed = result.rowcount
-            if removed > 0:
-                self._db._conn.commit()
+            with self._db.transaction() as txn:
+                result = txn.execute("""
+                    DELETE FROM edge_zones
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM edges WHERE edges.a = edge_zones.a AND edges.b = edge_zones.b
+                    )
+                """)
+                removed = result.rowcount
             return removed
-        except Exception:
+        except sqlite3.OperationalError as e:
+            print(f"WARNING: cleanup_orphan_zones failed: {e}", file=sys.stderr)
             return 0
 
     def vacuum_if_needed(self, threshold_seconds: float = 10.0) -> bool:
@@ -1049,10 +1055,12 @@ class Mycelium:
         if self._db is None:
             return False
         try:
-            self._db._conn.execute("PRAGMA optimize")
-            self._db._conn.execute("VACUUM")
+            with self._db._lock:
+                self._db._conn.execute("PRAGMA optimize")
+                self._db._conn.execute("VACUUM")
             return True
-        except Exception:
+        except sqlite3.OperationalError as e:
+            print(f"WARNING: vacuum failed: {e}", file=sys.stderr)
             return False
 
     def growth_stats(self) -> dict:
@@ -1411,9 +1419,11 @@ class Mycelium:
             # SQL-native: only fetch strong fusions with prefix relationship
             # Filter in SQL: form contains '+', strength >= 8
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute(
-                "SELECT a, b FROM fusions WHERE strength >= 8"
-            ):
+            with self._db._lock:
+                fusion_rows = self._db._conn.execute(
+                    "SELECT a, b FROM fusions WHERE strength >= 8"
+                ).fetchall()
+            for row in fusion_rows:
                 a = id_to_name.get(row[0])
                 b = id_to_name.get(row[1])
                 if not a or not b:
@@ -1481,7 +1491,9 @@ class Mycelium:
 
             # P7: Single-pass — collect concepts AND edges in one scan
             edge_triples = []
-            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+            with self._db._lock:
+                all_edges = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
+            for row in all_edges:
                 a_name = id_to_name.get(row[0], "")
                 b_name = id_to_name.get(row[1], "")
                 if not a_name or not b_name:
@@ -1546,7 +1558,7 @@ class Mycelium:
         # 4. Eigenvectors
         try:
             eigenvalues, eigenvectors = eigsh(L_sym, k=k, which='LM')
-        except Exception as e:
+        except (ValueError, ArithmeticError, RuntimeError) as e:
             print(f"detect_zones eigsh failed: {e}", file=sys.stderr)
             return {}
 
@@ -1605,7 +1617,9 @@ class Mycelium:
         tagged = 0
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+            with self._db._lock:
+                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
+            for row in edge_rows:
                 a_name = id_to_name.get(row[0], "")
                 b_name = id_to_name.get(row[1], "")
                 if not a_name or not b_name:
@@ -1641,7 +1655,9 @@ class Mycelium:
         """P20.8: Get all zones and their connection counts."""
         if self._db is not None:
             zone_counts = {}
-            for row in self._db._conn.execute("SELECT zone, COUNT(*) FROM edge_zones GROUP BY zone"):
+            with self._db._lock:
+                zone_rows = self._db._conn.execute("SELECT zone, COUNT(*) FROM edge_zones GROUP BY zone").fetchall()
+            for row in zone_rows:
                 zone_counts[row[0]] = row[1]
             return dict(sorted(zone_counts.items(), key=lambda x: x[1], reverse=True))
         zone_counts = {}
@@ -1656,19 +1672,23 @@ class Mycelium:
         bridges = []
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            rows = self._db._conn.execute("""
-                SELECT a, b, COUNT(zone) as nz FROM edge_zones
-                GROUP BY a, b HAVING nz >= 2
-            """).fetchall()
-            for a_id, b_id, nz in rows:
-                a_name = id_to_name.get(a_id, "")
-                b_name = id_to_name.get(b_id, "")
-                if not a_name or not b_name:
-                    continue
-                zones = [r[0] for r in self._db._conn.execute(
-                    "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))]
-                count_row = self._db._conn.execute(
-                    "SELECT count FROM edges WHERE a=? AND b=?", (a_id, b_id)).fetchone()
+            with self._db._lock:
+                rows = self._db._conn.execute("""
+                    SELECT a, b, COUNT(zone) as nz FROM edge_zones
+                    GROUP BY a, b HAVING nz >= 2
+                """).fetchall()
+                bridge_data = []
+                for a_id, b_id, nz in rows:
+                    a_name = id_to_name.get(a_id, "")
+                    b_name = id_to_name.get(b_id, "")
+                    if not a_name or not b_name:
+                        continue
+                    zones = [r[0] for r in self._db._conn.execute(
+                        "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))]
+                    count_row = self._db._conn.execute(
+                        "SELECT count FROM edges WHERE a=? AND b=?", (a_id, b_id)).fetchone()
+                    bridge_data.append((a_name, b_name, zones, count_row))
+            for a_name, b_name, zones, count_row in bridge_data:
                 count = count_row[0] if count_row else 1
                 key = self._key(a_name, b_name)
                 weight = self.effective_weight(key, count)
@@ -1731,12 +1751,17 @@ class Mycelium:
         zones = self.get_zones()
         if zones:
             if self._db is not None:
+                with self._db._lock:
+                    zone_avgs = {}
+                    for zone_name in zones:
+                        row = self._db._conn.execute("""
+                            SELECT AVG(e.count) FROM edges e
+                            JOIN edge_zones ez ON e.a=ez.a AND e.b=ez.b
+                            WHERE ez.zone=?
+                        """, (zone_name,)).fetchone()
+                        zone_avgs[zone_name] = row
                 for zone_name in zones:
-                    row = self._db._conn.execute("""
-                        SELECT AVG(e.count) FROM edges e
-                        JOIN edge_zones ez ON e.a=ez.a AND e.b=ez.b
-                        WHERE ez.zone=?
-                    """, (zone_name,)).fetchone()
+                    row = zone_avgs[zone_name]
                     if row and row[0] is not None and row[0] < 2:
                         weak_zones.append(zone_name)
             else:
@@ -1799,7 +1824,9 @@ class Mycelium:
         adj = {}
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+            with self._db._lock:
+                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
+            for row in edge_rows:
                 a = id_to_name.get(row[0], "")
                 b = id_to_name.get(row[1], "")
                 if not a or not b:
@@ -1828,7 +1855,7 @@ class Mycelium:
         # Heuristic 1: Same-zone gaps (needs zones tagged on connections)
         try:
             zones = self.detect_zones()
-        except Exception:
+        except (ValueError, sqlite3.Error):
             zones = {}
 
         if zones:
@@ -1946,7 +1973,9 @@ class Mycelium:
         conn_set = set()
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+            with self._db._lock:
+                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
+            for row in edge_rows:
                 a_name = id_to_name.get(row[0], "")
                 b_name = id_to_name.get(row[1], "")
                 if a_name and b_name:
@@ -2040,7 +2069,9 @@ class Mycelium:
         adj = {}
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            for row in self._db._conn.execute("SELECT a, b FROM edges"):
+            with self._db._lock:
+                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
+            for row in edge_rows:
                 a = id_to_name.get(row[0], "")
                 b = id_to_name.get(row[1], "")
                 if not a or not b:
@@ -2121,7 +2152,9 @@ class Mycelium:
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
             strong_pairs = []
-            for row in self._db._conn.execute("SELECT a, b, count FROM edges"):
+            with self._db._lock:
+                all_edges = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
+            for row in all_edges:
                 a = id_to_name.get(row[0], "")
                 b = id_to_name.get(row[1], "")
                 if not a or not b:
@@ -2320,7 +2353,7 @@ class Mycelium:
             try:
                 migrated_db = MyceliumDB.migrate_from_json(meta_json_p, meta_db_p)
                 migrated_db.close()  # X8: close returned handle
-            except Exception as e:
+            except (sqlite3.Error, OSError, json.JSONDecodeError, ValueError) as e:
                 print(f"WARNING: meta migration failed: {e}", file=sys.stderr)
 
         if self._db is not None:
@@ -2349,42 +2382,43 @@ class Mycelium:
                 zone = self.zone
                 local_conns = self.data["connections"]
                 n_synced = len(local_conns)
-                for key, conn in local_conns.items():
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    a_id = db._get_or_create_concept(a)
-                    b_id = db._get_or_create_concept(b)
-                    fs = date_to_days(conn.get("first_seen", "2026-01-01"))
-                    ls = date_to_days(conn.get("last_seen", "2026-01-01"))
-                    db._conn.execute("""
-                        INSERT INTO edges (a, b, count, first_seen, last_seen)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(a, b) DO UPDATE SET
-                            count = MAX(count, excluded.count),
-                            first_seen = MIN(first_seen, excluded.first_seen),
-                            last_seen = MAX(last_seen, excluded.last_seen)
-                    """, (a_id, b_id, conn["count"], fs, ls))
-                    db._conn.execute(
-                        "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                        (a_id, b_id, zone))
+                with db.transaction() as txn:
+                    for key, edge_data in local_conns.items():
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        a_id = db._get_or_create_concept(a)
+                        b_id = db._get_or_create_concept(b)
+                        fs = date_to_days(edge_data.get("first_seen", "2026-01-01"))
+                        ls = date_to_days(edge_data.get("last_seen", "2026-01-01"))
+                        txn.execute("""
+                            INSERT INTO edges (a, b, count, first_seen, last_seen)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                count = MAX(count, excluded.count),
+                                first_seen = MIN(first_seen, excluded.first_seen),
+                                last_seen = MAX(last_seen, excluded.last_seen)
+                        """, (a_id, b_id, edge_data["count"], fs, ls))
+                        txn.execute(
+                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                            (a_id, b_id, zone))
 
-                local_fusions = self.data.get("fusions", {})
-                for key, fusion in local_fusions.items():
-                    parts = key.split("|")
-                    if len(parts) != 2:
-                        continue
-                    a, b = parts
-                    a_id = db._get_or_create_concept(a)
-                    b_id = db._get_or_create_concept(b)
-                    fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
-                    db._conn.execute("""
-                        INSERT INTO fusions (a, b, form, strength, fused_at)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(a, b) DO UPDATE SET
-                            strength = MAX(strength, excluded.strength)
-                    """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
+                    local_fusions = self.data.get("fusions", {})
+                    for key, fusion in local_fusions.items():
+                        parts = key.split("|")
+                        if len(parts) != 2:
+                            continue
+                        a, b = parts
+                        a_id = db._get_or_create_concept(a)
+                        b_id = db._get_or_create_concept(b)
+                        fa = date_to_days(fusion.get("fused_at", "2026-01-01"))
+                        txn.execute("""
+                            INSERT INTO fusions (a, b, form, strength, fused_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(a, b) DO UPDATE SET
+                                strength = MAX(strength, excluded.strength)
+                        """, (a_id, b_id, fusion["form"], fusion["strength"], fa))
             finally:
                 db.close()
             return n_synced
@@ -2441,16 +2475,18 @@ class Mycelium:
                 if not query_ids:
                     return 0
                 placeholders = ",".join("?" * len(query_ids))
-                rows = db._conn.execute(f"""
-                    SELECT a, b, count, first_seen, last_seen FROM edges
-                    WHERE a IN ({placeholders}) OR b IN ({placeholders})
-                    ORDER BY count DESC LIMIT ?
-                """, list(query_ids) + list(query_ids) + [max_pull]).fetchall()
+                with db._lock:
+                    rows = db._conn.execute(f"""
+                        SELECT a, b, count, first_seen, last_seen FROM edges
+                        WHERE a IN ({placeholders}) OR b IN ({placeholders})
+                        ORDER BY count DESC LIMIT ?
+                    """, list(query_ids) + list(query_ids) + [max_pull]).fetchall()
             else:
-                rows = db._conn.execute(
-                    "SELECT a, b, count, first_seen, last_seen FROM edges "
-                    "ORDER BY count DESC LIMIT ?", (max_pull,)
-                ).fetchall()
+                with db._lock:
+                    rows = db._conn.execute(
+                        "SELECT a, b, count, first_seen, last_seen FROM edges "
+                        "ORDER BY count DESC LIMIT ?", (max_pull,)
+                    ).fetchall()
 
             for row in rows:
                 a_name = db._id_to_name.get(row[0]) or db._concept_name(row[0])
@@ -2466,10 +2502,12 @@ class Mycelium:
                             last_seen=days_to_date(row[4]),
                         )
                         # Pull zones
-                        for zr in db._conn.execute(
-                            "SELECT zone FROM edge_zones WHERE a=? AND b=?",
-                            (row[0], row[1])
-                        ):
+                        with db._lock:
+                            zone_rows = db._conn.execute(
+                                "SELECT zone FROM edge_zones WHERE a=? AND b=?",
+                                (row[0], row[1])
+                            ).fetchall()
+                        for zr in zone_rows:
                             self._db.add_zone_to_edge(a_name, b_name, zr[0])
                         pulled += 1
                 else:
@@ -2482,10 +2520,11 @@ class Mycelium:
                             "first_seen": days_to_date(row[3]),
                             "last_seen": days_to_date(row[4]),
                         }
-                        zones = [r[0] for r in db._conn.execute(
-                            "SELECT zone FROM edge_zones WHERE a=? AND b=?",
-                            (row[0], row[1])
-                        )]
+                        with db._lock:
+                            zones = [r[0] for r in db._conn.execute(
+                                "SELECT zone FROM edge_zones WHERE a=? AND b=?",
+                                (row[0], row[1])
+                            ).fetchall()]
                         if zones:
                             conn["zones"] = zones
                         local_conns[key] = conn
@@ -2503,7 +2542,9 @@ class Mycelium:
                 else:
                     fquery = "SELECT a, b, form, strength, fused_at FROM fusions ORDER BY strength DESC LIMIT ?"
                     fparams = [max_pull]
-                for frow in db._conn.execute(fquery, fparams):
+                with db._lock:
+                    fusion_rows = db._conn.execute(fquery, fparams).fetchall()
+                for frow in fusion_rows:
                     a_name = db._id_to_name.get(frow[0]) or db._concept_name(frow[0])
                     b_name = db._id_to_name.get(frow[1]) or db._concept_name(frow[1])
                     if not self._db.has_fusion(a_name, b_name):
@@ -2525,10 +2566,11 @@ class Mycelium:
                     b_id = db._concept_cache.get(parts[1])
                     if a_id is None or b_id is None:
                         continue
-                    frow = db._conn.execute(
-                        "SELECT form, strength, fused_at FROM fusions WHERE a=? AND b=?",
-                        (a_id, b_id)
-                    ).fetchone()
+                    with db._lock:
+                        frow = db._conn.execute(
+                            "SELECT form, strength, fused_at FROM fusions WHERE a=? AND b=?",
+                            (a_id, b_id)
+                        ).fetchone()
                     if frow:
                         local_fusions[key] = {
                             "concepts": list(parts),

@@ -26,6 +26,7 @@ import collections
 import json
 import os
 import socket
+import sqlite3
 import ssl
 import struct
 import threading
@@ -198,7 +199,7 @@ class SyncServer:
                         return value
         except PermissionError:
             raise
-        except Exception:
+        except (ssl.SSLError, ValueError, AttributeError):
             pass
         return None
 
@@ -208,7 +209,7 @@ class SyncServer:
         if not self._limiter.allow(ip):
             try:
                 _send_msg(conn, {"status": "error", "message": "rate_limited"})
-            except Exception:
+            except (OSError, ssl.SSLError):
                 pass
             conn.close()
             return
@@ -255,10 +256,10 @@ class SyncServer:
             else:
                 _send_msg(conn, {"status": "error", "message": f"unknown action: {action}"})
 
-        except Exception as e:
+        except (OSError, ssl.SSLError, ValueError, json.JSONDecodeError) as e:
             try:
                 _send_msg(conn, {"status": "error", "message": "internal error"})
-            except Exception:
+            except (OSError, ssl.SSLError):
                 pass
         finally:
             conn.close()
@@ -314,7 +315,7 @@ class SyncServer:
             # H1: audit log
             try:
                 db.log_sync(action="push_tls", repo=repo_name, count=merged)
-            except Exception:
+            except (sqlite3.Error, OSError):
                 pass
         finally:
             db.close()
@@ -379,7 +380,7 @@ class SyncServer:
                         conn, addr = ssock.accept()
                         try:
                             threading.Thread(target=self._handle_client, args=(conn, addr), daemon=True).start()
-                        except Exception:
+                        except (RuntimeError, OSError):
                             conn.close()
                     except socket.timeout:
                         continue
@@ -398,7 +399,7 @@ class SyncServer:
         if self._server_socket:
             try:
                 self._server_socket.close()
-            except Exception:
+            except OSError:
                 pass
         if self._thread:
             self._thread.join(timeout=5)
@@ -523,7 +524,7 @@ class TLSBackend:
         try:
             for ts in local_db.get_tombstones():
                 local_tombstones.add((ts[0], ts[1]))
-        except Exception:
+        except (sqlite3.Error, AttributeError):
             pass
 
         for conn in result.get("connections", []):
@@ -553,7 +554,7 @@ class TLSBackend:
             pong = self.client.ping()
             result["connected"] = pong.get("status") == "pong"
             result["server_version"] = pong.get("version")
-        except Exception as e:
+        except (OSError, ssl.SSLError, ConnectionError) as e:
             result["connected"] = False
             result["error"] = str(e)
         return result

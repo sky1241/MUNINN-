@@ -42,7 +42,8 @@ def test_c4_3_convergent():
 
 def test_c4_4_wired_in_recall():
     """adapt_k() should be called in recall()."""
-    src = Path(muninn.__file__).read_text(encoding="utf-8")
+    _mdir = Path(muninn.__file__).parent
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     recall_start = src.find("def recall(")
     recall_end = src.find("\ndef ", recall_start + 1)
     recall_body = src[recall_start:recall_end]
@@ -52,7 +53,8 @@ def test_c4_4_wired_in_recall():
 
 def test_c4_5_wired_in_inject():
     """adapt_k() should be called in inject_memory()."""
-    src = Path(muninn.__file__).read_text(encoding="utf-8")
+    _mdir = Path(muninn.__file__).parent
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     inject_start = src.find("def inject_memory(")
     inject_end = src.find("\ndef ", inject_start + 1)
     inject_body = src[inject_start:inject_end]

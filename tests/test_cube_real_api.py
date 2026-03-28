@@ -59,7 +59,7 @@ def provider():
     return ClaudeProvider(model="claude-sonnet-4-6")
 
 
-def _build_cubes(file_path, target_tokens=88):
+def _build_cubes(file_path, target_tokens=112):
     """Subdivide a file into cubes, store, assign neighbors."""
     tmp = tempfile.mkdtemp()
     db_path = os.path.join(tmp, "cube_test.db")

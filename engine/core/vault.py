@@ -221,6 +221,7 @@ class Vault:
             expected = verify_path.read_text(encoding="utf-8").strip()
             actual = hashlib.sha256(self._key).hexdigest()[:16]
             if actual != expected:
+                _zero_bytes(self._key)
                 self._key = None
                 _audit_log(self.muninn_dir, "auth_fail", False, reason="wrong_password")
                 raise ValueError("Wrong password (vault.verify mismatch)")
@@ -270,13 +271,21 @@ class Vault:
         total_bytes = 0
 
         for fp in files:
-            data = fp.read_bytes()
-            ct = _encrypt_bytes(data, self._key)
-            vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
-            vault_path.write_bytes(ct)
-            total_bytes += len(data)
-            _secure_delete(fp)  # Overwrite + delete plaintext
-            encrypted += 1
+            data = None
+            ct = None
+            try:
+                data = fp.read_bytes()
+                ct = _encrypt_bytes(data, self._key)
+                vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
+                vault_path.write_bytes(ct)
+                total_bytes += len(data)
+                _secure_delete(fp)  # Overwrite + delete plaintext
+                encrypted += 1
+            finally:
+                if data and isinstance(data, (bytearray, memoryview)):
+                    _zero_bytes(data)
+                if ct and isinstance(ct, (bytearray, memoryview)):
+                    _zero_bytes(ct)
 
         _audit_log(self.muninn_dir, "lock", True, files=encrypted, bytes_total=total_bytes)
         return {"encrypted": encrypted, "total_bytes": total_bytes}
@@ -292,17 +301,22 @@ class Vault:
 
         for vp in locked:
             data = vp.read_bytes()
+            plaintext = None
             try:
                 plaintext = _decrypt_bytes(data, self._key)
             except Exception as e:
                 print(f"WARNING: failed to decrypt {vp.name}: {e}", file=sys.stderr)
                 continue
-            # Restore original path (strip .vault)
-            orig_path = vp.with_suffix("")
-            orig_path.write_bytes(plaintext)
-            total_bytes += len(plaintext)
-            vp.unlink()  # Remove encrypted
-            decrypted += 1
+            try:
+                # Restore original path (strip .vault)
+                orig_path = vp.with_suffix("")
+                orig_path.write_bytes(plaintext)
+                total_bytes += len(plaintext)
+                vp.unlink()  # Remove encrypted
+                decrypted += 1
+            finally:
+                if plaintext and isinstance(plaintext, (bytearray, memoryview)):
+                    _zero_bytes(plaintext)
 
         _audit_log(self.muninn_dir, "unlock", True, files=decrypted, bytes_total=total_bytes)
         return {"decrypted": decrypted, "total_bytes": total_bytes}
@@ -335,7 +349,13 @@ class Vault:
         """Re-encrypt all .vault files with a new password.
 
         Requires current key loaded (call load_key first).
-        Atomically: decrypt with old key, encrypt with new key, update salt+verify.
+        KeyboardInterrupt-safe three-phase approach:
+          Phase 1: re-encrypt all files to .rekey temp files (originals untouched)
+          Phase 2: atomically replace originals with .rekey files
+          Phase 3: write salt.rekey marker, update salt/verify, cleanup marker
+        If interrupted during Phase 1, originals are intact with old key.
+        If interrupted during Phase 2, recover_rekey() can finish the job.
+        WARNING: user MUST remember new_password — needed for recover_rekey().
         Returns: {rekeyed: int, total_bytes: int}
         """
         if self._key is None:
@@ -348,42 +368,151 @@ class Vault:
         new_key = bytearray(_derive_key(new_password, new_salt))
 
         locked = self._get_locked_files()
-        rekeyed = 0
         total_bytes = 0
 
+        # ── Phase 1: re-encrypt to .rekey temp files ──
+        # If interrupted here, originals are untouched. .rekey files are garbage.
+        rekey_pairs = []  # [(original_path, rekey_path)]
         failed = []
-        for vp in locked:
-            try:
-                data = vp.read_bytes()
-                # Decrypt with old key
-                plaintext = _decrypt_bytes(data, old_key)
-                # Re-encrypt with new key
-                ct = _encrypt_bytes(plaintext, new_key)
-                # Atomic write: temp file then replace
-                tmp = vp.with_suffix(".tmp")
-                tmp.write_bytes(ct)
-                tmp.replace(vp)  # Atomic on both Windows and Linux
-                total_bytes += len(plaintext)
-                rekeyed += 1
-            except Exception as e:
-                failed.append((vp.name, str(e)))
+        try:
+            for vp in locked:
+                try:
+                    data = vp.read_bytes()
+                    plaintext = _decrypt_bytes(data, old_key)
+                    ct = _encrypt_bytes(plaintext, new_key)
+                    # Append .rekey to full name (not replace suffix) so
+                    # recover_rekey can map back: foo.vault.rekey -> foo.vault
+                    rekey_path = vp.parent / (vp.name + ".rekey")
+                    rekey_path.write_bytes(ct)
+                    rekey_pairs.append((vp, rekey_path))
+                    total_bytes += len(plaintext)
+                except Exception as e:
+                    failed.append((vp.name, str(e)))
+        except KeyboardInterrupt:
+            # Cleanup .rekey temps on interrupt — originals are intact
+            for _, rp in rekey_pairs:
+                try:
+                    rp.unlink()
+                except OSError:
+                    pass
+            _zero_bytes(new_key)
+            raise  # Re-raise so caller knows rekey was interrupted
 
         if failed:
-            # Partial failure — DO NOT wipe old key, user needs it for un-rekeyed files
-            _audit_log(self.muninn_dir, "rekey", False, files=rekeyed,
-                       reason=f"partial failure: {len(failed)} files failed")
+            # Cleanup .rekey temps on failure
+            for _, rp in rekey_pairs:
+                try:
+                    rp.unlink()
+                except OSError:
+                    pass
+            _audit_log(self.muninn_dir, "rekey", False, files=0,
+                       reason=f"phase1 failure: {len(failed)} files failed")
             _zero_bytes(new_key)
-            return {"rekeyed": rekeyed, "total_bytes": total_bytes, "failed": len(failed)}
+            return {"rekeyed": 0, "total_bytes": 0, "failed": len(failed)}
 
-        # Update salt + backup + verify
+        # ── Phase 2: atomic swap ──
+        # Write salt.rekey marker BEFORE replaces so recover_rekey() can
+        # re-derive the new key if interrupted mid-replace. The marker
+        # alone (without any replaced files) is harmless — recover_rekey()
+        # verifies decryptability before updating salt.
+        salt_rekey = self.salt_path.with_suffix(".salt.rekey")
+        salt_rekey.write_bytes(new_salt)
+
+        # Replace originals with re-encrypted versions.
+        # Each replace() is atomic. If interrupted mid-loop, some files are
+        # rekeyed and some still have .rekey pending.
+        for orig, rekey_path in rekey_pairs:
+            rekey_path.replace(orig)  # Atomic on POSIX and Windows
+
+        # Update salt + backup + verify (completing the rekey)
         self.salt_path.write_bytes(new_salt)
         self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
         verify = hashlib.sha256(new_key).hexdigest()[:16]
         (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
 
+        # Cleanup rekey marker
+        try:
+            salt_rekey.unlink()
+        except OSError:
+            pass
+
         # Wipe old key, set new
         _zero_bytes(old_key)
         self._key = new_key
 
-        _audit_log(self.muninn_dir, "rekey", True, files=rekeyed, bytes_total=total_bytes)
-        return {"rekeyed": rekeyed, "total_bytes": total_bytes}
+        _audit_log(self.muninn_dir, "rekey", True, files=len(rekey_pairs),
+                   bytes_total=total_bytes)
+        return {"rekeyed": len(rekey_pairs), "total_bytes": total_bytes}
+
+    def recover_rekey(self, new_password: str) -> dict:
+        """Recover from an interrupted rekey operation.
+
+        Detects vault.salt.rekey marker left by Phase 2.
+        If found, the new salt was written but the replace loop may be partial.
+        Completes the rekey by:
+          1. Re-deriving the new key from the marker salt
+          2. Finishing any remaining .rekey -> original replaces
+          3. Verifying at least one .vault file is decryptable with new key
+          4. Only then updating salt/verify
+
+        WARNING: requires the same new_password used in the interrupted rekey().
+        Returns: {recovered: bool, files_cleaned: int}
+        """
+        salt_rekey = self.salt_path.with_suffix(".salt.rekey")
+        if not salt_rekey.exists():
+            return {"recovered": False, "files_cleaned": 0}
+
+        # The new salt was saved — derive the new key
+        new_salt = salt_rekey.read_bytes()
+        new_key = bytearray(_derive_key(new_password, new_salt))
+
+        # Finish any remaining .rekey files (Phase 2 was interrupted mid-loop)
+        cleaned = 0
+        for rp in self.muninn_dir.rglob("*.rekey"):
+            if rp == salt_rekey:
+                continue
+            orig = rp.with_suffix("")
+            rp.replace(orig)
+            cleaned += 1
+
+        # Safety check: verify we can actually decrypt at least one .vault file
+        # with the new key before updating salt. This prevents data loss if
+        # the marker was written but NO files were actually re-encrypted
+        # (interrupt between marker write and first replace).
+        locked = self._get_locked_files()
+        can_decrypt = False
+        for vp in locked:
+            try:
+                data = vp.read_bytes()
+                _decrypt_bytes(data, new_key)
+                can_decrypt = True
+                break
+            except Exception:
+                continue
+
+        if not can_decrypt and locked:
+            # Files exist but none are decryptable with new key.
+            # The interrupt happened before any files were re-encrypted.
+            # Clean up marker and leave everything as-is (old key still valid).
+            salt_rekey.unlink()
+            _zero_bytes(new_key)
+            _audit_log(self.muninn_dir, "recover_rekey", False, files=0,
+                       reason="no files decryptable with new key, rekey was not started")
+            return {"recovered": False, "files_cleaned": 0}
+
+        # All good — finalize salt + verify
+        self.salt_path.write_bytes(new_salt)
+        self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
+        verify = hashlib.sha256(new_key).hexdigest()[:16]
+        (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
+
+        # Cleanup marker
+        salt_rekey.unlink()
+
+        if self._key is not None:
+            _zero_bytes(self._key)
+        self._key = new_key
+
+        _audit_log(self.muninn_dir, "recover_rekey", True, files=cleaned,
+                   reason="completed interrupted rekey")
+        return {"recovered": True, "files_cleaned": cleaned}

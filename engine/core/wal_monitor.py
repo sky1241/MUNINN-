@@ -50,11 +50,30 @@ class WALMonitor:
         self.checkpoint_history: list[tuple[float, int, float]] = []
 
     def get_wal_size(self) -> int:
-        """Taille actuelle du WAL en pages."""
+        """Taille actuelle du WAL en pages (read-only, no checkpoint side-effect).
+
+        Reads the WAL file header directly to get the page count.
+        Falls back to 0 if the WAL file doesn't exist or is empty
+        (which means SQLite has already checkpointed everything).
+        """
         try:
-            result = self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
-            return result[1] if result else 0
-        except Exception:
+            import struct
+            wal_path = str(self.conn.execute("PRAGMA database_list").fetchone()[2]) + "-wal"
+            with open(wal_path, "rb") as f:
+                header = f.read(32)
+                if len(header) < 32:
+                    return 0
+                # WAL header: bytes 24-27 = checkpoint sequence (not needed)
+                # We count frames: each frame = header(24 bytes) + page_size bytes
+                page_size = struct.unpack(">I", header[8:12])[0]
+                if page_size == 0 or page_size < 512 or page_size > 65536:
+                    return 0
+                import os
+                file_size = os.fstat(f.fileno()).st_size
+                frame_size = 24 + page_size  # 24-byte frame header + page data
+                n_frames = (file_size - 32) // frame_size  # 32-byte WAL header
+                return max(0, n_frames)
+        except (OSError, struct.error, TypeError):
             return 0
 
     def should_checkpoint(self) -> bool:
@@ -68,10 +87,11 @@ class WALMonitor:
         return wal_pages >= threshold or elapsed >= self.config.max_interval_sec
 
     def checkpoint(self):
-        """Flush le WAL de maniere non-bloquante (PASSIVE)."""
+        """Flush le WAL de maniere non-bloquante (PASSIVE). Single call, no redundancy."""
         try:
             start = time.time()
             wal_before = self.get_wal_size()
+            # Single PASSIVE checkpoint — the ONLY place we call wal_checkpoint
             self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
             duration_ms = (time.time() - start) * 1000
             self.checkpoint_history.append((time.time(), wal_before, duration_ms))

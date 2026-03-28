@@ -38,7 +38,7 @@ def p(s):
         print(s.encode('ascii', 'replace').decode(), flush=True)
 
 
-def build_cubes(file_path, target_tokens=88):
+def build_cubes(file_path, target_tokens=112):
     tmp = tempfile.mkdtemp()
     db_path = os.path.join(tmp, "cube_test.db")
     with open(file_path, "r", encoding="utf-8") as f:

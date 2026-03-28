@@ -13,6 +13,7 @@ Zero new dependencies (sqlite3 = Python stdlib).
 """
 import json
 import sqlite3
+import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -67,6 +68,7 @@ class MyceliumDB:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()  # Protects all DB writes when check_same_thread=False
         self._conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")  # M14 fix: enforce FK constraints
@@ -78,6 +80,96 @@ class MyceliumDB:
         self._wal_monitor = WALMonitor(self._conn)
         self._concept_cache = {}  # name -> id (in-memory for fast lookups)
         self._load_concept_cache()
+
+    class _Transaction:
+        """Context manager: acquires _lock, enters sqlite3 transaction, returns conn."""
+        def __init__(self, db):
+            self._db = db
+        def __enter__(self):
+            self._db._lock.acquire()
+            self._db._conn.__enter__()  # BEGIN TRANSACTION
+            return self._db._conn
+        def __exit__(self, *args):
+            try:
+                self._db._conn.__exit__(*args)  # COMMIT or ROLLBACK
+            finally:
+                self._db._lock.release()
+
+    def transaction(self):
+        """Get a locked transaction context manager.
+
+        Usage: with db.transaction() as conn: conn.execute(...)
+        Acquires _lock for thread safety AND begins a sqlite3 transaction.
+        """
+        return self._Transaction(self)
+
+    def checkpoint_wal(self):
+        """Run a PASSIVE WAL checkpoint."""
+        with self._lock:
+            try:
+                self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            except sqlite3.OperationalError:
+                pass
+
+    def vacuum(self):
+        """Run PRAGMA optimize + VACUUM."""
+        with self._lock:
+            self._conn.execute("PRAGMA optimize")
+            self._conn.execute("VACUUM")
+
+    def delete_stale_fusions(self, min_edge_count: int) -> int:
+        """Delete fusions whose backing edges dropped below threshold."""
+        with self._lock:
+            result = self._conn.execute(
+                "DELETE FROM fusions WHERE NOT EXISTS ("
+                "SELECT 1 FROM edges e WHERE e.a = fusions.a AND e.b = fusions.b "
+                "AND e.count >= ?)", (min_edge_count,))
+            if result.rowcount > 0:
+                self._conn.commit()
+            return result.rowcount
+
+    def cleanup_orphan_concepts(self) -> int:
+        """Delete concepts not referenced by any edge."""
+        with self._lock:
+            result = self._conn.execute(
+                "DELETE FROM concepts WHERE id NOT IN "
+                "(SELECT a FROM edges UNION SELECT b FROM edges)")
+            removed = result.rowcount
+            if removed > 0:
+                self._conn.commit()
+                self._load_concept_cache()
+            return removed
+
+    def cleanup_orphan_zones(self) -> int:
+        """Delete zone entries whose edges no longer exist."""
+        with self._lock:
+            result = self._conn.execute(
+                "DELETE FROM edge_zones WHERE NOT EXISTS ("
+                "SELECT 1 FROM edges WHERE edges.a = edge_zones.a "
+                "AND edges.b = edge_zones.b)")
+            removed = result.rowcount
+            if removed > 0:
+                self._conn.commit()
+            return removed
+
+    def get_zone_counts(self) -> dict:
+        """Return {zone_name: edge_count} for all zones."""
+        rows = self._conn.execute(
+            "SELECT zone, COUNT(*) FROM edge_zones GROUP BY zone").fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def get_multi_zone_edges(self, min_zones: int = 2) -> list:
+        """Return edges that span multiple zones: [(a_id, b_id, zone_count)]."""
+        return self._conn.execute(
+            "SELECT a, b, COUNT(zone) as nz FROM edge_zones "
+            "GROUP BY a, b HAVING nz >= ?", (min_zones,)).fetchall()
+
+    def get_zone_avg_count(self, zone: str) -> float:
+        """Return average edge count for a zone."""
+        row = self._conn.execute(
+            "SELECT AVG(e.count) FROM edges e JOIN edge_zones ez "
+            "ON e.a = ez.a AND e.b = ez.b WHERE ez.zone = ?", (zone,)).fetchone()
+        return row[0] or 0.0 if row else 0.0
 
     def _setup_tables(self):
         """Create tables if they don't exist."""
@@ -231,12 +323,13 @@ class MyceliumDB:
 
     def set_meta(self, key: str, value: str):
         """Set a metadata value."""
-        self._conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-            (key, value)
-        )
-        self._conn.commit()
-        self._wal_monitor.on_write()
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+            self._conn.commit()
+            self._wal_monitor.on_write()
 
     # ── Connection operations ────────────────────────────────────────
 
@@ -275,42 +368,44 @@ class MyceliumDB:
 
         If count is provided, uses import mode (set exact count + dates).
         Otherwise, uses increment mode (add to existing count).
+        Thread-safe: acquires _lock for all writes.
         """
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._get_or_create_concept(a_key)
-        b_id = self._get_or_create_concept(b_key)
-        td = today_days()
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._get_or_create_concept(a_key)
+            b_id = self._get_or_create_concept(b_key)
+            td = today_days()
 
-        if count is not None:
-            # Import mode: set exact count and dates
-            fs = date_to_days(first_seen) if first_seen else td
-            ls = date_to_days(last_seen) if last_seen else td
-            self._conn.execute("""
-                INSERT INTO edges (a, b, count, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(a, b) DO UPDATE SET
-                    count = ?,
-                    first_seen = MIN(edges.first_seen, ?),
-                    last_seen = MAX(edges.last_seen, ?)
-            """, (a_id, b_id, count, fs, ls, count, fs, ls))
-        else:
-            # Increment mode: add to existing count
-            self._conn.execute("""
-                INSERT INTO edges (a, b, count, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(a, b) DO UPDATE SET
-                    count = count + ?,
-                    last_seen = ?
-            """, (a_id, b_id, increment, td, td, increment, td))
+            if count is not None:
+                # Import mode: set exact count and dates
+                fs = date_to_days(first_seen) if first_seen else td
+                ls = date_to_days(last_seen) if last_seen else td
+                self._conn.execute("""
+                    INSERT INTO edges (a, b, count, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(a, b) DO UPDATE SET
+                        count = ?,
+                        first_seen = MIN(edges.first_seen, ?),
+                        last_seen = MAX(edges.last_seen, ?)
+                """, (a_id, b_id, count, fs, ls, count, fs, ls))
+            else:
+                # Increment mode: add to existing count
+                self._conn.execute("""
+                    INSERT INTO edges (a, b, count, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(a, b) DO UPDATE SET
+                        count = count + ?,
+                        last_seen = ?
+                """, (a_id, b_id, increment, td, td, increment, td))
 
-        if zone:
-            self._conn.execute(
-                "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                (a_id, b_id, zone)
-            )
-        self._conn.commit()  # H3 fix: persist writes immediately
-        self._wal_monitor.on_write()
+            if zone:
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                    (a_id, b_id, zone)
+                )
+            self._conn.commit()  # H3 fix: persist writes immediately
+            self._wal_monitor.on_write()
 
     def get_all_connections(self) -> dict:
         """Get all connections as a dict (for compatibility with existing code).
@@ -399,53 +494,56 @@ class MyceliumDB:
     def upsert_fusion(self, concept_a: str, concept_b: str,
                       form: str, strength: int, fused_at=None):
         """Create or update a fusion."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._get_or_create_concept(a_key)
-        b_id = self._get_or_create_concept(b_key)
-        if fused_at is None:
-            fused_at = today_days()
-        elif isinstance(fused_at, str):
-            fused_at = date_to_days(fused_at)
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._get_or_create_concept(a_key)
+            b_id = self._get_or_create_concept(b_key)
+            if fused_at is None:
+                fused_at = today_days()
+            elif isinstance(fused_at, str):
+                fused_at = date_to_days(fused_at)
 
-        self._conn.execute("""
-            INSERT INTO fusions (a, b, form, strength, fused_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(a, b) DO UPDATE SET
-                strength = ?,
-                form = ?,
-                fused_at = ?
-        """, (a_id, b_id, form, strength, fused_at, strength, form, fused_at))
-        self._conn.commit()  # H3 fix: persist writes immediately
-        self._wal_monitor.on_write()
+            self._conn.execute("""
+                INSERT INTO fusions (a, b, form, strength, fused_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(a, b) DO UPDATE SET
+                    strength = ?,
+                    form = ?,
+                    fused_at = ?
+            """, (a_id, b_id, form, strength, fused_at, strength, form, fused_at))
+            self._conn.commit()  # H3 fix: persist writes immediately
+            self._wal_monitor.on_write()
 
     def delete_connection(self, concept_a: str, concept_b: str):
         """Delete a connection and its fusion if any."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return
-        self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
-        self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
-        self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
-        self._conn.commit()  # H4 fix: persist deletes immediately
-        self._wal_monitor.on_write()
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return
+            self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
+            self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
+            self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
+            self._conn.commit()  # H4 fix: persist deletes immediately
+            self._wal_monitor.on_write()
 
     def update_connection_count(self, concept_a: str, concept_b: str, new_count: int):
         """Update a connection's count directly."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return
-        self._conn.execute(
-            "UPDATE edges SET count=? WHERE a=? AND b=?", (new_count, a_id, b_id)
-        )
-        self._conn.commit()  # M11 fix: persist count update
-        self._wal_monitor.on_write()
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return
+            self._conn.execute(
+                "UPDATE edges SET count=? WHERE a=? AND b=?", (new_count, a_id, b_id)
+            )
+            self._conn.commit()  # M11 fix: persist count update
+            self._wal_monitor.on_write()
 
     # ── Iteration helpers (cursor-based, low RAM) ────────────────────
 
@@ -526,18 +624,19 @@ class MyceliumDB:
 
     def add_zone_to_edge(self, concept_a: str, concept_b: str, zone: str):
         """Add a zone to an edge."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return
-        self._conn.execute(
-            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-            (a_id, b_id, zone)
-        )
-        self._conn.commit()  # M12 fix: persist zone addition
-        self._wal_monitor.on_write()
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return
+            self._conn.execute(
+                "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                (a_id, b_id, zone)
+            )
+            self._conn.commit()  # M12 fix: persist zone addition
+            self._wal_monitor.on_write()
 
     # ── Top/sorted queries ───────────────────────────────────────────
 
@@ -669,48 +768,51 @@ class MyceliumDB:
                                   zone: str = None):
         """Batch upsert multiple connections in a single transaction."""
         td = today_days()
-        with self._conn:
-            for a, b in pairs:
-                a_key = min(a, b)
-                b_key = max(a, b)
-                a_id = self._get_or_create_concept(a_key)
-                b_id = self._get_or_create_concept(b_key)
-                self._conn.execute("""
-                    INSERT INTO edges (a, b, count, first_seen, last_seen)
-                    VALUES (?, ?, 1, ?, ?)
-                    ON CONFLICT(a, b) DO UPDATE SET
-                        count = count + 1,
-                        last_seen = ?
-                """, (a_id, b_id, td, td, td))
-                if zone:
-                    self._conn.execute(
-                        "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
-                        (a_id, b_id, zone)
-                    )
-        self._wal_monitor.on_write()
+        with self._lock:
+            with self._conn:
+                for a, b in pairs:
+                    a_key = min(a, b)
+                    b_key = max(a, b)
+                    a_id = self._get_or_create_concept(a_key)
+                    b_id = self._get_or_create_concept(b_key)
+                    self._conn.execute("""
+                        INSERT INTO edges (a, b, count, first_seen, last_seen)
+                        VALUES (?, ?, 1, ?, ?)
+                        ON CONFLICT(a, b) DO UPDATE SET
+                            count = count + 1,
+                            last_seen = ?
+                    """, (a_id, b_id, td, td, td))
+                    if zone:
+                        self._conn.execute(
+                            "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
+                            (a_id, b_id, zone)
+                        )
+            self._wal_monitor.on_write()
 
     def batch_delete_connections(self, keys: list[str]):
         """Batch delete connections by key strings (atomic)."""
-        with self._conn:
-            for key in keys:
-                parts = key.split("|")
-                if len(parts) != 2:
-                    continue
-                a_key = min(parts[0], parts[1])
-                b_key = max(parts[0], parts[1])
-                a_id = self._concept_cache.get(a_key)
-                b_id = self._concept_cache.get(b_key)
-                if a_id is None or b_id is None:
-                    continue
-                self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
-                self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
-                self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
-        self._wal_monitor.on_write()
+        with self._lock:
+            with self._conn:
+                for key in keys:
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    a_key = min(parts[0], parts[1])
+                    b_key = max(parts[0], parts[1])
+                    a_id = self._concept_cache.get(a_key)
+                    b_id = self._concept_cache.get(b_key)
+                    if a_id is None or b_id is None:
+                        continue
+                    self._conn.execute("DELETE FROM edges WHERE a=? AND b=?", (a_id, b_id))
+                    self._conn.execute("DELETE FROM fusions WHERE a=? AND b=?", (a_id, b_id))
+                    self._conn.execute("DELETE FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))
+            self._wal_monitor.on_write()
 
     def commit(self):
         """Explicit commit."""
-        self._conn.commit()
-        self._wal_monitor.on_write()
+        with self._lock:
+            self._conn.commit()
+            self._wal_monitor.on_write()
 
     def purge_secret_concepts(self) -> int:
         """X1b: Remove concepts that match secret patterns.
@@ -723,7 +825,7 @@ class MyceliumDB:
         except ImportError:
             from _secrets import _COMPILED_PATTERNS
 
-        # Find contaminated concept IDs
+        # Find contaminated concept IDs (read-only scan, no lock needed)
         purge_ids = []
         for cid, name in list(self._id_to_name.items()):
             for pat in _COMPILED_PATTERNS:
@@ -735,19 +837,20 @@ class MyceliumDB:
             return 0
 
         # Delete in cascade: edges, fusions, edge_zones, then concepts
-        placeholders = ",".join("?" * len(purge_ids))
-        self._conn.execute(f"DELETE FROM edges WHERE a IN ({placeholders}) OR b IN ({placeholders})",
-                           purge_ids + purge_ids)
-        self._conn.execute(f"DELETE FROM fusions WHERE a IN ({placeholders}) OR b IN ({placeholders})",
-                           purge_ids + purge_ids)
-        self._conn.execute(f"DELETE FROM edge_zones WHERE a IN ({placeholders}) OR b IN ({placeholders})",
-                           purge_ids + purge_ids)
-        self._conn.execute(f"DELETE FROM concepts WHERE id IN ({placeholders})", purge_ids)
-        self._conn.commit()
+        with self._lock:
+            placeholders = ",".join("?" * len(purge_ids))
+            self._conn.execute(f"DELETE FROM edges WHERE a IN ({placeholders}) OR b IN ({placeholders})",
+                               purge_ids + purge_ids)
+            self._conn.execute(f"DELETE FROM fusions WHERE a IN ({placeholders}) OR b IN ({placeholders})",
+                               purge_ids + purge_ids)
+            self._conn.execute(f"DELETE FROM edge_zones WHERE a IN ({placeholders}) OR b IN ({placeholders})",
+                               purge_ids + purge_ids)
+            self._conn.execute(f"DELETE FROM concepts WHERE id IN ({placeholders})", purge_ids)
+            self._conn.commit()
 
-        # Rebuild caches
-        self._load_concept_cache()
-        self._wal_monitor.on_write()
+            # Rebuild caches
+            self._load_concept_cache()
+            self._wal_monitor.on_write()
 
         return len(purge_ids)
 
@@ -760,15 +863,16 @@ class MyceliumDB:
         if user is None:
             try:
                 user = getpass.getuser()
-            except Exception:
+            except (OSError, KeyError):
                 user = "unknown"
-        self._conn.execute(
-            "INSERT INTO sync_log (timestamp, user, repo, action, count, errors, checksum) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (time.strftime("%Y-%m-%dT%H:%M:%SZ"), user, repo, action, count, errors, checksum)
-        )
-        self._conn.commit()
-        self._wal_monitor.on_write()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO sync_log (timestamp, user, repo, action, count, errors, checksum) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (time.strftime("%Y-%m-%dT%H:%M:%SZ"), user, repo, action, count, errors, checksum)
+            )
+            self._conn.commit()
+            self._wal_monitor.on_write()
 
     def get_sync_log(self, limit: int = 50) -> list[dict]:
         """H1: Get recent sync log entries."""
@@ -782,35 +886,49 @@ class MyceliumDB:
 
     # ── H2: Pre-sync snapshot + rollback ──────────────────────────
 
+    @staticmethod
+    def _validate_savepoint_name(name: str):
+        """Validate savepoint name to prevent SQL injection."""
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]+$', name):
+            raise ValueError(f"Invalid savepoint name: {name!r} (only alphanumeric and _ allowed)")
+
     def savepoint(self, name: str = "pre_sync"):
         """H2: Create a savepoint before sync operations."""
-        self._conn.execute(f"SAVEPOINT {name}")
+        self._validate_savepoint_name(name)
+        with self._lock:
+            self._conn.execute(f"SAVEPOINT {name}")
 
     def rollback_to(self, name: str = "pre_sync"):
         """H2: Rollback to a savepoint if sync fails."""
-        self._conn.execute(f"ROLLBACK TO SAVEPOINT {name}")
+        self._validate_savepoint_name(name)
+        with self._lock:
+            self._conn.execute(f"ROLLBACK TO SAVEPOINT {name}")
 
     def release_savepoint(self, name: str = "pre_sync"):
         """H2: Release a savepoint after successful sync."""
-        self._conn.execute(f"RELEASE SAVEPOINT {name}")
+        self._validate_savepoint_name(name)
+        with self._lock:
+            self._conn.execute(f"RELEASE SAVEPOINT {name}")
 
     # ── H4: Tombstones ────────────────────────────────────────────
 
     def record_tombstone(self, concept_a: str, concept_b: str, deleted_by: str = None):
         """H4: Record a deleted edge as tombstone (respected by pull)."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return
-        td = today_days()
-        self._conn.execute(
-            "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
-            "VALUES (?, ?, ?, ?)", (a_id, b_id, td, deleted_by)
-        )
-        self._conn.commit()
-        self._wal_monitor.on_write()
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return
+            td = today_days()
+            self._conn.execute(
+                "INSERT OR REPLACE INTO tombstones (a, b, deleted_at, deleted_by) "
+                "VALUES (?, ?, ?, ?)", (a_id, b_id, td, deleted_by)
+            )
+            self._conn.commit()
+            self._wal_monitor.on_write()
 
     def is_tombstoned(self, concept_a: str, concept_b: str) -> bool:
         """H4: Check if an edge has a tombstone."""
@@ -843,22 +961,25 @@ class MyceliumDB:
         """
         cutoff = today_days() - max_age_days
         try:
-            result = self._conn.execute(
-                "DELETE FROM tombstones WHERE deleted_at < ?", (cutoff,))
-            removed = result.rowcount
-            if removed > 0:
-                self._conn.commit()
-            return removed
-        except Exception:
+            with self._lock:
+                result = self._conn.execute(
+                    "DELETE FROM tombstones WHERE deleted_at < ?", (cutoff,))
+                removed = result.rowcount
+                if removed > 0:
+                    self._conn.commit()
+                return removed
+        except sqlite3.OperationalError as e:
+            print(f"WARNING: clear_dead_edges failed: {e}", file=sys.stderr)
             return 0
 
     def close(self):
         """Close the database connection and checkpoint WAL."""
-        try:
-            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except Exception:
-            pass
-        self._conn.close()
+        with self._lock:
+            try:
+                self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except sqlite3.OperationalError:
+                pass
+            self._conn.close()
 
     # ── Migration from JSON ──────────────────────────────────────────
 
@@ -970,7 +1091,7 @@ class MyceliumDB:
         """Close connection on garbage collection."""
         try:
             self._conn.close()
-        except Exception:
+        except (sqlite3.Error, AttributeError):
             pass
 
 
@@ -1035,7 +1156,8 @@ class ConceptTranslator:
             # Load cache into memory
             for row in self._db.execute("SELECT source, target FROM translations"):
                 self._cache[row[0]] = row[1]
-        except Exception:
+        except (sqlite3.Error, OSError) as e:
+            print(f"WARNING: translation cache init failed: {e}", file=sys.stderr)
             self._db = None
 
     def is_english(self, word: str) -> bool:
@@ -1052,7 +1174,7 @@ class ConceptTranslator:
         try:
             tokens = self._tokenizer.encode(word)
             return len(tokens) <= 1
-        except Exception:
+        except (TypeError, ValueError):
             return True
 
     def translate(self, word: str) -> str:
@@ -1165,8 +1287,8 @@ class ConceptTranslator:
                 (source, target, time.strftime("%Y-%m-%d"))
             )
             self._db.commit()
-        except Exception:
-            pass
+        except sqlite3.Error as e:
+            print(f"WARNING: translation cache write failed: {e}", file=sys.stderr)
 
     def flush_pending(self) -> int:
         """Translate all pending words in one batch. Returns count translated. H13: thread-safe."""

@@ -1,7 +1,77 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 7941 + mycelium.py 2873 + cube.py 3264 + mycelium_db.py 1207 + sync_backend.py 1128 + sync_tls.py 600 + forge.py 2048 + vault.py 389 + sentiment.py 154 + tokenizer.py 43 + wal_monitor.py 89 = 19736 total
-Tests: 1069 PASS, 0 FAIL, 7 SKIP.
+Engine: muninn.py 1509 + muninn_layers.py 1294 + muninn_tree.py 3608 + muninn_feed.py 1619 + cube.py 1056 + cube_providers.py 580 + cube_analysis.py 1759 + mycelium.py 2915 + mycelium_db.py 1329 + sync_backend.py 1128 + sync_tls.py 601 + wal_monitor.py 109 + tokenizer.py 43 + lang_lexicons.py 1007 = 18557 total (14 files)
+Tests: 1294 PASS, 0 FAIL, 3 SKIP.
+
+---
+
+## Module Split — Architecture Polish (2026-03-28) [DONE]
+
+Split monolithic modules into focused sub-modules. Zero functional change, 1294 tests pass.
+
+**muninn.py (7959L -> 4 files):**
+- muninn.py (1509L) — orchestrator: globals, scan, bootstrap, CLI, hooks, secrets
+- muninn_layers.py (1294L) — compression pipeline: L0-L7, L10-L11, L9, verify
+- muninn_tree.py (3608L) — tree+boot+intelligence: tree I/O, boot, recall, prune, diagnostics
+- muninn_feed.py (1619L) — feed pipeline: parsing, compression, hooks, history, watch
+
+**cube.py (3273L -> 3 files):**
+- cube.py (1056L) — core: scanner, Cube/CubeStore classes, subdivision, deps, neighbors
+- cube_providers.py (580L) — LLM: providers (Ollama/Claude/OpenAI), FIM, reconstruction, NCD
+- cube_analysis.py (1759L) — analysis: destruction cycle, temperatures, math, CLI, anomalies
+
+**Key patterns:**
+- `_ModRef` lazy proxy: sub-modules access parent via `sys.modules['muninn']` at call time (not import time). Avoids circular imports while sharing mutable global state.
+- `sys.modules.setdefault('cube', sys.modules[__name__])`: ensures sub-modules find parent module regardless of import path (bare `import cube` vs `from engine.core.cube import`).
+- `__all__` lists: export private `_`-prefixed functions via `from X import *`.
+- `from muninn_layers import *` in muninn.py: backward-compatible re-export, all existing code keeps working.
+
+**Tests updated:** 16 source-inspection tests updated to read all 4 muninn source files via `chr(10).join(...)`.
+**pyproject.toml:** Added pytest configuration (testpaths, markers, filterwarnings).
+**WINTER_TREE.md:** Complete rewrite with new file structure (462 lines).
+
+---
+
+## Audit Bugs — External Audit Fixes (2026-03-27) [DONE]
+
+4 bugs + 3 critical, 33 tests. Fixes from external code audit + senior architect review.
+
+**Pass 1 — 4 bugs, 23 tests:**
+- **Bug 1**: WAL double checkpoint — get_wal_size() now reads WAL file header directly (struct.unpack), zero checkpoint side-effect. checkpoint() calls PRAGMA wal_checkpoint(PASSIVE) exactly once.
+- **Bug 2**: Thread safety — threading.Lock added to MyceliumDB (17 write methods) and CubeStore (8 write methods). All wrapped with `with self._lock:`. Protects check_same_thread=False usage.
+- **Bug 3**: Vault rekey atomicity — Three-phase rekey: Phase 1 re-encrypts to .vault.rekey temp files (originals untouched, KeyboardInterrupt cleans up), Phase 2 atomically replaces, Phase 3 updates salt. recover_rekey() verifies decryptability before updating salt (prevents data loss on pre-replace interrupt).
+- **Bug 4**: _high_degree_cache stale after observe — cache now invalidated in observe() alongside _adj_cache. Previously only invalidated in save(), causing fusions to use stale degree distribution.
+
+**Pass 2 — 3 critical, 10 tests:**
+- **SQL injection in savepoint/rollback** (mycelium_db.py): f-string interpolation in SAVEPOINT/ROLLBACK/RELEASE. Fix: `_validate_savepoint_name()` rejects non-alphanumeric names via `^[a-zA-Z0-9_]+$` regex.
+- **inject_memory() missing lock** (muninn.py): concurrent hooks could corrupt tree.json. Fix: entire inject_memory body wrapped in `with _MuninnLock(repo):`.
+- **TOCTOU stale lock race** (muninn.py): between `_is_lock_stale()` and `rmtree()`, another process could take the lock. Fix: atomic `rename()` to `.stale.{pid}` temp dir, then rmtree. If rename fails, another process won — just retry.
+
+**Pass 3 — 4 hardening fixes, 8 tests:**
+- **CubeStore read lock** (cube.py): 7 read methods (get_cube, get_cubes_by_file, get_cubes_by_level, get_hot_cubes, count_cubes, get_neighbors, get_cycles) now protected by `with self._lock:`. Prevents cursor corruption on concurrent read+write.
+- **Vault key zeroing** (vault.py): `_zero_bytes()` called on wrong password (was `self._key = None` only). lock() and unlock() now have try/finally to clean up plaintext/ciphertext data from memory on error paths.
+- **WAL page_size validation** (wal_monitor.py): get_wal_size() now rejects page_size < 512 or > 65536 (SQLite bounds). Corrupted WAL returns 0 instead of integer overflow.
+- **Lock exit logging** (muninn.py): `_MuninnLock.__exit__` no longer uses `ignore_errors=True`. Failures are logged to hook_log.txt for debugging stale lock accumulation on Windows.
+
+**Pass 4 — full codebase audit, 5 fixes, 11 tests:**
+- **Lock init race** (cube.py): `record_quarantine()` and `record_anomaly()` used `hasattr()` to init locks — not atomic, two threads could create separate Lock objects. Fix: module-level `_quarantine_lock` and `_anomaly_lock`.
+- **Unprotected analysis reads** (cube.py): `cube_heatmap()` and `fuse_risks()` accessed `store.conn` directly without `store._lock`. Fix: wrapped in `with store._lock:`.
+- **Missing encoding** (cube.py): `CubeConfig.load()` and `.save()` opened JSON files without `encoding='utf-8'`. Breaks on Windows with non-ASCII content. Fix: added encoding to all 3 open() calls.
+- **File handle leak** (muninn.py): `_tree_lock()` returned open file handle on timeout without closing it. Fix: `lock_f.close()` before returning `(None, False)`. Also added `encoding="utf-8"` to open().
+- **hasattr init race** (mycelium.py): `_session_seen` and `_congestion_checked` were initialized via `hasattr()` in `observe()` — race condition. Fix: initialized in `__init__()`.
+
+**Pass 5 — architectural hardening, 9 tests:**
+- **Bare excepts -> specific types** (mycelium_db.py, mycelium.py, cube.py): 20+ `except Exception: pass` replaced with specific types (sqlite3.OperationalError, OSError, ValueError, etc.) + stderr logging where failures need debugging. Silent error swallowing eliminated in core DB ops.
+- **MyceliumDB.transaction()** (mycelium_db.py): New `_Transaction` context manager acquires `_lock` AND enters sqlite3 transaction. `with db.transaction() as conn:` = thread-safe + transactional. Solves the 60 direct `._conn` accesses bypassing locks.
+- **8 new MyceliumDB methods**: `checkpoint_wal()`, `vacuum()`, `delete_stale_fusions()`, `cleanup_orphan_concepts()`, `cleanup_orphan_zones()`, `get_zone_counts()`, `get_multi_zone_edges()`, `get_zone_avg_count()`. All lock-protected.
+- **observe() refactored** (mycelium.py): Batch writes now use `self._db.transaction()` instead of `self._db._conn`. Fusion query wrapped in `self._db._lock`. save() meta updates use `transaction()`.
+- **WAL checkpoints routed** (mycelium.py): Direct `PRAGMA wal_checkpoint` calls replaced with `self._db.checkpoint_wal()`.
+
+**Pass 6 — full polish, 0 new tests (regression-only):**
+- **Bare excepts eradicated** (sync_backend.py, sync_tls.py, cube.py, mycelium.py): 41 remaining `except Exception` replaced with specific types across 4 files. sync_backend: `(sqlite3.Error, OSError)` for DB ops, `(json.JSONDecodeError, OSError)` for config. sync_tls: `(ssl.SSLError, ValueError)` for cert, `(OSError, ssl.SSLError)` for socket, `(sqlite3.Error, OSError)` for DB. cube.py: 21 instances — `(urllib.error.URLError, OSError)` for Ollama, `(subprocess.SubprocessError, OSError)` for git, `(ValueError, ZeroDivisionError, TypeError)` for math/stats, `(AttributeError, ValueError, TypeError)` for mycelium calls. mycelium.py: 5 final broad catches narrowed to `(sqlite3.Error, OSError, json.JSONDecodeError, ValueError)`.
+- **._conn bypass eliminated** (mycelium.py): All 55 direct `self._db._conn` accesses refactored. Write functions (`_check_fusions`, `decay`, `save`, `sync_to_meta`) now use `with self._db.transaction() as txn:`. Read functions (`_build_adj_cache`, `_get_high_degree_concepts`, `get_learned_abbreviations`, `detect_zones`, `auto_label_zones`, `get_zones`, `get_bridges`, `detect_anomalies`, `detect_blind_spots`, `dream`, `_bfs_zones`, `_pull_from_meta_sqlite`) now use `with self._db._lock:` + `.fetchall()` to materialize results under lock. Zero raw `._conn` access outside lock/transaction context.
+- **sqlite3 + urllib.error imports** added at module level in sync_tls.py and cube.py for specific exception types.
+- Regression: 672 PASS, 0 FAIL, 2 SKIP (1 pre-existing API-key test excluded).
 
 ---
 

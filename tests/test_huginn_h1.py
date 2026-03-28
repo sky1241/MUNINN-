@@ -162,7 +162,8 @@ def test_h1_7_graph_entropy():
 def test_h1_8_wired_in_prune():
     """trip() should be called in prune()."""
     import muninn
-    src = Path(muninn.__file__).read_text(encoding="utf-8")
+    _mdir = Path(muninn.__file__).parent
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     prune_start = src.find("def prune(")
     prune_end = src.find("\ndef ", prune_start + 1)
     prune_body = src[prune_start:prune_end]
@@ -174,7 +175,8 @@ def test_h1_8_wired_in_prune():
 def test_h1_9_in_cli():
     """'trip' should be in CLI choices."""
     import muninn
-    src = Path(muninn.__file__).read_text(encoding="utf-8")
+    _mdir = Path(muninn.__file__).parent
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     assert '"trip"' in src, "H1.9 FAIL: trip not in CLI choices"
     print("  H1.9 PASS: trip in CLI choices")
 

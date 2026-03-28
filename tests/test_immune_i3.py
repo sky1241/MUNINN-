@@ -188,7 +188,8 @@ def test_i3_4_too_few_branches():
 def test_i3_5_code_check():
     """I3 section should exist in prune()."""
     import muninn
-    src = Path(muninn.__file__).read_text(encoding="utf-8")
+    _mdir = Path(muninn.__file__).parent
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     prune_start = src.find("def prune(")
     prune_end = src.find("\ndef ", prune_start + 1)
     prune_body = src[prune_start:prune_end]

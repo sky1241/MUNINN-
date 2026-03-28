@@ -21,6 +21,11 @@ vault_audit.jsonl
 # Temp
 *.tmp
 
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+
 # Build artifacts
 *.egg-info/
 dist/

@@ -6,6 +6,8 @@ Designed for future Git (Phase 3) and TLS (Phase 4) backends.
 import hashlib
 import json
 import os
+import sqlite3
+import subprocess
 import sys
 import time
 from abc import ABC, abstractmethod
@@ -157,7 +159,7 @@ class SharedFileBackend(SyncBackend):
         def _do():
             try:
                 path.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
+            except OSError as e:
                 result[0] = e
         t = threading.Thread(target=_do, daemon=True)
         t.start()
@@ -274,7 +276,7 @@ class SharedFileBackend(SyncBackend):
 
             # H2: commit all at once (rollback on exception = no commit)
             db.commit()
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             errors = str(e)
             raise
         finally:
@@ -285,8 +287,8 @@ class SharedFileBackend(SyncBackend):
                     count=n_synced, errors=errors,
                     checksum=payload.checksum(),
                 )
-            except Exception:
-                pass
+            except (sqlite3.Error, OSError):
+                pass  # Audit log is best-effort
             db.close()
         return n_synced
 
@@ -310,7 +312,7 @@ class SharedFileBackend(SyncBackend):
             try:
                 for ts in local_db.get_tombstones():
                     local_tombstones.add((ts[0], ts[1]))
-            except Exception:
+            except (sqlite3.OperationalError, AttributeError):
                 pass  # No tombstones table = old schema, skip
 
             if query_concepts:
@@ -386,15 +388,15 @@ class SharedFileBackend(SyncBackend):
             # H2: commit all at once (no commit on exception = auto rollback)
             if local_db is not None:
                 local_db.commit()
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             errors = str(e)
             raise
         finally:
             # H1: audit log
             try:
                 db.log_sync(action="pull", count=pulled, errors=errors)
-            except Exception:
-                pass
+            except (sqlite3.Error, OSError):
+                pass  # Audit log is best-effort
             db.close()
         return pulled
 
@@ -414,7 +416,7 @@ class SharedFileBackend(SyncBackend):
                 repos_str = db.get_meta("repos", "")
                 result["repos"] = repos_str.split(",") if repos_str else []
                 db.close()
-            except Exception:
+            except (sqlite3.Error, OSError):
                 result["error"] = "failed to read meta DB"
         return result
 
@@ -487,8 +489,6 @@ def get_sync_backend(config: dict = None) -> SyncBackend:
 
 
 # ── G1-G5: GitBackend ────────────────────────────────────────────
-
-import subprocess
 
 class GitBackend(SyncBackend):
     """G1: Sync via bare git repo (local or remote).
@@ -664,8 +664,8 @@ class GitBackend(SyncBackend):
         try:
             for ts in local_db.get_tombstones():
                 local_tombstones.add((ts[0], ts[1]))
-        except Exception:
-            pass
+        except (sqlite3.OperationalError, AttributeError):
+            pass  # No tombstones = old schema
 
         # Read all repo JSON files
         for json_file in self.repo_path.glob("*.json"):
@@ -770,7 +770,7 @@ def save_sync_config(config: dict):
         with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
         os.replace(tmp_path, str(config_path))
-    except Exception:
+    except (OSError, TypeError):
         try:
             os.unlink(tmp_path)
         except OSError:
@@ -807,8 +807,8 @@ def sync_metrics() -> dict:
             result["last_sync"] = logs[0].get("timestamp")
 
         db.close()
-    except Exception:
-        pass
+    except (sqlite3.Error, OSError):
+        pass  # Metrics collection is best-effort
 
     return result
 
@@ -905,7 +905,7 @@ def verify_hooks() -> dict:
     try:
         get_sync_backend()
         result["factory_load"] = True
-    except Exception:
+    except (ImportError, ValueError, OSError):
         result["factory_load"] = False
 
     # Check mycelium import path
@@ -933,14 +933,14 @@ def verify_hooks() -> dict:
         j = p.to_json()
         p2 = SyncPayload.from_json(j)
         result["payload_roundtrip"] = p2.repo_name == "test"
-    except Exception:
+    except (TypeError, ValueError, KeyError):
         result["payload_roundtrip"] = False
 
     # Check config load
     try:
         _load_sync_config()
         result["config_load"] = True
-    except Exception:
+    except (json.JSONDecodeError, OSError, KeyError):
         result["config_load"] = False
 
     return result
@@ -960,7 +960,7 @@ def sync_doctor() -> dict:
         backend = get_sync_backend()
         st = backend.status()
         result["backend"] = {"ok": True, "detail": f"type={st.get('type', '?')}"}
-    except Exception as e:
+    except (ImportError, OSError, sqlite3.Error, ConnectionError) as e:
         result["backend"] = {"ok": False, "detail": str(e)}
 
     # 2. Meta DB exists and readable
@@ -978,7 +978,7 @@ def sync_doctor() -> dict:
             result["schema_version"] = {"ok": ver >= 2,
                                         "detail": f"v{ver}"}
             db.close()
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             result["meta_db"] = {"ok": False, "detail": str(e)}
     else:
         result["meta_db"] = {"ok": True, "detail": "not created yet (OK for fresh install)"}
@@ -990,7 +990,7 @@ def sync_doctor() -> dict:
             cfg = json.loads(config_path.read_text(encoding="utf-8"))
             result["config"] = {"ok": True,
                                 "detail": f"backend={cfg.get('backend', 'shared_file')}"}
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             result["config"] = {"ok": False, "detail": f"parse error: {e}"}
     else:
         result["config"] = {"ok": True, "detail": "using defaults"}
@@ -1012,7 +1012,7 @@ def sync_doctor() -> dict:
             else:
                 result["last_sync"] = {"ok": True, "detail": "no sync yet"}
             db.close()
-        except Exception:
+        except (sqlite3.Error, OSError):
             result["last_sync"] = {"ok": True, "detail": "no sync log"}
 
     return result
@@ -1062,7 +1062,7 @@ def export_meta_json(output_path: Path) -> dict:
     try:
         for row in db._conn.execute("SELECT key, value FROM meta"):
             meta_info[row[0]] = row[1]
-    except Exception:
+    except sqlite3.OperationalError:
         pass
 
     export = {

@@ -90,7 +90,7 @@ def build_corpus(file_paths: dict[str, str], store: CubeStore):
             content = f.read()
 
         all_contents[fpath] = content
-        cubes = subdivide_file(content=content, file_path=fpath, target_tokens=88)
+        cubes = subdivide_file(content=content, file_path=fpath, target_tokens=112)
 
         for cube in cubes:
             store.save_cube(cube)

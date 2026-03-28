@@ -206,7 +206,8 @@ class TestA6BootPreWarm:
     def test_boot_has_git_diff_logic(self):
         """A6: boot() contains git diff pre-warm code."""
         import muninn
-        src = Path(muninn.__file__).read_text(encoding="utf-8")
+        _mdir = Path(muninn.__file__).parent
+        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         assert "git diff" in src.lower() or "git" in src
         assert "diff_concepts" in src or "A6" in src
 
@@ -240,7 +241,8 @@ class TestA8PruneWarning:
     def test_prune_warning_in_boot(self):
         """A8: boot() contains prune warning logic."""
         import muninn
-        src = Path(muninn.__file__).read_text(encoding="utf-8")
+        _mdir = Path(muninn.__file__).parent
+        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         assert "branches are cold" in src or "A8" in src
         assert "muninn prune" in src
 
