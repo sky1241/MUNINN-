@@ -10,9 +10,6 @@ Tests:
   T1.7  Message protocol: send/recv roundtrip
 """
 import sys, os, tempfile, time, socket, ssl
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
-
 def test_t1_1_generate_certs():
     """generate_certs creates cert + key files"""
     from pathlib import Path

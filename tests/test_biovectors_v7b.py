@@ -5,7 +5,6 @@ The V7B code: total = 0.8 * total + 0.2 * aco_score where aco = tau * eta^2.
 """
 import sys, os, json, tempfile, shutil, time
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 
 PASS = 0

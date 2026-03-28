@@ -14,7 +14,6 @@ Tests:
   X1.11 multiple secrets in one text all redacted
 """
 import sys, os, tempfile, shutil
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from _secrets import redact_secrets_text
 from pathlib import Path
 
@@ -74,7 +73,7 @@ def test_x1_6_aws_key():
 
 def test_x1_7_observe_text_defense():
     """Secrets fed to observe_text() never appear in mycelium concepts."""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
 
     tmpdir = tempfile.mkdtemp(prefix="muninn_x1_")
     try:

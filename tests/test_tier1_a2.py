@@ -10,7 +10,6 @@ Tests:
 """
 import sys, os, math
 from datetime import datetime, timedelta
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _actr_activation, _ebbinghaus_recall
 
 def _days_ago(n):

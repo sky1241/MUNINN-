@@ -5,7 +5,7 @@ import tempfile
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from engine.core.mycelium import Mycelium
+from muninn.mycelium import Mycelium
 
 
 def make_temp():

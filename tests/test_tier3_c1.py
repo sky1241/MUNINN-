@@ -9,8 +9,7 @@ Tests:
 """
 import sys, os, json, tempfile, shutil
 from datetime import datetime, timedelta
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium import Mycelium
+from muninn.mycelium import Mycelium
 
 
 def _make_mycelium(connections: dict) -> Mycelium:

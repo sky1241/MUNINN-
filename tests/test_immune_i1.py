@@ -10,7 +10,6 @@ Tests:
 """
 import sys, os, json, tempfile, shutil, re, time
 from datetime import datetime, timedelta
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
 
 _TODAY = time.strftime("%Y-%m-%d")

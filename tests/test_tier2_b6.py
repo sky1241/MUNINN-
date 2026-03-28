@@ -9,8 +9,6 @@ Tests:
   B6.6  Confidence in [0, 1]
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_b6_1_debug():
     """Session with many E> tags = debug"""
     import muninn

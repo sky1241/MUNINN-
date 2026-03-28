@@ -5,7 +5,6 @@ Calls real muninn.boot() with temp repos — no local formula reimplementation.
 """
 import sys, os, json, tempfile, shutil, time
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 
 PASS = 0

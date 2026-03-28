@@ -43,7 +43,7 @@ def main():
     try:
         # ── STEP 1: Mycelium ──
         print("[1/8] MYCELIUM — observe + spread_activation...")
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
 
         myc_repo = Path(tmp)
         (myc_repo / ".muninn").mkdir(parents=True, exist_ok=True)

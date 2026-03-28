@@ -19,7 +19,7 @@ MEMORY_DIR.mkdir()
 TREE_FILE = MEMORY_DIR / "tree.json"
 
 TEMP_META = Path(tempfile.mkdtemp(prefix="muninn_meta_"))
-from mycelium import Mycelium as _MycPatch
+from muninn.mycelium import Mycelium as _MycPatch
 _MycPatch.meta_path = staticmethod(lambda: TEMP_META / "meta_mycelium.json")
 _MycPatch.meta_db_path = staticmethod(lambda: TEMP_META / "meta_mycelium.db")
 assert "muninn_meta_" in str(_MycPatch.meta_db_path())
@@ -286,7 +286,7 @@ try:
     tree_path = boot_repo / "memory" / "tree.json"
     checks["tree.json exists"] = tree_path.exists()
 
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     db_path = boot_repo / ".muninn" / "mycelium.db"
     if db_path.exists():
         db = MyceliumDB(db_path)

@@ -13,9 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium import Mycelium
-from mycelium_db import MyceliumDB
+from muninn.mycelium import Mycelium
+from muninn.mycelium_db import MyceliumDB
 
 
 def _make_mycelium(tmp_path):
@@ -61,7 +60,7 @@ class TestCongestionDetect:
 
     def test_congestion_code_exists(self):
         """Verify the congestion detection code is in mycelium.py."""
-        import mycelium
+        import muninn.mycelium as mycelium
         source = open(mycelium.__file__, encoding="utf-8").read()
         assert "CONGESTION" in source
         assert "emergency decay" in source
@@ -75,7 +74,7 @@ class TestCongestionDetect:
 
         # Add some old edges that decay can remove
         m.observe(["alpha", "bravo"])
-        from mycelium import today_days
+        from muninn.mycelium import today_days
         td = today_days()
         a_id = m._db._concept_cache.get("alpha")
         b_id = m._db._concept_cache.get("bravo")

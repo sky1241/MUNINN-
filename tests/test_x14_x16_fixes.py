@@ -8,13 +8,12 @@ Tests:
   X16.1  get_learned_fillers returns empty (disabled = safe)
 """
 import sys, os, tempfile, shutil, json
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
 
 
 def test_x14_1_traversal_rejected():
     """Config path with '..' is rejected."""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
 
     tmpdir = tempfile.mkdtemp(prefix="muninn_x14_")
     try:
@@ -45,7 +44,7 @@ def test_x14_1_traversal_rejected():
 
 def test_x14_2_valid_path_accepted():
     """Config path with valid directory is accepted."""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
 
     tmpdir = tempfile.mkdtemp(prefix="muninn_x14_")
     try:
@@ -72,7 +71,7 @@ def test_x14_2_valid_path_accepted():
 
 def test_x14_3_type_check():
     """Config path with non-string type is rejected."""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
 
     tmpdir = tempfile.mkdtemp(prefix="muninn_x14_")
     try:
@@ -111,7 +110,7 @@ def test_x15_1_atomic_write():
 
 def test_x16_1_learned_fillers_disabled():
     """get_learned_fillers returns empty list (disabled = safe)."""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
 
     tmpdir = tempfile.mkdtemp(prefix="muninn_x16_")
     try:

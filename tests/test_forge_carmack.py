@@ -20,8 +20,7 @@ import json
 import tempfile
 import math
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from forge import (
+from muninn.forge import (
     _haar_wavelet_energy, _build_commit_signal, _KalmanPredictor,
     PREDICT_WEIGHTS, load_json, save_json
 )

@@ -62,7 +62,7 @@ if _CORE not in sys.path:
 
 from muninn import _ebbinghaus_recall, _actr_activation, _days_since
 try:
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     HAS_MYCELIUM = True
 except ImportError:
     HAS_MYCELIUM = False

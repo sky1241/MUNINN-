@@ -7,8 +7,8 @@ import tempfile
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from engine.core.mycelium import Mycelium
-from engine.core.mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
+from muninn.mycelium import Mycelium
+from muninn.mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
 
 
 def make_temp():

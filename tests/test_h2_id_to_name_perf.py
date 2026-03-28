@@ -14,8 +14,8 @@ sys.path.insert(0, str(ENGINE))
 
 def test_h2_id_to_name_built_once():
     """Verify id_to_name is not rebuilt inside the concept loop."""
-    from mycelium import Mycelium
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium import Mycelium
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     try:

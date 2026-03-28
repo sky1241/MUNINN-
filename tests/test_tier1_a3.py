@@ -8,8 +8,6 @@ Tests:
   A3.6  k=0: sigmoid disabled -> raw values preserved
 """
 import sys, os, math
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 TOLERANCE = 0.05
 
 def sigmoid(x, k=10, x0=0.3):
@@ -51,7 +49,7 @@ def test_a3_6_disabled():
 def test_a3_integration():
     """Test that spread_activation still works with sigmoid"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     # Use actual repo mycelium if it exists
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)

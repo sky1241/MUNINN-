@@ -11,10 +11,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
-from sync_backend import (
+from muninn.mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
+from muninn.sync_backend import (
     SyncBackend, SharedFileBackend, SyncPayload, SyncEdge, SyncFusion,
     get_sync_backend, _load_sync_config, save_sync_config,
 )
@@ -365,7 +363,7 @@ class TestAtomicConfigWrite:
 class TestF4Delegation:
     def test_sync_to_meta_delegates(self, tmp_path, monkeypatch):
         """F4: sync_to_meta() uses backend when self._db is not None."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -387,7 +385,7 @@ class TestF4Delegation:
 
     def test_pull_from_meta_delegates(self, tmp_path, monkeypatch):
         """F4: pull_from_meta() uses backend when self._db is not None."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
 
         meta_dir = tmp_path / "meta"
         # Create meta with data
@@ -414,7 +412,7 @@ class TestF4Delegation:
 
     def test_roundtrip_two_repos(self, tmp_path, monkeypatch):
         """F4: Full roundtrip — repo A pushes, repo B pulls via Mycelium API."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
 
         meta_dir = tmp_path / "shared_meta"
         monkeypatch.setenv("MUNINN_META_PATH", str(meta_dir))

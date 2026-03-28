@@ -19,7 +19,7 @@ TREE_FILE = MEMORY_DIR / "tree.json"
 
 TEMP_META = Path(tempfile.mkdtemp(prefix="muninn_meta_"))
 
-from mycelium import Mycelium as _MycPatch
+from muninn.mycelium import Mycelium as _MycPatch
 _orig_meta_path = _MycPatch.meta_path
 _orig_meta_db_path = _MycPatch.meta_db_path
 _MycPatch.meta_path = staticmethod(lambda: TEMP_META / "meta_mycelium.json")
@@ -302,8 +302,8 @@ except Exception as e:
 # ═══════════════════════════════════════════
 t0 = time.time()
 try:
-    from mycelium import Mycelium
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium import Mycelium
+    from muninn.mycelium_db import MyceliumDB
 
     m = Mycelium(TEMP_REPO)
     # Need to create strong fusion: observe "machine" and "learning" together many times

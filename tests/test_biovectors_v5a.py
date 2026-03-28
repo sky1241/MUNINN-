@@ -6,7 +6,6 @@ overlap with a branch's tags.
 """
 import sys, os, json, tempfile, shutil, time
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 
 PASS = 0

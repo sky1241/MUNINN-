@@ -36,14 +36,14 @@ Repository = "https://github.com/sky1241/MUNINN-"
 Issues = "https://github.com/sky1241/MUNINN-/issues"
 
 [project.scripts]
-muninn = "engine.core.muninn:main"
-mycelium = "engine.core.mycelium:main"
+muninn = "muninn._engine:main"
+mycelium = "muninn.mycelium:main"
 
 [tool.setuptools.packages.find]
-include = ["engine*"]
+include = ["muninn*"]
 
 [tool.setuptools.package-data]
-"engine.core" = ["*.py"]
+"muninn" = ["*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -17,7 +17,7 @@ MEMORY_DIR = TEMP_REPO / "memory"
 MEMORY_DIR.mkdir()
 
 TEMP_META = Path(tempfile.mkdtemp(prefix="muninn_meta_"))
-from mycelium import Mycelium as _MycPatch
+from muninn.mycelium import Mycelium as _MycPatch
 _MycPatch.meta_path = staticmethod(lambda: TEMP_META / "meta_mycelium.json")
 _MycPatch.meta_db_path = staticmethod(lambda: TEMP_META / "meta_mycelium.db")
 assert "muninn_meta_" in str(_MycPatch.meta_db_path())

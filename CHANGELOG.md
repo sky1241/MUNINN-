@@ -1,7 +1,35 @@
 # MUNINN — Changelog
 
 Engine: muninn.py 1509 + muninn_layers.py 1294 + muninn_tree.py 3608 + muninn_feed.py 1619 + cube.py 1056 + cube_providers.py 580 + cube_analysis.py 1759 + mycelium.py 2915 + mycelium_db.py 1329 + sync_backend.py 1128 + sync_tls.py 601 + wal_monitor.py 109 + tokenizer.py 43 + lang_lexicons.py 1007 = 18557 total (14 files)
-Tests: 1294 PASS, 0 FAIL, 3 SKIP.
+Tests: 1210 PASS, 0 FAIL, 3 SKIP.
+
+---
+
+## Pip Install — Package Structure (2026-03-28) [DONE]
+
+Muninn is now pip-installable as a proper Python package.
+
+**Package structure:**
+- `muninn/__init__.py` — `_ProxyModule` class: proxies getattr/setattr/delattr to `_engine.py`. Transparent to all existing code.
+- `muninn/__main__.py` — `python -m muninn` support
+- `muninn/_engine.py` — was `muninn.py`, renamed to avoid package/module name conflict
+- All 14 engine files live in `muninn/` with relative imports + bare import fallback
+- `engine/core/muninn.py` — still works (backward compat for hooks)
+
+**Test infrastructure:**
+- `tests/conftest.py` — pre-loads muninn package before collection (prevents engine/core shadowing)
+- 62 test files updated: bare `from mycelium import` → `from muninn.mycelium import`
+- 14 test files updated: source inspection `"muninn.py"` → `"_engine.py"`
+- `test_forge_carmack.py`: `from forge import` → `from muninn.forge import`
+
+**pyproject.toml:**
+- `muninn = "muninn._engine:main"` entry point
+- `include = ["muninn*"]` package discovery
+
+**Backward compatibility:** Both paths work:
+- `python engine/core/muninn.py feed` (hooks, existing scripts)
+- `python -m muninn feed` (new package path)
+- `pip install -e .` then `muninn feed` (entry point)
 
 ---
 

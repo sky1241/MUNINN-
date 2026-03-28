@@ -13,8 +13,6 @@ Tests:
   V6A.6  Hill switch is sharp around theta=0.5
 """
 import sys, os, tempfile, json
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 PASS = 0
 FAIL = 0
 
@@ -50,7 +48,7 @@ def test_v6a_2_max_boost():
 
 def test_v6a_3_mycelium_weight():
     """Mycelium connection with arousal > without arousal"""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         tmppath = type('P', (), {'__truediv__': lambda s, k: type('P2', (), {'__truediv__': lambda s2, k2: os.path.join(tmpdir, k, k2), 'exists': lambda s2: os.path.exists(os.path.join(tmpdir, k, k2)), 'mkdir': lambda s2, **kw: os.makedirs(os.path.join(tmpdir, k, k2), exist_ok=True), 'read_text': lambda s2, **kw: open(os.path.join(tmpdir, k, k2)).read(), 'write_text': lambda s2, t, **kw: open(os.path.join(tmpdir, k, k2), 'w').write(t)})()})()
         # Use simpler approach: create two Mycelium instances, observe same concepts
@@ -108,7 +106,7 @@ def test_v6a_4_no_explosion():
 
 def test_v6a_5_backward_compat():
     """observe_text with arousal=0 works same as before (count=1 per pair)"""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     m = Mycelium.__new__(Mycelium)
     m.data = {"connections": {}, "fusions": {}, "fillers": [], "stats": {}}
     m.repo_path = "."

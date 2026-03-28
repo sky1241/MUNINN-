@@ -8,7 +8,6 @@ Tests:
   C4.5  adapt_k() wired in inject_memory()
 """
 import sys, os, re
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 from pathlib import Path
 
@@ -43,7 +42,7 @@ def test_c4_3_convergent():
 def test_c4_4_wired_in_recall():
     """adapt_k() should be called in recall()."""
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     recall_start = src.find("def recall(")
     recall_end = src.find("\ndef ", recall_start + 1)
     recall_body = src[recall_start:recall_end]
@@ -54,7 +53,7 @@ def test_c4_4_wired_in_recall():
 def test_c4_5_wired_in_inject():
     """adapt_k() should be called in inject_memory()."""
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     inject_start = src.find("def inject_memory(")
     inject_end = src.find("\ndef ", inject_start + 1)
     inject_body = src[inject_start:inject_end]

@@ -9,8 +9,7 @@ Tests:
   X1b.6  purge_secrets_db works on local + meta databases
 """
 import sys, os, tempfile, shutil, sqlite3
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium_db import MyceliumDB
+from muninn.mycelium_db import MyceliumDB
 from pathlib import Path
 
 
@@ -30,7 +29,7 @@ def _make_db(tmpdir, name="mycelium.db"):
     secret_id3 = db._get_or_create_concept("AKIAIOSFODNN7EXAMPLE")
 
     # Create edges involving secrets
-    from mycelium_db import date_to_days
+    from muninn.mycelium_db import date_to_days
     today = date_to_days("2026-03-27")
     db._conn.execute("INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)",
                      (clean_id1, secret_id1, 5.0, today, today))

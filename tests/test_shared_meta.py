@@ -14,9 +14,7 @@ from pathlib import Path
 
 import pytest
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium import Mycelium
+from muninn.mycelium import Mycelium
 
 
 @pytest.fixture
@@ -179,7 +177,7 @@ class TestSharedSync:
         bob.sync_to_meta()
 
         # Check meta DB has both zones
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         _patch_home(monkeypatch, ws["alice_home"])  # either home works
         meta_db = MyceliumDB(Mycelium.meta_db_path())
         zones = set()
@@ -218,7 +216,7 @@ class TestConflictResistance:
         bob.sync_to_meta()
 
         # Verify meta has data from both
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         _patch_home(monkeypatch, ws["alice_home"])
         meta_db = MyceliumDB(Mycelium.meta_db_path())
         edge_count = meta_db._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
@@ -244,7 +242,7 @@ class TestConflictResistance:
         alice.sync_to_meta()
 
         # Check count in meta — should be ~5, not ~10
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         meta_db = MyceliumDB(Mycelium.meta_db_path())
         row = meta_db._conn.execute(
             "SELECT count FROM edges LIMIT 1"

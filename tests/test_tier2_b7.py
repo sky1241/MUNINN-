@@ -9,8 +9,6 @@ Tests:
   B7.6  Mycelium fed with concepts
 """
 import sys, os, tempfile, json, shutil, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def _setup_temp_repo(tmpdir):
     """Create minimal Muninn repo structure in tmpdir"""
     from pathlib import Path

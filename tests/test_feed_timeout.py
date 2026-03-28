@@ -16,15 +16,12 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
-
 def _make_repo(tmp_path):
     """Create a minimal repo structure."""
     muninn_dir = tmp_path / ".muninn"
     muninn_dir.mkdir(exist_ok=True)
     # Create SQLite DB
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     db_path = muninn_dir / "mycelium.db"
     db = MyceliumDB(db_path)
     db._conn.execute("INSERT INTO meta (key, value) VALUES ('migration_complete', '1')")

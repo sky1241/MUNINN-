@@ -16,8 +16,6 @@ Tests:
   V10A.10 Graceful when vaderSentiment not installed (mocked)
 """
 import sys, os, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 from sentiment import score_sentiment, score_session
 
 PASS = 0

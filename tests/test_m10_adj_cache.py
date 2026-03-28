@@ -13,8 +13,8 @@ sys.path.insert(0, str(ENGINE))
 
 def test_m10_cache_invalidated_after_observe():
     """After observe(), spread_activation should see new edges."""
-    from mycelium import Mycelium
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium import Mycelium
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     try:

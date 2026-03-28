@@ -14,7 +14,7 @@ sys.path.insert(0, str(ENGINE))
 
 def test_upsert_connection_persists():
     """H3: upsert_connection must survive close+reopen."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     db_path = tmp / "test.db"
@@ -36,7 +36,7 @@ def test_upsert_connection_persists():
 
 def test_upsert_fusion_persists():
     """H3: upsert_fusion must survive close+reopen."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     db_path = tmp / "test.db"
@@ -56,7 +56,7 @@ def test_upsert_fusion_persists():
 
 def test_delete_connection_persists():
     """H4: delete_connection must actually delete on disk."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     db_path = tmp / "test.db"
@@ -80,7 +80,7 @@ def test_delete_connection_persists():
 
 def test_update_connection_count_persists():
     """M11: update_connection_count must survive close+reopen."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     db_path = tmp / "test.db"
@@ -103,7 +103,7 @@ def test_update_connection_count_persists():
 
 def test_add_zone_to_edge_persists():
     """M12: add_zone_to_edge must survive close+reopen."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     db_path = tmp / "test.db"

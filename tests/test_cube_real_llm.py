@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.core.cube import (
+from muninn.cube import (
     Cube, CubeStore, OllamaProvider,
     sha256_hash, subdivide_file, assign_neighbors, parse_dependencies,
     reconstruct_cube, compute_ncd, run_destruction_cycle,
@@ -257,7 +257,7 @@ class TestRealFullPipeline:
         )
 
         # Scan
-        from engine.core.cube import scan_repo
+        from muninn.cube import scan_repo
         scanned = scan_repo(str(tmp_path), extensions=['.py'])
         assert len(scanned) == 2
 

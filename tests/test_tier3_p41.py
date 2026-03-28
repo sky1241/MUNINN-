@@ -8,8 +8,7 @@ Tests:
   P41.5  Second-order connections are real connections in the graph
 """
 import sys, os, json, tempfile, shutil
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium import Mycelium
+from muninn.mycelium import Mycelium
 
 
 def _make_mycelium(connections=None, fusions=None):

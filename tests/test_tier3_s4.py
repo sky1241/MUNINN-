@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 def test_s4_1_english_detection():
     """English words detected as 1 token."""
-    from engine.core.mycelium_db import ConceptTranslator
+    from muninn.mycelium_db import ConceptTranslator
     t = ConceptTranslator()
     english_words = ["compression", "tree", "algorithm", "sqlite", "memory",
                      "database", "branch", "token", "network", "graph"]
@@ -17,7 +17,7 @@ def test_s4_1_english_detection():
 
 def test_s4_2_foreign_detection():
     """Non-English words detected as 2+ tokens."""
-    from engine.core.mycelium_db import ConceptTranslator
+    from muninn.mycelium_db import ConceptTranslator
     t = ConceptTranslator()
     foreign_words = ["pouvait", "surtout", "dessus", "paradigme"]
     for w in foreign_words:
@@ -26,7 +26,7 @@ def test_s4_2_foreign_detection():
 
 def test_s4_3_normalize_passthrough():
     """English concepts pass through unchanged."""
-    from engine.core.mycelium_db import ConceptTranslator
+    from muninn.mycelium_db import ConceptTranslator
     t = ConceptTranslator()
     concepts = ["compression", "tree", "memory"]
     result = t.normalize_concepts(concepts)
@@ -35,7 +35,7 @@ def test_s4_3_normalize_passthrough():
 
 def test_s4_4_pending_queue():
     """Non-English concepts are queued for batch translation."""
-    from engine.core.mycelium_db import ConceptTranslator
+    from muninn.mycelium_db import ConceptTranslator
     t = ConceptTranslator()
     t._pending = []  # Reset
     concepts = ["compression", "pouvait", "surtout"]
@@ -46,7 +46,7 @@ def test_s4_4_pending_queue():
 
 def test_s4_5_cache_hit():
     """Cached translations are returned immediately."""
-    from engine.core.mycelium_db import ConceptTranslator
+    from muninn.mycelium_db import ConceptTranslator
     t = ConceptTranslator()
     t._cache["pouvait"] = "could"
     t._cache["surtout"] = "especially"

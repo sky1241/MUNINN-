@@ -15,10 +15,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days, ConceptTranslator
-from sync_backend import (
+from muninn.mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days, ConceptTranslator
+from muninn.sync_backend import (
     SharedFileBackend, SyncPayload, SyncEdge, SyncFusion,
     get_sync_backend, check_disk_space, save_sync_config,
 )
@@ -270,7 +268,7 @@ class TestH5FusionConflict:
 class TestH6DynamicDegree:
     def test_dynamic_percentile_decreases_with_repos(self, tmp_path, monkeypatch):
         """H6: More repos = tighter filter percentile."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         (repo_dir / ".muninn").mkdir()
@@ -292,7 +290,7 @@ class TestH6DynamicDegree:
 
     def test_non_federated_uses_base(self, tmp_path):
         """H6: Non-federated mode uses base percentile."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         (repo_dir / ".muninn").mkdir()

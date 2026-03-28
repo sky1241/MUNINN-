@@ -11,13 +11,12 @@ Tests:
   X7.1  Feed progress is written after save (order check)
 """
 import sys, os, tempfile, shutil
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
 
 
 def test_x3_1_composite_indexes_exist():
     """Composite indexes are created with the DB."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     tmpdir = tempfile.mkdtemp(prefix="muninn_x3_")
     try:
         db = MyceliumDB(Path(tmpdir) / "test.db")
@@ -35,7 +34,7 @@ def test_x3_1_composite_indexes_exist():
 
 def test_x3_2_index_used_by_edge_zones_query():
     """EXPLAIN QUERY PLAN uses index for edge_zones(a,b) lookup."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     tmpdir = tempfile.mkdtemp(prefix="muninn_x3_")
     try:
         db = MyceliumDB(Path(tmpdir) / "test.db")
@@ -53,7 +52,7 @@ def test_x3_2_index_used_by_edge_zones_query():
 
 def test_x4_1_user_version_set():
     """PRAGMA user_version is set after creation."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     tmpdir = tempfile.mkdtemp(prefix="muninn_x4_")
     try:
         db = MyceliumDB(Path(tmpdir) / "test.db")
@@ -67,7 +66,7 @@ def test_x4_1_user_version_set():
 
 def test_x4_2_migration_idempotent():
     """Opening DB twice doesn't crash (migration is idempotent)."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     tmpdir = tempfile.mkdtemp(prefix="muninn_x4_")
     try:
         db_path = Path(tmpdir) / "test.db"
@@ -85,7 +84,7 @@ def test_x4_2_migration_idempotent():
 
 def test_x4_3_migration_flag_cleared():
     """Migration in-progress flag is cleared after completion."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     tmpdir = tempfile.mkdtemp(prefix="muninn_x4_")
     try:
         db = MyceliumDB(Path(tmpdir) / "test.db")
@@ -101,7 +100,7 @@ def test_x4_3_migration_flag_cleared():
 
 def test_x5_1_days_to_date_fallback():
     """days_to_date fallback returns today, not hardcoded 2026-01-01."""
-    from mycelium_db import days_to_date
+    from muninn.mycelium_db import days_to_date
     from datetime import datetime, timezone
     result = days_to_date("garbage")
     today_str = datetime.now(timezone.utc).date().strftime("%Y-%m-%d")
@@ -112,7 +111,7 @@ def test_x5_1_days_to_date_fallback():
 
 def test_x6_1_saturation_float_not_int():
     """Saturation loss is float, preventing int truncation to 0/1."""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     tmpdir = tempfile.mkdtemp(prefix="muninn_x6_")
     try:
         m = Mycelium(Path(tmpdir))
@@ -158,7 +157,7 @@ def test_x7_1_feed_progress_order():
     """Verify feed progress code writes save() BEFORE progress file (source inspection)."""
     muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
     source = ""
-    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+    for _mf in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
         _mp = os.path.join(muninn_dir, _mf)
         if os.path.exists(_mp):
             with open(_mp, encoding="utf-8") as f:

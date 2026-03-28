@@ -9,11 +9,9 @@ Tests:
   W6  Integration: boot with wiring produces valid results
 """
 import sys, os, tempfile, json, time, math
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_w1_sigmoid_k_adapts():
     """B5: spread_activation should use session-adapted k"""
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     import muninn
     # Divergent mode -> k=5, Convergent -> k=20
     div_mode = muninn.detect_session_mode([f"c{i}" for i in range(20)])
@@ -37,7 +35,7 @@ def test_w2_blind_spots_boost():
     if not m_path.exists():
         print(f"  W2 SKIP: no mycelium")
         return
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     m = Mycelium(repo)
     if len(m.data["connections"]) < 100:
         print(f"  W2 SKIP: too few connections")

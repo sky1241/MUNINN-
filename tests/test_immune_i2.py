@@ -8,7 +8,6 @@ Tests:
   I2.5  Single branch: no suppression (nothing to compete with)
 """
 import sys, os, json, tempfile, shutil, zlib, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
 
 _TODAY = time.strftime("%Y-%m-%d")
@@ -135,7 +134,7 @@ def test_i2_4_code_check():
     """I2 section should exist in prune()."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     prune_start = src.find("def prune(")
     prune_end = src.find("\ndef ", prune_start + 1)
     prune_body = src[prune_start:prune_end]

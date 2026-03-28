@@ -8,12 +8,10 @@ Tests:
   B3.5  Output format: list of (str, str, str) tuples
 """
 import sys, os, tempfile
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_b3_1_zone_gap():
     """Two well-connected concepts in same cluster but no direct link"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         # Create a dense graph where alpha and beta share high-degree bridge nodes
@@ -41,7 +39,7 @@ def test_b3_1_zone_gap():
 def test_b3_2_transitive():
     """A-B connected, B-C connected, A-C missing with high degree"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         conns = {}
@@ -68,7 +66,7 @@ def test_b3_2_transitive():
 def test_b3_3_empty():
     """Empty mycelium should return empty list, no crash"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         result = m.detect_blind_spots()
@@ -78,7 +76,7 @@ def test_b3_3_empty():
 def test_b3_4_real():
     """Real mycelium should find at least 1 blind spot"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
     if len(m.data["connections"]) < 10:
@@ -91,7 +89,7 @@ def test_b3_4_real():
 def test_b3_5_format():
     """Output should be list of (str, str, str) tuples"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         conns = {}

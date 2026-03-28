@@ -14,14 +14,13 @@ import time
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium import Mycelium
+from muninn.mycelium import Mycelium
 
 
 @pytest.fixture
 def fresh_mycelium(tmp_path):
     """Create a fresh mycelium with SQLite DB (not in-memory dict)."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     muninn_dir = tmp_path / ".muninn"
     muninn_dir.mkdir()
     db_path = muninn_dir / "mycelium.db"

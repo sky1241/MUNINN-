@@ -6,12 +6,10 @@ Tests:
   A5.3  No crash: eigenvalue[0] = 0
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_a5_1_range():
     """Spectral gap should be in (0, 1] if computed"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
     if len(m.data["connections"]) < 10:
@@ -32,7 +30,7 @@ def test_a5_1_range():
 def test_a5_2_empty():
     """Empty mycelium should not crash"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     import tempfile
     # Create a temp dir with no mycelium
     with tempfile.TemporaryDirectory() as tmpdir:

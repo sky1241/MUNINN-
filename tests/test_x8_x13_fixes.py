@@ -12,14 +12,11 @@ Tests:
   X13.2  Hex pattern matches real commit hash
 """
 import sys, os, re
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
-
 def test_x8_1_migrate_returns_closeable():
     """migrate_from_json returns a MyceliumDB with close() method."""
     import tempfile, shutil, json
     from pathlib import Path
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmpdir = tempfile.mkdtemp(prefix="muninn_x8_")
     try:
@@ -45,7 +42,7 @@ def test_x9_1_access_count_max_not_sum():
     """Consolidated branch access_count uses max(members), not sum."""
     muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
     source = ""
-    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+    for _mf in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
         _mp = os.path.join(muninn_dir, _mf)
         if os.path.exists(_mp):
             with open(_mp, encoding="utf-8") as f:
@@ -84,7 +81,7 @@ def test_x11_2_l3_before_l2_in_source():
     """L3 appears before L2 in source code."""
     muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
     lines = []
-    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+    for _mf in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
         _mp = os.path.join(muninn_dir, _mf)
         if os.path.exists(_mp):
             with open(_mp, encoding="utf-8") as f:
@@ -126,7 +123,7 @@ def test_x13_1_hex_no_false_positive():
     # Check _NOVEL_PATTERNS in muninn.py
     muninn_dir = os.path.join(os.path.dirname(__file__), "..", "engine", "core")
     source = ""
-    for _mf in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
+    for _mf in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"]:
         _mp = os.path.join(muninn_dir, _mf)
         if os.path.exists(_mp):
             with open(_mp, encoding="utf-8") as f:

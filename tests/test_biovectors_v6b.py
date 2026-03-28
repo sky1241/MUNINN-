@@ -15,7 +15,6 @@ Tests:
 """
 import sys, os, time
 from datetime import datetime, timedelta
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _ebbinghaus_recall, _days_since
 
 _TODAY = time.strftime("%Y-%m-%d")

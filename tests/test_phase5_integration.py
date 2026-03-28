@@ -11,10 +11,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium_db import MyceliumDB, today_days
-from sync_backend import (
+from muninn.mycelium_db import MyceliumDB, today_days
+from muninn.sync_backend import (
     SharedFileBackend, SyncPayload, get_sync_backend, _load_sync_config,
     save_sync_config, verify_hooks, sync_doctor,
     export_meta_json, import_meta_json, migrate_backend,

@@ -5,7 +5,6 @@ The V11B code in boot() adds 3 cultural biases to each branch's total score.
 """
 import sys, os, json, tempfile, shutil, time
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 
 PASS = 0

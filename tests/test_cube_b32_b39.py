@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.core.cube import (
+from muninn.cube import (
     CubeScheduler, CubeConfig,
     CubeStore, MockLLMProvider, OllamaProvider,
     cli_scan, cli_run, cli_status, cli_god,
@@ -105,7 +105,7 @@ class TestB33Config:
     def test_local_only_blocks_api(self):
         """local_only=True blocks non-local providers."""
         cfg = CubeConfig(local_only=True, allowed_providers=['ollama', 'mock'])
-        from engine.core.cube import ClaudeProvider
+        from muninn.cube import ClaudeProvider
         provider = ClaudeProvider()
         assert cfg.validate_provider(provider) is False
 

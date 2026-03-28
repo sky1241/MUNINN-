@@ -14,8 +14,6 @@ Tests:
   V3A.7  No cycles: visited nodes not revisited
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 PASS = 0
 FAIL = 0
 
@@ -33,7 +31,7 @@ def _make_mycelium(connections):
     """Create a Mycelium with given connections dict.
     connections: dict of "a|b" -> count
     """
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     m = Mycelium.__new__(Mycelium)
     m.data = {
         "connections": {k: {"count": v, "first": "2026-01-01", "last": "2026-03-11"}

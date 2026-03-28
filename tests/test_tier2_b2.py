@@ -8,12 +8,10 @@ Tests:
   B2.5  Output keys are exactly {isolated, hubs, weak_zones}
 """
 import sys, os, tempfile
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_b2_1_isolated():
     """Concept with degree=1 should be detected as isolated"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         # Create a mini graph: A-B (isolated), C-D-E (connected)
@@ -34,7 +32,7 @@ def test_b2_1_isolated():
 def test_b2_2_hubs():
     """Node with much higher degree than others should be detected as hub"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         # Create a star: hub connects to 20 nodes, each node has degree=1
@@ -52,7 +50,7 @@ def test_b2_2_hubs():
 def test_b2_3_empty():
     """Empty mycelium should return empty anomalies, no crash"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         result = m.detect_anomalies()
@@ -62,7 +60,7 @@ def test_b2_3_empty():
 def test_b2_4_real():
     """Real mycelium should find at least 1 anomaly"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
     if not m.data["connections"]:
@@ -76,7 +74,7 @@ def test_b2_4_real():
 def test_b2_5_keys():
     """Output should have exactly the 3 expected keys"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         result = m.detect_anomalies()

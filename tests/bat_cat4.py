@@ -12,13 +12,13 @@ MUNINN_DIR = TEMP_REPO / ".muninn"
 MUNINN_DIR.mkdir()
 TEMP_META = Path(tempfile.mkdtemp(prefix="muninn_meta_"))
 
-from mycelium import Mycelium as _MycPatch
+from muninn.mycelium import Mycelium as _MycPatch
 _MycPatch.meta_path = staticmethod(lambda: TEMP_META / "meta_mycelium.json")
 _MycPatch.meta_db_path = staticmethod(lambda: TEMP_META / "meta_mycelium.db")
 assert "muninn_meta_" in str(_MycPatch.meta_db_path())
 
-from mycelium import Mycelium
-from mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
+from muninn.mycelium import Mycelium
+from muninn.mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
 import sqlite3
 
 results = []

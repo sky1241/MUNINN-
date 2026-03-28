@@ -8,7 +8,6 @@ Tests:
   C3.5  Budget check prevents overflow
 """
 import sys, os, json, tempfile, shutil, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
 
 _TODAY = time.strftime("%Y-%m-%d")
@@ -82,7 +81,7 @@ def test_c3_2_code_has_threshold():
     """C3 preload section should check prediction score threshold."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     c3_start = src.find("C3:")
     assert c3_start > 0, "C3.2 FAIL: C3 section not found"
     c3_section = src[c3_start:c3_start + 1000]
@@ -95,7 +94,7 @@ def test_c3_3_max_preloads():
     """Max 3 predictions preloaded (code check + behavioral)."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     c3_start = src.find("C3:")
     c3_section = src[c3_start:c3_start + 1000]
     assert "[:3]" in c3_section or "top_preds[:3]" in c3_section, \
@@ -127,7 +126,7 @@ def test_c3_5_budget_in_preload():
     """C3 section should check budget before loading."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     c3_start = src.find("C3:")
     assert c3_start > 0, "C3.5 FAIL: C3 not found"
     c3_section = src[c3_start:c3_start + 1000]

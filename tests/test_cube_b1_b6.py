@@ -21,14 +21,14 @@ import pytest
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.core.cube import (
+from muninn.cube import (
     scan_repo, ScannedFile,
     Cube, subdivide_file, subdivide_recursive,
     normalize_content, sha256_hash,
     CubeStore,
     TARGET_TOKENS, TOLERANCE_MIN, TOLERANCE_MAX,
 )
-from engine.core.tokenizer import token_count
+from muninn.tokenizer import token_count
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────

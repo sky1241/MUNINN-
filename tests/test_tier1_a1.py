@@ -10,7 +10,6 @@ Tests:
   A1.7  usefulness=0.0 => clamped to 0.1, no crash
 """
 import sys, os, math
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from muninn import _ebbinghaus_recall, compute_temperature
 
 TOLERANCE = 0.01

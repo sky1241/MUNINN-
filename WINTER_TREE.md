@@ -2,8 +2,9 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. Tests: 1294 PASS, 0 FAIL, 3 SKIP.
+> Mis a jour: 2026-03-28. Engine: 18557 lignes, 14 fichiers. Tests: 1210 PASS, 0 FAIL, 3 SKIP.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
+> Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 
 ## Architecture
 

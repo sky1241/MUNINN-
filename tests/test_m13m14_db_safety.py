@@ -14,7 +14,7 @@ sys.path.insert(0, str(ENGINE))
 
 def test_m13_only_catches_integrity():
     """_get_or_create_concept should only catch IntegrityError, not all errors."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
     import inspect
 
     # Check the source code
@@ -43,7 +43,7 @@ def test_m13_only_catches_integrity():
 
 def test_m14_foreign_keys_enabled():
     """PRAGMA foreign_keys should be ON."""
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     db_path = tmp / "test.db"

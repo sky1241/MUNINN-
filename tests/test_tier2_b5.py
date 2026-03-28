@@ -8,8 +8,6 @@ Tests:
   B5.5  Output keys: mode, diversity, suggested_k, concept_count
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_b5_1_divergent():
     """Many unique concepts = divergent mode"""
     import muninn

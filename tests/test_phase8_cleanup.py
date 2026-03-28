@@ -9,9 +9,6 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-
 # ── C1: Remove memory/tree.json legacy ──────────────────────────
 
 class TestC1LegacyTree:

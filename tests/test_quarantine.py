@@ -7,7 +7,6 @@ import threading
 import hashlib
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from cube import Cube, record_quarantine
 
 

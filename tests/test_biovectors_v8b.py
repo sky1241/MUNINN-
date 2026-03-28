@@ -5,7 +5,6 @@ The V8B code triggers when top 3 scored branches are within 10% of each other.
 """
 import sys, os, json, tempfile, shutil, time
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 
 PASS = 0

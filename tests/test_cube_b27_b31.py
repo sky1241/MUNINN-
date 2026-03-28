@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.core.cube import (
+from muninn.cube import (
     Cube, CubeStore, Dependency, ReconstructionResult,
     sha256_hash, subdivide_file,
     build_level_cubes, aggregate_scores, propagate_levels,

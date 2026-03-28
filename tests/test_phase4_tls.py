@@ -16,9 +16,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium_db import MyceliumDB, today_days
+from muninn.mycelium_db import MyceliumDB, today_days
 
 
 # ── T1: SyncServer real CRDT merge ──────────────────────────────
@@ -205,7 +203,7 @@ class TestT4AuthACL:
 class TestTLSFactory:
     def test_factory_tls_config(self):
         """Factory recognizes 'tls' backend type."""
-        from sync_backend import get_sync_backend
+        from muninn.sync_backend import get_sync_backend
         # This will fail to connect but should create the backend
         try:
             backend = get_sync_backend({

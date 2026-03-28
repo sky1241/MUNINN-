@@ -9,13 +9,13 @@ ENGINE_DIR = Path(r"c:\Users\ludov\MUNINN-\engine\core")
 sys.path.insert(0, str(ENGINE_DIR))
 
 TEMP_META = Path(tempfile.mkdtemp(prefix="audit_"))
-from mycelium import Mycelium as _MP
+from muninn.mycelium import Mycelium as _MP
 _MP.meta_path = staticmethod(lambda: TEMP_META / "meta.json")
 _MP.meta_db_path = staticmethod(lambda: TEMP_META / "meta.db")
 
 import muninn
-from mycelium import Mycelium
-from mycelium_db import MyceliumDB, date_to_days, days_to_date
+from muninn.mycelium import Mycelium
+from muninn.mycelium_db import MyceliumDB, date_to_days, days_to_date
 from tokenizer import count_tokens
 
 ALL_TEMPS = []

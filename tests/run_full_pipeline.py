@@ -35,8 +35,6 @@ import argparse
 import tempfile
 import shutil
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 from cube import (
     Cube, CubeStore, OllamaProvider, ClaudeProvider,
     subdivide_file, assign_neighbors, parse_dependencies,
@@ -119,7 +117,7 @@ def build_corpus(file_paths: dict[str, str], store: CubeStore):
 def build_mycelium_from_corpus(contents: dict[str, str]):
     """Build mycelium from all corpus file contents."""
     try:
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         myc_tmp = tempfile.mkdtemp()
         myc_path = os.path.join(myc_tmp, "mycelium.json")
         myc = Mycelium(myc_path)

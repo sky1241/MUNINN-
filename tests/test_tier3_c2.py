@@ -8,7 +8,6 @@ Tests:
   C2.5  No crash when no mycelium exists
 """
 import sys, os, json, tempfile, shutil, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from pathlib import Path
 
 _TODAY = time.strftime("%Y-%m-%d")

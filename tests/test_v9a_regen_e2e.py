@@ -9,7 +9,6 @@ ET sont-ils retrouvables par boot() ?
 import sys, os, json, tempfile, shutil, time, re
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 
 PASS = 0

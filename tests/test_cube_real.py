@@ -21,7 +21,7 @@ import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.core.cube import (
+from muninn.cube import (
     cli_scan, cli_run, cli_status, cli_god, CubeConfig, CubeStore,
     cube_heatmap, fuse_risks, auto_repair,
     record_anomaly, feedback_loop_check,

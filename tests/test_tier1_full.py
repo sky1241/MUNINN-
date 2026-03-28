@@ -3,8 +3,6 @@
 Run: python tests/test_tier1_full.py
 """
 import sys, os, math, time, json, tempfile
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 PASS = 0
 FAIL = 0
 SKIP = 0
@@ -158,7 +156,7 @@ def run_a3():
 
     # A3.INT: integration with real mycelium
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
     if m.data["connections"]:
@@ -215,7 +213,7 @@ def run_a4():
 
     # A4.INT: integration
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
     check("A4.INT default_beta", m.SATURATION_BETA >= 0.0, f"beta={m.SATURATION_BETA}")  # TIER3/C1: 0.001 moderate default
@@ -238,7 +236,7 @@ def run_a5():
 
     # A5.2: empty mycelium
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     with tempfile.TemporaryDirectory() as tmpdir:
         m = Mycelium(Path(tmpdir))
         zones = m.detect_zones()

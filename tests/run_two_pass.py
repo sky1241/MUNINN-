@@ -20,8 +20,6 @@ import argparse
 import tempfile
 import shutil
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 from cube import (
     Cube, CubeStore, OllamaProvider, ClaudeProvider,
     subdivide_file, assign_neighbors,
@@ -81,7 +79,7 @@ def build_mycelium(content, file_path):
     """Feed file content into a fresh mycelium and return it."""
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         myc_tmp = tempfile.mkdtemp()
         myc_path = os.path.join(myc_tmp, "mycelium.json")
         myc = Mycelium(myc_path)

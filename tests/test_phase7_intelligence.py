@@ -11,9 +11,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium_db import MyceliumDB, today_days
+from muninn.mycelium_db import MyceliumDB, today_days
 
 
 # ── A1: Fusion threshold adaptatif ───────────────────────────────
@@ -21,7 +19,7 @@ from mycelium_db import MyceliumDB, today_days
 class TestA1AdaptiveFusion:
     def test_adaptive_threshold_small(self, tmp_path):
         """A1: Small mycelium gets low fusion threshold."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.observe_text("alpha beta gamma")
         m.save()
@@ -39,7 +37,7 @@ class TestA1AdaptiveFusion:
         db.commit()
         db.close()
 
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         threshold = m.adaptive_fusion_threshold()
         # sqrt(400) * 0.4 = 8
@@ -48,7 +46,7 @@ class TestA1AdaptiveFusion:
 
     def test_adaptive_threshold_min(self, tmp_path):
         """A1: Threshold never goes below 2."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         threshold = m.adaptive_fusion_threshold()
         assert threshold >= 2
@@ -60,7 +58,7 @@ class TestA1AdaptiveFusion:
 class TestA2AdaptiveDecay:
     def test_adaptive_decay_default(self, tmp_path):
         """A2: Fresh mycelium returns default half-life."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         hl = m.adaptive_decay_half_life()
         assert 15 <= hl <= 90
@@ -68,7 +66,7 @@ class TestA2AdaptiveDecay:
 
     def test_adaptive_decay_active(self, tmp_path):
         """A2: Active repo gets shorter half-life."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.data["session_count"] = 100
         m.data["created"] = "2026-01-01"
@@ -79,7 +77,7 @@ class TestA2AdaptiveDecay:
 
     def test_adaptive_decay_inactive(self, tmp_path):
         """A2: Inactive repo gets longer half-life."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.data["session_count"] = 3
         m.data["created"] = "2025-01-01"
@@ -107,7 +105,7 @@ class TestA3OrphanCleanup:
         db.commit()
         db.close()
 
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         removed = m.cleanup_orphan_concepts()
         assert removed == 8  # 10 - 2 = 8 orphans (80% > 20% threshold)
@@ -127,7 +125,7 @@ class TestA3OrphanCleanup:
         db.commit()
         db.close()
 
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         removed = m.cleanup_orphan_concepts()
         assert removed == 0
@@ -139,14 +137,14 @@ class TestA3OrphanCleanup:
 class TestA4AutoVacuum:
     def test_vacuum_method_exists(self, tmp_path):
         """A4: vacuum_if_needed method exists."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         assert hasattr(m, "vacuum_if_needed")
         m.close()
 
     def test_decay_returns_count(self, tmp_path):
         """A4: decay() returns dead count (vacuum timing integrated)."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.observe_text("test data for decay")
         m.save()
@@ -160,7 +158,7 @@ class TestA4AutoVacuum:
 class TestA5AdaptiveHops:
     def test_adaptive_hops_default(self, tmp_path):
         """A5: Default hops = 2 for moderate graph."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         hops = m.adaptive_hops()
         assert hops in (1, 2, 3)
@@ -182,7 +180,7 @@ class TestA5AdaptiveHops:
         db.commit()
         db.close()
 
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         hops = m.adaptive_hops()
         assert hops == 3  # Sparse = more hops
@@ -190,7 +188,7 @@ class TestA5AdaptiveHops:
 
     def test_spread_uses_adaptive_hops(self, tmp_path):
         """A5: spread_activation uses adaptive hops when hops=None."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.observe_text("neural network deep learning")
         m.save()
@@ -207,7 +205,7 @@ class TestA6BootPreWarm:
         """A6: boot() contains git diff pre-warm code."""
         import muninn
         _mdir = Path(muninn.__file__).parent
-        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         assert "git diff" in src.lower() or "git" in src
         assert "diff_concepts" in src or "A6" in src
 
@@ -242,7 +240,7 @@ class TestA8PruneWarning:
         """A8: boot() contains prune warning logic."""
         import muninn
         _mdir = Path(muninn.__file__).parent
-        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         assert "branches are cold" in src or "A8" in src
         assert "muninn prune" in src
 

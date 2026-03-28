@@ -8,7 +8,6 @@ Tests:
   C6.5  Works with minimal tree
 """
 import sys, os, json, tempfile, shutil, time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 import muninn
 from pathlib import Path
 from io import StringIO
@@ -55,7 +54,7 @@ def test_c6_2_in_choices():
     import argparse
     # Parse the source to find choices
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     assert '"diagnose"' in src, "C6.2 FAIL: diagnose not in CLI choices"
     print("  C6.2 PASS: diagnose in CLI choices")
 

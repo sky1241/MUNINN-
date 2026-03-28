@@ -20,8 +20,6 @@ Tests:
 """
 import sys, os, re, tempfile, shutil, time
 from datetime import datetime, timedelta
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 _TODAY = time.strftime("%Y-%m-%d")
 _DAYS_AGO = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 

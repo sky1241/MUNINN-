@@ -13,8 +13,8 @@ sys.path.insert(0, str(ENGINE))
 
 def test_m9_pull_from_meta_none():
     """pull_from_meta(None) should not crash with NameError."""
-    from mycelium import Mycelium
-    from mycelium_db import MyceliumDB
+    from muninn.mycelium import Mycelium
+    from muninn.mycelium_db import MyceliumDB
 
     tmp = Path(tempfile.mkdtemp())
     try:

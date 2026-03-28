@@ -13,9 +13,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-from mycelium_db import MyceliumDB, today_days
+from muninn.mycelium_db import MyceliumDB, today_days
 
 
 # ── P1: Concurrent SharedFile backoff ────────────────────────────
@@ -23,7 +21,7 @@ from mycelium_db import MyceliumDB, today_days
 class TestP1ConcurrentBackoff:
     def test_backend_has_retry_config(self):
         """P1: SharedFileBackend has retry constants."""
-        from sync_backend import SharedFileBackend
+        from muninn.sync_backend import SharedFileBackend
         assert hasattr(SharedFileBackend, "MAX_RETRIES")
         assert hasattr(SharedFileBackend, "BASE_DELAY")
         assert hasattr(SharedFileBackend, "MAX_DELAY")
@@ -32,14 +30,14 @@ class TestP1ConcurrentBackoff:
 
     def test_retry_with_backoff_success(self, tmp_path):
         """P1: _retry_with_backoff returns on success."""
-        from sync_backend import SharedFileBackend
+        from muninn.sync_backend import SharedFileBackend
         backend = SharedFileBackend(tmp_path / "meta")
         result = backend._retry_with_backoff(lambda: 42)
         assert result == 42
 
     def test_retry_with_backoff_non_lock_error(self, tmp_path):
         """P1: Non-lock errors are not retried."""
-        from sync_backend import SharedFileBackend
+        from muninn.sync_backend import SharedFileBackend
         backend = SharedFileBackend(tmp_path / "meta")
         with pytest.raises(ValueError):
             backend._retry_with_backoff(lambda: (_ for _ in ()).throw(ValueError("bad")))
@@ -50,7 +48,7 @@ class TestP1ConcurrentBackoff:
 class TestP2ZoneCleanup:
     def test_cleanup_orphan_zones(self, tmp_path):
         """P2: cleanup_orphan_zones removes zones for deleted edges."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path, federated=True, zone="test")
         # Create edge with zone
         m.observe_text("python code pattern")
@@ -66,7 +64,7 @@ class TestP2ZoneCleanup:
 
     def test_cleanup_returns_zero_no_orphans(self, tmp_path):
         """P2: Returns 0 when no orphaned zones."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path, federated=True, zone="test")
         m.observe_text("hello world test")
         m.save()
@@ -80,7 +78,7 @@ class TestP2ZoneCleanup:
 class TestP3GrowthLimits:
     def test_growth_stats(self, tmp_path):
         """P3: growth_stats returns correct dict."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.observe_text("graph theory algorithm")
         m.save()
@@ -92,7 +90,7 @@ class TestP3GrowthLimits:
 
     def test_vacuum_runs(self, tmp_path):
         """P3: vacuum_if_needed executes without error."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.observe_text("test data")
         m.save()
@@ -102,7 +100,7 @@ class TestP3GrowthLimits:
 
     def test_max_connections_default(self):
         """P3: MAX_CONNECTIONS default is 0 (unlimited)."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         assert Mycelium.MAX_CONNECTIONS == 0
 
 
@@ -111,7 +109,7 @@ class TestP3GrowthLimits:
 class TestP4Observability:
     def test_sync_metrics_returns_dict(self):
         """P4: sync_metrics returns monitoring dict."""
-        from sync_backend import sync_metrics
+        from muninn.sync_backend import sync_metrics
         result = sync_metrics()
         assert isinstance(result, dict)
         assert "edges" in result
@@ -173,7 +171,7 @@ class TestP6BatchDeletes:
         db.commit()
         db.close()
 
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         assert m._db is not None
         dead = m.decay(days=30)
@@ -182,7 +180,7 @@ class TestP6BatchDeletes:
 
     def test_decay_normal_edges_survive(self, tmp_path):
         """P6: Fresh edges survive decay."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.observe_text("fresh concept today")
         m.save()
@@ -196,7 +194,7 @@ class TestP6BatchDeletes:
 class TestP7SinglePass:
     def test_detect_zones_works(self, tmp_path):
         """P7: detect_zones returns zones (single-pass)."""
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path, federated=True, zone="test")
         # Need enough connections for clustering
         for i in range(20):
@@ -218,7 +216,7 @@ class TestP8NCDCap:
         """P8: _sleep_consolidate has MAX_NCD_BRANCHES cap."""
         import muninn
         _mdir = Path(muninn.__file__).parent
-        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+        src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         assert "MAX_NCD_BRANCHES" in src
         assert "20" in src  # Cap value
 

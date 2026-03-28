@@ -18,7 +18,7 @@ MEMORY_DIR.mkdir()
 TREE_FILE = MEMORY_DIR / "tree.json"
 
 TEMP_META = Path(tempfile.mkdtemp(prefix="muninn_meta_"))
-from mycelium import Mycelium as _MycPatch
+from muninn.mycelium import Mycelium as _MycPatch
 _MycPatch.meta_path = staticmethod(lambda: TEMP_META / "meta_mycelium.json")
 _MycPatch.meta_db_path = staticmethod(lambda: TEMP_META / "meta_mycelium.db")
 assert "muninn_meta_" in str(_MycPatch.meta_db_path())
@@ -219,7 +219,7 @@ except Exception as e:
 # T8.6 — H1 Trip Mode
 t0 = time.time()
 try:
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo_trip = Path(tempfile.mkdtemp(prefix="muninn_trip_"))
     (repo_trip / ".muninn").mkdir()
     m = Mycelium(repo_trip)
@@ -266,7 +266,7 @@ try:
     (TREE_DIR / "root.mn").write_text("root\n", encoding="utf-8")
 
     # Create mycelium with some data
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     m = Mycelium(TEMP_REPO)
     for _ in range(10):
         m.observe(["api", "rest", "endpoint"])

@@ -8,8 +8,6 @@ Tests:
   A4.5  Integer: result stays int
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 def test_a4_1_arithmetic():
     """w=100, beta=0.001 => loss = int(0.001 * 100 * 100) = 10"""
     w = 100
@@ -59,7 +57,7 @@ def test_a4_5_integer():
 def test_a4_integration():
     """Test with real mycelium (beta=0.001 moderate default since TIER3/C1)"""
     from pathlib import Path
-    from mycelium import Mycelium
+    from muninn.mycelium import Mycelium
     repo = Path(os.path.dirname(__file__)).parent
     m = Mycelium(repo)
     if not m.data["connections"]:

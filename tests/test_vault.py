@@ -10,8 +10,6 @@ Tests:
   V1.7  CLI: lock + unlock without crash
 """
 import sys, os, tempfile, subprocess
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 MUNINN_PY = os.path.join(os.path.dirname(__file__), "..", "engine", "core", "muninn.py")
 
 

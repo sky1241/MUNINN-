@@ -6,8 +6,7 @@ Tests:
   X2.3  No date.today() calls remain in engine/core/
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium_db import today_days, date_to_days, days_to_date
+from muninn.mycelium_db import today_days, date_to_days, days_to_date
 from datetime import datetime, date, timedelta, timezone
 
 

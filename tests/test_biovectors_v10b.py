@@ -13,7 +13,6 @@ Tests:
   V10B.7  theta is in [-pi, +pi]
 """
 import sys, os, math
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
 from sentiment import circumplex_map
 
 PASS = 0

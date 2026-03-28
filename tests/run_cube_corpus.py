@@ -9,8 +9,6 @@ import time
 import tempfile
 import shutil
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 from cube import (
     Cube, CubeStore, ClaudeProvider,
     subdivide_file, assign_neighbors,

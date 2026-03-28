@@ -15,9 +15,6 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
-
-
 # ── Bug 1: WAL double checkpoint ─────────────────────────────────
 
 class TestBug1WALCheckpoint:
@@ -126,7 +123,7 @@ class TestBug2ThreadSafety:
 
     def test_mycelium_db_has_lock(self, tmp_path):
         """MyceliumDB.__init__ creates a threading.Lock."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "mycelium.db")
         assert hasattr(db, '_lock')
         assert isinstance(db._lock, type(threading.Lock()))
@@ -142,7 +139,7 @@ class TestBug2ThreadSafety:
 
     def test_mycelium_db_concurrent_writes(self, tmp_path):
         """Two threads writing to MyceliumDB don't corrupt data."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "mycelium.db")
         db.set_meta("migration_complete", "1")
         errors = []
@@ -206,7 +203,7 @@ class TestBug2ThreadSafety:
 
     def test_mycelium_db_lock_protects_delete(self, tmp_path):
         """delete_connection acquires lock."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "mycelium.db")
         db.set_meta("migration_complete", "1")
         db.upsert_connection("alpha", "beta")
@@ -220,7 +217,7 @@ class TestBug2ThreadSafety:
     def test_mycelium_db_all_write_methods_use_lock(self, tmp_path):
         """Every write method in MyceliumDB must use self._lock."""
         import inspect
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
 
         write_methods = [
             'set_meta', 'upsert_connection', 'upsert_fusion',
@@ -464,8 +461,8 @@ class TestBug4HighDegreeCache:
 
     def test_cache_invalidated_after_observe(self, tmp_path):
         """observe() invalidates _high_degree_cache."""
-        from mycelium_db import MyceliumDB
-        from mycelium import Mycelium
+        from muninn.mycelium_db import MyceliumDB
+        from muninn.mycelium import Mycelium
 
         # Create DB with migration flag
         db_path = tmp_path / ".muninn" / "mycelium.db"
@@ -488,8 +485,8 @@ class TestBug4HighDegreeCache:
 
     def test_cache_reset_during_save(self, tmp_path):
         """save() resets _high_degree_cache at start (then _check_fusions may refill it)."""
-        from mycelium_db import MyceliumDB
-        from mycelium import Mycelium
+        from muninn.mycelium_db import MyceliumDB
+        from muninn.mycelium import Mycelium
 
         db_path = tmp_path / ".muninn" / "mycelium.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -510,8 +507,8 @@ class TestBug4HighDegreeCache:
 
     def test_fusions_use_fresh_degree_after_observe(self, tmp_path):
         """After observe() adds many edges, _check_fusions sees updated degrees."""
-        from mycelium_db import MyceliumDB
-        from mycelium import Mycelium
+        from muninn.mycelium_db import MyceliumDB
+        from muninn.mycelium import Mycelium
 
         db_path = tmp_path / ".muninn" / "mycelium.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -541,8 +538,8 @@ class TestAuditBugsIntegration:
 
     def test_mycelium_full_cycle_with_locks(self, tmp_path):
         """Full cycle: create DB, observe, save, decay — all lock-protected."""
-        from mycelium_db import MyceliumDB
-        from mycelium import Mycelium
+        from muninn.mycelium_db import MyceliumDB
+        from muninn.mycelium import Mycelium
 
         db_path = tmp_path / ".muninn" / "mycelium.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -565,7 +562,7 @@ class TestAuditBugsIntegration:
 
     def test_wal_monitor_in_mycelium_db(self, tmp_path):
         """WALMonitor inside MyceliumDB doesn't double-checkpoint."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "mycelium.db")
 
         # The WAL monitor should use the fixed get_wal_size
@@ -581,7 +578,7 @@ class TestSQLInjectionSavepoint:
     """Savepoint name must be validated to prevent SQL injection."""
 
     def test_valid_names_accepted(self, tmp_path):
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         db.savepoint("pre_sync")
         db.release_savepoint("pre_sync")
@@ -590,28 +587,28 @@ class TestSQLInjectionSavepoint:
         db.close()
 
     def test_injection_rejected(self, tmp_path):
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with pytest.raises(ValueError, match="Invalid savepoint name"):
             db.savepoint("x; DROP TABLE connections; --")
         db.close()
 
     def test_injection_with_quotes_rejected(self, tmp_path):
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with pytest.raises(ValueError):
             db.rollback_to("x' OR '1'='1")
         db.close()
 
     def test_injection_with_spaces_rejected(self, tmp_path):
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with pytest.raises(ValueError):
             db.release_savepoint("pre sync")
         db.close()
 
     def test_empty_name_rejected(self, tmp_path):
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with pytest.raises(ValueError):
             db.savepoint("")
@@ -620,7 +617,7 @@ class TestSQLInjectionSavepoint:
     def test_validate_method_exists(self):
         """Source code must have _validate_savepoint_name."""
         import inspect
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         source = inspect.getsource(MyceliumDB)
         assert "_validate_savepoint_name" in source
         assert "re.match" in source
@@ -907,12 +904,12 @@ class TestMyceliumDBTransaction:
 
     def test_transaction_exists(self):
         """MyceliumDB must have a transaction() method."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         assert hasattr(MyceliumDB, 'transaction')
 
     def test_transaction_acquires_lock(self, tmp_path):
         """transaction() must acquire _lock during context."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with db.transaction() as conn:
             # Lock should be held
@@ -925,7 +922,7 @@ class TestMyceliumDBTransaction:
 
     def test_transaction_commits_on_success(self, tmp_path):
         """transaction() commits on clean exit."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with db.transaction() as conn:
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('tx_test', 'committed')")
@@ -935,7 +932,7 @@ class TestMyceliumDBTransaction:
 
     def test_transaction_rollback_on_error(self, tmp_path):
         """transaction() rolls back on exception."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         db.set_meta("before", "original")
         try:
@@ -951,7 +948,7 @@ class TestMyceliumDBTransaction:
 
     def test_new_utility_methods_exist(self, tmp_path):
         """New utility methods must exist on MyceliumDB."""
-        from mycelium_db import MyceliumDB
+        from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         assert hasattr(db, 'checkpoint_wal')
         assert hasattr(db, 'vacuum')
@@ -970,14 +967,14 @@ class TestObserveUsesTransaction:
     def test_observe_source_uses_transaction(self):
         """observe() source code must use transaction(), not _db._conn."""
         import inspect
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         source = inspect.getsource(Mycelium.observe)
         assert "self._db.transaction()" in source, "observe() must use db.transaction()"
 
     def test_save_uses_transaction(self):
         """save() source code must use transaction(), not _db._conn."""
         import inspect
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         source = inspect.getsource(Mycelium.save)
         assert "self._db.transaction()" in source, "save() must use db.transaction()"
 
@@ -1000,7 +997,7 @@ class TestBareExceptsFixed:
     def test_mycelium_core_exceptions_specific(self):
         """mycelium.py core ops (save, observe, close) should use specific exceptions."""
         import inspect
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         for method_name in ['save', 'close']:
             source = inspect.getsource(getattr(Mycelium, method_name))
             if "except Exception:" in source and "pass" in source:
@@ -1019,7 +1016,7 @@ class TestSessionSeenInit:
     def test_init_has_session_seen(self):
         """Mycelium.__init__ must set _session_seen."""
         import inspect
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         source = inspect.getsource(Mycelium.__init__)
         assert "_session_seen" in source, "__init__ must initialize _session_seen"
         assert "_congestion_checked" in source, "__init__ must initialize _congestion_checked"
@@ -1027,14 +1024,14 @@ class TestSessionSeenInit:
     def test_observe_no_hasattr(self):
         """observe() must not use hasattr for _session_seen (race condition)."""
         import inspect
-        from mycelium import Mycelium
+        from muninn.mycelium import Mycelium
         source = inspect.getsource(Mycelium.observe)
         assert "hasattr" not in source or "_session_seen" not in source.split("hasattr")[1][:50] if "hasattr" in source else True
 
     def test_session_seen_works(self, tmp_path):
         """_session_seen initialized properly and usable."""
-        from mycelium_db import MyceliumDB
-        from mycelium import Mycelium
+        from muninn.mycelium_db import MyceliumDB
+        from muninn.mycelium import Mycelium
         db_path = tmp_path / ".muninn" / "mycelium.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         db = MyceliumDB(db_path)

@@ -18,8 +18,6 @@ import re
 import math
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-
 # ── Ground truth: queries with expected topic tags ──────────────────
 GROUND_TRUTH = {
     # Ground truth rebuilt from real tree tags (2026-03-15)

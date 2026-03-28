@@ -41,7 +41,7 @@ pytestmark = pytest.mark.skipif(
     reason="No real mycelium.db — skip real integration tests"
 )
 
-from engine.core.mycelium import Mycelium
+from muninn.mycelium import Mycelium
 
 
 @pytest.fixture(scope="module")
@@ -92,7 +92,7 @@ def test_real_observe(myc):
     """
     t0 = time.time()
     # Use raw DB upsert to bypass translator — tests the SQL layer directly
-    from engine.core.mycelium_db import today_days
+    from muninn.mycelium_db import today_days
     td = today_days()
     a_key, b_key = "muninntest_a", "muninntest_b"
     a_id = myc._db._get_or_create_concept(a_key)

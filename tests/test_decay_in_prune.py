@@ -14,9 +14,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium import Mycelium
-from mycelium_db import MyceliumDB
+from muninn.mycelium import Mycelium
+from muninn.mycelium_db import MyceliumDB
 
 
 def _make_mycelium(tmp_path, federated=False):
@@ -53,7 +52,7 @@ def _get_edge(m, a, b):
 
 def _set_last_seen(m, a, b, days_ago):
     """Manually set last_seen to simulate old edges."""
-    from mycelium import today_days
+    from muninn.mycelium import today_days
     a_key = min(a, b)
     b_key = max(a, b)
     a_id = m._db._concept_cache.get(a_key)
@@ -156,7 +155,7 @@ class TestDecayInPrune:
         # the import path works by checking the code structure
         import muninn
         _mdir = Path(muninn.__file__).parent
-        source = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+        source = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
         # Verify decay is called in prune
         assert "m_decay.decay()" in source, "prune() must call mycelium decay()"
         assert "MYCELIUM DECAY" in source, "prune() must print decay results"

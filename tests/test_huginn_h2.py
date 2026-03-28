@@ -10,8 +10,7 @@ Tests:
   H2.7  dream wired in prune() (code check)
 """
 import sys, os, json, tempfile, shutil
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
-from mycelium import Mycelium
+from muninn.mycelium import Mycelium
 from pathlib import Path
 
 
@@ -140,7 +139,7 @@ def test_h2_7_wired_in_prune():
     """dream() should be called in prune()."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     prune_start = src.find("def prune(")
     prune_end = src.find("\ndef ", prune_start + 1)
     prune_body = src[prune_start:prune_end]
