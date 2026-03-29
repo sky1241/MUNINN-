@@ -239,6 +239,8 @@ class NeuronMapWidget(QWidget):
             neuron.category = LEVEL_SHAPES.get(neuron.level, SHAPE_CIRCLE)
             self._neurons.append(neuron)
 
+        # Also load connections from scan data if present
+        self._scan_connections = data.get("connections", [])
         self._build_edges()
         self._compute_degrees()
 
@@ -270,10 +272,12 @@ class NeuronMapWidget(QWidget):
         self.update()
 
     def _build_edges(self):
-        """Build edge list from node depends."""
+        """Build edge list from node depends + scan connections."""
         id_to_idx = {n.id: i for i, n in enumerate(self._neurons)}
         self._edges = []
         seen = set()
+
+        # From node.depends
         for i, n in enumerate(self._neurons):
             for dep_id in n.depends:
                 j = id_to_idx.get(dep_id)
@@ -282,6 +286,19 @@ class NeuronMapWidget(QWidget):
                     if key not in seen:
                         seen.add(key)
                         self._edges.append((key[0], key[1], 1.0))
+
+        # From scan connections (from/to or source/target format)
+        for conn in getattr(self, '_scan_connections', []):
+            src = conn.get("from") or conn.get("source", "")
+            tgt = conn.get("to") or conn.get("target", "")
+            i = id_to_idx.get(src)
+            j = id_to_idx.get(tgt)
+            if i is not None and j is not None:
+                key = (min(i, j), max(i, j))
+                if key not in seen:
+                    seen.add(key)
+                    w = conn.get("weight", 1.0)
+                    self._edges.append((key[0], key[1], w))
         # Build neighbor cache for fast lookup
         self._neighbor_cache.clear()
         for ia, ib, _ in self._edges:
