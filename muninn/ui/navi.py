@@ -201,15 +201,15 @@ class NaviWidget(QWidget):
         r = self._orb_radius
         pulse = 0.7 + 0.3 * math.sin(self._phase * 2)
 
-        # === 3 GLOW LAYERS (breathe animation, staggered) — ELECTRIC BLUE ===
+        # === 3 GLOW LAYERS (breathe animation, staggered) ===
         for i, (size_mult, base_alpha) in enumerate([(5.5, 0.06), (3.5, 0.15), (2.0, 0.5)]):
             breathe = 1.0 + 0.2 * math.sin(self._phase * 2 + i * 0.6)
             gr = r * size_mult * breathe
             glow = QRadialGradient(cx, cy, gr)
             a = int(base_alpha * 255 * pulse)
-            glow.setColorAt(0.0, QColor(30, 90, 255, a))
-            glow.setColorAt(0.4, QColor(0, 60, 255, int(a * 0.5)))
-            glow.setColorAt(0.65, QColor(0, 40, 200, 0))
+            glow.setColorAt(0.0, QColor(0, 255, 210, a))
+            glow.setColorAt(0.4, QColor(0, 150, 255, int(a * 0.5)))
+            glow.setColorAt(0.65, QColor(0, 100, 255, 0))
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QBrush(glow))
             p.drawEllipse(QPointF(cx, cy), gr, gr)
@@ -238,13 +238,13 @@ class NaviWidget(QWidget):
             angle_wobble = flap_range * (flap - 0.5)
             angle = base_ang + angle_wobble
 
-            # Iridescent gradient brush — ELECTRIC BLUE
+            # Iridescent gradient brush
             grad = QLinearGradient(-ww / 2, 0, ww / 2, 0)
-            grad.setColorAt(0.0, QColor(20, 60, 255, 45))
-            grad.setColorAt(0.3, QColor(60, 120, 255, 70))
-            grad.setColorAt(0.5, QColor(100, 160, 255, 45))
-            grad.setColorAt(0.7, QColor(30, 80, 255, 55))
-            grad.setColorAt(1.0, QColor(0, 50, 220, 30))
+            grad.setColorAt(0.0, QColor(0, 255, 220, 38))
+            grad.setColorAt(0.3, QColor(100, 200, 255, 64))
+            grad.setColorAt(0.5, QColor(180, 220, 255, 38))
+            grad.setColorAt(0.7, QColor(0, 255, 200, 51))
+            grad.setColorAt(1.0, QColor(0, 180, 255, 25))
 
             p.save()
             p.rotate(angle)
@@ -253,8 +253,8 @@ class NaviWidget(QWidget):
             wing_cx = (-ww * 0.4) if not is_right else (ww * 0.4)
             p.scale(1.0, scale_y)
 
-            # Border (nervures) — electric blue
-            p.setPen(QPen(QColor(80, 140, 255, 50), 0.5))
+            # Border (nervures)
+            p.setPen(QPen(QColor(180, 240, 255, 50), 0.5))
             p.setBrush(QBrush(grad))
             p.drawEllipse(QPointF(wing_cx, 0), ww / 2, wh / 2)
 
@@ -262,13 +262,13 @@ class NaviWidget(QWidget):
 
         p.restore()
 
-        # === CORE ORB — electric blue (white center -> blue edge) ===
+        # === CORE ORB — iridescent (white -> cyan -> blue) ===
         core = QRadialGradient(cx - r * 0.2, cy - r * 0.2, r)
-        core.setColorAt(0.0, QColor(220, 230, 255))
-        core.setColorAt(0.25, QColor(100, 150, 255))
-        core.setColorAt(0.5, QColor(30, 90, 255))
-        core.setColorAt(0.8, QColor(0, 50, 220))
-        core.setColorAt(1.0, QColor(0, 30, 180, 0))
+        core.setColorAt(0.0, QColor(255, 255, 255))
+        core.setColorAt(0.25, QColor(176, 255, 238))
+        core.setColorAt(0.5, QColor(0, 232, 192))
+        core.setColorAt(0.8, QColor(0, 136, 255))
+        core.setColorAt(1.0, QColor(0, 136, 255, 0))
         p.setBrush(QBrush(core))
         p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(QPointF(cx, cy), r, r)
@@ -296,10 +296,19 @@ class NaviWidget(QWidget):
 
         rect = QRectF(bx, by, bubble_w, bubble_h)
 
-        # Transparent bubble with electric blue frame only (no black fill)
-        p.setPen(QPen(QColor(30, 90, 255, 160), 1.5))
-        p.setBrush(QBrush(QColor(5, 10, 30, 140)))  # near-transparent dark
-        p.drawRoundedRect(rect, 12, 12)
+        # B-UI-14: Use PNG frame if available, else fallback to rounded rect
+        self._load_bubble_frame()
+        if self._bubble_frame and not self._bubble_frame.isNull():
+            scaled_frame = self._bubble_frame.scaled(
+                int(bubble_w), int(bubble_h),
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            p.drawPixmap(int(bx), int(by), scaled_frame)
+        else:
+            p.setPen(QPen(QColor(0, 220, 255, 100), 1))
+            p.setBrush(QBrush(QColor(2, 8, 22, 230)))
+            p.drawRoundedRect(rect, 12, 12)
 
         # Text
         p.setPen(QColor(TEXT_PRIMARY))
@@ -315,12 +324,12 @@ class NaviWidget(QWidget):
             btn_w, btn_h = 120, 24
             btn_x = bx + (bubble_w - btn_w) / 2
             btn_y = by + bubble_h - btn_h - 8
-            # Button background — electric blue
-            p.setPen(QPen(QColor(30, 90, 255), 1))
-            p.setBrush(QBrush(QColor(30, 90, 255, 50)))
+            # Button background
+            p.setPen(QPen(QColor(0, 220, 255), 1))
+            p.setBrush(QBrush(QColor(0, 220, 255, 40)))
             p.drawRoundedRect(QRectF(btn_x, btn_y, btn_w, btn_h), 6, 6)
             # Button text
-            p.setPen(QColor(80, 140, 255))
+            p.setPen(QColor(ACCENT_CYAN_HEX))
             p.setFont(QFont(FONT_BODY, 10))
             p.drawText(QRectF(btn_x, btn_y, btn_w, btn_h),
                        Qt.AlignmentFlag.AlignCenter, "Scanner un repo")
