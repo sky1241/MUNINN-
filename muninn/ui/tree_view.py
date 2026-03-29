@@ -130,6 +130,8 @@ class TreeViewWidget(QWidget):
         """
         self._family = family
         nodes_data = scan_data.get("nodes", [])
+        img_size = scan_data.get("imgSize", [1024, 1536])
+        img_w, img_h = img_size[0] or 1024, img_size[1] or 1536
 
         if not nodes_data:
             self._nodes = []
@@ -141,20 +143,32 @@ class TreeViewWidget(QWidget):
         # Load background template
         self._load_background(family)
 
-        # Load positions from template file if not provided
-        if positions is None:
-            positions = self._load_positions(family, len(nodes_data))
+        # Use node positions from JSON if available, else fallback
+        has_node_positions = any(
+            "x" in nd and "y" in nd for nd in nodes_data
+        )
+
+        if positions is None and not has_node_positions:
+            positions = self._auto_layout(nodes_data, family)
 
         self._nodes = []
         for i, nd in enumerate(nodes_data):
-            x, y = positions[i] if i < len(positions) else (0.5, 0.5)
+            if has_node_positions and "x" in nd and "y" in nd:
+                # Positions from skeleton JSON (in imgSize space)
+                x = nd["x"] / img_w
+                y = nd["y"] / img_h
+            elif positions and i < len(positions):
+                x, y = positions[i]
+            else:
+                x, y = 0.5, 0.5
+
             node = TreeNode(
                 id=nd.get("id", ""),
                 label=nd.get("label", nd.get("id", "")),
                 status=nd.get("status", ""),
                 x=x,
                 y=y,
-                level=nd.get("level", ""),
+                level=nd.get("level", nd.get("lk", "")),
                 depth=nd.get("depth", 0),
                 entry=nd.get("entry", ""),
             )
@@ -175,6 +189,47 @@ class TreeViewWidget(QWidget):
             self._bg_pixmap = None
         self._bg_cache = None
         self._bg_cache_size = (0, 0)
+
+    def _auto_layout(self, nodes_data: list, family: str) -> list[tuple[float, float]]:
+        """Generate tree-like positions based on node depth/level structure.
+
+        Places nodes organically: root at trunk, modules at mid-tree,
+        files in branches, functions at tips.
+        """
+        import random
+        rng = random.Random(42)
+
+        # Group by depth
+        depth_groups: dict[int, list[int]] = {}
+        for i, nd in enumerate(nodes_data):
+            d = nd.get("depth", 0)
+            depth_groups.setdefault(d, []).append(i)
+
+        max_depth = max(depth_groups.keys()) if depth_groups else 0
+        positions = [(0.5, 0.5)] * len(nodes_data)
+
+        for depth, indices in depth_groups.items():
+            if max_depth == 0:
+                # All same depth — spread evenly
+                y_base = 0.5
+            else:
+                # Depth 0 = trunk base (y=0.75), deepest = tips (y=0.15)
+                t = depth / max_depth
+                y_base = 0.75 - t * 0.55  # 0.75 -> 0.20
+
+            count = len(indices)
+            for j, idx in enumerate(indices):
+                # Spread horizontally with tree-like narrowing at extremes
+                spread = 0.2 + 0.5 * (1 - abs(2 * (depth / max(max_depth, 1)) - 0.5))
+                if count == 1:
+                    x = 0.5
+                else:
+                    x = 0.5 + (j / (count - 1) - 0.5) * spread
+                y = y_base + rng.uniform(-0.03, 0.03)
+                x += rng.uniform(-0.02, 0.02)
+                positions[idx] = (max(0.08, min(0.92, x)), max(0.08, min(0.92, y)))
+
+        return positions
 
     def _load_positions(self, family: str, count: int) -> list[tuple[float, float]]:
         """Load node positions from template positions file."""
@@ -204,10 +259,11 @@ class TreeViewWidget(QWidget):
 
     def _center_on_node(self, node: TreeNode):
         """Animate centering on a node (200ms ease-in-out)."""
-        # Target offset to center node in widget
-        w, h = self.width(), self.height()
-        self._center_target_x = w / 2 - node.x * w
-        self._center_target_y = h / 2 - node.y * h
+        x_off, y_off, img_w, img_h = self._get_image_rect()
+        cx = x_off + node.x * img_w
+        cy = y_off + node.y * img_h
+        self._center_target_x = self.width() / 2 - cx
+        self._center_target_y = self.height() / 2 - cy
         self._center_start_x = self._center_offset_x
         self._center_start_y = self._center_offset_y
         self._center_anim_progress = 0.0
@@ -274,16 +330,26 @@ class TreeViewWidget(QWidget):
         p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
                    "No tree loaded.\nClassify a repo first!")
 
+    def _get_image_rect(self) -> tuple[int, int, int, int]:
+        """Get the actual image area (x_off, y_off, img_w, img_h) after aspect-ratio scaling."""
+        if self._bg_cache and not self._bg_cache.isNull():
+            img_w = self._bg_cache.width()
+            img_h = self._bg_cache.height()
+            x_off = (self.width() - img_w) // 2
+            y_off = (self.height() - img_h) // 2
+            return x_off, y_off, img_w, img_h
+        return 0, 0, self.width(), self.height()
+
     def _paint_nodes(self, p: QPainter):
         """Draw tree nodes with glow rings based on status."""
-        w, h = self.width(), self.height()
+        x_off, y_off, img_w, img_h = self._get_image_rect()
         font = QFont(FONT_BODY, 10)
         fm = QFontMetrics(font)
         p.setFont(font)
 
         for node in self._nodes:
-            cx = node.x * w
-            cy = node.y * h
+            cx = x_off + node.x * img_w
+            cy = y_off + node.y * img_h
             r = node.radius
 
             # Glow ring (status color)
@@ -346,10 +412,10 @@ class TreeViewWidget(QWidget):
 
     def _hit_test(self, pos: QPointF) -> Optional[TreeNode]:
         """Find node at screen position."""
-        w, h = self.width(), self.height()
+        x_off, y_off, img_w, img_h = self._get_image_rect()
         for node in self._nodes:
-            cx = node.x * w
-            cy = node.y * h
+            cx = x_off + node.x * img_w
+            cy = y_off + node.y * img_h
             dx = pos.x() - cx
             dy = pos.y() - cy
             if math.hypot(dx, dy) < node.radius * 2:

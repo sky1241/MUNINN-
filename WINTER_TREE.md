@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-29. Engine: 18557 lignes, 14 fichiers. UI: 4470 lignes (+5197 ref), 20 fichiers. Tests: 1370+ PASS (719 engine + 152 UI + reste), 0 FAIL ours.
+> Mis a jour: 2026-03-29. Engine: 18557 lignes, 14 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: 1370+ PASS (719 engine + 152 UI + reste), 0 FAIL ours.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
@@ -486,21 +486,22 @@ Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 | closeEvent | 510-520 | Cancel workers, save, accept |
 | main() | 525-572 | R7 entry: HiDPI, Fusion, excepthook, fonts |
 
-### neuron_map.py (~960L) — Carte Neurones
+### neuron_map.py (~1031L) — Carte Neurones + Cube 3D
 | Element | Lignes | Role |
 |---------|--------|------|
-| Neuron dataclass | 39-54 | id, label, x, y, degree, category |
+| Neuron dataclass | 39-55 | id, label, x, y, z, degree, category |
 | DEGREE_GRADIENT + _degree_color | 77-102 | B-UI-03: cold blue -> red gradient |
-| load_scan() | 202-253 | Parse scan JSON, build edges, launch Laplacian |
-| _start_laplacian() | 307-333 | B-UI-03: QThread worker (R3, R12) |
-| _build_kdtree() | 366-381 | B-UI-05: scipy cKDTree O(log n) |
-| paintEvent | 406-420 | Background, edges, neurons, legend |
-| _paint_edges() | 430-490 | B-UI-07: bezier quadTo, LOD, frustum culling, max 5000 |
-| _paint_legend() | 530-560 | B-UI-03: degree color legend bottom-left |
-| _hit_test_edge() | 764-781 | B-UI-07: edge click detection |
-| _zoom_to_fit_animated() | 880-910 | B-UI-04: 300ms ease-out animation |
-| _anim_tick() | 912-930 | Animated zoom tick |
-| closeEvent | 197-200 | R4: cancel Laplacian + stop anim timer |
+| 3D cube rotation | ~185-250 | _cube_tick, _project_3d (Y+X rot, perspective fov=3.5) |
+| _paint_cube_wireframe | ~250-275 | 12 cyan wireframe edges, 8 corners |
+| _world_to_screen | ~280-295 | 3D projection -> screen coords (wz param) |
+| load_scan() | ~210-260 | Parse scan JSON, build edges, launch Laplacian |
+| _layout_random() | ~325 | 3D positions in [-0.8, 0.8] cube space |
+| _start_laplacian() | ~340-370 | B-UI-03: QThread worker (R3, R12) |
+| _build_kdtree() | ~400-420 | B-UI-05: scipy cKDTree O(log n) |
+| paintEvent | ~450-470 | Cube wireframe + edges + neurons + legend |
+| _paint_neurons | ~480-560 | Depth sort, depth-based sizing/alpha, labels hovered/selected only |
+| _paint_edges() | ~570-640 | B-UI-07: bezier quadTo, LOD, frustum culling |
+| closeEvent | ~200-210 | R4: cancel Laplacian + stop anim + cube timer |
 
 ### workers.py (~210L) — QThread Workers
 | Element | Lignes | Role |
@@ -510,17 +511,19 @@ Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 | _spring_layout | 165-198 | Fallback if eigsh fails |
 | _grid_layout | 200-210 | Fallback for disconnected graphs |
 
-### tree_view.py (~380L) — Arbre Botanique
+### tree_view.py (~469L) — Arbre Botanique + Auto-Layout
 | Element | Lignes | Role |
 |---------|--------|------|
 | TreeNode | 38-52 | id, label, status, x, y, radius |
-| load_tree() | 95-139 | Load from scan + positions file |
-| _center_on_node() | 175-185 | B-UI-11: 200ms center animation |
-| _cross_fade() | 193-197 | B-UI-11: 200ms opacity cross-fade |
-| paintEvent | 200-240 | R6: pixmap cache + nodes |
-| _paint_nodes | 260-310 | Glow rings (done/wip/todo), highlight, labels |
-| highlight_concept() | 340-360 | B-UI-11: center anim + cross-fade |
-| hit test + click | 310-340 | Node selection, double-click open file |
+| load_tree() | 95-170 | Load from scan, uses JSON x/y or auto_layout |
+| _auto_layout() | ~180-220 | Generate tree-shaped positions from depth/level |
+| _get_image_rect() | ~340-350 | Image-relative coordinates after aspect scaling |
+| _center_on_node() | ~260-270 | B-UI-11: 200ms center animation (image-relative) |
+| _cross_fade() | ~285-290 | B-UI-11: 200ms opacity cross-fade |
+| paintEvent | ~295-325 | R6: pixmap cache + nodes |
+| _paint_nodes | ~335-385 | Glow rings, image-relative coords, highlight, labels |
+| highlight_concept() | ~430-450 | B-UI-11: center anim + cross-fade |
+| hit test + click | ~405-425 | Image-relative hit testing |
 
 ### classifier.py (159L) — Auto-Classification
 | Element | Lignes | Role |
@@ -539,18 +542,17 @@ Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 | show_neuron() | 165-265 | B-UI-12 basic (LOC) + B-UI-13 extended (zone, last_modified) |
 | Cross-fade | 54-61 | QGraphicsOpacityEffect 200ms |
 
-### navi.py (~300L) — Fee Guide Navi
+### navi.py (~328L) — Fee Guide Navi
 | Element | Lignes | Role |
 |---------|--------|------|
-| HELP_TEXTS | 29-38 | Contextual help dict (7 contexts, FRENCH) |
-| _reduce_motion_enabled | 41-51 | Windows SPI_GETCLIENTAREAANIMATION |
-| _tick() | 102-125 | 16ms lerp + idle float oscillation |
-| _paint_orb | 184-232 | Radial gradient glow + wings + core |
-| _load_bubble_frame | 234-238 | B-UI-14: lazy load PNG frame |
-| _paint_bubble | 240-290 | B-UI-14: PNG frame + B-UI-15: scan button |
-| mousePressEvent | 292-300 | B-UI-15: scan button click -> scan_requested signal |
-| show_context_help | 145-154 | B-UI-15 contextual guide |
-| show_first_launch | 156-159 | "Hey! Scanne un repo!" |
+| HELP_TEXTS | 29-40 | Contextual help dict (9 contexts, FRENCH) |
+| _reduce_motion_enabled | 43-53 | Windows SPI_GETCLIENTAREAANIMATION |
+| __init__ | 70-107 | WA_TranslucentBackground, fill parent geometry |
+| _tick() | 109-130 | 16ms lerp + idle float oscillation |
+| _paint_orb | 192-240 | Radial gradient glow + wings + core |
+| _paint_bubble | 250-305 | B-UI-14: PNG frame + B-UI-15: scan button |
+| show_context_help | 155-165 | B-UI-15 contextual guide |
+| show_first_launch | 167-170 | "Hey! Scanne un repo!" |
 
 ### terminal.py (363L) — Terminal + LLM Streaming
 | Element | Lignes | Role |

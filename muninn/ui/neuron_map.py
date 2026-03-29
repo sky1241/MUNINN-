@@ -49,6 +49,7 @@ class Neuron:
     depends: list = field(default_factory=list)
     x: float = 0.0
     y: float = 0.0
+    z: float = 0.0
     degree: int = 0
     category: str = ""
 
@@ -177,6 +178,13 @@ class NeuronMapWidget(QWidget):
         # R11: AA toggle during pan
         self._aa_enabled = True
 
+        # 3D cube rotation
+        self._cube_angle = 0.0
+        self._cube_timer = QTimer(self)
+        self._cube_timer.setInterval(33)  # ~30fps
+        self._cube_timer.timeout.connect(self._cube_tick)
+        self._cube_timer.start()
+
         # B-UI-05: KD-tree (scipy.spatial.cKDTree)
         self._kdtree = None
         self._kdtree_screen_coords = None  # array of screen coords for KD-tree
@@ -199,7 +207,60 @@ class NeuronMapWidget(QWidget):
     def closeEvent(self, event):  # R4: cleanup
         self._cancel_laplacian()
         self._anim_timer.stop()
+        self._cube_timer.stop()
         super().closeEvent(event)
+
+    # --- 3D Cube ---
+
+    def _cube_tick(self):
+        """Rotate the 3D cube slowly."""
+        self._cube_angle += 0.006
+        if self._cube_angle > math.tau:
+            self._cube_angle -= math.tau
+        self._invalidate_kdtree()
+        self.update()
+
+    def _project_3d(self, x, y, z):
+        """Rotate + perspective project a 3D point. Returns (sx, sy, depth)."""
+        a = self._cube_angle
+        ax = a * 0.3  # slight X tilt
+
+        # Rotate around Y axis
+        cos_a, sin_a = math.cos(a), math.sin(a)
+        x1 = x * cos_a - z * sin_a
+        z1 = x * sin_a + z * cos_a
+
+        # Rotate around X axis (slight)
+        cos_ax, sin_ax = math.cos(ax), math.sin(ax)
+        y1 = y * cos_ax - z1 * sin_ax
+        z2 = y * sin_ax + z1 * cos_ax
+
+        # Perspective projection
+        fov = 3.5
+        scale = fov / (fov + z2)
+        return x1 * scale, y1 * scale, z2
+
+    def _paint_cube_wireframe(self, p: QPainter):
+        """Draw rotating wireframe cube."""
+        corners_3d = [
+            (-1, -1, -1), (1, -1, -1), (1, 1, -1), (-1, 1, -1),
+            (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),
+        ]
+        wire_edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),  # front face
+            (4, 5), (5, 6), (6, 7), (7, 4),  # back face
+            (0, 4), (1, 5), (2, 6), (3, 7),  # connectors
+        ]
+        s = 0.85  # cube edge slightly larger than neuron space
+        projected = []
+        for cx, cy, cz in corners_3d:
+            sp = self._world_to_screen(cx * s, cy * s, cz * s)
+            projected.append(sp)
+
+        pen = QPen(QColor(0, 220, 255, 35), 1)
+        p.setPen(pen)
+        for i, j in wire_edges:
+            p.drawLine(projected[i], projected[j])
 
     # --- Data loading ---
 
@@ -315,13 +376,12 @@ class NeuronMapWidget(QWidget):
         self._max_degree = max((n.degree for n in self._neurons), default=1)
 
     def _layout_random(self):
-        """Assign random positions in [0.1, 0.9] normalized space."""
+        """Assign random 3D positions in [-0.8, 0.8] cube space."""
         rng = random.Random(42)
-        w, h = self.width() or 400, self.height() or 400
-        margin = 0.1
         for n in self._neurons:
-            n.x = (margin + rng.random() * (1 - 2 * margin)) * w
-            n.y = (margin + rng.random() * (1 - 2 * margin)) * h
+            n.x = (rng.random() - 0.5) * 1.6
+            n.y = (rng.random() - 0.5) * 1.6
+            n.z = (rng.random() - 0.5) * 1.6
 
     # --- B-UI-03: Laplacian spectral layout (QThread) ---
 
@@ -365,13 +425,13 @@ class NeuronMapWidget(QWidget):
         self._layout_computing = False
 
     def _on_laplacian_done(self, positions):
-        """Apply Laplacian layout positions."""
+        """Apply Laplacian layout positions (mapped to 3D cube space)."""
         self._layout_computing = False
-        w, h = self.width() or 400, self.height() or 400
         for i, (px, py) in enumerate(positions):
             if i < len(self._neurons):
-                self._neurons[i].x = px * w
-                self._neurons[i].y = py * h
+                self._neurons[i].x = (px - 0.5) * 1.6  # map [0,1] -> [-0.8, 0.8]
+                self._neurons[i].y = (py - 0.5) * 1.6
+                # Keep z from random layout
         self._cache_dirty = True
         self._kdtree = None
         self.layout_finished.emit()
@@ -394,7 +454,7 @@ class NeuronMapWidget(QWidget):
             import numpy as np
             coords = []
             for n in self._neurons:
-                sp = self._world_to_screen(n.x, n.y)
+                sp = self._world_to_screen(n.x, n.y, n.z)
                 coords.append([sp.x(), sp.y()])
             self._kdtree_screen_coords = np.array(coords)
             self._kdtree = cKDTree(self._kdtree_screen_coords)
@@ -407,14 +467,23 @@ class NeuronMapWidget(QWidget):
 
     # --- Coordinate transforms ---
 
-    def _world_to_screen(self, wx: float, wy: float) -> QPointF:
-        sx = (wx - self._pan_x) * self._zoom + self.width() / 2
-        sy = (wy - self._pan_y) * self._zoom + self.height() / 2
+    def _world_to_screen(self, wx: float, wy: float, wz: float = 0.0) -> QPointF:
+        px, py, _ = self._project_3d(wx, wy, wz)
+        half_w = self.width() / 2
+        half_h = self.height() / 2
+        cube_scale = min(half_w, half_h) * 0.7
+        sx = half_w + (px * cube_scale - self._pan_x) * self._zoom
+        sy = half_h + (py * cube_scale - self._pan_y) * self._zoom
         return QPointF(sx, sy)
 
     def _screen_to_world(self, sx: float, sy: float) -> tuple[float, float]:
-        wx = (sx - self.width() / 2) / self._zoom + self._pan_x
-        wy = (sy - self.height() / 2) / self._zoom + self._pan_y
+        half_w = self.width() / 2
+        half_h = self.height() / 2
+        cube_scale = min(half_w, half_h) * 0.7
+        if cube_scale == 0:
+            return 0.0, 0.0
+        wx = (sx - half_w) / (self._zoom * cube_scale) + self._pan_x / cube_scale
+        wy = (sy - half_h) / (self._zoom * cube_scale) + self._pan_y / cube_scale
         return wx, wy
 
     # --- Paint ---
@@ -431,6 +500,7 @@ class NeuronMapWidget(QWidget):
             p.end()
             return
 
+        self._paint_cube_wireframe(p)
         self._paint_edges(p)
         self._paint_neurons(p)
         self._paint_legend(p)
@@ -456,8 +526,7 @@ class NeuronMapWidget(QWidget):
                    "No data loaded.\nScan a repo first!")
 
     def _paint_neurons(self, p: QPainter):
-        """Draw neurons with degree-based colors and category shapes."""
-        radius = max(4, 6 * self._zoom)
+        """Draw neurons with degree-based colors, 3D depth, and category shapes."""
         font = QFont(FONT_BODY, max(8, int(10 * self._zoom)))
         fm = QFontMetrics(font)
         p.setFont(font)
@@ -472,19 +541,29 @@ class NeuronMapWidget(QWidget):
 
         viewport = self.rect()
 
-        for i, n in enumerate(self._neurons):
-            sp = self._world_to_screen(n.x, n.y)
+        # Depth-sort: paint far neurons first (painter's algorithm)
+        indexed = list(enumerate(self._neurons))
+        indexed.sort(key=lambda x: self._project_3d(x[1].x, x[1].y, x[1].z)[2])
+
+        for i, n in indexed:
+            sp = self._world_to_screen(n.x, n.y, n.z)
 
             # Frustum culling: skip off-screen neurons
             if not viewport.contains(sp.toPoint()):
                 continue
 
+            # Depth-based sizing and alpha
+            _, _, depth = self._project_3d(n.x, n.y, n.z)
+            depth_scale = 3.5 / (3.5 + depth)
+            radius = max(3, 6 * self._zoom * depth_scale)
+            depth_alpha = int(130 + 125 * min(max(depth_scale, 0), 1))
+
             # Dimming: if something is hovered, dim non-neighbors
-            alpha = 255
+            alpha = depth_alpha
             if hovered_idx is not None and i != hovered_idx:
                 neighbors = self._neighbor_cache.get(hovered_idx, set())
                 if i not in neighbors:
-                    alpha = 51  # 20%
+                    alpha = int(depth_alpha * 0.2)
 
             # B-UI-03: Color by degree (not status)
             color = _degree_color(n.degree, self._max_degree)
@@ -517,12 +596,12 @@ class NeuronMapWidget(QWidget):
             p.setBrush(QBrush(color))
             self._draw_shape(p, sp, radius, n.category)
 
-            # Label
-            if self._zoom > 0.5 and len(self._neurons) < 200:
+            # Label: only for hovered/selected neurons (3D cube is too dense for all labels)
+            if (i == hovered_idx or i in self._selected) and self._zoom > 0.3:
                 label_color = QColor(TEXT_PRIMARY)
-                label_color.setAlpha(alpha)
+                label_color.setAlpha(min(alpha, 220))
                 p.setPen(label_color)
-                max_w = int(80 * self._zoom)
+                max_w = int(100 * self._zoom)
                 elided = fm.elidedText(n.label, Qt.TextElideMode.ElideRight, max_w)
                 p.drawText(QPointF(sp.x() + radius + 4, sp.y() + 4), elided)
 
@@ -566,8 +645,8 @@ class NeuronMapWidget(QWidget):
             if ia >= n_neurons or ib >= n_neurons:
                 continue
             na, nb = self._neurons[ia], self._neurons[ib]
-            sa = self._world_to_screen(na.x, na.y)
-            sb = self._world_to_screen(nb.x, nb.y)
+            sa = self._world_to_screen(na.x, na.y, na.z)
+            sb = self._world_to_screen(nb.x, nb.y, nb.z)
             # Frustum culling: skip if both endpoints off-screen
             if not viewport.contains(sa) and not viewport.contains(sb):
                 continue
@@ -634,19 +713,9 @@ class NeuronMapWidget(QWidget):
     # --- Zoom + Drag (B-UI-04) ---
 
     def wheelEvent(self, event):
-        pos = event.position()
-        old_wx, old_wy = self._screen_to_world(pos.x(), pos.y())
-
         delta = event.angleDelta().y()
         factor = 1.15 if delta > 0 else 1 / 1.15
-        new_zoom = max(0.1, min(20.0, self._zoom * factor))
-        self._zoom = new_zoom
-
-        new_wx, new_wy = self._screen_to_world(pos.x(), pos.y())
-        self._pan_x -= (new_wx - old_wx)
-        self._pan_y -= (new_wy - old_wy)
-
-        self._clamp_pan()
+        self._zoom = max(0.1, min(20.0, self._zoom * factor))
         self._cache_dirty = True
         self._invalidate_kdtree()
         self._schedule_repaint()
@@ -736,12 +805,7 @@ class NeuronMapWidget(QWidget):
             from PyQt6.QtCore import QUrl
             QDesktopServices.openUrl(QUrl.fromLocalFile(hit.entry))
         elif hit is None:
-            self._zoom = 1.0
-            self._pan_x = 0.0
-            self._pan_y = 0.0
-            self._cache_dirty = True
-            self._invalidate_kdtree()
-            self.update()
+            self._zoom_to_fit()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_0 and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -775,7 +839,7 @@ class NeuronMapWidget(QWidget):
         best = None
         best_dist = float("inf")
         for n in self._neurons:
-            sp = self._world_to_screen(n.x, n.y)
+            sp = self._world_to_screen(n.x, n.y, n.z)
             dx = screen_pos.x() - sp.x()
             dy = screen_pos.y() - sp.y()
             dist = math.hypot(dx, dy)
@@ -795,8 +859,8 @@ class NeuronMapWidget(QWidget):
         for ia, ib, w in self._edges:
             if ia >= n_neurons or ib >= n_neurons:
                 continue
-            sa = self._world_to_screen(self._neurons[ia].x, self._neurons[ia].y)
-            sb = self._world_to_screen(self._neurons[ib].x, self._neurons[ib].y)
+            sa = self._world_to_screen(self._neurons[ia].x, self._neurons[ia].y, self._neurons[ia].z)
+            sb = self._world_to_screen(self._neurons[ib].x, self._neurons[ib].y, self._neurons[ib].z)
             # Point-to-segment distance
             dist = self._point_to_segment_dist(sx, sy, sa.x(), sa.y(), sb.x(), sb.y())
             if dist < hit_radius:
@@ -899,41 +963,26 @@ class NeuronMapWidget(QWidget):
     # --- View helpers ---
 
     def _zoom_to_fit(self):
-        """Instant zoom to fit (used internally)."""
+        """Instant zoom to fit (reset to default 3D view)."""
         if not self._neurons:
             return
-        xs = [n.x for n in self._neurons]
-        ys = [n.y for n in self._neurons]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        dx = max_x - min_x or 1
-        dy = max_y - min_y or 1
-        self._pan_x = (min_x + max_x) / 2
-        self._pan_y = (min_y + max_y) / 2
-        self._zoom = min(self.width() / (dx * 1.2), self.height() / (dy * 1.2))
-        self._zoom = max(0.1, min(20.0, self._zoom))
+        self._zoom = 1.0
+        self._pan_x = 0.0
+        self._pan_y = 0.0
         self._cache_dirty = True
         self._invalidate_kdtree()
         self.update()
 
     def _zoom_to_fit_animated(self):
-        """B-UI-04: Animated zoom-to-fit (300ms ease-out)."""
+        """B-UI-04: Animated zoom-to-fit (300ms ease-out, reset to default 3D view)."""
         if not self._neurons:
             return
-        xs = [n.x for n in self._neurons]
-        ys = [n.y for n in self._neurons]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        dx = max_x - min_x or 1
-        dy = max_y - min_y or 1
-
         self._anim_start_zoom = self._zoom
         self._anim_start_pan_x = self._pan_x
         self._anim_start_pan_y = self._pan_y
-        self._anim_target_pan_x = (min_x + max_x) / 2
-        self._anim_target_pan_y = (min_y + max_y) / 2
-        self._anim_target_zoom = min(self.width() / (dx * 1.2), self.height() / (dy * 1.2))
-        self._anim_target_zoom = max(0.1, min(20.0, self._anim_target_zoom))
+        self._anim_target_pan_x = 0.0
+        self._anim_target_pan_y = 0.0
+        self._anim_target_zoom = 1.0
         self._anim_progress = 0.0
         self._anim_timer.start()
 
@@ -955,16 +1004,9 @@ class NeuronMapWidget(QWidget):
         self.update()
 
     def _clamp_pan(self):
-        if not self._neurons:
-            return
-        xs = [n.x for n in self._neurons]
-        ys = [n.y for n in self._neurons]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        margin_x = (max_x - min_x) * 0.2 + 100
-        margin_y = (max_y - min_y) * 0.2 + 100
-        self._pan_x = max(min_x - margin_x, min(max_x + margin_x, self._pan_x))
-        self._pan_y = max(min_y - margin_y, min(max_y + margin_y, self._pan_y))
+        half = min(self.width(), self.height()) * 0.5 + 50
+        self._pan_x = max(-half, min(half, self._pan_x))
+        self._pan_y = max(-half, min(half, self._pan_y))
 
     def _schedule_repaint(self):
         if not self._repaint_timer.isActive():

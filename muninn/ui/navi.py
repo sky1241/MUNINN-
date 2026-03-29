@@ -69,8 +69,12 @@ class NaviWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
+        # Fill parent size
+        if parent:
+            self.setGeometry(parent.rect())
 
         # Position (screen coords within parent)
         self._pos = QPointF(100, 100)
@@ -298,6 +302,10 @@ class NaviWidget(QWidget):
                        Qt.AlignmentFlag.AlignCenter, "Scanner un repo")
             # Store button rect for click detection
             self._scan_btn_rect = QRectF(btn_x, btn_y, btn_w, btn_h)
+
+    def resizeEvent(self, event):
+        """Keep Navi the same size as parent overlay."""
+        super().resizeEvent(event)
 
     def mousePressEvent(self, event):
         """Handle click on scan button (B-UI-15)."""

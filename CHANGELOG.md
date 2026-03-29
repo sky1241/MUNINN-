@@ -5,6 +5,32 @@ Tests: 1210 PASS, 0 FAIL, 3 SKIP.
 
 ---
 
+## UI 3D Cube + Navi + Tree Auto-Layout (2026-03-29) [DONE]
+
+Major visual upgrades to the desktop UI.
+
+**3D Rotating Cube (neuron_map.py):**
+- Neurons placed inside a slowly rotating 3D wireframe cube (QPainter perspective projection)
+- Depth-based sizing + alpha (far neurons smaller/dimmer, painter's algorithm depth sort)
+- Wireframe: 12 cyan edges, 8 corners at ±0.85, neurons at ±0.8
+- Rotation: Y-axis + slight X tilt, 0.006 rad/tick at ~30fps
+- All interactions preserved: zoom, pan, click, hover, KD-tree hit testing
+- Coordinate system: normalized [-0.8, 0.8] cube space, perspective projection (fov=3.5)
+- Labels shown only for hovered/selected neurons (less clutter in 3D)
+
+**Navi Fix (navi.py + main_window.py):**
+- Fixed invisible Navi: added WA_TranslucentBackground, proper geometry fill
+- eventFilter on neuron_panel resizes Navi overlay to match parent
+- WA_TransparentForMouseEvents=True so clicks pass through to neurons underneath
+
+**Tree Auto-Layout (tree_view.py):**
+- Nodes now use positions from skeleton JSON (x/y in imgSize space, normalized)
+- New `_auto_layout()`: generates tree-like positions from depth/level when no positions file
+- `_get_image_rect()`: nodes positioned relative to scaled background image (not widget)
+- Hit test + center animation use image-relative coordinates
+
+---
+
 ## UI Phase 6-9 — Full Battleplan Complete (2026-03-28) [DONE]
 
 All 32 briques implemented. 9 new modules, main_window fully wired.

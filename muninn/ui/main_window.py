@@ -119,8 +119,12 @@ class MainWindow(QMainWindow):
         from muninn.ui.navi import NaviWidget
         self._navi = NaviWidget(self.neuron_panel)
         self._navi.scan_requested.connect(self._scan_folder_dialog)
+        self._navi.raise_()  # Above neuron panel content
         self._navi.show()
         self._navi.show_first_launch()
+
+        # Keep Navi sized to neuron panel
+        self.neuron_panel.installEventFilter(self)
 
         # Command palette (overlay, initially hidden)
         from muninn.ui.command_palette import CommandPalette
@@ -129,6 +133,14 @@ class MainWindow(QMainWindow):
 
         # About dialog (lazy)
         self._about_dialog = None
+
+    def eventFilter(self, obj, event):
+        """Resize Navi overlay when neuron panel resizes."""
+        from PyQt6.QtCore import QEvent
+        if obj is self.neuron_panel and event.type() == QEvent.Type.Resize:
+            if hasattr(self, '_navi'):
+                self._navi.setGeometry(self.neuron_panel.rect())
+        return super().eventFilter(obj, event)
 
     def _wire_signals(self):
         """Cable signals between panels."""
