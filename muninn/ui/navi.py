@@ -371,108 +371,80 @@ class NaviWidget(QWidget):
             p.setBrush(QBrush(glow))
             p.drawEllipse(QPointF(cx, cy), gr, gr)
 
-        # === 6 WINGS — scythe/crescent shape, top-mounted downbeat ===
-        # Grandes: long curved crescents on top, powerful downbeat
-        # Moyennes: shorter crescents, offset phase
-        # Petites: tiny fast stabilizers behind
+        # === WINGS — seraph x firefly ===
+        # Concept: 3 paires d'ailes empilees verticalement comme un seraphin
+        # mais fines comme des ailes de libellule, quasi invisibles,
+        # juste des contours de lumiere + veines. On voit A TRAVERS.
+        # Le mouvement: chaque paire a son propre rythme, cascade du haut vers le bas.
 
         p.save()
         p.translate(cx, cy)
 
         t = self._phase
 
-        def _draw_crescent_wing(side_m, length, thickness, angle_deg, alpha_base):
-            """Draw a curved crescent/scythe wing shape."""
-            grad = QLinearGradient(0, -length, 0, length * 0.2)
-            grad.setColorAt(0.0, QColor(0, 255, 230, int(alpha_base * 0.3)))
-            grad.setColorAt(0.3, QColor(60, 240, 255, int(alpha_base * 0.9)))
-            grad.setColorAt(0.6, QColor(140, 250, 255, alpha_base))
-            grad.setColorAt(1.0, QColor(0, 200, 255, int(alpha_base * 0.2)))
+        # 3 pairs: grandes EN BAS, petites AU MILIEU (rapides), moyennes AU-DESSUS (plus larges)
+        # Each pair: (y_offset, base_tilt, arc_range, length, width, speed, phase, stroke_width)
+        pairs = [
+            ( r * 0.6,  15, 70, r * 7.5, r * 2.3, 2.0, 0.0,  1.0),   # grandes — bas, lentes, un peu plus fines
+            (-r * 0.8, -80, 90, r * 5.0, r * 2.2, 3.2, 0.6,  0.6),   # moyennes — plus haut, battent vers le HAUT, ample
+            ( r * 0.0, -10, 45, r * 3.2, r * 1.5, 8.0, 1.2,  0.4),   # petites — milieu, tres rapides
+        ]
 
-            p.save()
-            p.rotate(angle_deg)
+        for y_off, base_tilt, arc_range, wL, wW, speed, ph_off, stroke_w in pairs:
+            for side_m in [-1, 1]:
+                ph = ph_off + (0.1 if side_m == 1 else 0.0)
+                beat = math.sin(t * speed + ph)
+                flap = beat * 0.5 + 0.5  # 0..1
 
-            p.setPen(QPen(QColor(130, 235, 255, int(alpha_base * 0.7)), 0.6))
-            p.setBrush(QBrush(grad))
+                wing_angle = (base_tilt + flap * arc_range) * side_m
+                # Alpha pulses with beat — brighter at extremes
+                alpha = int(18 + 22 * abs(beat))
 
-            # Crescent: curves up from root, sweeps outward, tapers to point
-            path = QPainterPath()
-            # Root at body
-            path.moveTo(0, 0)
-            # Leading edge — sweeps up and out in a long arc
-            path.cubicTo(
-                -thickness * 0.8 * side_m, -length * 0.35,   # pull inward first
-                -thickness * 1.5 * side_m, -length * 0.7,    # wide arc outward
-                -thickness * 0.3 * side_m, -length,           # tip (nearly straight up)
-            )
-            # Trailing edge — tighter curve back to root
-            path.cubicTo(
-                thickness * 0.5 * side_m, -length * 0.65,
-                thickness * 0.3 * side_m, -length * 0.3,
-                0, 0,
-            )
-            path.closeSubpath()
-            p.drawPath(path)
+                p.save()
+                p.translate(0, y_off)
+                p.rotate(wing_angle)
 
-            # Single central nervure
-            p.setPen(QPen(QColor(120, 230, 255, int(alpha_base * 0.35)), 0.3))
-            p.drawLine(
-                QPointF(0, 0),
-                QPointF(-thickness * 0.4 * side_m, -length * 0.85),
-            )
+                # Crystal needle — fin, tranchant, effile
+                p.setBrush(Qt.BrushStyle.NoBrush)
 
-            p.restore()
+                s = side_m
+                # Needle shard — tres fin, pointe nette
+                p.setPen(QPen(QColor(0, 220, 255, alpha), stroke_w))
 
-        # === GRANDES — long crescents, slow powerful downbeat ===
-        for side_m in [-1, 1]:
-            ph = 0.0 if side_m == -1 else 0.2
-            raw = math.sin(t * 3.0 + ph)
-            # Asymmetric: slow down, fast up
-            flap = raw ** 0.5 if raw > 0 else -((-raw) ** 1.8)
-            # Angle: UP = tight to body (small angle), DOWN = spread wide
-            angle = 25 * side_m + flap * 55 * side_m
-            spread = (flap + 1) / 2
-            length = r * (5.0 + 1.5 * spread)
-            thickness = r * (0.8 + 0.4 * spread)
-            alpha = int(40 + 30 * spread)
-            _draw_crescent_wing(side_m, length, thickness, angle, alpha)
+                shard = QPainterPath()
+                shard.moveTo(0, 0)                                    # root
+                shard.lineTo(wL * 0.1 * s,  -wW * 0.38)             # shoulder
+                shard.lineTo(wL * 0.35 * s, -wW * 0.45)             # mid peak
+                shard.lineTo(wL * 0.65 * s, -wW * 0.28)             # narrowing
+                shard.lineTo(wL * 0.88 * s, -wW * 0.07)             # tip approach
+                shard.lineTo(wL * s,          0)                      # TIP
+                shard.lineTo(wL * 0.85 * s,  wW * 0.1)              # lower tip
+                shard.lineTo(wL * 0.55 * s,  wW * 0.18)             # lower mid
+                shard.lineTo(wL * 0.25 * s,  wW * 0.15)             # lower inner
+                shard.lineTo(wL * 0.07 * s,  wW * 0.05)             # root approach
+                shard.lineTo(0, 0)
+                p.drawPath(shard)
 
-        # === MOYENNES — shorter, delayed, slightly back ===
-        for side_m in [-1, 1]:
-            ph = 0.6 if side_m == -1 else 0.9
-            raw = math.sin(t * 3.0 + ph)
-            flap = raw ** 0.6 if raw > 0 else -((-raw) ** 1.5)
-            angle = 35 * side_m + flap * 45 * side_m
-            spread = (flap + 1) / 2
-            length = r * (3.5 + 1.0 * spread)
-            thickness = r * (0.6 + 0.3 * spread)
-            alpha = int(30 + 20 * spread)
+                # Inner facets — 2 fine diagonal lines
+                facet_alpha = int(alpha * 0.35)
+                p.setPen(QPen(QColor(0, 200, 255, facet_alpha), stroke_w * 0.35))
+                p.drawLine(QPointF(wL * 0.1 * s,  -wW * 0.38),
+                          QPointF(wL * 0.55 * s,  wW * 0.18))
+                p.drawLine(QPointF(wL * 0.35 * s, -wW * 0.45),
+                          QPointF(wL * s, 0))
 
-            p.save()
-            p.translate(0, r * 0.3)  # Slightly lower attach point
-            _draw_crescent_wing(side_m, length, thickness, angle, alpha)
-            p.restore()
+                # Subtle fill on downstroke
+                if flap > 0.5:
+                    fill_alpha = int((flap - 0.5) / 0.5 * 12)
+                    grad = QLinearGradient(0, -wW * 0.2, wL * 0.8 * s, 0)
+                    grad.setColorAt(0.0, QColor(0, 255, 240, fill_alpha))
+                    grad.setColorAt(0.5, QColor(0, 210, 255, int(fill_alpha * 0.4)))
+                    grad.setColorAt(1.0, QColor(0, 180, 255, 0))
+                    p.setPen(Qt.PenStyle.NoPen)
+                    p.setBrush(QBrush(grad))
+                    p.drawPath(shard)
 
-        # === PETITES — fast stabilizers, ellipses, behind ===
-        for side_m in [-1, 1]:
-            ph = 1.5 if side_m == -1 else 1.8
-            flap = math.sin(t * 8.0 + ph) * 0.5 + 0.5
-            angle = 50 * side_m + 15 * (flap - 0.5) * side_m
-            wl = r * 1.8
-            ww = r * 0.25
-            alpha = 25
-
-            grad = QLinearGradient(0, 0, wl * side_m * 0.5, -wl * 0.5)
-            grad.setColorAt(0.0, QColor(0, 255, 230, alpha))
-            grad.setColorAt(1.0, QColor(0, 200, 255, int(alpha * 0.2)))
-
-            p.save()
-            p.translate(0, r * 0.7)
-            p.rotate(angle)
-            p.setPen(QPen(QColor(130, 230, 255, int(alpha * 0.5)), 0.3))
-            p.setBrush(QBrush(grad))
-            p.drawEllipse(QPointF(wl * 0.3 * side_m, -wl * 0.2), wl * 0.4, ww)
-            p.restore()
+                p.restore()
 
         p.restore()
 
@@ -487,23 +459,28 @@ class NaviWidget(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(QPointF(cx, cy), r, r)
 
+    def _make_transparent_frame(self, img: QImage) -> QPixmap:
+        """Remove black background from PNG frame, keep luminous parts."""
+        img = img.convertToFormat(QImage.Format.Format_ARGB32)
+        for y in range(img.height()):
+            for x in range(img.width()):
+                c = QColor(img.pixel(x, y))
+                brightness = c.red() + c.green() + c.blue()
+                if brightness < 120:
+                    alpha = int((brightness / 120) * c.alpha())
+                    img.setPixelColor(x, y, QColor(c.red(), c.green(), c.blue(), alpha))
+        return QPixmap.fromImage(img)
+
     def _load_bubble_frame(self):
-        """Lazy-load PNG bubble frame (B-UI-14) with black made transparent."""
+        """Lazy-load PNG bubble frame + flipped version for button."""
         if self._bubble_frame is None:
             frame_path = _ASSETS_DIR / "node_tooltip_frame_blue.png"
             if frame_path.exists():
                 img = QImage(str(frame_path))
-                img = img.convertToFormat(QImage.Format.Format_ARGB32)
-                # Make dark pixels transparent (threshold: brightness < 40)
-                for y in range(img.height()):
-                    for x in range(img.width()):
-                        c = QColor(img.pixel(x, y))
-                        brightness = c.red() + c.green() + c.blue()
-                        if brightness < 120:  # Near-black -> transparent
-                            # Scale alpha by brightness (smooth fade)
-                            alpha = int((brightness / 120) * c.alpha())
-                            img.setPixelColor(x, y, QColor(c.red(), c.green(), c.blue(), alpha))
-                self._bubble_frame = QPixmap.fromImage(img)
+                self._bubble_frame = self._make_transparent_frame(img)
+                # Flipped version for button
+                flipped = img.mirrored(True, True)  # horizontal + vertical flip
+                self._button_frame = self._make_transparent_frame(flipped)
 
     def _paint_bubble(self, p: QPainter):
         """Draw the dialogue bubble to the right of Navi (B-UI-14: PNG frame x2.5)."""
@@ -546,19 +523,26 @@ class NaviWidget(QWidget):
                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
                    self._bubble_text)
 
-        # B-UI-15: Action button in bubble
+        # B-UI-15: Action button — flipped PNG frame as background
         if self._bubble_button_visible:
             btn_label = getattr(self, '_bubble_button_text', '') or "Scanner un repo"
-            btn_w, btn_h = 200, 36
+            btn_w, btn_h = 280, 55
             btn_x = bx + (bubble_w - btn_w) / 2
-            btn_y = by + bubble_h - btn_h - 16
-            # Button background
-            p.setPen(QPen(QColor(0, 220, 255), 1))
-            p.setBrush(QBrush(QColor(0, 220, 255, 40)))
-            p.drawRoundedRect(QRectF(btn_x, btn_y, btn_w, btn_h), 6, 6)
-            # Button text
+            btn_y = by + bubble_h - btn_h - 12
+
+            # Draw flipped PNG frame as button background
+            btn_frame = getattr(self, '_button_frame', None)
+            if btn_frame and not btn_frame.isNull():
+                scaled = btn_frame.scaled(
+                    int(btn_w), int(btn_h),
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                p.drawPixmap(int(btn_x), int(btn_y), scaled)
+
+            # Button text centered
             p.setPen(QColor(0, 220, 255))
-            p.setFont(QFont(FONT_BODY, 14))
+            p.setFont(QFont(FONT_BODY, 15))
             p.drawText(QRectF(btn_x, btn_y, btn_w, btn_h),
                        Qt.AlignmentFlag.AlignCenter, btn_label)
             # Store button rect for click detection
