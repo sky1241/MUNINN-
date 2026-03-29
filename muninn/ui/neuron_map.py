@@ -74,13 +74,18 @@ STATUS_COLORS = {
     "skip": QColor(128, 128, 128),
 }
 
-# B-UI-03: Degree-based color gradient (cold blue -> cyan -> orange -> red)
+# B-UI-03: Degree-based color gradient (green -> yellow -> red, 10 steps)
 DEGREE_GRADIENT = [
-    (0.0, QColor(70, 130, 180)),    # steel blue (cold)
-    (0.25, QColor(0, 180, 220)),    # cyan
-    (0.5, QColor(0, 220, 180)),     # teal
-    (0.75, QColor(255, 180, 50)),   # orange
-    (1.0, QColor(255, 80, 50)),     # red-orange (hot)
+    (0.0,   QColor(0, 180, 0)),       # green
+    (0.11,  QColor(40, 200, 0)),      # green-lime
+    (0.22,  QColor(100, 210, 0)),     # lime
+    (0.33,  QColor(160, 220, 0)),     # lime-yellow
+    (0.44,  QColor(210, 220, 0)),     # yellow-green
+    (0.55,  QColor(240, 200, 0)),     # yellow
+    (0.66,  QColor(250, 170, 0)),     # yellow-orange
+    (0.77,  QColor(250, 120, 0)),     # orange
+    (0.88,  QColor(240, 60, 0)),      # orange-red
+    (1.0,   QColor(220, 0, 0)),       # red
 ]
 
 

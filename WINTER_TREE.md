@@ -468,7 +468,7 @@ Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 | _build_qss() | 53-260 | Full QSS (minimal selectors, no border-image) |
 | get_palette() | 263-285 | QPalette for dynamic colors (avoids GDI leak) |
 
-### main_window.py (572L) — MainWindow Fully Wired
+### main_window.py (584L) — MainWindow Fully Wired
 | Element | Lignes | Role |
 |---------|--------|------|
 | MainWindow.__init__ | 39-59 | Splitters, status bar, autosave 60s, _install_extras |
@@ -486,11 +486,11 @@ Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 | closeEvent | 510-520 | Cancel workers, save, accept |
 | main() | 525-572 | R7 entry: HiDPI, Fusion, excepthook, fonts |
 
-### neuron_map.py (~1031L) — Carte Neurones + Cube 3D
+### neuron_map.py (~1036L) — Carte Neurones + Cube 3D
 | Element | Lignes | Role |
 |---------|--------|------|
 | Neuron dataclass | 39-55 | id, label, x, y, z, degree, category |
-| DEGREE_GRADIENT + _degree_color | 77-102 | B-UI-03: cold blue -> red gradient |
+| DEGREE_GRADIENT + _degree_color | 77-107 | B-UI-03: green->yellow->red 10-step gradient |
 | 3D cube rotation | ~185-250 | _cube_tick, _project_3d (Y+X rot, perspective fov=3.5) |
 | _paint_cube_wireframe | ~250-275 | 12 cyan wireframe edges, 8 corners |
 | _world_to_screen | ~280-295 | 3D projection -> screen coords (wz param) |
@@ -542,17 +542,19 @@ Phase 0-9 COMPLETE. 32 briques. 152 UI tests PASS (PyQt6 6.10.2).
 | show_neuron() | 165-265 | B-UI-12 basic (LOC) + B-UI-13 extended (zone, last_modified) |
 | Cross-fade | 54-61 | QGraphicsOpacityEffect 200ms |
 
-### navi.py (~328L) — Fee Guide Navi
+### navi.py (~593L) — Fee Guide Navi Evolved
 | Element | Lignes | Role |
 |---------|--------|------|
-| HELP_TEXTS | 29-40 | Contextual help dict (9 contexts, FRENCH) |
-| _reduce_motion_enabled | 43-53 | Windows SPI_GETCLIENTAREAANIMATION |
-| __init__ | 70-107 | WA_TranslucentBackground, fill parent geometry |
-| _tick() | 109-130 | 16ms lerp + idle float oscillation |
-| _paint_orb | 192-240 | Radial gradient glow + wings + core |
-| _paint_bubble | 250-305 | B-UI-14: PNG frame + B-UI-15: scan button |
-| show_context_help | 155-165 | B-UI-15 contextual guide |
-| show_first_launch | 167-170 | "Hey! Scanne un repo!" |
+| TUTORIAL_STEPS | 30-85 | 7-step guided tutorial (welcome->scan->explore) |
+| HELP_TEXTS | 87-98 | Contextual help dict (FRENCH) |
+| _reduce_motion_enabled | 100-110 | Windows SPI_GETCLIENTAREAANIMATION |
+| __init__ | 115-170 | Tutorial state, flight patterns, WA_TransparentForMouseEvents=False |
+| _tick() | 172-255 | 16ms, 5 flight patterns, geostationary when bubble visible, tutorial auto-advance |
+| _advance_tutorial | 295-300 | Step progression + on_scan_complete hook |
+| _paint_orb | 350-490 | 3 glow layers + 6 crescent wings (Bezier) + iridescent core |
+| _load_bubble_frame | 493-510 | PNG frame with black pixels made transparent (pixel alpha) |
+| _paint_bubble | 512-570 | x2.5 size (600x180), centered cyan text, interactive button |
+| mousePressEvent | 575-585 | Button click -> scan_requested, else event.ignore() (forward) |
 
 ### terminal.py (363L) — Terminal + LLM Streaming
 | Element | Lignes | Role |

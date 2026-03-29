@@ -15,7 +15,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QPointF, QRectF, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QPainter, QPen, QColor, QBrush, QFont, QLinearGradient,
-    QRadialGradient, QPainterPath, QPixmap,
+    QRadialGradient, QPainterPath, QPixmap, QImage,
 )
 from PyQt6.QtWidgets import QWidget, QPushButton, QVBoxLayout, QLabel
 
@@ -26,17 +26,68 @@ from muninn.ui.theme import (
 from muninn.ui import _ASSETS_DIR
 
 
+# Guided tutorial steps (B-UI-15) — French
+TUTORIAL_STEPS = [
+    {
+        "key": "welcome",
+        "text": "Hey! Je suis Navi, ton guide.\nOn va explorer ton code ensemble.",
+        "button": None,
+        "duration": 5.0,
+    },
+    {
+        "key": "scan_prompt",
+        "text": "D'abord, scanne un repo pour\nque je puisse cartographier ton code.",
+        "button": "Scanner un repo",
+        "duration": None,  # Wait for click
+    },
+    {
+        "key": "scanning",
+        "text": "Scan en cours...\nJe construis la carte neuronale.",
+        "button": None,
+        "duration": None,  # Until scan completes
+    },
+    {
+        "key": "scan_done",
+        "text": "Carte chargee! Chaque point est\nun concept de ton code.",
+        "button": None,
+        "duration": 5.0,
+    },
+    {
+        "key": "explore_cube",
+        "text": "Le cube 3D montre les connexions.\nClique un neurone pour l'explorer.",
+        "button": None,
+        "duration": 6.0,
+    },
+    {
+        "key": "explore_tree",
+        "text": "L'arbre en bas revele la structure.\nLes neurones du cube y correspondent.",
+        "button": None,
+        "duration": 6.0,
+    },
+    {
+        "key": "explore_detail",
+        "text": "Le panneau de droite montre les\ndetails: voisins, fichiers, temperature.",
+        "button": None,
+        "duration": 6.0,
+    },
+    {
+        "key": "idle",
+        "text": "",
+        "button": None,
+        "duration": None,
+    },
+]
+
 # Contextual help texts (B-UI-15) — French
 HELP_TEXTS = {
-    "neuron_map": "La carte neuronale. Chaque point est un concept de ton code. Les connexions montrent les dependances.",
-    "tree_view": "L'arbre botanique de ton projet. Sa forme revele le pattern d'architecture.",
-    "detail_panel": "Clique un neurone pour voir ses details ici: voisins, fichiers, temperature.",
-    "terminal": "Le terminal. Lance des commandes Muninn ou discute avec le LLM.",
-    "first_launch": "Hey! Scanne un repo pour commencer!",
-    "no_data": "Pas de donnees chargees. Scanne un repo!",
-    "scan_button": "Clique ici pour scanner un repo et remplir la carte.",
-    "neuron_loaded": "Repo charge! Clique un neurone pour explorer. Ctrl+F pour chercher.",
-    "no_forest": "Pas de meta-mycelium. Lance 'muninn feed' sur plusieurs repos d'abord.",
+    "neuron_map": "La carte neuronale. Chaque point\nest un concept de ton code.",
+    "tree_view": "L'arbre botanique de ton projet.\nSa forme revele l'architecture.",
+    "detail_panel": "Clique un neurone pour voir\nses details ici.",
+    "terminal": "Le terminal. Lance des commandes\nMuninn ou discute avec le LLM.",
+    "first_launch": "Hey! Scanne un repo\npour commencer!",
+    "no_data": "Pas de donnees chargees.\nScanne un repo!",
+    "neuron_loaded": "Repo charge! Clique un neurone\npour explorer. Ctrl+F pour chercher.",
+    "no_forest": "Pas de meta-mycelium.\nLance 'muninn feed' sur plusieurs repos.",
 }
 
 
@@ -69,7 +120,8 @@ class NaviWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        # NOT transparent for mouse — we handle clicks on button, forward the rest
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         # Fill parent size
@@ -96,6 +148,17 @@ class NaviWidget(QWidget):
         self._first_launch = True
         self._current_context = ""
 
+        # Tutorial state (B-UI-15)
+        self._tutorial_step = 0
+        self._tutorial_timer = 0.0  # seconds elapsed in current step
+        self._tutorial_active = True
+
+        # Flight patterns
+        self._flight_mode = 0  # 0=patrol-H, 1=patrol-V, 2=figure-8, 3=circle, 4=diagonal
+        self._flight_timer = 0.0
+        self._flight_switch_interval = 12.0  # seconds per pattern
+        self._flight_time = 0.0
+
         # R1: Timer stored as self attribute
         self._navi_timer = QTimer(self)
         self._navi_timer.setInterval(16)  # ~60fps
@@ -109,23 +172,80 @@ class NaviWidget(QWidget):
         self._scan_btn_rect: Optional[QRectF] = None
 
     def _tick(self):
-        """Main animation tick (16ms)."""
+        """Main animation tick (16ms) with flight patterns + tutorial."""
         self._phase += 0.05
         if self._phase > math.pi * 200:
             self._phase = 0
 
-        if not self._reduce_motion:
-            # Lerp toward target
-            lerp_speed = 0.08
-            dx = self._target.x() - self._pos.x()
-            dy = self._target.y() - self._pos.y()
-            self._pos = QPointF(
-                self._pos.x() + dx * lerp_speed,
-                self._pos.y() + dy * lerp_speed,
-            )
+        dt = 0.016  # ~16ms
+        self._flight_time += dt
 
-            # Idle float (small oscillation)
-            if abs(dx) < 5 and abs(dy) < 5:
+        # Tutorial auto-advance (timed steps only)
+        if self._tutorial_active and self._tutorial_step < len(TUTORIAL_STEPS):
+            step = TUTORIAL_STEPS[self._tutorial_step]
+            if step["duration"] is not None:
+                self._tutorial_timer += dt
+                if self._tutorial_timer >= step["duration"]:
+                    self._advance_tutorial()
+
+        # Switch flight pattern periodically (only when NOT talking)
+        if not self._bubble_visible:
+            if self._flight_time > self._flight_switch_interval:
+                self._flight_time = 0.0
+                self._flight_mode = (self._flight_mode + 1) % 5
+
+        if not self._reduce_motion:
+            w = max(self.width(), 200)
+            h = max(self.height(), 200)
+            margin = 60
+
+            if self._bubble_visible:
+                # GEOSTATIONARY — hover gently in place when talking
+                lerp_speed = 0.02
+                # Gentle breathing only
+                self._pos = QPointF(
+                    self._pos.x() + math.sin(self._phase * 0.3) * 0.2,
+                    self._pos.y() + math.cos(self._phase * 0.4) * 0.3,
+                )
+            else:
+                # Flight patterns
+                t = self._flight_time / self._flight_switch_interval  # 0..1
+
+                if self._flight_mode == 0:
+                    tx = margin + t * (w - 2 * margin)
+                    ty = h * 0.25 + math.sin(t * math.pi * 4) * 30
+                elif self._flight_mode == 1:
+                    tx = w * 0.3 + math.cos(t * math.pi * 3) * 40
+                    ty = margin + t * (h - 2 * margin)
+                elif self._flight_mode == 2:
+                    tx = w * 0.5 + math.sin(t * math.pi * 2) * (w * 0.3)
+                    ty = h * 0.4 + math.sin(t * math.pi * 4) * (h * 0.2)
+                elif self._flight_mode == 3:
+                    tx = w * 0.5 + math.cos(t * math.pi * 2) * (w * 0.25)
+                    ty = h * 0.4 + math.sin(t * math.pi * 2) * (h * 0.25)
+                else:
+                    seg = int(t * 4) % 4
+                    st = (t * 4) % 1.0
+                    corners = [
+                        (margin, margin), (w - margin, h * 0.4),
+                        (margin, h * 0.6), (w - margin, margin),
+                    ]
+                    x0, y0 = corners[seg]
+                    x1, y1 = corners[(seg + 1) % 4]
+                    tx = x0 + st * (x1 - x0)
+                    ty = y0 + st * (y1 - y0)
+
+                self._target = QPointF(tx, ty)
+
+                lerp_speed = 0.06
+                dx = self._target.x() - self._pos.x()
+                dy = self._target.y() - self._pos.y()
+                self._pos = QPointF(
+                    self._pos.x() + dx * lerp_speed,
+                    self._pos.y() + dy * lerp_speed,
+                )
+
+                # Micro float
                 self._pos = QPointF(
                     self._pos.x() + math.sin(self._phase * 0.5) * 0.3,
                     self._pos.y() + math.cos(self._phase * 0.7) * 0.5,
@@ -153,23 +273,60 @@ class NaviWidget(QWidget):
 
     def show_context_help(self, context: str):
         """Show contextual help for a given context (B-UI-15)."""
+        if self._tutorial_active:
+            return  # Don't interrupt tutorial
         if context == self._current_context:
             return
         self._current_context = context
         text = HELP_TEXTS.get(context, "")
         if text:
-            self.show_bubble(text, show_button=(context in ("first_launch", "no_data")))
+            self.show_bubble(text, show_button=False)
         else:
             self.hide_bubble()
 
     def show_first_launch(self):
-        """Show first launch guide (B-UI-15)."""
+        """Start guided tutorial (B-UI-15)."""
         self._first_launch = True
-        self.show_context_help("first_launch")
+        self._tutorial_active = True
+        self._tutorial_step = 0
+        self._tutorial_timer = 0.0
+        self._show_tutorial_step()
+
+    def _show_tutorial_step(self):
+        """Display current tutorial step."""
+        if self._tutorial_step >= len(TUTORIAL_STEPS):
+            self._tutorial_active = False
+            self.hide_bubble()
+            return
+        step = TUTORIAL_STEPS[self._tutorial_step]
+        if step["key"] == "idle":
+            self._tutorial_active = False
+            self.hide_bubble()
+            return
+        self.show_bubble(step["text"], show_button=(step["button"] is not None))
+        self._bubble_button_text = step.get("button", "")
+
+    def _advance_tutorial(self):
+        """Move to next tutorial step."""
+        self._tutorial_step += 1
+        self._tutorial_timer = 0.0
+        self._show_tutorial_step()
+
+    def on_scan_complete(self):
+        """Called when scan finishes — advance tutorial past scanning step."""
+        if self._tutorial_active:
+            # Jump to scan_done step
+            for i, step in enumerate(TUTORIAL_STEPS):
+                if step["key"] == "scan_done":
+                    self._tutorial_step = i
+                    self._tutorial_timer = 0.0
+                    self._show_tutorial_step()
+                    return
 
     def dismiss_first_launch(self):
         """Dismiss first launch guide (after scan)."""
         self._first_launch = False
+        self._tutorial_active = False
         self.hide_bubble()
 
     # --- Paint ---
@@ -214,50 +371,107 @@ class NaviWidget(QWidget):
             p.setBrush(QBrush(glow))
             p.drawEllipse(QPointF(cx, cy), gr, gr)
 
-        # === 6 DRAGONFLY WINGS — fan pattern ===
-        # Each wing: (base_angle, width, height, flap_speed, flap_range, y_offset)
-        wing_defs = [
-            # Left: grande (top), moyenne (mid), petite (bottom)
-            (-60, r * 4.3, r * 1.1, 10, 18, -r * 2.3),
-            (-15, r * 3.7, r * 0.9, 12, 15, -r * 0.2),
-            ( 25, r * 2.7, r * 0.75, 14, 15,  r * 0.5),
-            # Right: mirrored
-            ( 60, r * 4.3, r * 1.1, 10, 18, -r * 2.3),
-            ( 15, r * 3.7, r * 0.9, 12, 15, -r * 0.2),
-            (-25, r * 2.7, r * 0.75, 14, 15,  r * 0.5),
-        ]
+        # === 6 WINGS — scythe/crescent shape, top-mounted downbeat ===
+        # Grandes: long curved crescents on top, powerful downbeat
+        # Moyennes: shorter crescents, offset phase
+        # Petites: tiny fast stabilizers behind
 
         p.save()
         p.translate(cx, cy)
 
-        for idx, (base_ang, ww, wh, speed, flap_range, y_off) in enumerate(wing_defs):
-            is_right = idx >= 3
-            # Flap animation: scaleY oscillation + angle wobble
-            flap = math.sin(self._phase * speed) * 0.5 + 0.5  # 0..1
-            scale_y = 0.45 + 0.55 * flap  # scaleY between 0.45 and 1.0
-            angle_wobble = flap_range * (flap - 0.5)
-            angle = base_ang + angle_wobble
+        t = self._phase
 
-            # Iridescent gradient brush
-            grad = QLinearGradient(-ww / 2, 0, ww / 2, 0)
-            grad.setColorAt(0.0, QColor(0, 255, 220, 38))
-            grad.setColorAt(0.3, QColor(100, 200, 255, 64))
-            grad.setColorAt(0.5, QColor(180, 220, 255, 38))
-            grad.setColorAt(0.7, QColor(0, 255, 200, 51))
-            grad.setColorAt(1.0, QColor(0, 180, 255, 25))
+        def _draw_crescent_wing(side_m, length, thickness, angle_deg, alpha_base):
+            """Draw a curved crescent/scythe wing shape."""
+            grad = QLinearGradient(0, -length, 0, length * 0.2)
+            grad.setColorAt(0.0, QColor(0, 255, 230, int(alpha_base * 0.3)))
+            grad.setColorAt(0.3, QColor(60, 240, 255, int(alpha_base * 0.9)))
+            grad.setColorAt(0.6, QColor(140, 250, 255, alpha_base))
+            grad.setColorAt(1.0, QColor(0, 200, 255, int(alpha_base * 0.2)))
 
             p.save()
-            p.rotate(angle)
+            p.rotate(angle_deg)
 
-            # Wing shape: elongated ellipse with dragonfly border-radius feel
-            wing_cx = (-ww * 0.4) if not is_right else (ww * 0.4)
-            p.scale(1.0, scale_y)
-
-            # Border (nervures)
-            p.setPen(QPen(QColor(180, 240, 255, 50), 0.5))
+            p.setPen(QPen(QColor(130, 235, 255, int(alpha_base * 0.7)), 0.6))
             p.setBrush(QBrush(grad))
-            p.drawEllipse(QPointF(wing_cx, 0), ww / 2, wh / 2)
 
+            # Crescent: curves up from root, sweeps outward, tapers to point
+            path = QPainterPath()
+            # Root at body
+            path.moveTo(0, 0)
+            # Leading edge — sweeps up and out in a long arc
+            path.cubicTo(
+                -thickness * 0.8 * side_m, -length * 0.35,   # pull inward first
+                -thickness * 1.5 * side_m, -length * 0.7,    # wide arc outward
+                -thickness * 0.3 * side_m, -length,           # tip (nearly straight up)
+            )
+            # Trailing edge — tighter curve back to root
+            path.cubicTo(
+                thickness * 0.5 * side_m, -length * 0.65,
+                thickness * 0.3 * side_m, -length * 0.3,
+                0, 0,
+            )
+            path.closeSubpath()
+            p.drawPath(path)
+
+            # Single central nervure
+            p.setPen(QPen(QColor(120, 230, 255, int(alpha_base * 0.35)), 0.3))
+            p.drawLine(
+                QPointF(0, 0),
+                QPointF(-thickness * 0.4 * side_m, -length * 0.85),
+            )
+
+            p.restore()
+
+        # === GRANDES — long crescents, slow powerful downbeat ===
+        for side_m in [-1, 1]:
+            ph = 0.0 if side_m == -1 else 0.2
+            raw = math.sin(t * 3.0 + ph)
+            # Asymmetric: slow down, fast up
+            flap = raw ** 0.5 if raw > 0 else -((-raw) ** 1.8)
+            # Angle: UP = tight to body (small angle), DOWN = spread wide
+            angle = 25 * side_m + flap * 55 * side_m
+            spread = (flap + 1) / 2
+            length = r * (5.0 + 1.5 * spread)
+            thickness = r * (0.8 + 0.4 * spread)
+            alpha = int(40 + 30 * spread)
+            _draw_crescent_wing(side_m, length, thickness, angle, alpha)
+
+        # === MOYENNES — shorter, delayed, slightly back ===
+        for side_m in [-1, 1]:
+            ph = 0.6 if side_m == -1 else 0.9
+            raw = math.sin(t * 3.0 + ph)
+            flap = raw ** 0.6 if raw > 0 else -((-raw) ** 1.5)
+            angle = 35 * side_m + flap * 45 * side_m
+            spread = (flap + 1) / 2
+            length = r * (3.5 + 1.0 * spread)
+            thickness = r * (0.6 + 0.3 * spread)
+            alpha = int(30 + 20 * spread)
+
+            p.save()
+            p.translate(0, r * 0.3)  # Slightly lower attach point
+            _draw_crescent_wing(side_m, length, thickness, angle, alpha)
+            p.restore()
+
+        # === PETITES — fast stabilizers, ellipses, behind ===
+        for side_m in [-1, 1]:
+            ph = 1.5 if side_m == -1 else 1.8
+            flap = math.sin(t * 8.0 + ph) * 0.5 + 0.5
+            angle = 50 * side_m + 15 * (flap - 0.5) * side_m
+            wl = r * 1.8
+            ww = r * 0.25
+            alpha = 25
+
+            grad = QLinearGradient(0, 0, wl * side_m * 0.5, -wl * 0.5)
+            grad.setColorAt(0.0, QColor(0, 255, 230, alpha))
+            grad.setColorAt(1.0, QColor(0, 200, 255, int(alpha * 0.2)))
+
+            p.save()
+            p.translate(0, r * 0.7)
+            p.rotate(angle)
+            p.setPen(QPen(QColor(130, 230, 255, int(alpha * 0.5)), 0.3))
+            p.setBrush(QBrush(grad))
+            p.drawEllipse(QPointF(wl * 0.3 * side_m, -wl * 0.2), wl * 0.4, ww)
             p.restore()
 
         p.restore()
@@ -274,25 +488,38 @@ class NaviWidget(QWidget):
         p.drawEllipse(QPointF(cx, cy), r, r)
 
     def _load_bubble_frame(self):
-        """Lazy-load PNG bubble frame (B-UI-14)."""
+        """Lazy-load PNG bubble frame (B-UI-14) with black made transparent."""
         if self._bubble_frame is None:
             frame_path = _ASSETS_DIR / "node_tooltip_frame_blue.png"
             if frame_path.exists():
-                self._bubble_frame = QPixmap(str(frame_path))
+                img = QImage(str(frame_path))
+                img = img.convertToFormat(QImage.Format.Format_ARGB32)
+                # Make dark pixels transparent (threshold: brightness < 40)
+                for y in range(img.height()):
+                    for x in range(img.width()):
+                        c = QColor(img.pixel(x, y))
+                        brightness = c.red() + c.green() + c.blue()
+                        if brightness < 120:  # Near-black -> transparent
+                            # Scale alpha by brightness (smooth fade)
+                            alpha = int((brightness / 120) * c.alpha())
+                            img.setPixelColor(x, y, QColor(c.red(), c.green(), c.blue(), alpha))
+                self._bubble_frame = QPixmap.fromImage(img)
 
     def _paint_bubble(self, p: QPainter):
-        """Draw the dialogue bubble near the orb (B-UI-14: PNG frame)."""
+        """Draw the dialogue bubble to the right of Navi (B-UI-14: PNG frame x2.5)."""
         cx, cy = self._pos.x(), self._pos.y()
 
-        # Bubble position (above the orb)
-        bubble_w = 240
-        bubble_h = 100 if self._bubble_button_visible else 80
-        bx = cx - bubble_w / 2
-        by = cy - self._orb_radius * 3 - bubble_h
+        # Bubble size (x2.5 bigger)
+        bubble_w = 600
+        bubble_h = 220 if self._bubble_button_visible else 180
+
+        # Position: to the RIGHT of Navi orb
+        bx = cx + self._orb_radius * 4
+        by = cy - bubble_h / 2
 
         # Clamp to widget bounds
         bx = max(8, min(self.width() - bubble_w - 8, bx))
-        by = max(8, by)
+        by = max(8, min(self.height() - bubble_h - 8, by))
 
         rect = QRectF(bx, by, bubble_w, bubble_h)
 
@@ -307,32 +534,33 @@ class NaviWidget(QWidget):
             p.drawPixmap(int(bx), int(by), scaled_frame)
         else:
             p.setPen(QPen(QColor(0, 220, 255, 100), 1))
-            p.setBrush(QBrush(QColor(2, 8, 22, 230)))
+            p.setBrush(QBrush(QColor(2, 8, 22, 0)))  # Transparent background
             p.drawRoundedRect(rect, 12, 12)
 
-        # Text
-        p.setPen(QColor(TEXT_PRIMARY))
-        font = QFont(FONT_BODY, 11)
+        # Text — cyan color like Navi, CENTERED
+        p.setPen(QColor(0, 220, 255))
+        font = QFont(FONT_BODY, 16)
         p.setFont(font)
-        text_rect = QRectF(bx + 12, by + 8, bubble_w - 24, bubble_h - (40 if self._bubble_button_visible else 16))
+        text_rect = QRectF(bx + 24, by + 20, bubble_w - 48, bubble_h - (70 if self._bubble_button_visible else 40))
         p.drawText(text_rect,
-                   Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
+                   Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
                    self._bubble_text)
 
-        # B-UI-15: Scan button in bubble
+        # B-UI-15: Action button in bubble
         if self._bubble_button_visible:
-            btn_w, btn_h = 120, 24
+            btn_label = getattr(self, '_bubble_button_text', '') or "Scanner un repo"
+            btn_w, btn_h = 200, 36
             btn_x = bx + (bubble_w - btn_w) / 2
-            btn_y = by + bubble_h - btn_h - 8
+            btn_y = by + bubble_h - btn_h - 16
             # Button background
             p.setPen(QPen(QColor(0, 220, 255), 1))
             p.setBrush(QBrush(QColor(0, 220, 255, 40)))
             p.drawRoundedRect(QRectF(btn_x, btn_y, btn_w, btn_h), 6, 6)
             # Button text
-            p.setPen(QColor(ACCENT_CYAN_HEX))
-            p.setFont(QFont(FONT_BODY, 10))
+            p.setPen(QColor(0, 220, 255))
+            p.setFont(QFont(FONT_BODY, 14))
             p.drawText(QRectF(btn_x, btn_y, btn_w, btn_h),
-                       Qt.AlignmentFlag.AlignCenter, "Scanner un repo")
+                       Qt.AlignmentFlag.AlignCenter, btn_label)
             # Store button rect for click detection
             self._scan_btn_rect = QRectF(btn_x, btn_y, btn_w, btn_h)
 
@@ -341,14 +569,18 @@ class NaviWidget(QWidget):
         super().resizeEvent(event)
 
     def mousePressEvent(self, event):
-        """Handle click on scan button (B-UI-15)."""
+        """Handle click on button — forward everything else to parent."""
         if (event.button() == Qt.MouseButton.LeftButton
                 and self._bubble_button_visible
                 and self._scan_btn_rect is not None
                 and self._scan_btn_rect.contains(event.position())):
             self.scan_requested.emit()
-            self.dismiss_first_launch()
-        super().mousePressEvent(event)
+            # Advance tutorial past scan_prompt
+            if self._tutorial_active:
+                self._advance_tutorial()
+            return  # Consumed
+        # Forward click to parent (neuron map underneath)
+        event.ignore()
 
     # --- Public ---
 

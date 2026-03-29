@@ -5,29 +5,33 @@ Tests: 1210 PASS, 0 FAIL, 3 SKIP.
 
 ---
 
-## UI 3D Cube + Navi + Tree Auto-Layout (2026-03-29) [DONE]
+## UI 3D Cube + Navi Evolved + Tutorial (2026-03-29) [DONE]
 
 Major visual upgrades to the desktop UI.
 
 **3D Rotating Cube (neuron_map.py):**
-- Neurons placed inside a slowly rotating 3D wireframe cube (QPainter perspective projection)
-- Depth-based sizing + alpha (far neurons smaller/dimmer, painter's algorithm depth sort)
-- Wireframe: 12 cyan edges, 8 corners at ±0.85, neurons at ±0.8
-- Rotation: Y-axis + slight X tilt, 0.006 rad/tick at ~30fps
-- All interactions preserved: zoom, pan, click, hover, KD-tree hit testing
-- Coordinate system: normalized [-0.8, 0.8] cube space, perspective projection (fov=3.5)
-- Labels shown only for hovered/selected neurons (less clutter in 3D)
+- Neurons inside rotating 3D wireframe cube (QPainter perspective projection, fov=3.5)
+- 10-step green->yellow->red gradient (degree-based)
+- Depth-sorted painting, depth-based sizing + alpha
 
-**Navi Fix (navi.py + main_window.py):**
-- Fixed invisible Navi: added WA_TranslucentBackground, proper geometry fill
-- eventFilter on neuron_panel resizes Navi overlay to match parent
-- WA_TransparentForMouseEvents=True so clicks pass through to neurons underneath
+**Navi Evolved (navi.py):**
+- 6 crescent/scythe wings: 2 grandes (slow power downbeat), 2 moyennes (delayed), 2 petites (fast stabilizers)
+- Wing shapes: Bezier curves (QPainterPath), asymmetric flap (slow down, fast up)
+- 5 flight patterns cycling every 12s: patrol-H, patrol-V, figure-8, circle, diagonal
+- Geostationary mode when talking (gentle breathing only)
+- PNG bubble frame with black pixels made transparent (pixel-level alpha)
+- Bubble: x2.5 size (600x180), text centered, cyan color, positioned right of Navi
+- Clicks on button consumed, all other clicks forwarded to neuron map
+
+**Guided Tutorial (navi.py + main_window.py):**
+- 7-step tutorial: welcome -> scan prompt -> scanning -> scan done -> explore cube -> tree -> detail -> idle
+- Timed auto-advance (5-6s per step), scan step waits for button click
+- Interactive "Scanner un repo" button triggers folder dialog
+- on_scan_complete() advances tutorial automatically after scan
 
 **Tree Auto-Layout (tree_view.py):**
-- Nodes now use positions from skeleton JSON (x/y in imgSize space, normalized)
-- New `_auto_layout()`: generates tree-like positions from depth/level when no positions file
-- `_get_image_rect()`: nodes positioned relative to scaled background image (not widget)
-- Hit test + center animation use image-relative coordinates
+- Nodes use positions from skeleton JSON (x/y in imgSize space, normalized)
+- `_auto_layout()` fallback, `_get_image_rect()` for image-relative coords
 
 ---
 

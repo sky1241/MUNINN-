@@ -436,9 +436,9 @@ class MainWindow(QMainWindow):
         # Feed search bar with neuron list (B-UI-25)
         self._search_bar.set_neurons(self.neuron_panel.neurons)
 
-        # Navi context update
+        # Navi: scan complete -> advance tutorial
         if hasattr(self, '_navi'):
-            self._navi.show_context_help("neuron_loaded")
+            self._navi.on_scan_complete()
 
     def _build_status_bar(self):
         """Status bar: repo name, neuron count, mode, zoom %."""
