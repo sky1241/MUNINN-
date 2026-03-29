@@ -385,7 +385,7 @@ class TreeViewWidget(QWidget):
 
             # Label
             p.setPen(QColor(TEXT_PRIMARY))
-            max_w = int(min(80, w * 0.15))
+            max_w = int(min(80, img_w * 0.15))
             elided = fm.elidedText(node.label, Qt.TextElideMode.ElideRight, max_w)
             p.drawText(QPointF(cx + r + 4, cy + 4), elided)
 

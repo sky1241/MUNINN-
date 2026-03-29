@@ -191,51 +191,84 @@ class NaviWidget(QWidget):
         p.end()
 
     def _paint_orb(self, p: QPainter):
-        """Draw the Navi orb with pulsing glow + dragonfly wings."""
+        """Draw the Navi orb — 3 glow layers + 6 dragonfly wings + iridescent core.
+
+        Ported from proto_navi.html (sky1241/tree).
+        6 wings in fan pattern: 3 left (grande/moyenne/petite), 3 right (mirrored).
+        Each pair has different flap speed and angle range.
+        """
         cx, cy = self._pos.x(), self._pos.y()
         r = self._orb_radius
-
-        # Pulsing glow
         pulse = 0.7 + 0.3 * math.sin(self._phase * 2)
-        glow_r = r * (2.0 + pulse * 0.5)
 
-        # Outer glow (radial gradient)
-        glow = QRadialGradient(cx, cy, glow_r)
-        glow.setColorAt(0.0, QColor(0, 220, 255, int(120 * pulse)))
-        glow.setColorAt(0.5, QColor(0, 220, 255, int(40 * pulse)))
-        glow.setColorAt(1.0, QColor(0, 220, 255, 0))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(glow))
-        p.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
+        # === 3 GLOW LAYERS (breathe animation, staggered) ===
+        for i, (size_mult, base_alpha) in enumerate([(5.5, 0.06), (3.5, 0.15), (2.0, 0.5)]):
+            breathe = 1.0 + 0.2 * math.sin(self._phase * 2 + i * 0.6)
+            gr = r * size_mult * breathe
+            glow = QRadialGradient(cx, cy, gr)
+            a = int(base_alpha * 255 * pulse)
+            glow.setColorAt(0.0, QColor(0, 255, 210, a))
+            glow.setColorAt(0.4, QColor(0, 150, 255, int(a * 0.5)))
+            glow.setColorAt(0.65, QColor(0, 100, 255, 0))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(glow))
+            p.drawEllipse(QPointF(cx, cy), gr, gr)
 
-        # Wings (two ellipses, oscillating)
-        wing_angle = math.sin(self._phase * 4) * 0.3  # Flutter
+        # === 6 DRAGONFLY WINGS — fan pattern ===
+        # Each wing: (base_angle, width, height, flap_speed, flap_range, y_offset)
+        wing_defs = [
+            # Left: grande (top), moyenne (mid), petite (bottom)
+            (-60, r * 4.3, r * 1.1, 10, 18, -r * 2.3),
+            (-15, r * 3.7, r * 0.9, 12, 15, -r * 0.2),
+            ( 25, r * 2.7, r * 0.75, 14, 15,  r * 0.5),
+            # Right: mirrored
+            ( 60, r * 4.3, r * 1.1, 10, 18, -r * 2.3),
+            ( 15, r * 3.7, r * 0.9, 12, 15, -r * 0.2),
+            (-25, r * 2.7, r * 0.75, 14, 15,  r * 0.5),
+        ]
+
         p.save()
         p.translate(cx, cy)
 
-        wing_color = QColor(0, 220, 255, 60)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(wing_color))
+        for idx, (base_ang, ww, wh, speed, flap_range, y_off) in enumerate(wing_defs):
+            is_right = idx >= 3
+            # Flap animation: scaleY oscillation + angle wobble
+            flap = math.sin(self._phase * speed) * 0.5 + 0.5  # 0..1
+            scale_y = 0.45 + 0.55 * flap  # scaleY between 0.45 and 1.0
+            angle_wobble = flap_range * (flap - 0.5)
+            angle = base_ang + angle_wobble
 
-        # Left wing
-        p.save()
-        p.rotate(-30 + math.degrees(wing_angle))
-        p.drawEllipse(QPointF(-r * 1.5, -r * 0.3), r * 1.2, r * 0.4)
+            # Iridescent gradient brush (linear along wing length)
+            grad = QLinearGradient(-ww / 2, 0, ww / 2, 0)
+            grad.setColorAt(0.0, QColor(0, 255, 220, 38))
+            grad.setColorAt(0.3, QColor(100, 200, 255, 64))
+            grad.setColorAt(0.5, QColor(180, 220, 255, 38))
+            grad.setColorAt(0.7, QColor(0, 255, 200, 51))
+            grad.setColorAt(1.0, QColor(0, 180, 255, 25))
+
+            p.save()
+            p.rotate(angle)
+
+            # Wing shape: elongated ellipse with dragonfly border-radius feel
+            wing_cx = (-ww * 0.4) if not is_right else (ww * 0.4)
+            p.scale(1.0, scale_y)
+
+            # Border (nervures)
+            p.setPen(QPen(QColor(180, 240, 255, 50), 0.5))
+            p.setBrush(QBrush(grad))
+            p.drawEllipse(QPointF(wing_cx, 0), ww / 2, wh / 2)
+
+            p.restore()
+
         p.restore()
 
-        # Right wing
-        p.save()
-        p.rotate(30 - math.degrees(wing_angle))
-        p.drawEllipse(QPointF(r * 1.5, -r * 0.3), r * 1.2, r * 0.4)
-        p.restore()
-
-        p.restore()
-
-        # Core orb
+        # === CORE ORB — iridescent (white center -> cyan -> blue edge) ===
         core = QRadialGradient(cx - r * 0.2, cy - r * 0.2, r)
-        core.setColorAt(0.0, QColor(200, 255, 255))
-        core.setColorAt(0.4, QColor(0, 220, 255))
-        core.setColorAt(1.0, QColor(0, 150, 200))
+        core.setColorAt(0.0, QColor(255, 255, 255))
+        core.setColorAt(0.25, QColor(176, 255, 238))
+        core.setColorAt(0.5, QColor(0, 232, 192))
+        core.setColorAt(0.8, QColor(0, 136, 255))
+        core.setColorAt(1.0, QColor(0, 136, 255, 0))
         p.setBrush(QBrush(core))
         p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(QPointF(cx, cy), r, r)
