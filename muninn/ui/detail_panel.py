@@ -78,7 +78,7 @@ class DetailPanel(QWidget):
 
         # Status badge
         self._status_label = QLabel()
-        self._status_label.setFont(QFont(FONT_BODY, 12))
+        self._status_label.setFont(QFont(FONT_BODY, 14))
         layout.addWidget(self._status_label)
 
         # Basic info section (B-UI-12)
@@ -92,10 +92,11 @@ class DetailPanel(QWidget):
         self._depth_label = QLabel()
         self._confidence_label = QLabel()
         self._entry_label = QLabel()
-        self._entry_label.setFont(QFont(FONT_CODE, 12))
+        self._entry_label.setFont(QFont(FONT_CODE, 11))
 
         for lbl in [self._level_label, self._loc_label, self._depth_label,
                      self._confidence_label, self._entry_label]:
+            lbl.setFont(QFont(FONT_BODY, 13))
             lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
             info_layout.addWidget(lbl)
 
@@ -115,22 +116,25 @@ class DetailPanel(QWidget):
 
         # Temperature
         self._temp_label = QLabel()
+        self._temp_label.setFont(QFont(FONT_BODY, 13))
         self._temp_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
         ext_layout.addWidget(self._temp_label)
 
         # B-UI-13: Last modified
         self._last_modified_label = QLabel()
+        self._last_modified_label.setFont(QFont(FONT_BODY, 13))
         self._last_modified_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
         ext_layout.addWidget(self._last_modified_label)
 
         # B-UI-13: Zone
         self._zone_label = QLabel()
+        self._zone_label.setFont(QFont(FONT_BODY, 13))
         self._zone_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
         ext_layout.addWidget(self._zone_label)
 
         # Neighbors section
         neighbors_header = QLabel("Neighbors")
-        neighbors_header.setFont(QFont(FONT_BODY, 12))
+        neighbors_header.setFont(QFont(FONT_BODY, 14))
         neighbors_header.setStyleSheet(f"color: {TEXT_PRIMARY}; font-weight: 600; background: transparent; border: none;")
         ext_layout.addWidget(neighbors_header)
 
@@ -142,7 +146,7 @@ class DetailPanel(QWidget):
 
         # Files section
         files_header = QLabel("Files")
-        files_header.setFont(QFont(FONT_BODY, 12))
+        files_header.setFont(QFont(FONT_BODY, 14))
         files_header.setStyleSheet(f"color: {TEXT_PRIMARY}; font-weight: 600; background: transparent; border: none;")
         ext_layout.addWidget(files_header)
 

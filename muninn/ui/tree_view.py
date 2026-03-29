@@ -35,6 +35,19 @@ GLOW_COLORS = {
     "todo": QColor(ERROR),
 }
 
+# Level -> node color (botanical mapping)
+LEVEL_COLORS = {
+    "C": QColor(139, 90, 43),       # trunk (brown)
+    "R-1": QColor(100, 140, 60),    # roots level 1 (olive)
+    "R-2": QColor(80, 120, 50),     # roots level 2 (darker green)
+    "R-3": QColor(60, 100, 40),     # roots level 3
+    "B": QColor(50, 160, 80),       # branches (green)
+    "B1": QColor(60, 180, 90),      # branch level 1
+    "B2": QColor(70, 200, 100),     # branch level 2
+    "F": QColor(100, 200, 60),      # foliage (bright green)
+    "L": QColor(120, 220, 80),      # leaves (lime)
+}
+
 
 class TreeNode:
     """A node on the botanical tree."""
@@ -341,19 +354,21 @@ class TreeViewWidget(QWidget):
         return 0, 0, self.width(), self.height()
 
     def _paint_nodes(self, p: QPainter):
-        """Draw tree nodes with glow rings based on status."""
+        """Draw tree nodes — colored by level, with glow on selection."""
         x_off, y_off, img_w, img_h = self._get_image_rect()
-        font = QFont(FONT_BODY, 10)
+        font = QFont(FONT_BODY, 11)
         fm = QFontMetrics(font)
         p.setFont(font)
 
         for node in self._nodes:
             cx = x_off + node.x * img_w
             cy = y_off + node.y * img_h
-            r = node.radius
+            r = max(node.radius, 10)  # min 10px radius for visibility
 
-            # Glow ring (status color)
-            glow_color = GLOW_COLORS.get(node.status, QColor(128, 128, 128))
+            # Color by level (botanical), fallback to status or grey
+            level_color = LEVEL_COLORS.get(node.level, None)
+            if level_color is None:
+                level_color = GLOW_COLORS.get(node.status, QColor(100, 140, 180))
 
             # Highlight: primary = full halo, secondary = outline
             is_primary = (node.id == self._highlighted_id)
@@ -361,33 +376,38 @@ class TreeViewWidget(QWidget):
             is_selected = (node.id == self._selected_id)
 
             if is_primary or is_selected:
-                # Full cyan halo
+                # Full cyan halo (pulsing effect via slightly larger radius)
                 halo = QColor(ACCENT_CYAN_HEX)
-                halo.setAlpha(180)
+                halo.setAlpha(200)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QBrush(halo))
-                p.drawEllipse(QPointF(cx, cy), r * 2.5, r * 2.5)
+                p.drawEllipse(QPointF(cx, cy), r * 2.8, r * 2.8)
 
             if is_secondary:
                 # Outline only
                 p.setPen(QPen(QColor(ACCENT_CYAN_HEX), 2))
                 p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawEllipse(QPointF(cx, cy), r * 1.8, r * 1.8)
+                p.drawEllipse(QPointF(cx, cy), r * 2.0, r * 2.0)
 
-            # Glow ring
+            # Outer ring (level color)
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(glow_color))
+            p.setBrush(QBrush(level_color))
             p.drawEllipse(QPointF(cx, cy), r * 1.3, r * 1.3)
 
-            # Inner node
+            # Inner node (dark center)
+            inner = QColor(level_color)
+            inner.setAlpha(180)
             p.setBrush(QBrush(QColor(BG_1DP)))
-            p.drawEllipse(QPointF(cx, cy), r, r)
+            p.drawEllipse(QPointF(cx, cy), r * 0.7, r * 0.7)
 
-            # Label
+            # Label — use ID if label is placeholder
+            label = node.label
+            if label in ("Nouveau nœud", "Nouveau noeud", ""):
+                label = node.id
             p.setPen(QColor(TEXT_PRIMARY))
-            max_w = int(min(80, img_w * 0.15))
-            elided = fm.elidedText(node.label, Qt.TextElideMode.ElideRight, max_w)
-            p.drawText(QPointF(cx + r + 4, cy + 4), elided)
+            max_w = int(min(100, img_w * 0.18))
+            elided = fm.elidedText(label, Qt.TextElideMode.ElideRight, max_w)
+            p.drawText(QPointF(cx + r * 1.4 + 2, cy + 4), elided)
 
     # --- Interaction ---
 
