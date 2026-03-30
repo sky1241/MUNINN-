@@ -61,6 +61,14 @@ class LLMProvider(ABC):
         """Provider name (e.g. 'ollama', 'claude', 'openai')."""
         ...
 
+    def stream(self, prompt: str, system: str = "",
+               max_tokens: int = 1024, temperature: float = 0.3):
+        """Stream response chunks (generator). Override for real streaming.
+
+        Default fallback: yields the full generate() result as one chunk.
+        """
+        yield self.generate(prompt, max_tokens, temperature)
+
     @property
     def supports_fim(self) -> bool:
         """Whether this provider supports Fill-in-the-Middle."""
@@ -142,6 +150,34 @@ class OllamaProvider(LLMProvider):
                 self._available = []
         return self._available
 
+    def stream(self, prompt: str, system: str = "",
+               max_tokens: int = 1024, temperature: float = 0.3):
+        """Stream response from Ollama (real streaming via NDJSON)."""
+        payload = {
+            'model': self.model,
+            'prompt': prompt,
+            'options': {'num_predict': max_tokens, 'temperature': temperature},
+            'stream': True,
+        }
+        if system:
+            payload['system'] = system
+        url = f"{self.base_url}/api/generate"
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data,
+                                     headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                for line in resp:
+                    if line.strip():
+                        chunk = json.loads(line)
+                        text = chunk.get('response', '')
+                        if text:
+                            yield text
+                        if chunk.get('done', False):
+                            break
+        except (urllib.error.URLError, OSError) as e:
+            raise ConnectionError(f"Ollama stream error: {e}")
+
     def fim_generate(self, prefix: str, suffix: str,
                      max_tokens: int = 256) -> str:
         """FIM using Ollama's raw mode with model-specific FIM tokens."""
@@ -220,6 +256,22 @@ class ClaudeProvider(LLMProvider):
         ratio = difflib.SequenceMatcher(None, completion, result).ratio()
         return max(0.0, -2.0 * (ratio - 1.0))
 
+    def stream(self, prompt: str, system: str = "",
+               max_tokens: int = 1024, temperature: float = 0.3):
+        """Stream response from Claude API."""
+        client = self._get_client()
+        kwargs = dict(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        if system:
+            kwargs['system'] = system
+        with client.messages.stream(**kwargs) as stream:
+            for text in stream.text_stream:
+                yield text
+
     def list_models(self) -> list[str]:
         return ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
                 'claude-opus-4-6']
@@ -274,6 +326,26 @@ class OpenAIProvider(LLMProvider):
         import difflib
         ratio = difflib.SequenceMatcher(None, completion, result).ratio()
         return max(0.0, -2.0 * (ratio - 1.0))
+
+    def stream(self, prompt: str, system: str = "",
+               max_tokens: int = 1024, temperature: float = 0.3):
+        """Stream response from OpenAI API."""
+        client = self._get_client()
+        messages = []
+        if system:
+            messages.append({'role': 'system', 'content': system})
+        messages.append({'role': 'user', 'content': prompt})
+        resp = client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=messages,
+            stream=True,
+        )
+        for chunk in resp:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield delta.content
 
     def list_models(self) -> list[str]:
         return ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']

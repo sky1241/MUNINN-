@@ -2,6 +2,7 @@
 
 B-UI-19: Terminal basique (QTextEdit + QLineEdit, history, Ctrl+L, flash).
 B-UI-20: LLM connection (QThread, streaming, breathing indicator, stop).
+B-UI-21: Multi-provider AI (Claude/GPT/Ollama/Off) + config + mycelium boost.
 
 Rules: R1 (ownership), R3 (worker pattern), R5 (repaint throttle),
 R8 (empty state), bug #61 (maxBlockCount 5000), bug #20 (no QMessageBox in slot).
@@ -19,57 +20,69 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
-    QPushButton, QLabel, QGraphicsOpacityEffect,
+    QPushButton, QLabel, QGraphicsOpacityEffect, QComboBox,
 )
 
 from muninn.ui.theme import (
     BG_1DP, ACCENT_CYAN_HEX, ACCENT_GREEN, TEXT_PRIMARY,
     TEXT_SECONDARY, FONT_CODE, FONT_BODY,
 )
+from muninn.ui.ai_config import (
+    PROVIDERS, load_config, save_config,
+    get_active_provider, set_active_provider,
+    get_active_model, set_active_model,
+    get_api_key, set_api_key,
+    get_mycelium_boost, set_mycelium_boost,
+    create_provider,
+)
 
 
 class LLMWorker(QObject):
-    """Background worker for LLM API calls (R3, B-UI-20).
+    """Background worker for LLM API calls (R3, B-UI-20, B-UI-21).
 
-    Streams response chunks via signal. Supports cancellation.
+    Uses LLMProvider.stream() for real streaming across all providers.
+    Falls back to echo mode if provider is None/off.
     """
 
     chunk_ready = pyqtSignal(str)   # One chunk of text
+    full_response = pyqtSignal(str) # Complete response (for mycelium boost)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
-    def __init__(self, prompt: str, context: str = ""):
+    def __init__(self, prompt: str, context: str = "",
+                 provider=None):
         super().__init__()
         self._stop = False
         self._prompt = prompt
         self._context = context
+        self._provider = provider
 
     def run(self):
-        """Execute LLM call. Override for actual API integration."""
+        """Execute LLM call via provider streaming."""
         try:
-            # Try Anthropic API if available
-            try:
-                import anthropic
-                client = anthropic.Anthropic()
-                system = self._context or "You are Muninn, a memory compression assistant."
-                with client.messages.stream(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=1024,
-                    system=system,
-                    messages=[{"role": "user", "content": self._prompt}],
-                ) as stream:
-                    for text in stream.text_stream:
-                        if self._stop:
-                            return
-                        self.chunk_ready.emit(text)
-            except ImportError:
-                # No anthropic package — echo mode
+            if self._provider is None:
                 self.chunk_ready.emit(f"[echo] {self._prompt}\n")
-                self.chunk_ready.emit("(Install 'anthropic' package for LLM features)")
+                self.chunk_ready.emit("(Configure a provider: /provider claude|openai|ollama)")
+                self.full_response.emit(f"[echo] {self._prompt}")
+                self.finished.emit()
+                return
+
+            system = self._context or "You are Muninn, a memory compression assistant. Answer concisely in the user's language."
+            chunks = []
+            try:
+                for text in self._provider.stream(
+                    self._prompt, system=system,
+                    max_tokens=1024, temperature=0.3,
+                ):
+                    if self._stop:
+                        return
+                    self.chunk_ready.emit(text)
+                    chunks.append(text)
             except Exception as e:
                 self.error.emit(str(e))
                 return
 
+            self.full_response.emit("".join(chunks))
             self.finished.emit()
 
         except Exception as e:
@@ -77,10 +90,11 @@ class LLMWorker(QObject):
 
 
 class TerminalWidget(QWidget):
-    """Terminal panel with command input, history, and LLM integration.
+    """Terminal panel with command input, history, and multi-provider LLM.
 
     B-UI-19: basic terminal (history, Ctrl+L, flash, maxBlockCount).
     B-UI-20: LLM streaming with breathing indicator and stop button.
+    B-UI-21: Provider selector dropdown, /config, /provider commands, mycelium boost.
     """
 
     command_entered = pyqtSignal(str)  # Raw command text
@@ -99,12 +113,69 @@ class TerminalWidget(QWidget):
         self._llm_worker: Optional[LLMWorker] = None
         self._context: str = ""
 
+        # Current prompt (for mycelium boost)
+        self._current_prompt: str = ""
+
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(4)
+
+        # Provider toolbar (B-UI-21)
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(4)
+
+        ai_label = QLabel("AI:")
+        ai_label.setFont(QFont(FONT_CODE, 10))
+        ai_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        toolbar.addWidget(ai_label)
+
+        self._provider_combo = QComboBox()
+        self._provider_combo.setFont(QFont(FONT_CODE, 10))
+        self._provider_combo.setStyleSheet(
+            f"QComboBox {{ background: {BG_1DP}; color: {ACCENT_CYAN_HEX}; "
+            f"border: 1px solid rgba(0,220,255,0.3); border-radius: 4px; "
+            f"padding: 2px 8px; min-width: 100px; }}"
+            f"QComboBox::drop-down {{ border: none; }}"
+            f"QComboBox QAbstractItemView {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
+            f"selection-background-color: rgba(0,220,255,0.2); }}"
+        )
+        for key, info in PROVIDERS.items():
+            self._provider_combo.addItem(info["label"], key)
+        # Set current from config
+        current = get_active_provider()
+        for i in range(self._provider_combo.count()):
+            if self._provider_combo.itemData(i) == current:
+                self._provider_combo.setCurrentIndex(i)
+                break
+        self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        toolbar.addWidget(self._provider_combo)
+
+        # Model selector
+        self._model_combo = QComboBox()
+        self._model_combo.setFont(QFont(FONT_CODE, 10))
+        self._model_combo.setStyleSheet(
+            f"QComboBox {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
+            f"border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; "
+            f"padding: 2px 8px; min-width: 140px; }}"
+            f"QComboBox::drop-down {{ border: none; }}"
+            f"QComboBox QAbstractItemView {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
+            f"selection-background-color: rgba(0,220,255,0.2); }}"
+        )
+        self._model_combo.currentIndexChanged.connect(self._on_model_changed)
+        toolbar.addWidget(self._model_combo)
+        self._refresh_models()
+
+        # Status dot — green=connected, red=no key, grey=off
+        self._status_dot = QLabel("\u2022")
+        self._status_dot.setFont(QFont(FONT_BODY, 16))
+        toolbar.addWidget(self._status_dot)
+        self._update_status_dot()
+
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
 
         # Output area
         self._output = QTextEdit()
@@ -177,6 +248,76 @@ class TerminalWidget(QWidget):
         self._flash_timer.setInterval(150)
         self._flash_timer.timeout.connect(self._flash_reset)
 
+    # --- Provider UI ---
+
+    def _on_provider_changed(self, index: int):
+        """User changed provider in dropdown."""
+        name = self._provider_combo.itemData(index)
+        if name:
+            set_active_provider(name)
+            self._refresh_models()
+            self._update_status_dot()
+            pinfo = PROVIDERS.get(name, {})
+            self._append_text(f"[AI] Provider: {pinfo.get('label', name)}", color=ACCENT_CYAN_HEX)
+            if pinfo.get("needs_key") and not get_api_key(name):
+                self._append_text(
+                    f"  API key needed. Use: /key {name} sk-your-key-here",
+                    color="#F59E0B",
+                )
+
+    def _on_model_changed(self, index: int):
+        """User changed model in dropdown."""
+        model = self._model_combo.currentText()
+        provider = get_active_provider()
+        if model and provider != "off":
+            set_active_model(provider, model)
+
+    def _refresh_models(self):
+        """Populate model combo for current provider."""
+        self._model_combo.blockSignals(True)
+        self._model_combo.clear()
+        provider = get_active_provider()
+        pinfo = PROVIDERS.get(provider, {})
+        models = pinfo.get("models", [])
+
+        if provider == "ollama":
+            # Try to detect live Ollama models
+            try:
+                p = create_provider("ollama")
+                if p:
+                    live = p.list_models()
+                    if live:
+                        models = live
+            except Exception:
+                pass
+
+        for m in models:
+            self._model_combo.addItem(m)
+
+        # Set current
+        current = get_active_model()
+        idx = self._model_combo.findText(current)
+        if idx >= 0:
+            self._model_combo.setCurrentIndex(idx)
+
+        self._model_combo.setVisible(provider != "off")
+        self._model_combo.blockSignals(False)
+
+    def _update_status_dot(self):
+        """Update status dot color based on provider readiness."""
+        provider = get_active_provider()
+        if provider == "off":
+            self._status_dot.setStyleSheet("color: #666;")
+            self._status_dot.setToolTip("AI off")
+        elif PROVIDERS.get(provider, {}).get("needs_key") and not get_api_key(provider):
+            self._status_dot.setStyleSheet("color: #EF4444;")
+            self._status_dot.setToolTip(f"No API key for {provider}")
+        else:
+            self._status_dot.setStyleSheet("color: #32CD32;")
+            self._status_dot.setToolTip(f"{provider} ready")
+
+    # --- Commands ---
+
     def _on_enter(self):
         """Handle Enter key: process command."""
         text = self._input.text().strip()
@@ -211,24 +352,120 @@ class TerminalWidget(QWidget):
 
     def _handle_command(self, cmd: str):
         """Handle local commands."""
-        if cmd == "/clear":
+        parts = cmd.split(None, 2)
+        base = parts[0].lower()
+
+        if base == "/clear":
             self._output.clear()
-        elif cmd == "/help":
+        elif base == "/help":
             self._append_text(
                 "Commands:\n"
-                "  /clear   — Clear terminal\n"
-                "  /help    — Show this help\n"
-                "  /scan    — Scan current repo\n"
-                "  /status  — Show Muninn status\n"
-                "  (text)   — Ask the LLM",
+                "  /clear              — Clear terminal\n"
+                "  /help               — Show this help\n"
+                "  /scan               — Scan current repo\n"
+                "  /status             — Show Muninn status\n"
+                "  /provider <name>    — Switch AI (claude/openai/ollama/off)\n"
+                "  /model <name>       — Switch model\n"
+                "  /key <provider> <k> — Set API key\n"
+                "  /boost              — Toggle mycelium boost\n"
+                "  /ai                 — Show AI config\n"
+                "  (text)              — Ask the AI",
                 color=TEXT_SECONDARY,
             )
-        elif cmd == "/scan":
+        elif base == "/scan":
             self._run_scan()
-        elif cmd == "/status":
+        elif base == "/status":
             self._run_status()
+        elif base == "/provider":
+            self._cmd_provider(parts)
+        elif base == "/model":
+            self._cmd_model(parts)
+        elif base == "/key":
+            self._cmd_key(parts)
+        elif base == "/boost":
+            self._cmd_boost()
+        elif base == "/ai":
+            self._cmd_ai_status()
         else:
-            self._append_text(f"Unknown command: {cmd}", color="#EF4444")
+            self._append_text(f"Unknown command: {cmd}. /help for list.", color="#EF4444")
+
+    def _cmd_provider(self, parts: list):
+        """Switch AI provider."""
+        if len(parts) < 2:
+            self._append_text(
+                f"Current: {get_active_provider()}\n"
+                f"Usage: /provider claude|openai|ollama|off",
+                color=TEXT_SECONDARY,
+            )
+            return
+        name = parts[1].lower()
+        if name not in PROVIDERS:
+            self._append_text(f"Unknown provider: {name}. Options: {', '.join(PROVIDERS.keys())}", color="#EF4444")
+            return
+        set_active_provider(name)
+        # Update dropdown
+        for i in range(self._provider_combo.count()):
+            if self._provider_combo.itemData(i) == name:
+                self._provider_combo.setCurrentIndex(i)
+                break
+
+    def _cmd_model(self, parts: list):
+        """Switch model."""
+        if len(parts) < 2:
+            self._append_text(f"Current: {get_active_model()}", color=TEXT_SECONDARY)
+            return
+        model = parts[1]
+        provider = get_active_provider()
+        set_active_model(provider, model)
+        self._refresh_models()
+        self._append_text(f"[AI] Model: {model}", color=ACCENT_CYAN_HEX)
+
+    def _cmd_key(self, parts: list):
+        """Set API key for a provider."""
+        if len(parts) < 3:
+            self._append_text("Usage: /key <provider> <api-key>", color=TEXT_SECONDARY)
+            return
+        provider = parts[1].lower()
+        key = parts[2].strip()
+        if provider not in PROVIDERS:
+            self._append_text(f"Unknown provider: {provider}", color="#EF4444")
+            return
+        set_api_key(provider, key)
+        self._update_status_dot()
+        # Show masked key
+        masked = key[:8] + "..." + key[-4:] if len(key) > 16 else "***"
+        self._append_text(f"[AI] Key saved for {provider}: {masked}", color="#32CD32")
+
+    def _cmd_boost(self):
+        """Toggle mycelium boost."""
+        current = get_mycelium_boost()
+        set_mycelium_boost(not current)
+        state = "ON" if not current else "OFF"
+        self._append_text(f"[AI] Mycelium boost: {state}", color=ACCENT_CYAN_HEX)
+
+    def _cmd_ai_status(self):
+        """Show AI configuration status."""
+        provider = get_active_provider()
+        model = get_active_model()
+        boost = get_mycelium_boost()
+        pinfo = PROVIDERS.get(provider, {})
+        has_key = bool(get_api_key(provider)) if pinfo.get("needs_key") else True
+
+        lines = [
+            f"Provider : {pinfo.get('label', provider)}",
+            f"Model    : {model or 'N/A'}",
+            f"API Key  : {'OK' if has_key else 'MISSING'}",
+            f"Boost    : {'ON' if boost else 'OFF'} (AI feeds mycelium)",
+        ]
+        if provider == "ollama":
+            try:
+                p = create_provider("ollama")
+                if p:
+                    models = p.list_models()
+                    lines.append(f"Ollama   : {len(models)} models available")
+            except Exception:
+                lines.append("Ollama   : NOT RUNNING")
+        self._append_text("\n".join(lines), color=TEXT_SECONDARY)
 
     def _run_scan(self):
         """Run muninn scan on current repo."""
@@ -260,15 +497,22 @@ class TerminalWidget(QWidget):
         except Exception as e:
             self._append_text(f"Status error: {e}", color="#EF4444")
 
+    # --- LLM ---
+
     def _start_llm(self, prompt: str):
-        """Launch LLM query in background thread (R3, B-UI-20)."""
+        """Launch LLM query in background thread (R3, B-UI-20, B-UI-21)."""
         self._stop_llm()  # Cancel previous
+        self._current_prompt = prompt
+
+        # Create provider from config
+        provider = create_provider()
 
         self._llm_thread = QThread()
-        self._llm_worker = LLMWorker(prompt, self._context)
+        self._llm_worker = LLMWorker(prompt, self._context, provider=provider)
         self._llm_worker.moveToThread(self._llm_thread)
         self._llm_thread.started.connect(self._llm_worker.run)
         self._llm_worker.chunk_ready.connect(self._on_chunk)
+        self._llm_worker.full_response.connect(self._on_full_response)
         self._llm_worker.finished.connect(self._on_llm_done)
         self._llm_worker.error.connect(self._on_llm_error)
         self._llm_worker.finished.connect(self._llm_thread.quit)
@@ -303,6 +547,19 @@ class TerminalWidget(QWidget):
         cursor.insertText(text, fmt)
         self._output.setTextCursor(cursor)
         self._output.ensureCursorVisible()
+
+    def _on_full_response(self, response: str):
+        """Feed AI response + prompt to mycelium if boost is ON."""
+        if not get_mycelium_boost() or not response:
+            return
+        # Feed in background — don't block UI
+        try:
+            from engine.core.mycelium import Mycelium
+            m = Mycelium()
+            combined = f"{self._current_prompt}\n{response}"
+            m.observe_text(combined)
+        except Exception:
+            pass  # Mycelium boost is best-effort
 
     def _on_llm_done(self):
         """LLM finished."""
