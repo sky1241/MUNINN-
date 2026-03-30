@@ -10,6 +10,7 @@ Respects Windows "reduce motion" setting.
 import math
 import time
 import ctypes
+import random
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QPointF, QRectF, QTimer, pyqtSignal
@@ -71,11 +72,33 @@ TUTORIAL_STEPS = [
         "duration": 6.0,
     },
     {
+        "key": "free_roam",
+        "text": "A toi de jouer!\nJe suis la si tu as besoin.",
+        "button": None,
+        "duration": 4.0,
+    },
+    {
         "key": "idle",
         "text": "",
         "button": None,
         "duration": None,
     },
+]
+
+# "Hey! Ecoute!" — random idle lines (Zelda style)
+IDLE_CHATTER = [
+    "Hey! Ecoute!",
+    "Tu savais? Ctrl+F pour chercher\nun neurone.",
+    "Essaie de cliquer un neurone\ndans le cube!",
+    "Hey! Le terminal accepte aussi\nles commandes Muninn.",
+    "L'arbre en bas montre\nla structure de ton code.",
+    "Les couleurs du cube vont\ndu vert (peu connecte) au rouge (hub).",
+    "Ctrl+Shift+P ouvre la\npalette de commandes!",
+    "Hey! Tu peux drag & drop\nun dossier sur le cube.",
+    "Les neurones les plus gros\nsont les plus connectes.",
+    "Shift+S pour screenshot,\nShift+P pour exporter!",
+    "Hey! Ecoute!\nChaque session Muninn apprend.",
+    "Le mycelium grandit a\nchaque scan. Il apprend!",
 ]
 
 # Contextual help texts (B-UI-15) — French
@@ -154,10 +177,17 @@ class NaviWidget(QWidget):
         self._tutorial_active = True
 
         # Flight patterns
-        self._flight_mode = 0  # 0=patrol-H, 1=patrol-V, 2=figure-8, 3=circle, 4=diagonal
+        self._flight_mode = 0  # 0-7 different patterns
         self._flight_timer = 0.0
         self._flight_switch_interval = 12.0  # seconds per pattern
         self._flight_time = 0.0
+
+        # Idle chatter (Zelda "Hey! Listen!")
+        self._idle_chatter_timer = 0.0
+        self._idle_chatter_interval = 25.0  # seconds between random lines
+        self._idle_chatter_duration = 4.0   # how long each line shows
+        self._idle_chatting = False
+        self._chatter_index = 0
 
         # R1: Timer stored as self attribute
         self._navi_timer = QTimer(self)
@@ -167,6 +197,13 @@ class NaviWidget(QWidget):
 
         # Orb size
         self._orb_radius = 12
+
+        # Movement tracking (for wing direction awareness)
+        self._prev_pos = QPointF(100, 100)
+        self._velocity_x = 0.0
+        self._velocity_y = 0.0
+        self._move_angle = 0.0   # radians, 0=right, pi/2=down
+        self._move_speed = 0.0   # pixels/tick
 
         # B-UI-15: Scan button rect (set during paint)
         self._scan_btn_rect: Optional[QRectF] = None
@@ -188,11 +225,30 @@ class NaviWidget(QWidget):
                 if self._tutorial_timer >= step["duration"]:
                     self._advance_tutorial()
 
+        # Idle chatter — "Hey! Ecoute!" random lines when not in tutorial
+        if not self._tutorial_active and not self._idle_chatting:
+            self._idle_chatter_timer += dt
+            if self._idle_chatter_timer >= self._idle_chatter_interval:
+                self._idle_chatter_timer = 0.0
+                self._idle_chatting = True
+                self._chatter_index = random.randint(0, len(IDLE_CHATTER) - 1)
+                self.show_bubble(IDLE_CHATTER[self._chatter_index])
+                # Randomize next interval (20-40s)
+                self._idle_chatter_interval = 20.0 + random.random() * 20.0
+        elif self._idle_chatting:
+            self._idle_chatter_timer += dt
+            if self._idle_chatter_timer >= self._idle_chatter_duration:
+                self._idle_chatter_timer = 0.0
+                self._idle_chatting = False
+                self.hide_bubble()
+
         # Switch flight pattern periodically (only when NOT talking)
         if not self._bubble_visible:
             if self._flight_time > self._flight_switch_interval:
                 self._flight_time = 0.0
-                self._flight_mode = (self._flight_mode + 1) % 5
+                self._flight_mode = random.randint(0, 7)
+                # Vary duration too (8-16s)
+                self._flight_switch_interval = 8.0 + random.random() * 8.0
 
         if not self._reduce_motion:
             w = max(self.width(), 200)
@@ -223,7 +279,8 @@ class NaviWidget(QWidget):
                 elif self._flight_mode == 3:
                     tx = w * 0.5 + math.cos(t * math.pi * 2) * (w * 0.25)
                     ty = h * 0.4 + math.sin(t * math.pi * 2) * (h * 0.25)
-                else:
+                elif self._flight_mode == 4:
+                    # Diagonal zigzag
                     seg = int(t * 4) % 4
                     st = (t * 4) % 1.0
                     corners = [
@@ -234,6 +291,34 @@ class NaviWidget(QWidget):
                     x1, y1 = corners[(seg + 1) % 4]
                     tx = x0 + st * (x1 - x0)
                     ty = y0 + st * (y1 - y0)
+                elif self._flight_mode == 5:
+                    # Dart & hover — rush to random spot, then hover
+                    dart_phase = (t * 3) % 1.0
+                    if dart_phase < 0.3:
+                        # Rushing to a spot (use sin as pseudo-random)
+                        tx = margin + abs(math.sin(self._flight_time * 0.7 + 1.3)) * (w - 2 * margin)
+                        ty = margin + abs(math.sin(self._flight_time * 0.5 + 2.7)) * (h - 2 * margin)
+                    else:
+                        # Hovering in place
+                        tx = self._target.x()
+                        ty = self._target.y()
+                elif self._flight_mode == 6:
+                    # Explore corners — visits each corner
+                    corner_idx = int(t * 4) % 4
+                    st = (t * 4) % 1.0
+                    corners = [
+                        (margin, margin), (w - margin, margin),
+                        (w - margin, h - margin), (margin, h - margin),
+                    ]
+                    cx, cy = corners[corner_idx]
+                    # Orbit around corner
+                    orbit_r = min(w, h) * 0.12
+                    tx = cx + math.cos(st * math.pi * 2) * orbit_r
+                    ty = cy + math.sin(st * math.pi * 2) * orbit_r
+                else:
+                    # Lazy drift — slow random wandering
+                    tx = w * 0.5 + math.sin(t * math.pi * 0.8 + 1.1) * (w * 0.3)
+                    ty = h * 0.5 + math.cos(t * math.pi * 0.6 + 0.7) * (h * 0.3)
 
                 self._target = QPointF(tx, ty)
 
@@ -250,6 +335,14 @@ class NaviWidget(QWidget):
                     self._pos.x() + math.sin(self._phase * 0.5) * 0.3,
                     self._pos.y() + math.cos(self._phase * 0.7) * 0.5,
                 )
+
+        # Track velocity for wing direction awareness
+        self._velocity_x = self._pos.x() - self._prev_pos.x()
+        self._velocity_y = self._pos.y() - self._prev_pos.y()
+        self._move_speed = math.sqrt(self._velocity_x ** 2 + self._velocity_y ** 2)
+        if self._move_speed > 0.3:
+            self._move_angle = math.atan2(self._velocity_y, self._velocity_x)
+        self._prev_pos = QPointF(self._pos)
 
         self.update()
 
@@ -382,6 +475,24 @@ class NaviWidget(QWidget):
 
         t = self._phase
 
+        # Movement-aware wing parameters
+        spd = min(self._move_speed, 8.0)  # cap at 8 px/tick
+        speed_factor = spd / 8.0  # 0..1 normalized speed
+        # Bank angle: tilt body into direction of travel (max +-20 deg)
+        bank_angle = 0.0
+        if spd > 0.5:
+            # Horizontal component -> bank left/right
+            bank_angle = math.degrees(math.atan2(self._velocity_y, abs(self._velocity_x) + 0.01))
+            bank_angle = max(-20, min(20, bank_angle * 0.6))
+            # Flip bank if going left
+            if self._velocity_x < -0.3:
+                bank_angle = -bank_angle
+
+        p.rotate(bank_angle)
+
+        # Wing beat speed boost when moving fast (up to x1.8)
+        beat_boost = 1.0 + speed_factor * 0.8
+
         # 3 pairs: grandes EN BAS, petites AU MILIEU (rapides), moyennes AU-DESSUS (plus larges)
         # Each pair: (y_offset, base_tilt, arc_range, length, width, speed, phase, stroke_width)
         pairs = [
@@ -393,12 +504,22 @@ class NaviWidget(QWidget):
         for y_off, base_tilt, arc_range, wL, wW, speed, ph_off, stroke_w in pairs:
             for side_m in [-1, 1]:
                 ph = ph_off + (0.1 if side_m == 1 else 0.0)
-                beat = math.sin(t * speed + ph)
+                beat = math.sin(t * speed * beat_boost + ph)
                 flap = beat * 0.5 + 0.5  # 0..1
 
-                wing_angle = (base_tilt + flap * arc_range) * side_m
-                # Alpha pulses with beat — brighter at extremes
-                alpha = int(18 + 22 * abs(beat))
+                # Trailing wing effect: wing on movement side folds back slightly
+                trail_offset = 0.0
+                if spd > 0.5:
+                    # If moving right (vx>0), right wings (+1) trail back, left lead
+                    going_right = self._velocity_x > 0.3
+                    if (going_right and side_m == 1) or (not going_right and side_m == -1):
+                        trail_offset = speed_factor * 15  # trailing wing swept back
+                    else:
+                        trail_offset = -speed_factor * 8  # leading wing pushed forward
+
+                wing_angle = (base_tilt + trail_offset + flap * arc_range) * side_m
+                # Alpha pulses with beat — brighter at extremes, brighter when moving fast
+                alpha = int(18 + 22 * abs(beat) + speed_factor * 15)
 
                 p.save()
                 p.translate(0, y_off)
