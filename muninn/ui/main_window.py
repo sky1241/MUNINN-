@@ -83,28 +83,7 @@ class MainWindow(QMainWindow):
         self.detail_panel = DetailPanel()
         self.terminal_panel = TerminalWidget()
 
-        # Search bar + forest toggle overlay above neuron map
-        from muninn.ui.search import SearchBar
-        from muninn.ui.forest import ForestToggle
-
-        self._search_bar = SearchBar()
-        self._forest_toggle = ForestToggle()
-
-        neuron_container = QWidget()
-        neuron_layout = QVBoxLayout(neuron_container)
-        neuron_layout.setContentsMargins(0, 0, 0, 0)
-        neuron_layout.setSpacing(0)
-
-        toolbar = QWidget()
-        toolbar_layout = QHBoxLayout(toolbar)
-        toolbar_layout.setContentsMargins(4, 2, 4, 2)
-        toolbar_layout.setSpacing(4)
-        toolbar_layout.addWidget(self._forest_toggle)
-        toolbar_layout.addWidget(self._search_bar, 1)
-        neuron_layout.addWidget(toolbar)
-        neuron_layout.addWidget(self.neuron_panel, 1)
-
-        self.left_splitter.addWidget(neuron_container)
+        self.left_splitter.addWidget(self.neuron_panel)
         self.left_splitter.addWidget(self.tree_panel)
 
         self.right_splitter.addWidget(self.terminal_panel)
@@ -174,13 +153,7 @@ class MainWindow(QMainWindow):
         install_context_menu(self.detail_panel, "detail")
         install_drag_drop(self.neuron_panel, self)
 
-        # Search bar wiring
-        self._search_bar.search_changed.connect(self._on_search_changed)
-        self._search_bar.search_confirmed.connect(self._on_search_confirmed)
-        self._search_bar.search_cleared.connect(self._on_search_cleared)
-
-        # Forest toggle wiring
-        self._forest_toggle.mode_changed.connect(self._on_mode_changed)
+        # (Search bar + forest toggle removed — B-UI-21 cleanup)
 
         # Command palette wiring
         self._command_palette.action_selected.connect(self._on_palette_action)
@@ -256,8 +229,8 @@ class MainWindow(QMainWindow):
         """Execute command palette action."""
         actions = {
             "zoom_to_fit": lambda: self.neuron_panel._zoom_to_fit_animated(),
-            "toggle_mode": lambda: self._forest_toggle.toggle(),
-            "focus_search": lambda: self._search_bar.focus_input(),
+            "toggle_mode": lambda: None,
+            "focus_search": lambda: None,
             "clear_terminal": lambda: self.terminal_panel._output.clear(),
             "export_screenshot": lambda: self._export_panel_screenshot(),
             "focus_neuron": lambda: self.neuron_panel.setFocus(),
@@ -434,7 +407,7 @@ class MainWindow(QMainWindow):
         self._update_status()
 
         # Feed search bar with neuron list (B-UI-25)
-        self._search_bar.set_neurons(self.neuron_panel.neurons)
+        # (search bar removed)
 
         # Navi: scan complete -> advance tutorial
         if hasattr(self, '_navi'):

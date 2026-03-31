@@ -16,7 +16,7 @@ from PyQt6.QtCore import (
     pyqtSignal, QObject,
 )
 from PyQt6.QtGui import (
-    QFont, QColor, QTextCursor, QTextCharFormat,
+    QFont, QColor, QTextCursor, QTextCharFormat, QPalette,
 )
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from muninn.ui.theme import (
-    BG_1DP, ACCENT_CYAN_HEX, ACCENT_GREEN, TEXT_PRIMARY,
+    BG_1DP, BG_2DP, ACCENT_CYAN_HEX, ACCENT_GREEN, TEXT_PRIMARY,
     TEXT_SECONDARY, FONT_CODE, FONT_BODY,
 )
 from muninn.ui.ai_config import (
@@ -45,6 +45,7 @@ class LLMWorker(QObject):
     """
 
     chunk_ready = pyqtSignal(str)   # One chunk of text
+    route_info = pyqtSignal(str)   # Which model was picked (smart router)
     full_response = pyqtSignal(str) # Complete response (for mycelium boost)
     finished = pyqtSignal()
     error = pyqtSignal(str)
@@ -68,6 +69,13 @@ class LLMWorker(QObject):
                 return
 
             system = self._context or "You are Muninn, a memory compression assistant. Answer concisely in the user's language."
+
+            # Emit route info for smart router
+            if hasattr(self._provider, 'last_route'):
+                from muninn.ui.ai_router import pick_model, get_route_label
+                model = pick_model(self._prompt)
+                self.route_info.emit(get_route_label(model))
+
             chunks = []
             try:
                 for text in self._provider.stream(
@@ -134,14 +142,14 @@ class TerminalWidget(QWidget):
 
         self._provider_combo = QComboBox()
         self._provider_combo.setFont(QFont(FONT_CODE, 10))
-        self._provider_combo.setStyleSheet(
-            f"QComboBox {{ background: {BG_1DP}; color: {ACCENT_CYAN_HEX}; "
-            f"border: 1px solid rgba(0,220,255,0.3); border-radius: 4px; "
+        _combo_ss = (
+            f"QComboBox {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
+            f"border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; "
             f"padding: 2px 8px; min-width: 100px; }}"
             f"QComboBox::drop-down {{ border: none; }}"
-            f"QComboBox QAbstractItemView {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
-            f"selection-background-color: rgba(0,220,255,0.2); }}"
         )
+        self._provider_combo.setStyleSheet(_combo_ss)
+        self._style_combo_popup(self._provider_combo)
         for key, info in PROVIDERS.items():
             self._provider_combo.addItem(info["label"], key)
         # Set current from config
@@ -158,12 +166,11 @@ class TerminalWidget(QWidget):
         self._model_combo.setFont(QFont(FONT_CODE, 10))
         self._model_combo.setStyleSheet(
             f"QComboBox {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
-            f"border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; "
+            f"border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; "
             f"padding: 2px 8px; min-width: 140px; }}"
             f"QComboBox::drop-down {{ border: none; }}"
-            f"QComboBox QAbstractItemView {{ background: {BG_1DP}; color: {TEXT_PRIMARY}; "
-            f"selection-background-color: rgba(0,220,255,0.2); }}"
         )
+        self._style_combo_popup(self._model_combo)
         self._model_combo.currentIndexChanged.connect(self._on_model_changed)
         toolbar.addWidget(self._model_combo)
         self._refresh_models()
@@ -248,6 +255,41 @@ class TerminalWidget(QWidget):
         self._flash_timer.setInterval(150)
         self._flash_timer.timeout.connect(self._flash_reset)
 
+    # --- Combo popup fix (Windows ignores QSS on popup) ---
+
+    def _style_combo_popup(self, combo: QComboBox):
+        """Force dark theme on QComboBox popup via QPalette (Windows fix).
+
+        UX: popup must appear directly below the combo, same width or wider.
+        On Windows, stylesheet alone doesn't work on the popup — must use palette.
+        Do NOT touch window flags — breaks native positioning.
+        """
+        bg = QColor(BG_1DP)
+        fg = QColor(TEXT_PRIMARY)
+        hl = QColor(255, 255, 255, 25)
+
+        # Style the view (list inside popup)
+        view = combo.view()
+        pal = view.palette()
+        pal.setColor(QPalette.ColorRole.Base, bg)
+        pal.setColor(QPalette.ColorRole.Window, bg)
+        pal.setColor(QPalette.ColorRole.Text, fg)
+        pal.setColor(QPalette.ColorRole.WindowText, fg)
+        pal.setColor(QPalette.ColorRole.Highlight, hl)
+        pal.setColor(QPalette.ColorRole.HighlightedText, fg)
+        view.setPalette(pal)
+
+        # Style the popup container (the frame around the list)
+        container = view.parentWidget()
+        if container:
+            cpal = container.palette()
+            cpal.setColor(QPalette.ColorRole.Window, bg)
+            cpal.setColor(QPalette.ColorRole.Base, bg)
+            container.setPalette(cpal)
+            container.setStyleSheet(
+                f"background: {BG_1DP}; border: 1px solid rgba(255,255,255,0.1);"
+            )
+
     # --- Provider UI ---
 
     def _on_provider_changed(self, index: int):
@@ -300,7 +342,7 @@ class TerminalWidget(QWidget):
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
 
-        self._model_combo.setVisible(provider != "off")
+        self._model_combo.setVisible(provider not in ("off", "ollama-smart"))
         self._model_combo.blockSignals(False)
 
     def _update_status_dot(self):
@@ -312,6 +354,20 @@ class TerminalWidget(QWidget):
         elif PROVIDERS.get(provider, {}).get("needs_key") and not get_api_key(provider):
             self._status_dot.setStyleSheet("color: #EF4444;")
             self._status_dot.setToolTip(f"No API key for {provider}")
+        elif provider in ("ollama", "ollama-smart"):
+            # Check if Ollama is actually running
+            try:
+                from muninn.ui.ai_router import get_available_models
+                models = get_available_models()
+                if models:
+                    self._status_dot.setStyleSheet("color: #32CD32;")
+                    self._status_dot.setToolTip(f"{provider} ready ({len(models)} models)")
+                else:
+                    self._status_dot.setStyleSheet("color: #EF4444;")
+                    self._status_dot.setToolTip("Ollama: no models installed")
+            except Exception:
+                self._status_dot.setStyleSheet("color: #EF4444;")
+                self._status_dot.setToolTip("Ollama: not running")
         else:
             self._status_dot.setStyleSheet("color: #32CD32;")
             self._status_dot.setToolTip(f"{provider} ready")
@@ -457,14 +513,16 @@ class TerminalWidget(QWidget):
             f"API Key  : {'OK' if has_key else 'MISSING'}",
             f"Boost    : {'ON' if boost else 'OFF'} (AI feeds mycelium)",
         ]
-        if provider == "ollama":
+        if provider in ("ollama", "ollama-smart"):
             try:
                 p = create_provider("ollama")
                 if p:
                     models = p.list_models()
-                    lines.append(f"Ollama   : {len(models)} models available")
+                    lines.append(f"Ollama   : {len(models)} models ({', '.join(models)})")
             except Exception:
                 lines.append("Ollama   : NOT RUNNING")
+        if provider == "ollama-smart":
+            lines.append("Router   : code->deepseek-coder, general->mistral")
         self._append_text("\n".join(lines), color=TEXT_SECONDARY)
 
     def _run_scan(self):
@@ -512,6 +570,7 @@ class TerminalWidget(QWidget):
         self._llm_worker.moveToThread(self._llm_thread)
         self._llm_thread.started.connect(self._llm_worker.run)
         self._llm_worker.chunk_ready.connect(self._on_chunk)
+        self._llm_worker.route_info.connect(self._on_route_info)
         self._llm_worker.full_response.connect(self._on_full_response)
         self._llm_worker.finished.connect(self._on_llm_done)
         self._llm_worker.error.connect(self._on_llm_error)
@@ -537,6 +596,10 @@ class TerminalWidget(QWidget):
         self._breathing.hide()
         self._breath_anim.stop()
         self._stop_btn.hide()
+
+    def _on_route_info(self, route: str):
+        """Show which model the smart router picked."""
+        self._append_text(f"[router -> {route}]", color=TEXT_SECONDARY)
 
     def _on_chunk(self, text: str):
         """Append streaming LLM chunk."""
@@ -567,8 +630,20 @@ class TerminalWidget(QWidget):
         self._stop_llm()
 
     def _on_llm_error(self, msg: str):
-        """LLM error (bug #20: no QMessageBox here)."""
-        self._append_text(f"Error: {msg}", color="#EF4444")
+        """LLM error (bug #20: no QMessageBox here). Clean up raw API errors."""
+        # Extract clean message from API error dumps
+        clean = msg
+        if "'message':" in msg:
+            import re
+            m = re.search(r"'message':\s*'([^']+)'", msg)
+            if m:
+                clean = m.group(1)
+        elif "message=" in msg:
+            import re
+            m = re.search(r"message=['\"]([^'\"]+)['\"]", msg)
+            if m:
+                clean = m.group(1)
+        self._append_text(f"Error: {clean}", color="#EF4444")
         self._stop_llm()
 
     def _append_text(self, text: str, color: str = ACCENT_GREEN):

@@ -36,6 +36,13 @@ PROVIDERS = {
         "env_key": None,
         "needs_key": False,
     },
+    "ollama-smart": {
+        "label": "Ollama Smart (Router)",
+        "models": [],
+        "default_model": "",
+        "env_key": None,
+        "needs_key": False,
+    },
     "off": {
         "label": "Off (Echo)",
         "models": [],
@@ -157,6 +164,9 @@ def create_provider(provider_name: Optional[str] = None, model: Optional[str] = 
         return _OpenAILite(model=mdl or "gpt-4o-mini", api_key=key)
     elif name == "ollama":
         return _OllamaLite(model=mdl or "llama3.1")
+    elif name == "ollama-smart":
+        from muninn.ui.ai_router import SmartRouter
+        return SmartRouter()
     return None
 
 
