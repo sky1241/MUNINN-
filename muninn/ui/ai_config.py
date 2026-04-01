@@ -256,6 +256,7 @@ class _OllamaLite:
             'prompt': prompt,
             'options': {'num_predict': max_tokens, 'temperature': temperature},
             'stream': True,
+            'keep_alive': '5m',
         }
         if system:
             payload['system'] = system

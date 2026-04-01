@@ -142,16 +142,39 @@ class SmartRouter:
 
     def stream(self, prompt: str, system: str = "",
                max_tokens: int = 1024, temperature: float = 0.3):
-        """Route query to best model and stream response."""
+        """Route query to best model and stream response.
+
+        Retries once on 500 error (model swap can cause transient failures).
+        """
         model = pick_model(prompt, self.base_url)
         self._last_model = model
         self._last_route = get_route_label(model)
 
+        for attempt in range(2):
+            try:
+                yield from self._stream_model(
+                    model, prompt, system, max_tokens, temperature,
+                )
+                return
+            except urllib.error.HTTPError as e:
+                if e.code == 500 and attempt == 0:
+                    # Model swap can cause 500 — wait and retry once
+                    import time
+                    time.sleep(2)
+                    continue
+                raise ConnectionError(f"Ollama error {e.code}: {e.reason}")
+            except (urllib.error.URLError, OSError) as e:
+                raise ConnectionError(f"Ollama not reachable: {e}")
+
+    def _stream_model(self, model: str, prompt: str, system: str,
+                      max_tokens: int, temperature: float):
+        """Stream from a specific Ollama model."""
         payload = {
             'model': model,
             'prompt': prompt,
             'options': {'num_predict': max_tokens, 'temperature': temperature},
             'stream': True,
+            'keep_alive': '5m',  # Keep model in RAM for 5 min
         }
         if system:
             payload['system'] = system
