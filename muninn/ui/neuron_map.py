@@ -218,7 +218,9 @@ class NeuronMapWidget(QWidget):
     # --- 3D Cube ---
 
     def _cube_tick(self):
-        """Rotate the 3D cube slowly."""
+        """Rotate the 3D cube slowly. Skip when hidden to save CPU."""
+        if not self.isVisible():
+            return
         self._cube_angle += 0.006
         if self._cube_angle > math.tau:
             self._cube_angle -= math.tau

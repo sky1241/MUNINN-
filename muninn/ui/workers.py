@@ -99,9 +99,10 @@ class LaplacianWorker(QObject):
             degrees_diag = np.array(adj.sum(axis=1)).flatten()
             # Avoid division by zero
             degrees_diag[degrees_diag == 0] = 1
-            D_inv_sqrt = csr_matrix(np.diag(1.0 / np.sqrt(degrees_diag)))
+            from scipy.sparse import diags as sparse_diags, eye as sparse_eye
+            D_inv_sqrt = sparse_diags(1.0 / np.sqrt(degrees_diag))
             # Normalized Laplacian: I - D^(-1/2) A D^(-1/2)
-            L_norm = csr_matrix(np.eye(n)) - D_inv_sqrt @ adj @ D_inv_sqrt
+            L_norm = sparse_eye(n) - D_inv_sqrt @ adj @ D_inv_sqrt
 
             if self._stop:
                 return

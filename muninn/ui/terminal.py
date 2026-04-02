@@ -526,34 +526,43 @@ class TerminalWidget(QWidget):
         self._append_text("\n".join(lines), color=TEXT_SECONDARY)
 
     def _run_scan(self):
-        """Run muninn scan on current repo."""
-        import subprocess
+        """Run muninn scan in background thread (non-blocking UI)."""
         import sys
         self._append_text("Scanning repo...", color=TEXT_SECONDARY)
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "muninn", "scan", "."],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd="."
-            )
-            if result.returncode == 0:
-                self._append_text(result.stdout.strip() or "Scan complete.", color="#32CD32")
-            else:
-                self._append_text(result.stderr.strip() or "Scan failed.", color="#EF4444")
-        except Exception as e:
-            self._append_text(f"Scan error: {e}", color="#EF4444")
+        self._run_subprocess_bg(
+            [sys.executable, "-m", "muninn", "scan", "."], timeout=30,
+        )
 
     def _run_status(self):
-        """Run muninn status."""
-        import subprocess
+        """Run muninn status in background thread (non-blocking UI)."""
         import sys
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "muninn", "status"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, cwd="."
-            )
-            self._append_text(result.stdout.strip() or "No status available.", color=TEXT_SECONDARY)
-        except Exception as e:
-            self._append_text(f"Status error: {e}", color="#EF4444")
+        self._run_subprocess_bg(
+            [sys.executable, "-m", "muninn", "status"], timeout=10,
+        )
+
+    def _run_subprocess_bg(self, cmd: list, timeout: int = 30):
+        """Run a subprocess in a background thread to avoid freezing the UI."""
+        import subprocess, sys, threading
+
+        def _worker():
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                    timeout=timeout, cwd=".",
+                )
+                if result.returncode == 0:
+                    # Use QTimer.singleShot to emit on main thread
+                    QTimer.singleShot(0, lambda: self._append_text(
+                        result.stdout.strip() or "Done.", color="#32CD32"))
+                else:
+                    QTimer.singleShot(0, lambda: self._append_text(
+                        result.stderr.strip() or "Failed.", color="#EF4444"))
+            except Exception as e:
+                QTimer.singleShot(0, lambda: self._append_text(
+                    f"Error: {e}", color="#EF4444"))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # --- LLM ---
 

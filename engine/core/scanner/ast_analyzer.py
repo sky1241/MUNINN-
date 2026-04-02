@@ -532,13 +532,23 @@ def analyze_findings(findings: list, file_contents: dict = None) -> list:
         file_contents = {}
 
     verdicts = []
+    _content_cache = dict(file_contents)  # Local cache to avoid re-reading files
 
     for finding in findings:
         fp = finding.get('file', '')
         line = finding.get('line', 0)
         pid = finding.get('pattern_id', '')
         sev = finding.get('severity', '')
-        content = finding.get('content') or file_contents.get(fp)
+        content = finding.get('content') or _content_cache.get(fp)
+
+        # Cache file content on first read
+        if content is None and fp and os.path.isfile(fp):
+            try:
+                with open(fp, 'r', encoding='utf-8', errors='replace') as f:
+                    content = f.read()
+                _content_cache[fp] = content
+            except (OSError, IOError):
+                pass
 
         verdict = analyze_finding(fp, line, pid, sev, content=content)
         verdicts.append(verdict)
