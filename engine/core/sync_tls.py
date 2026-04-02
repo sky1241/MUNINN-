@@ -24,7 +24,6 @@ Requires: Python 3.10+ (ssl stdlib). No pip dependency.
 """
 import collections
 import json
-import os
 import socket
 import sqlite3
 import ssl

@@ -14,7 +14,7 @@ This scanner NEVER crashes — all API errors are caught and logged.
 import re
 import time
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

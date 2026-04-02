@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
-from cube import Cube, CubeStore, sha256_hash
+from cube import Cube, sha256_hash
 
 try:
     from engine.core.lang_lexicons import get_lexicon, format_lexicon_prompt

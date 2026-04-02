@@ -13,14 +13,12 @@ import hashlib
 import json
 import math
 import os
-import re
 import sqlite3
 import subprocess
 import threading
 import time as _time
-import zlib
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 

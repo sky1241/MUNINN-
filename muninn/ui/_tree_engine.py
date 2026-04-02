@@ -4904,8 +4904,7 @@ Exemples:
         print(f"✅ Knowledge base exportée : {path}")
 
     elif cmd == "validate":
-        print("TODO: Implémenter la lecture de fichiers YAML pour validation.")
-        print("En attendant, utiliser validate_growth() en Python directement.")
+        print("Validation YAML non implementee. Utiliser validate_growth() en Python.", file=sys.stderr)
 
     else:
         print(f"Commande inconnue : {cmd}")

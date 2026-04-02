@@ -9,7 +9,7 @@ Zero dependencies beyond sqlite3 + time (Python stdlib).
 
 import sqlite3
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

@@ -274,7 +274,7 @@ def init_repo(root):
     # .gitignore for .forge/
     gitignore = forge_dir / ".gitignore"
     if not gitignore.exists():
-        gitignore.write_text("*\n")
+        gitignore.write_text("*\n", encoding="utf-8")
 
     # BUGS.md
     bugs_path = root / BUGS_FILE
@@ -301,7 +301,7 @@ def init_repo(root):
     tests_dir = root / "tests"
     if not tests_dir.exists():
         tests_dir.mkdir()
-        (tests_dir / "__init__.py").write_text("")
+        (tests_dir / "__init__.py").write_text("", encoding="utf-8")
         print(f"  Created tests/")
 
     print(f"  Forge initialized in {root.name}")

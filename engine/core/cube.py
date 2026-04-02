@@ -19,12 +19,8 @@ import sys
 import os
 import re
 import sqlite3
-import subprocess
 import threading
 import time as _time
-import urllib.error
-import urllib.request
-from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -34,7 +30,7 @@ from typing import Optional
 _quarantine_lock = threading.Lock()
 _anomaly_lock = threading.Lock()
 
-from engine.core.tokenizer import count_tokens, token_count
+from engine.core.tokenizer import token_count
 try:
     from engine.core.wal_monitor import WALMonitor
 except ImportError:

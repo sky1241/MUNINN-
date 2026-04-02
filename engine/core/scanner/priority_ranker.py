@@ -20,7 +20,7 @@ import math
 import os
 import sys
 import zlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ── Triple import fallback ─────────────────────────────────────────
 try:

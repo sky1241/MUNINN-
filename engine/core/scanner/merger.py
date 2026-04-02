@@ -18,7 +18,8 @@ MODE DEGRADE: B-SCAN-06 can be None/empty — merger handles gracefully.
 """
 
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+
+
 
 # Severity ordering (lower = more critical)
 _SEVERITY_ORDER = {"CRIT": 0, "HIGH": 1, "MED": 2, "LOW": 3, "INFO": 4}

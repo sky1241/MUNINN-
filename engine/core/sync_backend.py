@@ -8,13 +8,10 @@ import json
 import os
 import sqlite3
 import subprocess
-import sys
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional
-
 try:
     from .mycelium_db import MyceliumDB, date_to_days, days_to_date, today_days
 except ImportError:

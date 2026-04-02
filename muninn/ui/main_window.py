@@ -282,13 +282,14 @@ class MainWindow(QMainWindow):
         import json
 
         self.status_bar.showMessage(f"Scanning {path}...", 10000)
+        tmp_path = None
         try:
             # Run muninn scan and capture JSON output
             with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
                 tmp_path = tmp.name
             result = subprocess.run(
                 [sys.executable, "-m", "muninn", "scan", path, "--output", tmp_path],
-                capture_output=True, text=True, timeout=60
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
             )
             if result.returncode == 0:
                 from pathlib import Path
@@ -301,6 +302,12 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage(f"Scan failed: {result.stderr[:80]}", 5000)
         except Exception as e:
             self.status_bar.showMessage(f"Scan error: {e}", 5000)
+        finally:
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
     def _on_neuron_selected(self, neuron):
         """Handle neuron selection from map."""

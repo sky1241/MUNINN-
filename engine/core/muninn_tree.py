@@ -12,7 +12,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from tokenizer import count_tokens, token_count
+from tokenizer import token_count
 from _secrets import redact_secrets_text as _redact_secrets_text
 
 
