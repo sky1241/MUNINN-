@@ -136,7 +136,7 @@ def render(scan_path, output_path=None):
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 12)
         font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 10)
         font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 16)
-    except:
+    except Exception:
         font = font_sm = font_title = ImageFont.load_default()
 
     # Assign positions to nodes

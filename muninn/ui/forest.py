@@ -95,9 +95,10 @@ class MetaMyceliumWorker(QObject):
                     # Get top concepts by degree in this zone
                     rows = conn.execute("""
                         SELECT c.name, COUNT(*) as degree
-                        FROM connections cn
-                        JOIN concepts c ON c.id = cn.concept_a OR c.id = cn.concept_b
-                        WHERE cn.zone = ?
+                        FROM edges e
+                        JOIN edge_zones ez ON ez.a = e.a AND ez.b = e.b
+                        JOIN concepts c ON c.id = e.a OR c.id = e.b
+                        WHERE ez.zone = ?
                         GROUP BY c.name
                         ORDER BY degree DESC
                         LIMIT ?

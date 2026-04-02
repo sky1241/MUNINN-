@@ -1853,8 +1853,9 @@ def scan_repo(path):
             lines = 0
             if ext in EXT_LANG:
                 try:
-                    lines = sum(1 for _ in open(fpath, "r", encoding="utf-8", errors="ignore"))
-                except:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as _fh:
+                        lines = sum(1 for _ in _fh)
+                except Exception:
                     lines = 0
 
                 lang = EXT_LANG[ext]
@@ -2041,9 +2042,9 @@ def scan_repo(path):
                 if ext not in CODE_EXTENSIONS:
                     try:
                         data_weight_mb += os.path.getsize(fpath) / (1024 * 1024)
-                    except:
+                    except Exception:
                         pass
-    except:
+    except Exception:
         pass
 
     # Calculer l'échelle visuelle (hauteur = code, épaisseur = data)
@@ -2200,7 +2201,7 @@ def _classify_from_scan(nodes, top_dirs, biggest_file, total_code_lines, repo_pa
                             module = line.split("from ")[1].strip().strip("'\"").strip(";")
                             if module.startswith("."):
                                 imports.add(module)
-            except:
+            except Exception:
                 continue
 
             internal_imports = set()

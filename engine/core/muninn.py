@@ -257,8 +257,16 @@ def scan_repo(repo_path: Path):
     }
 
     local_path = muninn_dir / "local.json"
-    with open(local_path, "w", encoding="utf-8") as f:
-        json.dump(local, f, ensure_ascii=False, indent=2)
+    import tempfile as _tmpmod
+    _fd, _tmp = _tmpmod.mkstemp(dir=str(local_path.parent), suffix=".tmp")
+    try:
+        with open(_fd, "w", encoding="utf-8") as f:
+            json.dump(local, f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, str(local_path))
+    except Exception:
+        if os.path.exists(_tmp):
+            os.unlink(_tmp)
+        raise
 
     print(f"  Generated: {len(encode)} local codes")
     print(f"  Saved: {_safe_path(local_path)}")
@@ -519,7 +527,16 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
     TREE_DIR.mkdir(parents=True, exist_ok=True)
     tree = load_tree()
     root_path = TREE_DIR / "root.mn"
-    root_path.write_text(content, encoding="utf-8")
+    import tempfile as _tmpmod
+    _fd, _tmp = _tmpmod.mkstemp(dir=str(root_path.parent), suffix=".tmp")
+    try:
+        with open(_fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(_tmp, str(root_path))
+    except Exception:
+        if os.path.exists(_tmp):
+            os.unlink(_tmp)
+        raise
     tree["nodes"]["root"]["lines"] = len(lines)
     tree["nodes"]["root"]["last_access"] = time.strftime("%Y-%m-%d")
     tree["nodes"]["root"]["tags"] = top_concepts[:7]

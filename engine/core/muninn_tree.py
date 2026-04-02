@@ -154,8 +154,8 @@ def init_tree():
 
     _atomic_json_write(_m.TREE_META, tree)
 
-    (_m.TREE_DIR / "root.mn").write_text(
-        "# MUNINN|codebook=v0.1\n", encoding="utf-8"
+    _atomic_text_write(_m.TREE_DIR / "root.mn",
+        "# MUNINN|codebook=v0.1\n"
     )
 
     print(f"  Tree initialized: {_m._safe_path(_m.TREE_DIR)}")
@@ -545,7 +545,7 @@ def read_node(name: str, _tree: dict | None = None) -> str:
             reconsolidated = _m._extract_rules(reconsolidated)
             # B1.1: only save if it got smaller (never inflate)
             if len(reconsolidated) < original_len:
-                filepath.write_text(reconsolidated, encoding="utf-8")
+                _atomic_text_write(filepath, reconsolidated)
                 node["hash"] = compute_hash(filepath)
                 node["lines"] = reconsolidated.count("\n") + 1
                 text = reconsolidated
@@ -671,7 +671,7 @@ def build_tree(filepath: Path):
             else:
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
-                (_m.TREE_DIR / branch_file).write_text(section, encoding="utf-8")
+                _atomic_text_write(_m.TREE_DIR / branch_file, section)
                 root_lines.append(f"\u2192{branch_name}:{first_line}")
 
                 tree["nodes"][branch_name] = {
@@ -697,7 +697,7 @@ def build_tree(filepath: Path):
                 overflow = root_lines.pop()
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
-                (_m.TREE_DIR / branch_file).write_text(overflow, encoding="utf-8")
+                _atomic_text_write(_m.TREE_DIR / branch_file, overflow)
                 overflow_refs.append(f"\u2192{branch_name}:{overflow[:50]}")
                 tree["nodes"][branch_name] = {
                     "type": "branch", "file": branch_file,
@@ -826,7 +826,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
                 new_lines = merged_text.split("\n")
                 max_l = node.get("max_lines", 150)
                 if len(new_lines) <= max_l:
-                    filepath.write_text(merged_text, encoding="utf-8")
+                    _atomic_text_write(filepath, merged_text)
                     node["lines"] = len(new_lines)
                     node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
                     # V6B: Update sentiment (weighted average old + new)
@@ -847,7 +847,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             branch_file = f"{branch_name}.mn"
             branch_path = _m.TREE_DIR / branch_file
             lines = body.split("\n")
-            branch_path.write_text(body, encoding="utf-8")
+            _atomic_text_write(branch_path, body)
 
             new_node = {
                 "type": "branch",
@@ -2412,7 +2412,7 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
         # Write the consolidated file
         merged_file = f"{merged_name}.mn"
         merged_path = _m.TREE_DIR / merged_file
-        merged_path.write_text(combined, encoding="utf-8")
+        _atomic_text_write(merged_path, combined)
 
         # Collect tags from all merged branches
         all_tags = set()
@@ -2830,7 +2830,7 @@ def prune(dry_run: bool = True):
             # Apply L9 (LLM compression) if branch is large enough
             compressed = _m._llm_compress(content, context=f"cold-branch:{name}")
             if compressed != content:
-                filepath.write_text(compressed, encoding="utf-8")
+                _atomic_text_write(filepath, compressed)
                 new_lines = len(compressed.split("\n"))
                 node["lines"] = new_lines
                 recompressed += 1
@@ -2997,7 +2997,7 @@ def prune(dry_run: bool = True):
                                     combined = _m._cue_distill(combined)
                                     combined = _m._extract_rules(combined)
 
-                                survivor_filepath.write_text(combined, encoding="utf-8")
+                                _atomic_text_write(survivor_filepath, combined)
                                 _regen_facts_total += len(new_facts)
                                 # Update hash + line count so boot() P34 integrity check passes
                                 nodes[best_survivor]["hash"] = compute_hash(survivor_filepath)
@@ -3617,7 +3617,7 @@ def inject_memory(fact: str, repo_path: Path = None):
 
         # Write branch file to tree directory
         mn_path = tree_dir / nodes[live_name]["file"]
-        mn_path.write_text(new_content, encoding="utf-8")
+        _atomic_text_write(mn_path, new_content)
 
         # Update metadata
         nodes[live_name]["hash"] = compute_hash(mn_path)

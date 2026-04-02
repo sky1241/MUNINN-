@@ -209,7 +209,9 @@ class NaviWidget(QWidget):
         self._scan_btn_rect: Optional[QRectF] = None
 
     def _tick(self):
-        """Main animation tick (16ms) with flight patterns + tutorial."""
+        """Main animation tick (15ms) with flight patterns + tutorial."""
+        if not self.isVisible():
+            return  # Save CPU when hidden/minimized
         self._phase += 0.05
         if self._phase > math.pi * 200:
             self._phase -= math.pi * 200  # Smooth wrap, no discontinuity

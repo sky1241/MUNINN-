@@ -25,7 +25,7 @@ def install_shortcuts(window: QMainWindow):
 
     # Space: toggle solo/forest
     sc_space = QShortcut(QKeySequence(Qt.Key.Key_Space), window)
-    sc_space.setContext(Qt.ShortcutContext.ApplicationShortcut)
+    sc_space.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
     sc_space.activated.connect(lambda: _toggle_mode(window))
 
     # Escape: deselect / clear
