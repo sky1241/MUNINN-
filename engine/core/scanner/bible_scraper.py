@@ -814,6 +814,12 @@ def download_sources(sources_dir: str | Path, refresh: bool = False) -> dict[str
             # Unzip
             try:
                 with zipfile.ZipFile(semgrep_zip, "r") as zf:
+                    # Zip-slip protection: reject entries with path traversal
+                    target = str(sources_dir.resolve())
+                    for member in zf.namelist():
+                        member_path = str((sources_dir / member).resolve())
+                        if not member_path.startswith(target + os.sep) and member_path != target:
+                            raise ValueError(f"Zip-slip detected: {member}")
                     zf.extractall(sources_dir)
                 # The zip extracts to semgrep-rules-develop/
                 extracted = sources_dir / "semgrep-rules-develop"

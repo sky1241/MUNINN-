@@ -559,6 +559,14 @@ class TerminalWidget(QWidget):
 
     def _start_llm(self, prompt: str):
         """Launch LLM query in background thread (R3, B-UI-20, B-UI-21)."""
+        # Disconnect old worker signals before stopping (prevent stale signal race)
+        if self._llm_worker is not None:
+            try:
+                self._llm_worker.finished.disconnect()
+                self._llm_worker.error.disconnect()
+                self._llm_worker.chunk_ready.disconnect()
+            except (TypeError, RuntimeError):
+                pass  # Already disconnected
         self._stop_llm()  # Cancel previous
         self._current_prompt = prompt
 
@@ -612,17 +620,21 @@ class TerminalWidget(QWidget):
         self._output.ensureCursorVisible()
 
     def _on_full_response(self, response: str):
-        """Feed AI response + prompt to mycelium if boost is ON."""
+        """Feed AI response + prompt to mycelium if boost is ON (background thread)."""
         if not get_mycelium_boost() or not response:
             return
-        # Feed in background — don't block UI
-        try:
-            from engine.core.mycelium import Mycelium
-            m = Mycelium()
-            combined = f"{self._current_prompt}\n{response}"
-            m.observe_text(combined)
-        except Exception:
-            pass  # Mycelium boost is best-effort
+        import threading
+        prompt = self._current_prompt
+
+        def _feed():
+            try:
+                from engine.core.mycelium import Mycelium
+                m = Mycelium()
+                m.observe_text(f"{prompt}\n{response}")
+            except Exception:
+                pass  # Mycelium boost is best-effort
+
+        threading.Thread(target=_feed, daemon=True).start()
 
     def _on_llm_done(self):
         """LLM finished."""

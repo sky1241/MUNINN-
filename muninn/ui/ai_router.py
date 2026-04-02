@@ -78,15 +78,25 @@ def classify_query(text: str) -> str:
     return MODEL_GENERAL
 
 
+_model_cache = {"models": [], "ts": 0}
+
+
 def get_available_models(base_url: str = "http://localhost:11434") -> list[str]:
-    """Get list of models installed in Ollama."""
+    """Get list of models installed in Ollama. Cached for 60 seconds."""
+    import time as _time
+    now = _time.time()
+    if _model_cache["models"] and now - _model_cache["ts"] < 60:
+        return _model_cache["models"]
     try:
         url = f"{base_url}/api/tags"
         with urllib.request.urlopen(url, timeout=5) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-            return [m['name'] for m in data.get('models', [])]
+            models = [m['name'] for m in data.get('models', [])]
+            _model_cache["models"] = models
+            _model_cache["ts"] = now
+            return models
     except Exception:
-        return []
+        return _model_cache["models"] or []
 
 
 def pick_model(text: str, base_url: str = "http://localhost:11434") -> str:

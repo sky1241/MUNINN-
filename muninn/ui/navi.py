@@ -212,7 +212,7 @@ class NaviWidget(QWidget):
         """Main animation tick (16ms) with flight patterns + tutorial."""
         self._phase += 0.05
         if self._phase > math.pi * 200:
-            self._phase = 0
+            self._phase -= math.pi * 200  # Smooth wrap, no discontinuity
 
         dt = 0.016  # ~16ms
         self._flight_time += dt

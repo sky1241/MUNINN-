@@ -192,6 +192,10 @@ def _tree_lock(path: Path, timeout: float = 5.0):
         lock_f.close()
         return None, False
     except Exception:
+        try:
+            lock_f.close()
+        except Exception:
+            pass
         return None, False
 
 
@@ -217,7 +221,9 @@ def _tree_unlock(lock_f):
 def load_tree():
     if not _m.TREE_META.exists():
         return init_tree()
-    lock_f, _ = _tree_lock(_m.TREE_META)
+    lock_f, acquired = _tree_lock(_m.TREE_META)
+    if not acquired:
+        print("WARNING: tree lock timeout on load_tree, proceeding anyway", file=sys.stderr)
     try:
         with open(_m.TREE_META, encoding="utf-8") as f:
             tree = json.load(f)
@@ -249,7 +255,9 @@ def save_tree(tree):
     import tempfile, os
     tree["updated"] = time.strftime("%Y-%m-%d")
     _m.TREE_DIR.mkdir(parents=True, exist_ok=True)
-    lock_f, _ = _tree_lock(_m.TREE_META)
+    lock_f, acquired = _tree_lock(_m.TREE_META)
+    if not acquired:
+        print("WARNING: tree lock timeout on save_tree, proceeding anyway", file=sys.stderr)
     try:
         fd, tmp_path = tempfile.mkstemp(
             dir=str(_m.TREE_DIR), suffix=".tmp", prefix="tree_"
