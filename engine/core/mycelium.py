@@ -303,7 +303,8 @@ class Mycelium:
         for c in concepts:
             if c is None:
                 continue
-            c = str(c).lower().strip()
+            import unicodedata
+            c = unicodedata.normalize("NFC", str(c).lower().strip())
             if len(c) >= self.MIN_CONCEPT_LEN and c not in _STOPWORDS:
                 clean.append(c)
 
@@ -887,6 +888,11 @@ class Mycelium:
 
                     periods = age_days // days
                     new_count = count / (2 ** periods)
+
+                    # Guard against NaN/Inf from corrupted data
+                    if not isinstance(new_count, (int, float)) or new_count != new_count or new_count == float('inf'):
+                        dead_ids.append((a_id, b_id))
+                        continue
 
                     if (self.SATURATION_BETA > 0 and new_count > self.SATURATION_THRESHOLD):
                         saturation_loss = self.SATURATION_BETA * new_count * new_count

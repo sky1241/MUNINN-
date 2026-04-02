@@ -1064,6 +1064,8 @@ def _llm_compress_chunk(text: str, client, context: str = "") -> tuple:
                 _L9_PROMPT + f"INPUT ({len(text)} chars):\n{text}"
             }],
         )
+        if not response.content:
+            return text, getattr(response, 'usage', None)
         compressed = response.content[0].text
         truncated = response.stop_reason == "max_tokens"
         if truncated:

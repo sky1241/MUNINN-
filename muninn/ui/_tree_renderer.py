@@ -109,7 +109,7 @@ def draw_glow_ring(draw, cx, cy, r, color, alpha_outer=50, ring_w=6):
 
 
 def render(scan_path, output_path=None):
-    with open(scan_path) as f:
+    with open(scan_path, encoding="utf-8") as f:
         tree = json.load(f)
 
     family = tree.get("family", "buisson")

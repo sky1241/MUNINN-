@@ -703,7 +703,8 @@ class MyceliumDB:
         """Get connections whose last_seen is older than threshold days ago."""
         cutoff = today_days() - days_threshold
         rows = self._conn.execute(
-            "SELECT a, b, count, first_seen, last_seen FROM edges WHERE CAST(last_seen AS INTEGER) < ?",
+            "SELECT a, b, count, first_seen, last_seen FROM edges WHERE "
+            "CASE WHEN typeof(last_seen) = 'text' THEN 0 ELSE CAST(last_seen AS INTEGER) END < ?",
             (cutoff,)
         ).fetchall()
         result = []

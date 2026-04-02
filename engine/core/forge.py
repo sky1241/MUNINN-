@@ -475,7 +475,7 @@ def show_heatmap(root):
         cumulative = 0
         for i, (test, count) in enumerate(failure_counts.most_common(20)):
             cumulative += count
-            pct = cumulative / total_failures * 100
+            pct = (cumulative / total_failures * 100) if total_failures > 0 else 0
             heat = "#" * min(count, 30)
             print(f"  {count:3d}x  {test[:60]}")
             print(f"       {heat}  ({pct:.0f}% cumulative)")

@@ -172,6 +172,8 @@ def _tree_lock(path: Path, timeout: float = 5.0):
     lock_path = path.with_suffix(".lock")
     try:
         lock_f = open(lock_path, "w", encoding="utf-8")
+        lock_f.write("L")  # Write 1 byte — msvcrt.locking needs non-empty file
+        lock_f.flush()
         if sys.platform == "win32":
             import msvcrt
             for _ in range(int(timeout * 20)):
@@ -228,10 +230,10 @@ def load_tree():
         with open(_m.TREE_META, encoding="utf-8") as f:
             tree = json.load(f)
         # Validate all node file paths to prevent path traversal
-        tree_dir_resolved = str(_m.TREE_DIR.resolve())
+        tree_dir_resolved = os.path.normcase(str(_m.TREE_DIR.resolve()))
         for name, node in tree.get("nodes", {}).items():
             if "file" in node:
-                resolved = str((_m.TREE_DIR / node["file"]).resolve())
+                resolved = os.path.normcase(str((_m.TREE_DIR / node["file"]).resolve()))
                 if not resolved.startswith(tree_dir_resolved + os.sep) and resolved != tree_dir_resolved:
                     print(f"WARNING: path traversal in tree node '{name}': {node['file']}, sanitized", file=sys.stderr)
                     node["file"] = f"{name}.mn"
@@ -291,6 +293,27 @@ def _atomic_json_write(path: Path, data, indent: int = 2):
         with open(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=indent)
         os.replace(tmp_path, str(path))
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+
+def _atomic_text_write(path: Path, text: str):
+    """Atomic text write via tempfile + os.replace. For .mn branch/root files."""
+    import tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with open(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        for _attempt in range(3):
+            try:
+                os.replace(tmp_path, str(path))
+                return
+            except PermissionError:
+                time.sleep(0.05)
+        os.replace(tmp_path, str(path))  # Final try
     except Exception:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -419,7 +442,8 @@ def _actr_activation(node: dict, _d: float = 0.5) -> float:
 def _days_since(date_str: str) -> int:
     """Days since a YYYY-MM-DD date string. Returns 90 on parse error."""
     try:
-        return max(0, (datetime.now() - datetime.strptime(date_str, "%Y-%m-%d")).days)
+        from datetime import timezone
+        return max(0, (datetime.now(timezone.utc) - datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)).days)
     except ValueError:
         return 90
 
@@ -608,7 +632,7 @@ def build_tree(filepath: Path):
 
     if len(comp_lines) <= BUDGET["root_lines"]:
         root_path = _m.TREE_DIR / "root.mn"
-        root_path.write_text(compressed, encoding="utf-8")
+        _atomic_text_write(root_path, compressed)
         tree["nodes"]["root"]["lines"] = len(comp_lines)
         tree["nodes"]["root"]["last_access"] = time.strftime("%Y-%m-%d")
         save_tree(tree)
@@ -679,7 +703,7 @@ def build_tree(filepath: Path):
             root_lines.extend(overflow_refs)
 
         root_path = _m.TREE_DIR / "root.mn"
-        root_path.write_text("\n".join(root_lines), encoding="utf-8")
+        _atomic_text_write(root_path, "\n".join(root_lines))
         tree["nodes"]["root"]["lines"] = len(root_lines)
         tree["nodes"]["root"]["children"] = [n for n in tree["nodes"] if n != "root"]
         save_tree(tree)
@@ -3448,11 +3472,11 @@ def _append_session_log(repo_path: Path, compressed: str, ratio: float):
         new_text = parts[0] + "\nR:\n" + "\n".join(existing_lines) + "\n"
         if rest:
             new_text += "\n" + rest
-        root_path.write_text(new_text, encoding="utf-8")
+        _atomic_text_write(root_path, new_text)
     else:
         # No R: section yet — append one
         root_text = root_text.rstrip() + f"\n\nR:\n{log_line}\n"
-        root_path.write_text(root_text, encoding="utf-8")
+        _atomic_text_write(root_path, root_text)
 
 
 def _extract_error_fixes(repo_path: Path, compressed: str):
