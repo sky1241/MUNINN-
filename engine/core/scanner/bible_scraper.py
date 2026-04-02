@@ -17,20 +17,10 @@ import json
 import os
 import re
 import zipfile
-import io
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 from xml.etree import ElementTree
-
-# --- Triple import fallback ---
-try:
-    from engine.core.scanner import _SCANNER_VERSION
-except ImportError:
-    try:
-        from . import _SCANNER_VERSION
-    except ImportError:
-        _SCANNER_VERSION = None
 
 _SCANNER_VERSION = "0.1.0"
 

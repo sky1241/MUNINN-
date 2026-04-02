@@ -15,7 +15,6 @@ import re
 import time
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -14,17 +14,8 @@ OUTPUT: List of ASTVerdict with confirmed/fp/unconfirmed verdicts + reasoning
 import ast
 import os
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Optional
-
-# --- Triple import fallback ---
-try:
-    from engine.core.scanner import _SCANNER_VERSION
-except ImportError:
-    try:
-        from . import _SCANNER_VERSION
-    except ImportError:
-        _SCANNER_VERSION = None
 
 _SCANNER_VERSION = "0.1.0"
 
@@ -107,13 +98,6 @@ def _find_enclosing_function(tree: ast.AST, line: int) -> Optional[ast.FunctionD
                     best = node
     return best
 
-
-def _get_line_node(func_node: ast.FunctionDef, line: int) -> Optional[ast.AST]:
-    """Get the AST node at or closest to the given line within a function."""
-    for node in ast.walk(func_node):
-        if hasattr(node, 'lineno') and node.lineno == line:
-            return node
-    return None
 
 
 def _node_contains_call(node: ast.AST, func_names: set) -> bool:
@@ -548,8 +532,6 @@ def analyze_findings(findings: list, file_contents: dict = None) -> list:
         file_contents = {}
 
     verdicts = []
-    # Cache parsed ASTs per file
-    _ast_cache = {}
 
     for finding in findings:
         fp = finding.get('file', '')

@@ -17,17 +17,6 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional
 
-# --- Triple import fallback ---
-try:
-    from engine.core.scanner import _SCANNER_VERSION
-except ImportError:
-    try:
-        from . import _SCANNER_VERSION
-    except ImportError:
-        _SCANNER_VERSION = None
-
-_SCANNER_VERSION = "0.1.0"
-
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Dataclass
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

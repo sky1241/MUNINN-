@@ -18,13 +18,11 @@ Key NEVER stored on disk — derived from password at runtime.
 
 Requires: pip install cryptography
 """
-import base64
 import ctypes
 import getpass as _getpass_mod
 import hashlib
 import json as _json
 import os
-import platform
 import sys
 import socket as _socket
 import time as _time

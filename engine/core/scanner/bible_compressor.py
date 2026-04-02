@@ -31,17 +31,6 @@ except ImportError:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         from engine.core.muninn import compress_line
 
-# --- Triple import fallback (scanner version) ---
-try:
-    from engine.core.scanner import _SCANNER_VERSION
-except ImportError:
-    try:
-        from . import _SCANNER_VERSION
-    except ImportError:
-        _SCANNER_VERSION = None
-
-_SCANNER_VERSION = "0.1.0"
-
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Bible-aware compression

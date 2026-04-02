@@ -44,7 +44,6 @@ from datetime import datetime
 from collections import Counter
 import ast
 import math
-import textwrap
 
 def _safe_path(filepath) -> str:
     """Sanitize path for display — never show absolute paths."""

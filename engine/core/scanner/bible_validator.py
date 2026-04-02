@@ -16,20 +16,9 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional
-
-# --- Triple import fallback (scanner version) ---
-try:
-    from engine.core.scanner import _SCANNER_VERSION
-except ImportError:
-    try:
-        from . import _SCANNER_VERSION
-    except ImportError:
-        _SCANNER_VERSION = None
-
-_SCANNER_VERSION = "0.1.0"
 
 # --- Triple import fallback (bible_scraper) ---
 try:
@@ -40,15 +29,6 @@ except ImportError:
     except ImportError:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         from engine.core.scanner.bible_scraper import BibleEntry, _core_bible
-
-# --- Triple import fallback (bible_compressor) ---
-try:
-    from engine.core.scanner.bible_compressor import compress_bible_file, load_bible_mn
-except ImportError:
-    try:
-        from .bible_compressor import compress_bible_file, load_bible_mn
-    except ImportError:
-        from engine.core.scanner.bible_compressor import compress_bible_file, load_bible_mn
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

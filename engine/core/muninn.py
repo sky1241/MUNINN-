@@ -21,7 +21,6 @@ Usage:
 __version__ = "0.9.1"
 
 import argparse
-import hashlib
 import io
 import json
 import os
@@ -29,7 +28,6 @@ import re
 import sys
 import time
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
 
 if sys.stdout.encoding != "utf-8":

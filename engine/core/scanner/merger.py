@@ -20,17 +20,6 @@ MODE DEGRADE: B-SCAN-06 can be None/empty — merger handles gracefully.
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
-# --- Triple import fallback ---
-try:
-    from engine.core.scanner import _SCANNER_VERSION
-except ImportError:
-    try:
-        from . import _SCANNER_VERSION
-    except ImportError:
-        _SCANNER_VERSION = None
-
-_SCANNER_VERSION = "0.1.0"
-
 # Severity ordering (lower = more critical)
 _SEVERITY_ORDER = {"CRIT": 0, "HIGH": 1, "MED": 2, "LOW": 3, "INFO": 4}
 _CONFIDENCE_ORDER = {"confirmed": 0, "maybe": 1, "fp": 2}
@@ -164,15 +153,6 @@ def _normalize_ast(verdicts: list) -> list:
 # Grouping + confidence + dedup
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _group_key(item: dict, line_tolerance: int) -> tuple:
-    """
-    Return a grouping key for a normalized finding.
-    Line is bucketed to the nearest multiple of (line_tolerance*2+1)
-    to allow nearby lines to merge.
-    """
-    return (item["file"], item["type"])
-
-
 def _lines_match(line_a: int, line_b: int, tolerance: int) -> bool:
     """Check if two line numbers are within tolerance."""
     return abs(line_a - line_b) <= tolerance
@@ -219,30 +199,6 @@ def _dedup(findings: list) -> list:
         else:
             seen[key] = f
     return list(seen.values())
-
-
-def _apply_ast_verdicts(merged: list, ast_items: list, line_tolerance: int) -> list:
-    """
-    Apply AST confirm/reject verdicts to merged findings.
-    An AST verdict of "fp" overrides to confidence="fp".
-    An AST verdict of "confirmed" counts as an additional source.
-    """
-    for finding in merged:
-        for ast_item in ast_items:
-            if (ast_item["file"] == finding.file
-                    and ast_item["type"] == finding.type
-                    and _lines_match(ast_item["line"], finding.line, line_tolerance)):
-                verdict = ast_item.get("_verdict", "unconfirmed")
-                if verdict == "fp" or verdict == "false_positive":
-                    finding.confidence = "fp"
-                elif verdict == "confirmed":
-                    if "ast" not in finding.sources:
-                        finding.sources.append("ast")
-                    # Recompute confidence with new source count
-                    finding.confidence = _assign_confidence(
-                        len(finding.sources), ast_rejected=False
-                    )
-    return merged
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

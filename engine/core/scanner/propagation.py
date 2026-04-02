@@ -156,17 +156,7 @@ def debtrank(
         for i in all_nodes:
             if i in inactive:
                 continue
-            # Sum contributions from predecessors j that point to i
-            delta = 0.0
-            for j in reverse.get(i, []):
-                if j in W and i in W[j]:
-                    w_ji = W[j][i]
-                else:
-                    w_ji = 0.0
-                # Only newly stressed portion contributes
-                delta += w_ji * h[j] * (1.0 if h_prev[j] == 0.0 else 1.0)
-
-            # Actually use the DebtRank formula correctly:
+            # DebtRank formula:
             # h_i(t+1) = min(1, h_i(t) + sum(W_ji * h_j(t) * (1 - h_prev_j_before_infected)))
             # The (1 - h_prev[j]) term means only the NEW stress from j contributes
             contribution = 0.0

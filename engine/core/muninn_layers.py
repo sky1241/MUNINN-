@@ -2,7 +2,6 @@
 
 import re
 import sys
-from collections import Counter
 from pathlib import Path
 
 from tokenizer import count_tokens, token_count
@@ -635,9 +634,6 @@ def compress_section(header: str, lines: list[str]) -> str:
         header = re.sub(rf'\b{re.escape(pattern)}\b', text_rules[pattern], header)
 
     compressed_header = f"{state}{header}{session}"
-
-    # Gather body text
-    body_text = "\n".join(line for line in lines if line.strip())
 
     # Detect sub-sections (### headers within the section)
     subsections = []
