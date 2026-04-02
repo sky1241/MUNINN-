@@ -87,7 +87,11 @@ class MyceliumDB:
             self._db = db
         def __enter__(self):
             self._db._lock.acquire()
-            self._db._conn.__enter__()  # BEGIN TRANSACTION
+            try:
+                self._db._conn.__enter__()  # BEGIN TRANSACTION
+            except Exception:
+                self._db._lock.release()  # Release lock if __enter__ fails
+                raise
             return self._db._conn
         def __exit__(self, *args):
             try:
@@ -263,20 +267,32 @@ class MyceliumDB:
 
     def _load_concept_cache(self):
         """Load concept name->id and id->name mappings into memory (~100KB for 10K concepts)."""
-        self._concept_cache = {}
-        self._id_to_name = {}
-        for row in self._conn.execute("SELECT id, name FROM concepts"):
-            self._concept_cache[row[1]] = row[0]
-            self._id_to_name[row[0]] = row[1]
+        with self._lock:
+            self._concept_cache = {}
+            self._id_to_name = {}
+            for row in self._conn.execute("SELECT id, name FROM concepts"):
+                self._concept_cache[row[1]] = row[0]
+                self._id_to_name[row[0]] = row[1]
 
     def _get_or_create_concept(self, name: str) -> int:
-        """Get concept ID, creating it if needed."""
-        if name in self._concept_cache:
-            return self._concept_cache[name]
-        try:
-            self._conn.execute(
-                "INSERT OR IGNORE INTO concepts (name) VALUES (?)", (name,)
-            )
+        """Get concept ID, creating it if needed. Thread-safe via _lock."""
+        with self._lock:
+            if name in self._concept_cache:
+                return self._concept_cache[name]
+            try:
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO concepts (name) VALUES (?)", (name,)
+                )
+                row = self._conn.execute(
+                    "SELECT id FROM concepts WHERE name = ?", (name,)
+                ).fetchone()
+                if row:
+                    self._concept_cache[name] = row[0]
+                    self._id_to_name[row[0]] = name
+                    return row[0]
+            except sqlite3.IntegrityError:
+                pass  # M13 fix: only catch duplicate key, not disk-full/corruption
+            # Fallback: fetch existing
             row = self._conn.execute(
                 "SELECT id FROM concepts WHERE name = ?", (name,)
             ).fetchone()
@@ -284,33 +300,23 @@ class MyceliumDB:
                 self._concept_cache[name] = row[0]
                 self._id_to_name[row[0]] = name
                 return row[0]
-        except sqlite3.IntegrityError:
-            pass  # M13 fix: only catch duplicate key, not disk-full/corruption
-        # Fallback: fetch existing
-        row = self._conn.execute(
-            "SELECT id FROM concepts WHERE name = ?", (name,)
-        ).fetchone()
-        if row:
-            self._concept_cache[name] = row[0]
-            self._id_to_name[row[0]] = name
-            return row[0]
-        raise ValueError(f"Failed to get/create concept: {name}")
+            raise ValueError(f"Failed to get/create concept: {name}")
 
     def _concept_name(self, cid: int) -> str:
-        """Get concept name from ID. O(1) via reverse cache."""
-        # Use reverse cache (built alongside _concept_cache)
-        name = self._id_to_name.get(cid)
-        if name is not None:
-            return name
-        # Fallback: query DB (rare — only for IDs added after cache load)
-        row = self._conn.execute(
-            "SELECT name FROM concepts WHERE id = ?", (cid,)
-        ).fetchone()
-        if row:
-            self._concept_cache[row[0]] = cid
-            self._id_to_name[cid] = row[0]
-            return row[0]
-        return f"?{cid}"
+        """Get concept name from ID. O(1) via reverse cache. Thread-safe via _lock."""
+        with self._lock:
+            name = self._id_to_name.get(cid)
+            if name is not None:
+                return name
+            # Fallback: query DB (rare — only for IDs added after cache load)
+            row = self._conn.execute(
+                "SELECT name FROM concepts WHERE id = ?", (cid,)
+            ).fetchone()
+            if row:
+                self._concept_cache[row[0]] = cid
+                self._id_to_name[cid] = row[0]
+                return row[0]
+            return f"?{cid}"
 
     # ── Meta key-value store ─────────────────────────────────────────
 

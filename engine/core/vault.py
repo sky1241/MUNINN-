@@ -291,13 +291,14 @@ class Vault:
         return {"encrypted": encrypted, "total_bytes": total_bytes}
 
     def unlock(self) -> dict:
-        """Decrypt all .vault files back to plaintext. Returns stats."""
+        """Decrypt all .vault files back to plaintext. Returns stats + failed list."""
         if self._key is None:
             raise RuntimeError("No key loaded. Call init() or load_key() first.")
 
         locked = self._get_locked_files()
         decrypted = 0
         total_bytes = 0
+        failed_files = []
 
         for vp in locked:
             data = vp.read_bytes()
@@ -306,6 +307,7 @@ class Vault:
                 plaintext = _decrypt_bytes(data, self._key)
             except Exception as e:
                 print(f"WARNING: failed to decrypt {vp.name}: {e}", file=sys.stderr)
+                failed_files.append({"file": vp.name, "error": str(e)})
                 continue
             try:
                 # Restore original path (strip .vault)
@@ -318,8 +320,11 @@ class Vault:
                 if plaintext and isinstance(plaintext, (bytearray, memoryview)):
                     _zero_bytes(plaintext)
 
-        _audit_log(self.muninn_dir, "unlock", True, files=decrypted, bytes_total=total_bytes)
-        return {"decrypted": decrypted, "total_bytes": total_bytes}
+        success = len(failed_files) == 0
+        _audit_log(self.muninn_dir, "unlock", success, files=decrypted,
+                   bytes_total=total_bytes,
+                   reason=f"{len(failed_files)} files failed" if failed_files else None)
+        return {"decrypted": decrypted, "total_bytes": total_bytes, "failed": failed_files}
 
     def encrypt_file(self, filepath: Path) -> Path:
         """Encrypt a single file. Returns path to .vault file."""
@@ -361,7 +366,7 @@ class Vault:
         if self._key is None:
             raise RuntimeError("No key loaded. Call load_key() first.")
 
-        old_key = self._key
+        old_key = bytearray(self._key)  # Defensive copy — _zero_bytes(old_key) must not destroy self._key
 
         # Generate new salt + key
         new_salt = os.urandom(32)
