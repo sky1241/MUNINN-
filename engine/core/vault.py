@@ -189,7 +189,7 @@ class Vault:
         self._key = bytearray(_derive_key(password, salt))
 
         # Derive a verification hash (to detect wrong passwords without decrypting)
-        verify = hashlib.sha256(self._key).hexdigest()[:16]
+        verify = hashlib.sha256(self._key).hexdigest()[:32]
         verify_path = self.muninn_dir / "vault.verify"
         verify_path.write_text(verify, encoding="utf-8")
 
@@ -219,7 +219,7 @@ class Vault:
         verify_path = self.muninn_dir / "vault.verify"
         if verify_path.exists():
             expected = verify_path.read_text(encoding="utf-8").strip()
-            actual = hashlib.sha256(self._key).hexdigest()[:16]
+            actual = hashlib.sha256(self._key).hexdigest()[:32]
             if actual != expected:
                 _zero_bytes(self._key)
                 self._key = None
@@ -432,7 +432,7 @@ class Vault:
         # Update salt + backup + verify (completing the rekey)
         self.salt_path.write_bytes(new_salt)
         self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
-        verify = hashlib.sha256(new_key).hexdigest()[:16]
+        verify = hashlib.sha256(new_key).hexdigest()[:32]
         (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
 
         # Cleanup rekey marker
@@ -508,7 +508,7 @@ class Vault:
         # All good — finalize salt + verify
         self.salt_path.write_bytes(new_salt)
         self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
-        verify = hashlib.sha256(new_key).hexdigest()[:16]
+        verify = hashlib.sha256(new_key).hexdigest()[:32]
         (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
 
         # Cleanup marker

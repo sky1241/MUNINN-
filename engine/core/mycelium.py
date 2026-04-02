@@ -104,18 +104,20 @@ class Mycelium:
                     # DB is complete OR no JSON to fall back to
                     return self._load_from_sqlite()
                 else:
-                    # Partial migration: delete corrupt DB and retry
+                    # Partial migration: rename corrupt DB and retry (H7 fix: don't delete)
                     try:
-                        self.db_path.unlink()
-                    except PermissionError:
+                        corrupt_path = self.db_path.with_suffix(".db.corrupt")
+                        self.db_path.rename(corrupt_path)
+                    except (PermissionError, OSError):
                         pass  # Windows: file locked, skip cleanup
             except (sqlite3.Error, OSError) as e:
                 print(f"WARNING: mycelium DB check failed: {e}", file=sys.stderr)
                 if not self.mycelium_path.exists():
                     return self._load_from_sqlite()
                 try:
-                    self.db_path.unlink(missing_ok=True)
-                except PermissionError:
+                    corrupt_path = self.db_path.with_suffix(".db.corrupt")
+                    self.db_path.rename(corrupt_path)
+                except (PermissionError, OSError):
                     pass  # Windows: file locked, skip cleanup
 
         # Case 2: JSON exists — migrate to SQLite, then load

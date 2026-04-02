@@ -2009,7 +2009,7 @@ def main():
             current = h.hexdigest()
             if current != last_hash:
                 last_hash = current
-                os.system("cls" if os.name == "nt" else "clear")
+                subprocess.run(["cls" if os.name == "nt" else "clear"], shell=(os.name == "nt"))
                 results = run_tests(root)
                 baseline = load_json(str(root / BASELINE_FILE))
                 print_report(results, baseline)

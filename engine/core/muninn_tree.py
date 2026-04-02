@@ -46,7 +46,10 @@ def adaptive_boot_budget(context_size: int = None) -> int:
     If context_size not given, uses MUNINN_CONTEXT_SIZE env var or 200K default.
     """
     if context_size is None:
-        context_size = int(os.environ.get("MUNINN_CONTEXT_SIZE", 200_000))
+        try:
+            context_size = int(os.environ.get("MUNINN_CONTEXT_SIZE", 200_000))
+        except (ValueError, TypeError):
+            context_size = 200_000
     budget = int(context_size * 0.15)
     return max(15_000, min(budget, 100_000))
 

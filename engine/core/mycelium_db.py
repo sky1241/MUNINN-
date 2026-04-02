@@ -68,7 +68,7 @@ class MyceliumDB:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()  # Protects all DB writes when check_same_thread=False
+        self._lock = threading.RLock()  # RLock: allows re-entry from same thread (observe->transaction->_get_or_create_concept)
         self._conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")  # M14 fix: enforce FK constraints
@@ -1101,6 +1101,9 @@ class MyceliumDB:
             pass
 
 
+_CT_LOCK = threading.Lock()  # Module-level lock for ConceptTranslator singleton (H3 fix)
+
+
 class ConceptTranslator:
     """S4: Auto-translate non-English concepts to English using tokenizer + Haiku.
 
@@ -1128,11 +1131,8 @@ class ConceptTranslator:
 
     @classmethod
     def get(cls) -> "ConceptTranslator":
-        """Get or create singleton instance. H13: thread-safe."""
-        import threading
-        if not hasattr(cls, '_class_lock') or cls._class_lock is None:
-            cls._class_lock = threading.Lock()
-        with cls._class_lock:
+        """Get or create singleton instance. Thread-safe via module-level lock (H3 fix)."""
+        with _CT_LOCK:
             if cls._instance is None:
                 cls._instance = cls()
         return cls._instance

@@ -200,6 +200,7 @@ class SharedFileBackend(SyncBackend):
         n_synced = 0
         errors = None
         try:
+            db._lock.acquire()  # H1 fix: protect all writes with the DB lock
             # Track repo (raw SQL — no auto-commit, H2 safety)
             repos_str = db.get_meta("repos", "")
             repos = repos_str.split(",") if repos_str else []
@@ -280,6 +281,7 @@ class SharedFileBackend(SyncBackend):
             errors = str(e)
             raise
         finally:
+            db._lock.release()  # H1 fix: always release lock
             # H1: audit log + H3: checksum
             try:
                 db.log_sync(

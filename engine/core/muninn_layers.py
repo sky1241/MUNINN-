@@ -1165,7 +1165,9 @@ def compress_file(filepath: Path) -> str:
         return ""
     try:
         text = filepath.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
+    except (UnicodeDecodeError, OSError) as e:
+        import sys
+        print(f"[MUNINN] compress_file failed on {filepath}: {e}", file=sys.stderr)
         return ""
 
     # P10: Redact secrets before any compression (compiled patterns)

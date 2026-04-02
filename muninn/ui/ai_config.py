@@ -76,10 +76,20 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict):
-    """Save config to ~/.muninn/ui_config.json."""
+    """Save config to ~/.muninn/ui_config.json (atomic write)."""
+    import tempfile
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(_CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=str(_CONFIG_DIR), suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+        os.replace(tmp_path, str(_CONFIG_FILE))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def get_active_provider() -> str:

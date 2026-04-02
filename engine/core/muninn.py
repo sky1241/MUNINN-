@@ -750,7 +750,7 @@ def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
         hook_input = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError, Exception):
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError):
         sys.exit(0)
 
     prompt = hook_input.get("prompt", "")
@@ -776,8 +776,8 @@ def main():
         result = muninn.bridge_fast(prompt)
         if result:
             print(result)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[MUNINN BRIDGE ERROR] {type(e).__name__}: {e}", file=sys.stderr)
 
     sys.exit(0)
 

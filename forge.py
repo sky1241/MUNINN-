@@ -824,7 +824,8 @@ def snapshot_capture(root, cmd_str):
 
     print(f"  Capturing: {cmd_str}")
     try:
-        result = subprocess.run(cmd_str, shell=True, capture_output=True,
+        import shlex
+        result = subprocess.run(shlex.split(cmd_str), shell=False, capture_output=True,
                                text=True, cwd=str(root), timeout=60,
                                encoding="utf-8", errors="replace")
         output = result.stdout
@@ -875,7 +876,8 @@ def snapshot_check(root):
 
         # Re-run command
         try:
-            result = subprocess.run(meta["command"], shell=True,
+            import shlex
+            result = subprocess.run(shlex.split(meta["command"]), shell=False,
                                    capture_output=True, text=True,
                                    cwd=str(root), timeout=60,
                                    encoding="utf-8", errors="replace")

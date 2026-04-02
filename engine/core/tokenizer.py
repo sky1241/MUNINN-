@@ -9,8 +9,11 @@ Tries in order:
 Returns (count, method) where method is "tiktoken" or "estimate".
 """
 
+import threading
+
 _tiktoken_enc = None
 _method = None
+_tok_lock = threading.Lock()  # M1 fix: protect global state init
 
 
 def count_tokens(text: str) -> tuple[int, str]:
@@ -24,9 +27,11 @@ def count_tokens(text: str) -> tuple[int, str]:
     if _method is None or _method == "tiktoken":
         try:
             if _tiktoken_enc is None:
-                import tiktoken
-                _tiktoken_enc = tiktoken.get_encoding("cl100k_base")
-                _method = "tiktoken"
+                with _tok_lock:
+                    if _tiktoken_enc is None:  # Double-check under lock
+                        import tiktoken
+                        _tiktoken_enc = tiktoken.get_encoding("cl100k_base")
+                        _method = "tiktoken"
             return len(_tiktoken_enc.encode(text)), "tiktoken"
         except ImportError:
             _method = "estimate"
