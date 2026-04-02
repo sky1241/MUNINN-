@@ -191,7 +191,7 @@ class NaviWidget(QWidget):
 
         # R1: Timer stored as self attribute
         self._navi_timer = QTimer(self)
-        self._navi_timer.setInterval(16)  # ~60fps
+        self._navi_timer.setInterval(15)  # ~60fps (15ms aligns better with Windows timer resolution)
         self._navi_timer.timeout.connect(self._tick)
         self._navi_timer.start()
 

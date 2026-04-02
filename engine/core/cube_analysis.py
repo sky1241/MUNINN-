@@ -1690,7 +1690,7 @@ def feedback_loop_check(anomaly_path: str, repo_root: str,
         try:
             result = subprocess.run(
                 ['git', 'log', '--oneline', f'--since={since_date}',
-                 '--grep=fix\\|bug\\|patch\\|repair', '--', a['file']],
+                 '--extended-regexp', '--grep=fix|bug|patch|repair', '--', a['file']],
                 capture_output=True, text=True, cwd=repo_root, timeout=10
             )
             bugfixes = [l for l in result.stdout.strip().split('\n') if l.strip()]

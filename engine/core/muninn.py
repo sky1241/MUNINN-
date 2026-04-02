@@ -1154,7 +1154,11 @@ def main():
         if result.get("reason"):
             print(f"  Note: {result['reason']}")
         for d in result["dreams"][:10]:
-            print(f"    {d['from']} <-> {d['to']} (zones: {d['zones'][0][:20]}|{d['zones'][1][:20]})")
+            zones = d.get('zones', [])
+            if len(zones) >= 2:
+                print(f"    {d['from']} <-> {d['to']} (zones: {zones[0][:20]}|{zones[1][:20]})")
+            else:
+                print(f"    {d['from']} <-> {d['to']}")
         if result["created"] > 10:
             print(f"    ... and {result['created'] - 10} more")
         return

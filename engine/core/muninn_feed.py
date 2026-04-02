@@ -649,7 +649,19 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
         if existing_mn.exists():
             mn_path = existing_mn  # overwrite same file
 
-    mn_path.write_text(result, encoding="utf-8")
+    # Atomic write: tempfile + os.replace to avoid corruption on crash
+    import tempfile as _tf
+    _fd, _tmp = _tf.mkstemp(dir=str(mn_path.parent), suffix=".tmp")
+    try:
+        with open(_fd, "w", encoding="utf-8") as _f:
+            _f.write(result)
+        os.replace(_tmp, str(mn_path))
+    except BaseException:
+        try:
+            os.unlink(_tmp)
+        except OSError:
+            pass
+        raise
 
     # Track which transcript produced which .mn
     dedup_state[source_key] = {"size": source_size, "mn_file": mn_path.name, "timestamp": timestamp}
@@ -658,7 +670,10 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
     # Keep only last 10 session files (oldest get pruned)
     session_files = sorted(sessions_dir.glob("*.mn"))
     for old_file in session_files[:-10]:
-        old_file.unlink()
+        try:
+            old_file.unlink()
+        except OSError:
+            pass
 
     orig_tokens, tok_method = count_tokens(all_text)
     comp_tokens = token_count(result)
@@ -1277,7 +1292,7 @@ def feed_history(repo_path: Path):
     repo_name = repo_path.name
     project_dirs = []
     for d in claude_dir.iterdir():
-        if d.is_dir() and d.name.endswith(f"-{repo_name}"):
+        if d.is_dir() and d.name.lower().endswith(f"-{repo_name.lower()}"):
             project_dirs.append(d)
 
     if not project_dirs:
@@ -1430,7 +1445,7 @@ def feed_watch(repo_path: Path):
 
     repo_name = repo_path.name
     project_dirs = [d for d in claude_dir.iterdir()
-                    if d.is_dir() and d.name.endswith(f"-{repo_name}")]
+                    if d.is_dir() and d.name.lower().endswith(f"-{repo_name.lower()}")]
     if not project_dirs:
         print(f"MUNINN WATCH: no project dir for '{repo_name}'", file=sys.stderr)
         return

@@ -301,6 +301,9 @@ def _spectral_radius(graph: dict[str, list[str]]) -> float:
     n = len(nodes)
     idx = {node: i for i, node in enumerate(nodes)}
 
+    if n <= 1:
+        return 0.0
+
     if HAS_SCIPY and n > 0:
         rows, cols, data = [], [], []
         for src, neighbors in graph.items():

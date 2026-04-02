@@ -162,12 +162,13 @@ def mapk_depth_bonus(file: str, graph: dict[str, list[str]]) -> float:
         return 1.0
 
     # BFS to find max depth
+    from collections import deque
     visited: set[str] = {file}
-    queue: list[tuple[str, int]] = [(file, 0)]
+    queue: deque[tuple[str, int]] = deque([(file, 0)])
     max_depth = 0
 
     while queue:
-        node, depth = queue.pop(0)
+        node, depth = queue.popleft()
         for nb in graph.get(node, []):
             if nb not in visited:
                 visited.add(nb)

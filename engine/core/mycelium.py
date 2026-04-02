@@ -2295,8 +2295,19 @@ class Mycelium:
             ins["timestamp"] = timestamp
         combined = insights + existing
         combined = combined[:50]
-        insights_path.write_text(json.dumps(combined, indent=2, ensure_ascii=False),
-                                  encoding="utf-8")
+        # Atomic write: tempfile + os.replace to avoid corruption on crash
+        import tempfile as _tf
+        _fd, _tmp = _tf.mkstemp(dir=str(insights_path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(_fd, "w", encoding="utf-8") as _f:
+                json.dump(combined, _f, indent=2, ensure_ascii=False)
+            os.replace(_tmp, str(insights_path))
+        except BaseException:
+            try:
+                os.unlink(_tmp)
+            except OSError:
+                pass
+            raise
 
     # ── P20b: Meta-mycelium sync ──────────────────────────────────
 

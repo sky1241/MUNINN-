@@ -533,7 +533,7 @@ class TerminalWidget(QWidget):
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "muninn", "scan", "."],
-                capture_output=True, text=True, timeout=30, cwd="."
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd="."
             )
             if result.returncode == 0:
                 self._append_text(result.stdout.strip() or "Scan complete.", color="#32CD32")
@@ -549,7 +549,7 @@ class TerminalWidget(QWidget):
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "muninn", "status"],
-                capture_output=True, text=True, timeout=10, cwd="."
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, cwd="."
             )
             self._append_text(result.stdout.strip() or "No status available.", color=TEXT_SECONDARY)
         except Exception as e:

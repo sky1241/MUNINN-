@@ -152,8 +152,7 @@ def init_tree():
         },
     }
 
-    with open(_m.TREE_META, "w", encoding="utf-8") as f:
-        json.dump(tree, f, ensure_ascii=False, indent=2)
+    _atomic_json_write(_m.TREE_META, tree)
 
     (_m.TREE_DIR / "root.mn").write_text(
         "# MUNINN|codebook=v0.1\n", encoding="utf-8"
@@ -292,7 +291,14 @@ def _atomic_json_write(path: Path, data, indent: int = 2):
     try:
         with open(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=indent)
-        os.replace(tmp_path, str(path))
+        for _attempt in range(3):
+            try:
+                os.replace(tmp_path, str(path))
+                break
+            except PermissionError:
+                time.sleep(0.05)
+        else:
+            os.replace(tmp_path, str(path))
     except Exception:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -1056,7 +1062,7 @@ def _load_virtual_branches(query: str, budget_tokens: int) -> list:
             registry = json.loads(reg_path.read_text(encoding="utf-8"))
             for name in dead_repos:
                 registry.get("repos", {}).pop(name, None)
-            reg_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
+            _atomic_json_write(reg_path, registry)
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -1579,7 +1585,7 @@ def boot(query: str = "") -> str:
                     history = [history]
             history.append(feedback)
             history = history[-20:]  # keep last 20 boots
-            feedback_path.write_text(_json.dumps(history, indent=1, ensure_ascii=False), encoding="utf-8")
+            _atomic_json_write(feedback_path, history, indent=1)
         except Exception as e:
             print(f"  [warn] boot feedback: {e}", file=sys.stderr)
 
@@ -1700,7 +1706,7 @@ def boot(query: str = "") -> str:
             if _v8b_hint:
                 boot_manifest["v8b_clarify"] = _v8b_hint
             manifest_path = _m._REPO_PATH / ".muninn" / "last_boot.json"
-            manifest_path.write_text(json.dumps(boot_manifest), encoding="utf-8")
+            _atomic_json_write(manifest_path, boot_manifest)
         except OSError:
             pass
 

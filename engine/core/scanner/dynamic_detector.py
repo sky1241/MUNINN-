@@ -212,6 +212,11 @@ def scan_file(file_path: str, language: str = "") -> ScanResult:
         ScanResult with findings and coverage_incomplete flag
     """
     try:
+        if os.path.getsize(file_path) > 10_000_000:
+            return ScanResult()
+    except OSError:
+        pass
+    try:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
     except (OSError, IOError) as e:

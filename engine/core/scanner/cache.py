@@ -11,6 +11,7 @@ Output: DeltaResult with to_scan, unchanged, removed lists.
 
 import json
 import os
+import tempfile
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 
@@ -65,8 +66,19 @@ def save_cache(cache_path: str, cache_data: dict) -> None:
             serialized[filepath] = asdict(entry)
         else:
             serialized[filepath] = entry
-    with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump(serialized, f, indent=2, ensure_ascii=False)
+    # Atomic write: tempfile + os.replace to avoid corruption on crash
+    dir_name = os.path.dirname(cache_path) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(serialized, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, cache_path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -126,6 +138,10 @@ def compute_delta(current_hashes: dict, cache_path: str) -> DeltaResult:
 def update_cache(cache_path: str, file_path: str, sha256: str, findings: list = None) -> None:
     """
     Update a single file's entry in the scan cache.
+
+    Note: This does load-modify-save per file. When called in a loop over N files,
+    this is O(N^2) because save_cache serializes the entire dict each time.
+    If perf matters, batch updates by calling load_cache once, mutating, then save_cache once.
 
     Args:
         cache_path: path to scan_cache.json
