@@ -44,7 +44,7 @@ TUTORIAL_STEPS = [
     {
         "key": "scanning",
         "text": "Scan en cours...\nJe construis la carte neuronale.",
-        "button": None,
+        "button": "Scanner un repo",  # Keep button visible in case user cancels/no dialog
         "duration": None,  # Until scan completes
     },
     {
@@ -208,6 +208,9 @@ class NaviWidget(QWidget):
         # B-UI-15: Scan button rect (set during paint)
         self._scan_btn_rect: Optional[QRectF] = None
 
+        # Floating scan button (lives on MainWindow, not clipped by neuron panel)
+        self._float_btn: Optional[QWidget] = None
+
     def _tick(self):
         """Main animation tick (15ms) with flight patterns + tutorial."""
         if not self.isVisible():
@@ -364,6 +367,7 @@ class NaviWidget(QWidget):
     def hide_bubble(self):
         """Hide the dialogue bubble."""
         self._bubble_visible = False
+        self._hide_float_btn()
         self.update()
 
     def show_context_help(self, context: str):
@@ -498,14 +502,16 @@ class NaviWidget(QWidget):
         # 3 pairs: grandes EN BAS, petites AU MILIEU (rapides), moyennes AU-DESSUS (plus larges)
         # Each pair: (y_offset, base_tilt, arc_range, length, width, speed, phase, stroke_width)
         pairs = [
-            ( r * 0.6,  15, 70, r * 7.5, r * 2.3, 2.0, 0.0,  1.0),   # grandes — bas, lentes, un peu plus fines
+            ( r * 0.6,  15, 70, r * 7.5, r * 2.3, 0.8, 0.0,  1.0),   # grandes — bas, tres lentes, puissantes comme un oiseau
             (-r * 0.8, -80, 90, r * 5.0, r * 2.2, 3.2, 0.6,  0.6),   # moyennes — plus haut, battent vers le HAUT, ample
             ( r * 0.0, -10, 45, r * 3.2, r * 1.5, 8.0, 1.2,  0.4),   # petites — milieu, tres rapides
         ]
 
         for y_off, base_tilt, arc_range, wL, wW, speed, ph_off, stroke_w in pairs:
             for side_m in [-1, 1]:
-                ph = ph_off + (0.1 if side_m == 1 else 0.0)
+                # Desync left/right more for big wings (slow ones get more offset)
+                side_offset = 0.3 if speed < 1.5 else 0.1
+                ph = ph_off + (side_offset if side_m == 1 else 0.0)
                 beat = math.sin(t * speed * beat_boost + ph)
                 flap = beat * 0.5 + 0.5  # 0..1
 
@@ -609,9 +615,9 @@ class NaviWidget(QWidget):
         """Draw the dialogue bubble to the right of Navi (B-UI-14: PNG frame x2.5)."""
         cx, cy = self._pos.x(), self._pos.y()
 
-        # Bubble size (x2.5 bigger)
-        bubble_w = 600
-        bubble_h = 220 if self._bubble_button_visible else 180
+        # Bubble size
+        bubble_w = 480
+        bubble_h = 170 if self._bubble_button_visible else 140
 
         # Position: to the RIGHT of Navi orb
         bx = cx + self._orb_radius * 4
@@ -639,37 +645,80 @@ class NaviWidget(QWidget):
 
         # Text — cyan color like Navi, CENTERED
         p.setPen(QColor(0, 220, 255))
-        font = QFont(FONT_BODY, 16)
+        font = QFont(FONT_BODY, 13)
         p.setFont(font)
-        text_rect = QRectF(bx + 24, by + 20, bubble_w - 48, bubble_h - (70 if self._bubble_button_visible else 40))
+        text_rect = QRectF(bx + 18, by + 14, bubble_w - 36, bubble_h - 28)
         p.drawText(text_rect,
                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
                    self._bubble_text)
 
-        # B-UI-15: Action button — flipped PNG frame as background
+        # B-UI-15: Floating action button — straddles right edge of bubble frame
         if self._bubble_button_visible:
-            btn_label = getattr(self, '_bubble_button_text', '') or "Scanner un repo"
-            btn_w, btn_h = 280, 55
-            btn_x = bx + (bubble_w - btn_w) / 2
-            btn_y = by + bubble_h - btn_h - 12
+            self._update_float_btn(bx, by, bubble_w)
 
-            # Draw flipped PNG frame as button background
-            btn_frame = getattr(self, '_button_frame', None)
-            if btn_frame and not btn_frame.isNull():
-                scaled = btn_frame.scaled(
-                    int(btn_w), int(btn_h),
+    def _create_float_btn(self):
+        """Create the floating scan button on the MainWindow (not clipped by parent)."""
+        win = self.window()
+        if win is None:
+            return
+        self._load_bubble_frame()
+        btn = QWidget(win)
+        btn.setFixedSize(220, 42)
+        btn.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # Store refs for painting
+        btn._frame = getattr(self, '_button_frame', None)
+        btn._label = "Scanner un repo"
+        btn._navi = self
+
+        # Custom paint
+        def _paint(evt, b=btn):
+            bp = QPainter(b)
+            bp.setRenderHint(QPainter.RenderHint.Antialiasing)
+            if b._frame and not b._frame.isNull():
+                scaled = b._frame.scaled(b.width(), b.height(),
                     Qt.AspectRatioMode.IgnoreAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                p.drawPixmap(int(btn_x), int(btn_y), scaled)
+                    Qt.TransformationMode.SmoothTransformation)
+                bp.drawPixmap(0, 0, scaled)
+            bp.setPen(QColor(0, 220, 255))
+            bp.setFont(QFont(FONT_BODY, 12))
+            bp.drawText(QRectF(0, 0, b.width(), b.height()),
+                       Qt.AlignmentFlag.AlignCenter, b._label)
+            bp.end()
 
-            # Button text centered
-            p.setPen(QColor(0, 220, 255))
-            p.setFont(QFont(FONT_BODY, 15))
-            p.drawText(QRectF(btn_x, btn_y, btn_w, btn_h),
-                       Qt.AlignmentFlag.AlignCenter, btn_label)
-            # Store button rect for click detection
-            self._scan_btn_rect = QRectF(btn_x, btn_y, btn_w, btn_h)
+        def _click(evt, b=btn):
+            if evt.button() == Qt.MouseButton.LeftButton:
+                b._navi.scan_requested.emit()
+                if b._navi._tutorial_active:
+                    b._navi._advance_tutorial()
+
+        btn.paintEvent = _paint
+        btn.mousePressEvent = _click
+        self._float_btn = btn
+
+    def _update_float_btn(self, bx: float, by: float, bubble_w: float):
+        """Position the floating button: centered on right edge of bubble."""
+        if self._float_btn is None:
+            self._create_float_btn()
+        if self._float_btn is None:
+            return
+        btn = self._float_btn
+        btn_label = getattr(self, '_bubble_button_text', '') or "Scanner un repo"
+        btn._label = btn_label
+
+        # Map bubble position from Navi coords to MainWindow coords
+        local_pt = self.mapToGlobal(QPointF(bx + bubble_w - btn.width() * 0.62, by + 14).toPoint())
+        win_pt = self.window().mapFromGlobal(local_pt)
+        btn.move(win_pt)
+        btn.raise_()
+        btn.show()
+        btn.update()
+
+    def _hide_float_btn(self):
+        """Hide the floating button."""
+        if self._float_btn is not None:
+            self._float_btn.hide()
 
     def resizeEvent(self, event):
         """Keep Navi the same size as parent overlay."""
