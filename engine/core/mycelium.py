@@ -24,6 +24,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import time
 from collections import Counter
 from pathlib import Path
@@ -77,6 +78,7 @@ class Mycelium:
         self._adj_cache = None  # Cached adjacency list {concept: [(neighbor, weight)]}
         self._adj_cache_max_weight = 0.0  # max edge weight for normalization
         self._session_seen = set()  # Delta observe: skip already-upserted pairs
+        self._session_lock = threading.Lock()  # Protects _session_seen across threads
         self._congestion_checked = False  # Congestion detection flag
         self.data = self._load()
 
@@ -350,8 +352,10 @@ class Mycelium:
                             a_id = self._db._get_or_create_concept(a_key)
                             b_id = self._db._get_or_create_concept(b_key)
                             pair_key = (a_id, b_id)
-                            if pair_key in self._session_seen:
-                                continue  # Delta: already upserted this session
+                            with self._session_lock:
+                                if pair_key in self._session_seen:
+                                    continue  # Delta: already upserted this session
+                                self._session_seen.add(pair_key)
                             conn.execute("""
                                 INSERT INTO edges (a, b, count, first_seen, last_seen)
                                 VALUES (?, ?, ?, ?, ?)
@@ -363,7 +367,6 @@ class Mycelium:
                                 conn.execute(
                                     "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                                     (a_id, b_id, self.zone))
-                            self._session_seen.add(pair_key)
                     # CONGESTION DETECTION: if first batch takes > 2s, the DB is
                     # too large. Run emergency decay to unclog before continuing.
                     if not _congestion_checked:

@@ -536,6 +536,7 @@ CREATE INDEX IF NOT EXISTS idx_cubes_level ON cubes(level);
 CREATE INDEX IF NOT EXISTS idx_cubes_temp ON cubes(temperature);
 CREATE INDEX IF NOT EXISTS idx_cycles_cube ON cycles(cube_id);
 CREATE INDEX IF NOT EXISTS idx_neighbors_neighbor ON neighbors(neighbor_id);
+CREATE INDEX IF NOT EXISTS idx_neighbors_cube ON neighbors(cube_id);
 """
 
 
