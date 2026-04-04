@@ -792,7 +792,7 @@ def main():
         if result:
             print(result)
     except Exception as e:
-        print(f"[MUNINN BRIDGE ERROR] {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[MUNINN BRIDGE ERROR] {{type(e).__name__}}: {{e}}", file=sys.stderr)
 
     sys.exit(0)
 
