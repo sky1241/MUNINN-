@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-03-29. Engine: 18557 lignes, 14 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: 1370+ PASS (719 engine + 152 UI + reste), 0 FAIL ours.
+> Mis a jour: 2026-04-06. Engine: 18739 lignes, 14 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: 1558 collected, 0 FAIL ours.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
@@ -16,12 +16,12 @@
       |      |
    [tree.json]                              +2 Branches (metadata arbre)
       |
-   muninn.py 1509L (orchestrateur)          +1 Tronc
+   muninn.py 1532L (orchestrateur)          +1 Tronc
      muninn_layers.py 1294L (compression)
-     muninn_tree.py 3608L (arbre+boot+intelligence)
-     muninn_feed.py 1619L (feed+hooks)
+     muninn_tree.py 3649L (arbre+boot+intelligence)
+     muninn_feed.py 1640L (feed+hooks)
       |
-   [mycelium.py 2915L + db 1329L]            0 SOL — champignon vivant
+   [mycelium.py 2932L + db 1336L]            0 SOL — champignon vivant
       |
    [sync_backend.py 1128L]               -0.5 Sync federe (SharedFile/Git/TLS)
       |
@@ -38,7 +38,7 @@
 
 ---
 
-## muninn.py — Orchestrateur (1509 lignes)
+## muninn.py — Orchestrateur (1532 lignes)
 
 Slim entry point: globals, scan, bootstrap, CLI, hooks, secrets.
 
@@ -211,7 +211,7 @@ Tout l'arbre L-system, boot, recall, prune, diagnostics.
 
 ---
 
-## muninn_feed.py — Feed Pipeline + Hooks (1619 lignes)
+## muninn_feed.py — Feed Pipeline + Hooks (1640 lignes)
 
 Ingestion transcripts, compression, hooks PreCompact/SessionEnd.
 
@@ -382,7 +382,7 @@ Destruction cycle, temperatures, math, niveaux, git, scheduling, anomalies.
 
 ---
 
-## mycelium.py — Champignon Vivant (2915 lignes)
+## mycelium.py — Champignon Vivant (2932 lignes)
 
 ### Mycelium (class, 54-2779)
 | Methode | Lignes | Role |

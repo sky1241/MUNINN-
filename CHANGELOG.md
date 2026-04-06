@@ -1,7 +1,33 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 1509 + muninn_layers.py 1294 + muninn_tree.py 3608 + muninn_feed.py 1619 + cube.py 1056 + cube_providers.py 580 + cube_analysis.py 1759 + mycelium.py 2915 + mycelium_db.py 1329 + sync_backend.py 1128 + sync_tls.py 601 + wal_monitor.py 109 + tokenizer.py 43 + lang_lexicons.py 1007 = 18557 total (14 files)
-Tests: 1210 PASS, 0 FAIL, 3 SKIP.
+Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3649 + muninn_feed.py 1640 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1757 + mycelium.py 2932 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 = 18739 total (14 files)
+Tests: 1558 collected, 0 FAIL.
+
+---
+
+## Dead Code Audit + DB Wiring + LaTeX Pipeline (2026-04-06) [DONE]
+
+Full dead code audit (250+ functions across 22 files). Zero deletions — all "dead" code
+was either pre-built for future features or duplicating DB layer functions.
+
+**DB Function Wiring (5 functions):**
+- `vacuum_if_needed()` now calls `db.vacuum()` instead of inline SQL
+- `get_zones()` now calls `db.get_zone_counts()` instead of inline query
+- `get_bridges()` now calls `db.get_multi_zone_edges()` instead of inline query
+- `detect_anomalies()` now calls `db.get_zone_avg_count()` instead of inline query
+- `decay()` now calls `db.delete_stale_fusions()` after removing dead edges
+
+**auto_label_zones() Wiring:**
+- `save()` now calls `auto_label_zones()` when `federated=True` and >= 50 connections
+- Spectral clustering zones auto-tagged on every save (graceful if no scipy)
+
+**LaTeX Pipeline Wiring (observe_latex + observe_with_concepts):**
+- `bootstrap_mycelium()` now globs `**/*.tex` and routes to `observe_latex()`
+- `ingest()` now includes `.tex` files in directory scans
+- LaTeX files chunked by `\section` markers (not paragraph breaks)
+- Ready for arXiv pipeline (P31) — 2449 tars on E:/arxiv/src/
+
+**Tests:** 31 new tests (13 DB wiring + 5 auto_label_zones + 13 LaTeX pipeline), all PASS.
 
 ---
 
