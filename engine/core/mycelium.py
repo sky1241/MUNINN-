@@ -925,6 +925,12 @@ class Mycelium:
                         "DELETE FROM fusions WHERE a=? AND b=?", dead_ids)
                     txn.executemany(
                         "DELETE FROM edge_zones WHERE a=? AND b=?", dead_ids)
+            # Clean up orphaned fusions whose edges were just removed
+            if dead_ids:
+                try:
+                    self._db.delete_stale_fusions(min_edge_count=1)
+                except (sqlite3.OperationalError, AttributeError):
+                    pass
             self._adj_cache = None  # M10 fix: invalidate after decay
             # A4: Auto-vacuum if decay took > 10s
             if time.time() - _decay_start > 10.0:
@@ -1066,9 +1072,7 @@ class Mycelium:
         if self._db is None:
             return False
         try:
-            with self._db._lock:
-                self._db._conn.execute("PRAGMA optimize")
-                self._db._conn.execute("VACUUM")
+            self._db.vacuum()
             return True
         except sqlite3.OperationalError as e:
             print(f"WARNING: vacuum failed: {e}", file=sys.stderr)
@@ -1665,11 +1669,7 @@ class Mycelium:
     def get_zones(self) -> dict[str, int]:
         """P20.8: Get all zones and their connection counts."""
         if self._db is not None:
-            zone_counts = {}
-            with self._db._lock:
-                zone_rows = self._db._conn.execute("SELECT zone, COUNT(*) FROM edge_zones GROUP BY zone").fetchall()
-            for row in zone_rows:
-                zone_counts[row[0]] = row[1]
+            zone_counts = self._db.get_zone_counts()
             return dict(sorted(zone_counts.items(), key=lambda x: x[1], reverse=True))
         zone_counts = {}
         for conn in self.data["connections"].values():
@@ -1683,22 +1683,17 @@ class Mycelium:
         bridges = []
         if self._db is not None:
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            with self._db._lock:
-                rows = self._db._conn.execute("""
-                    SELECT a, b, COUNT(zone) as nz FROM edge_zones
-                    GROUP BY a, b HAVING nz >= 2
-                """).fetchall()
-                bridge_data = []
-                for a_id, b_id, nz in rows:
-                    a_name = id_to_name.get(a_id, "")
-                    b_name = id_to_name.get(b_id, "")
-                    if not a_name or not b_name:
-                        continue
-                    zones = [r[0] for r in self._db._conn.execute(
-                        "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))]
-                    count_row = self._db._conn.execute(
-                        "SELECT count FROM edges WHERE a=? AND b=?", (a_id, b_id)).fetchone()
-                    bridge_data.append((a_name, b_name, zones, count_row))
+            bridge_data = []
+            for a_id, b_id, nz in self._db.get_multi_zone_edges(min_zones=2):
+                a_name = id_to_name.get(a_id, "")
+                b_name = id_to_name.get(b_id, "")
+                if not a_name or not b_name:
+                    continue
+                zones = [r[0] for r in self._db._conn.execute(
+                    "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id))]
+                count_row = self._db._conn.execute(
+                    "SELECT count FROM edges WHERE a=? AND b=?", (a_id, b_id)).fetchone()
+                bridge_data.append((a_name, b_name, zones, count_row))
             for a_name, b_name, zones, count_row in bridge_data:
                 count = count_row[0] if count_row else 1
                 key = self._key(a_name, b_name)
@@ -1762,18 +1757,9 @@ class Mycelium:
         zones = self.get_zones()
         if zones:
             if self._db is not None:
-                with self._db._lock:
-                    zone_avgs = {}
-                    for zone_name in zones:
-                        row = self._db._conn.execute("""
-                            SELECT AVG(e.count) FROM edges e
-                            JOIN edge_zones ez ON e.a=ez.a AND e.b=ez.b
-                            WHERE ez.zone=?
-                        """, (zone_name,)).fetchone()
-                        zone_avgs[zone_name] = row
                 for zone_name in zones:
-                    row = zone_avgs[zone_name]
-                    if row and row[0] is not None and row[0] < 2:
+                    avg_count = self._db.get_zone_avg_count(zone_name)
+                    if avg_count < 2:
                         weak_zones.append(zone_name)
             else:
                 conns = self.data.get("connections", {})
