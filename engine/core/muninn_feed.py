@@ -1568,6 +1568,8 @@ def ingest(filepath: Path, repo_path: Path):
         files_to_ingest = sorted(filepath.glob("**/*.md"))
         if not files_to_ingest:
             files_to_ingest = sorted(filepath.glob("**/*.txt"))
+        # Also include LaTeX sources
+        files_to_ingest.extend(sorted(filepath.glob("**/*.tex")))
         print(f"=== MUNINN INGEST: {filepath.name} ({len(files_to_ingest)} files) ===")
     elif filepath.is_file():
         files_to_ingest = [filepath]
@@ -1618,7 +1620,11 @@ def ingest(filepath: Path, repo_path: Path):
     for f in files_to_ingest:
         content = f.read_text(encoding="utf-8", errors="replace")
         if content.strip():
-            m.observe_text(_redact_secrets_text(content))
+            clean = _redact_secrets_text(content)
+            if f.suffix == ".tex":
+                m.observe_latex(clean)
+            else:
+                m.observe_text(clean)
     m.save()
 
     # Refresh tree

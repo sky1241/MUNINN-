@@ -137,10 +137,11 @@ except ImportError:
 
 # ── SCAN — auto-generate local codebook (R5) ────────────────────
 
-def scan_repo(repo_path: Path):
-    """Scan a repo to auto-generate its local codebook.
+def scan_repo(repo_path: Path, output_path: str = None):
+    """Scan a repo to auto-generate its local codebook + neuron map JSON.
     Finds frequent words, entities, paths, numbers and assigns short codes.
-    This is R5: codebook local per node."""
+    This is R5: codebook local per node.
+    If output_path is given, writes neuron map JSON for the UI."""
     repo_path = repo_path.resolve()
     print(f"=== MUNINN SCAN: {repo_path.name} ===")
 
@@ -297,6 +298,69 @@ def scan_repo(repo_path: Path):
         orig = next((c[1] for c in candidates if c[0] == pattern), 0)
         print(f"    '{pattern}' -> '{code}' ({orig}x)")
 
+    # Generate neuron map JSON for UI if output requested
+    if output_path:
+        nodes = []
+        connections = []
+        node_ids = set()
+
+        # Build nodes from candidates (words, entities, paths, numbers)
+        level_map = {"word": "F", "entity": "R", "path": "I", "number": "B"}
+        for i, (pattern, count, savings, ptype) in enumerate(candidates[:80]):
+            nid = re.sub(r'[^a-zA-Z0-9_]', '_', pattern.lower())
+            if nid in node_ids:
+                nid = f"{nid}_{i}"
+            node_ids.add(nid)
+            # Confidence from relative frequency (0-100)
+            max_count = candidates[0][1] if candidates else 1
+            confidence = min(100, int(100 * count / max_count))
+            nodes.append({
+                "id": nid,
+                "label": pattern,
+                "level": level_map.get(ptype, "F"),
+                "status": "done" if pattern in encode else "todo",
+                "entry": "",
+                "depth": 0 if ptype == "entity" else 1,
+                "confidence": confidence,
+            })
+
+        # Build connections: co-occurrence within same file
+        file_concepts = {}  # file_idx -> list of node indices
+        for fi, text in enumerate(all_text):
+            text_lower = text.lower()
+            present = []
+            for ni, (pattern, count, savings, ptype) in enumerate(candidates[:80]):
+                if pattern.lower() in text_lower:
+                    present.append(ni)
+            if len(present) >= 2:
+                file_concepts[fi] = present
+
+        # Create edges from co-occurrence (limit to avoid clutter)
+        edge_set = set()
+        for fi, present in file_concepts.items():
+            for a in present:
+                for b in present:
+                    if a < b:
+                        edge_set.add((a, b))
+        node_list = list(node_ids)
+        for a, b in list(edge_set)[:200]:  # cap edges
+            if a < len(nodes) and b < len(nodes):
+                connections.append({
+                    "from": nodes[a]["id"],
+                    "to": nodes[b]["id"],
+                })
+
+        neuron_data = {
+            "name": repo_path.name,
+            "family": "feuillu",
+            "nodes": nodes,
+            "connections": connections,
+        }
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(neuron_data, f, ensure_ascii=False, indent=2)
+        print(f"  Neuron map: {len(nodes)} nodes, {len(connections)} edges -> {output_path}")
+
 
 def analyze_file(filepath: Path) -> dict:
     cb = get_codebook()
@@ -351,7 +415,7 @@ def bootstrap_mycelium(repo_path: Path):
     for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
                     "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
                     "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini",
-                    "**/*.mn"]:
+                    "**/*.mn", "**/*.tex"]:
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -359,7 +423,11 @@ def bootstrap_mycelium(repo_path: Path):
             try:
                 text = f.read_text(encoding="utf-8", errors="ignore")
                 if len(text) < 50_000:
-                    m.observe_text(_redact_secrets_text(text))
+                    clean = _redact_secrets_text(text)
+                    if f.suffix == ".tex":
+                        m.observe_latex(clean)
+                    else:
+                        m.observe_text(clean)
                     file_count += 1
             except (PermissionError, OSError):
                 continue
@@ -1056,6 +1124,7 @@ def main():
     parser.add_argument("--no-l9", action="store_true", help="Skip L9 (LLM API) — use only free layers")
     parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
                         help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
+    parser.add_argument("--output", help="Output file path (e.g., scan JSON for UI)")
     parser.add_argument("--force", action="store_true", help="Force operation (e.g., prune without dry-run)")
     parser.add_argument("--password", help="Password for vault lock/unlock (AES-256)")
 
@@ -1220,7 +1289,7 @@ def main():
         if not args.file:
             print("ERROR: repo path required. Usage: muninn.py scan <repo-path>")
             sys.exit(1)
-        scan_repo(Path(args.file))
+        scan_repo(Path(args.file), output_path=args.output)
         return
 
     if args.command == "bootstrap":

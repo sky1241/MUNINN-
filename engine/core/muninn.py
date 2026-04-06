@@ -329,7 +329,7 @@ def bootstrap_mycelium(repo_path: Path):
     for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
                     "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
                     "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini",
-                    "**/*.mn"]:
+                    "**/*.mn", "**/*.tex"]:
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -337,7 +337,11 @@ def bootstrap_mycelium(repo_path: Path):
             try:
                 text = f.read_text(encoding="utf-8", errors="ignore")
                 if len(text) < 50_000:
-                    m.observe_text(_redact_secrets_text(text))
+                    clean = _redact_secrets_text(text)
+                    if f.suffix == ".tex":
+                        m.observe_latex(clean)
+                    else:
+                        m.observe_text(clean)
                     file_count += 1
             except (PermissionError, OSError):
                 continue
