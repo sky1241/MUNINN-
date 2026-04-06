@@ -198,6 +198,15 @@ class Mycelium:
         # the degree distribution stabilized
         self._check_fusions()
 
+        # P20.5+6: Auto-label zones on save when federated and enough data
+        if self.federated and self._db is not None:
+            n_conns = self._db.connection_count()
+            if n_conns >= 50:
+                try:
+                    self.auto_label_zones()
+                except Exception:
+                    pass  # numpy/scipy not installed or clustering failed
+
         # S4: Flush pending translations before save
         try:
             if ConceptTranslator:
