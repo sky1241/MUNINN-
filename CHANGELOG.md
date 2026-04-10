@@ -1,7 +1,49 @@
 # MUNINN — Changelog
 
 Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3649 + muninn_feed.py 1640 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1757 + mycelium.py 2932 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 = 18739 total (14 files)
-Tests: 1564 collected, 0 FAIL.
+Tests: 1582 collected, 0 FAIL.
+
+---
+
+## CRITICAL FIX 2026-04-10 — BUG-102: forge --gen-props had no isolation
+
+`forge.py --gen-props engine/core/muninn.py` generated a property test file that
+called `scrub_secrets(target_path, dry_run)` directly. Hypothesis fuzzed it with
+`target_path=''` / `target_path='.'` and `dry_run=False`, then the test scrubbed
+the entire MUNINN- repo in place — corrupting 165 files with literal `[REDACTED]`
+substitutions, breaking Python parsing across the whole repo. Took several
+hours to bisect because each `git checkout HEAD --` worked, but the next pytest
+run re-corrupted everything (the killer test was still in `tests/`).
+
+Fix: added `_is_destructive_function(node, source)` to all 3 forge.py files
+(root, engine/core, muninn package). Three layers of detection:
+1. Name patterns (`^scrub_`, `^install_`, `^purge_`, `^bootstrap`,
+   `^generate_`, `^observe`, `^feed`, `^migrate`, `^run_`, `_hook$`, …
+   ~30 patterns covering common side-effect verbs)
+2. AST scan for known-destructive calls (`write_text`, `rmtree`,
+   `subprocess.run`, `open(..., 'w')`, `executescript`, …)
+3. Path-like arg detection (any arg named `path`/`repo_path`/`target_path`
+   plus a body that calls `.walk()`/`.read_text()`/`.glob()` is flagged —
+   caller-supplied paths can't be fuzzed safely).
+
+`gen_props()` now skips destructive functions by default and emits a banner in
+the generated test file listing what was skipped and why. CLI flag
+`--include-destructive` exists for explicit override (loud warning printed).
+
+Tests: `tests/test_forge_destructive_skip.py` — 18 tests covering name patterns,
+AST detection, pure-function negatives, end-to-end gen_props on a fake module,
+override flag, and the explicit muninn.py regression test that re-runs the
+exact scenario that destroyed the repo and verifies the output contains zero
+calls to the killer functions.
+
+Recovery: `git checkout HEAD --pathspec-from-file=<list>` on 165 files, after
+deleting the killer `tests/test_props_muninn.py`. No commits were lost — the
+corruption was working-tree only.
+
+See BUGS.md → BUG-102 for the full bisect story. BUG-103 (scrub_secrets regex
+false positives on plain SQL — `TEXT`, `(a, b)`, `name:` all matching as secrets)
+opened separately, deferred — BUG-102 fix prevents the destructive call path
+from triggering accidentally, so BUG-103 is no longer urgent.
 
 ---
 

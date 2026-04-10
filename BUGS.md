@@ -13,7 +13,76 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10). **1 OPEN** (BUG-091 architectural smell).
+## Status: 90+10+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation fixed 2026-04-10). **2 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives).
+
+---
+
+## CRITICAL — 2026-04-10 — BUG-102: forge --gen-props had no isolation
+
+### BUG-102: forge --gen-props fuzzed destructive functions, corrupted 165 files
+- **Status**: FIXED
+- **Symptom**: ran `forge.py --gen-props engine/core/muninn.py`. Forge generated
+  `tests/test_props_muninn.py` which contained Hypothesis property tests for
+  every public function in the module — including `scrub_secrets(target_path,
+  dry_run)`, `install_hooks(repo_path)`, `purge_secrets_db(repo_path)`,
+  `bootstrap_mycelium(repo_path)`, `generate_root_mn(repo_path, ...)`, etc.
+  When pytest collected this file, Hypothesis happily generated `target_path=''`
+  / `target_path='.'` and `dry_run=False`. The test then walked the entire
+  MUNINN- repo, applied the over-aggressive `_COMPILED_SECRET_PATTERNS`, and
+  rewrote 165 source files in place with literal `[REDACTED]` substitutions.
+  Things like `key TEXT PRIMARY KEY` became `key [REDACTED] PRIMARY KEY`,
+  `r'AccountKey=...'` became `r'[REDACTED]`, breaking Python parsing across
+  the whole repo. Took several hours to bisect because `git checkout HEAD --`
+  appeared to work, but the next pytest run re-corrupted everything.
+- **Root cause**: `forge.gen_props()` walked all public functions of the module
+  and generated a smoke test for each one — with NO filtering for side effects.
+  The generated tests had `try/except (ValueError, TypeError, ...)` blocks but
+  `OSError` from filesystem writes was caught silently, and Hypothesis happily
+  generated empty/dot strings as path arguments. Property-based fuzzing on a
+  function with destructive side effects on the caller's filesystem is
+  dangerous by design.
+- **Fix**: added `_is_destructive_function(node, source)` helper to forge.py.
+  Three layers of detection: (1) name patterns matching `^scrub_`,
+  `^install_`, `^purge_`, `^bootstrap`, `^generate_`, `^observe`, `^feed`,
+  `^migrate`, `^run_`, `_hook$`, etc. (~30 patterns). (2) AST scan of
+  function body for known-destructive calls: `write_text`, `rmtree`,
+  `subprocess.run`, `open(..., 'w')`, etc. (3) Path-like argument detection:
+  if any arg is named `path`, `repo_path`, `target_path`, etc. AND the body
+  calls `.walk()`, `.read_text()`, etc., flag as destructive (caller-supplied
+  paths can't be fuzzed safely). gen_props() now skips these by default and
+  emits a banner in the generated test file listing what was skipped and why.
+  CLI flag `--include-destructive` exists for explicit override (with a loud
+  warning). Fix mirrored to all 3 forge.py files (root, engine/core, muninn
+  package) per BUG-091.
+- **Test**: `tests/test_forge_destructive_skip.py` — 18 tests covering name
+  patterns (scrub, install, purge, bootstrap, generate, hook), AST scan
+  (write_text, subprocess.run, open('w'), rmtree, walk on path-like arg),
+  pure-function negatives (string functions and read-only helpers must NOT
+  be flagged), end-to-end gen_props on a fake module, override flag works,
+  and the explicit muninn.py regression test (`test_gen_props_real_muninn_
+  does_not_call_scrub`) — verifies that `forge --gen-props engine/core/
+  muninn.py` produces a test file that contains ZERO calls to `scrub_secrets(`,
+  `install_hooks(`, `bootstrap_mycelium(`, `generate_root_mn(`, etc.
+- **Regression**: none. Pure functions like `redact_secrets_text`,
+  `count_chained_commands`, `clamp_chained_commands` are still detected as
+  safe and continue to be fuzzed normally.
+
+### BUG-103: scrub_secrets() regex patterns have false positives on plain SQL
+- **Status**: OPEN (deferred — separate fix from BUG-102)
+- **Symptom**: when BUG-102 corrupted the repo, the substitution pattern showed
+  that `_COMPILED_SECRET_PATTERNS` matches innocuous SQL fragments. Examples
+  observed in the diff: `key TEXT PRIMARY KEY` → `key [REDACTED] PRIMARY KEY`,
+  `PRIMARY KEY (a, b)` → `PRIMARY KEY [REDACTED] b)`, `f"display of $-var
+  matching secret name: {m.group(1)}"` → `... matching secret [REDACTED]`.
+- **Root cause**: not yet fully isolated. Likely a pattern like `\b[A-Z]{4}\b`
+  (4 uppercase letters = TOKEN-shaped) or a context-free trigger word match
+  that fires on any word followed by ` (...)` or `name:`.
+- **Fix**: TBD. Will require auditing every regex in `_SECRET_PATTERNS` and
+  adding negative lookbehind for SQL keywords (`TEXT`, `PRIMARY KEY`, etc.).
+- **Mitigation**: BUG-102 fix prevents `scrub_secrets()` from being called
+  by accident — that's the destructive part of the chain. The remaining
+  false positives are still wrong but no longer destructive.
+- **Test**: TBD.
 
 ---
 

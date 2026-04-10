@@ -1279,9 +1279,106 @@ def minimize_input(root, test_name, input_file):
 
 
 # === AXE 2: PROPERTY-BASED TEST GENERATION (Claessen & Hughes 2000) ===
-def gen_props(root, module_path):
+
+# BUG-102 (2026-04-10): destructive functions must NOT be fuzzed without isolation.
+# Hypothesis happily generates target_path='.' / dry_run=False and the test then
+# scrubs the entire repo in place. We discovered this when test_scrub_secrets
+# corrupted 165 files in MUNINN-. See BUGS.md.
+#
+# Defense: name patterns + AST scan for write operations. If either fires, the
+# function is treated as destructive and the generated test is wrapped with
+# pytest.skip(). Override with --include-destructive at the CLI level.
+
+_DESTRUCTIVE_NAME_PATTERNS = [
+    # filesystem mutations
+    r"^scrub_", r"^purge_", r"^install_", r"^uninstall_",
+    r"^bootstrap", r"^generate_", r"^create_", r"^delete_", r"^remove_",
+    r"^save", r"^write_", r"_write$", r"_save$",
+    r"^migrate", r"^upgrade", r"^downgrade",
+    r"^rebuild", r"^reset_", r"^cleanup", r"^prune",
+    # database / state mutations
+    r"^drop_", r"^truncate", r"^insert_", r"^update_",
+    r"^observe", r"^feed", r"^ingest", r"^compress_file",
+    # network / external side effects
+    r"^fetch_", r"^download", r"^upload", r"^send_", r"^post_", r"^put_",
+    r"^sync_", r"_sync$", r"^pull_", r"^push_",
+    # process / subprocess
+    r"^run_", r"^exec_", r"^spawn_", r"^kill_",
+    # hooks (anything in hook context is side-effecting by definition)
+    r"_hook$", r"^hook_",
+]
+
+_DESTRUCTIVE_CALLS = {
+    "write_text", "write_bytes", "writelines", "touch", "mkdir", "makedirs",
+    "rename", "replace", "rmtree", "remove", "unlink", "rmdir", "chmod", "chown",
+    "system", "popen", "call", "check_call", "check_output", "run",
+    "urlopen", "urlretrieve", "post", "put", "patch", "delete",
+    "executescript", "executemany",
+    "dump", "dumps_to_file",
+}
+
+_PATH_LIKE_ARG_NAMES = {
+    "path", "repo_path", "target_path", "file_path", "filepath",
+    "dir", "dirname", "directory", "root", "output", "out_path", "outfile",
+    "src", "dst", "source", "destination", "fp", "filename",
+    "tree_path", "db_path", "config_path", "session_path",
+}
+
+
+def _is_destructive_function(node, source_text):
+    """Return (is_destructive, reason) for an ast.FunctionDef node.
+
+    Heuristics (any-of):
+      1. Name matches a destructive pattern (e.g. scrub_, install_).
+      2. Body contains a known-destructive call (write_text, rmtree, run, ...).
+      3. Path-like argument + any FS-touching call in the body.
+    """
+    name = node.name
+
+    for pat in _DESTRUCTIVE_NAME_PATTERNS:
+        if re.search(pat, name):
+            return True, f"name matches /{pat}/"
+
+    has_path_arg = any(
+        a.arg in _PATH_LIKE_ARG_NAMES for a in node.args.args
+    )
+
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call):
+            func = child.func
+            if isinstance(func, ast.Attribute) and func.attr in _DESTRUCTIVE_CALLS:
+                return True, f"calls .{func.attr}()"
+            if isinstance(func, ast.Name) and func.id in _DESTRUCTIVE_CALLS:
+                return True, f"calls {func.id}()"
+            if isinstance(func, ast.Name) and func.id == "open":
+                for arg in list(child.args) + [kw.value for kw in child.keywords]:
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                        if any(m in arg.value for m in ("w", "a", "x", "+")):
+                            return True, "calls open() in write mode"
+
+    if has_path_arg:
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call):
+                func = child.func
+                if isinstance(func, ast.Attribute) and func.attr in (
+                    "walk", "iterdir", "glob", "rglob", "scandir", "listdir"
+                ):
+                    return True, f"path arg + .{func.attr}()"
+                if isinstance(func, ast.Attribute) and func.attr in (
+                    "read_text", "read_bytes", "open"
+                ):
+                    return True, f"path arg + .{func.attr}()"
+
+    return False, ""
+
+
+def gen_props(root, module_path, include_destructive=False):
     """Analyze a Python module and generate Hypothesis property test skeletons.
-    Detects: round-trip pairs, idempotent ops, sort/filter invariants."""
+    Detects: round-trip pairs, idempotent ops, sort/filter invariants.
+
+    BUG-102 fix: destructive functions are skipped by default. Pass
+    include_destructive=True to override (NOT recommended without tmp_path).
+    """
     mod_path = Path(module_path)
     if not mod_path.is_absolute():
         mod_path = root / mod_path
@@ -1298,8 +1395,14 @@ def gen_props(root, module_path):
 
     # Collect all public functions (top-level only, skip class methods)
     functions = []
+    skipped_destructive = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+            # BUG-102: filter destructive functions BEFORE generating any test
+            is_destr, reason = _is_destructive_function(node, source)
+            if is_destr and not include_destructive:
+                skipped_destructive.append((node.name, reason))
+                continue
             # Extract arg names and annotations
             args = []
             for arg in node.args.args:
@@ -1428,7 +1531,23 @@ def gen_props(root, module_path):
 
     if test_count == 0:
         print(f"  No testable functions found in {mod_path.name}")
+        if skipped_destructive:
+            print(f"  ({len(skipped_destructive)} destructive function(s) skipped — pass --include-destructive to override)")
         return
+
+    # BUG-102: header banner listing skipped destructive functions
+    if skipped_destructive:
+        banner = [
+            "# BUG-102 (forge): the following functions were SKIPPED because",
+            "# they have side effects (write to disk, run subprocess, hit",
+            "# network). Fuzzing them without isolation would corrupt the repo.",
+            "# To test them, write isolated tests by hand using tmp_path.",
+        ]
+        for fn, reason in skipped_destructive:
+            banner.append(f"#   - {fn}  ({reason})")
+        banner.append("")
+        # Insert after import block
+        lines = lines[:9] + banner + lines[9:]
 
     # Write test file
     tests_dir = root / "tests"
@@ -1438,6 +1557,13 @@ def gen_props(root, module_path):
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
     print(f"  Generated {test_count} property tests -> tests/{out_name}")
+    if skipped_destructive:
+        print(f"  Skipped {len(skipped_destructive)} destructive function(s):")
+        for fn, reason in skipped_destructive[:8]:
+            print(f"    - {fn}  ({reason})")
+        if len(skipped_destructive) > 8:
+            print(f"    ... and {len(skipped_destructive) - 8} more")
+        print(f"  Pass --include-destructive to fuzz them anyway (NOT RECOMMENDED).")
 
     # Check if hypothesis is installed
     try:
@@ -1966,9 +2092,14 @@ def main():
         idx = args.index("--gen-props")
         module_path = args[idx + 1] if idx + 1 < len(args) else ""
         if not module_path:
-            print("  Usage: forge.py --gen-props path/to/module.py")
+            print("  Usage: forge.py --gen-props path/to/module.py [--include-destructive]")
             return
-        gen_props(root, module_path)
+        include_destructive = "--include-destructive" in args
+        if include_destructive:
+            print("  WARNING: --include-destructive is set. Destructive functions WILL")
+            print("  be fuzzed by Hypothesis. This can corrupt your repo (BUG-102).")
+            print("  Make sure tests are isolated with tmp_path before running them.")
+        gen_props(root, module_path, include_destructive=include_destructive)
         return
 
     if "--mutate" in args:
