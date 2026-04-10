@@ -45,6 +45,36 @@ because primacy bias is real and these are the rules that actually matter.
   If you need to verify a token is set: `[ -n "$VAR" ] && echo set` (no value).
 </RULE>
 
+<RULE id="4" name="No claim without command output" priority="ABSOLUTE">
+  Anti-bullshit rule, written under fire 2026-04-10 after the 9th time
+  Claude said "c'est fait" without doing the work. Read the FULL contract
+  in [docs/ANTI_BULLSHIT_BATTLE_PLAN.md](docs/ANTI_BULLSHIT_BATTLE_PLAN.md)
+  before any session of real work.
+
+  The forbidden phrases (must NEVER appear without a fresh command output):
+    "c'est fait" / "ça marche" / "le test passe" / "le bug est fixé"
+    "c'est commité" / "c'est pushé" / "tout est OK" / "should work"
+
+  Each requires the corresponding command output visible 3 lines above
+  in the conversation:
+    "le test passe"  -> pytest output with "X passed in Y.Ys"
+    "c'est pushé"    -> git push output with "<old>..<new>  main -> main"
+    "x4.5 ratio"     -> tiktoken script output with the actual numbers
+    "fact preserved" -> grep output showing the fact in the compressed output
+
+  Avoid: paraphrasing "ça devrait marcher", batching commits without push,
+  marking TodoWrite items completed without a commit hash, claiming
+  tests pass from memory.
+
+  If you do: stop, run the verification command, paste the output,
+  THEN make the claim. Sky has built BUG_TRACKER schemas + master prompts
+  in 3 different repos to enforce this. The proof of the pattern is sourced
+  in section 2 of the battle plan doc.
+
+  See also the 10 verification questions in section 4 — Sky can ask any
+  of them at any time and you must be able to answer with a fresh command.
+</RULE>
+
 </MUNINN_RULES>
 
 ## C'est quoi Muninn ?
@@ -157,9 +187,10 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 
 <MUNINN_SANDWICH_RECENCY>
 
-Recency bias is real. Repeating the 3 critical rules at the bottom so they
-stay in your attention right before you generate. These 3 are not opinion —
-they were measured to change behavior on Opus 4.6 (chunk 9, 2026-04-10).
+Recency bias is real. Repeating the 4 critical rules at the bottom so they
+stay in your attention right before you generate. The first 3 were measured
+to change behavior on Opus 4.6 (chunk 9, 2026-04-10). RULE 4 was written
+under fire after the 9th time Claude lied about completion (2026-04-10).
 
 1. Parameterize every path in engine code. No "C:/Users/ludov/MUNINN-" in
    function bodies. (RULE 1, +100% measured effect)
@@ -169,5 +200,11 @@ they were measured to change behavior on Opus 4.6 (chunk 9, 2026-04-10).
 
 3. Never echo or display secrets, not even as placeholders. Use [ -n "$VAR" ]
    to check existence without showing the value. (RULE 3, +20% measured effect)
+
+4. NO CLAIM WITHOUT COMMAND OUTPUT. "C'est fait" / "ça marche" / "le test
+   passe" / "c'est pushé" — each requires the corresponding command output
+   visible 3 lines above in the conversation. Read the full contract in
+   docs/ANTI_BULLSHIT_BATTLE_PLAN.md. Sky will ask the 10 verification
+   questions at any time. (RULE 4, ABSOLUTE — written under fire)
 
 </MUNINN_SANDWICH_RECENCY>
