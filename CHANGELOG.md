@@ -13,6 +13,113 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 6 — Measurement: can Muninn compress its own CLAUDE.md? (2026-04-10) [DONE]
+
+CLAUDE.md is 239 lines (over Anthropic's 200 recommendation from chunk 2).
+Sky proposed: since Muninn is a memory compression engine, why not feed it
+to itself and make room for more rules? This chunk measures that question
+without modifying CLAUDE.md — the goal is decision data for a possible
+chunk 7 application.
+
+**This chunk ONLY measures — it does not modify CLAUDE.md.**
+
+**Key finding 1: Full `compress_file` is a NO-GO.**
+
+Running the full Muninn pipeline (L1-L7 + L10 + L11, L9 skipped) on a
+copy of CLAUDE.md gives impressive ratios but destroys normative wording:
+
+| Metric | Baseline | After full compress | Preserved? |
+|---|---|---|---|
+| lines | 239 | 142 | — |
+| tokens | 3255 | 1278 | x2.55 ratio |
+| `<MUNINN_RULES>` open/close | 2 | 2 | ✓ |
+| `<RULE id="N">` count | 8 | 8 | ✓ |
+| `Directive:` count | 8 | 8 | ✓ |
+| **`Bad reflex:` count** | **8** | **0** | **✗ LOST** |
+| **`Correction:` count** | **8** | **6** | **✗ PARTIAL** |
+| `<MUNINN_SANDWICH_RECENCY>` | yes | yes | ✓ (tags only, content mangled) |
+
+Root cause: `compress_section` calls `extract_facts` which scans for
+key=value, numbers, identifiers. The normative prose in the RULES has
+none of those patterns — it gets broken down into token fragments
+separated by `|`. Example: `Bad reflex: Skim, latch onto first bit,
+answer with vague summary.` becomes `Bad | Skim` (meaning lost).
+
+The sandwich block becomes unreadable:
+`Re | Sky | No | 1. Re / Say | I | Mark | 2. Say / No | RULE | 2`.
+
+**Key finding 2: Hybrid approach WORKS — compress memo cousin only.**
+
+The "Memo pour mon cousin" section (~71 lines) is pure narrative prose —
+exactly what Muninn was designed to compress. Running `compress_section`
+on it alone and leaving RULES/sandwich verbatim gives:
+
+| Metric | Baseline | After hybrid | Delta |
+|---|---|---|---|
+| lines | 239 | **186** | -53 (under 200 cap ✓) |
+| tokens | 3255 | **2519** | -736 (-22%) |
+| chars | 11405 | 8913 | -2492 |
+| `<RULE id="N">` count | 8 | 8 | ✓ |
+| `Directive:` / `Bad reflex:` / `Correction:` | 8/8/8 | 8/8/8 | ✓ |
+| `<MUNINN_SANDWICH_RECENCY>` | ✓ | ✓ | ✓ |
+| H2 markdown headers | 9 | 9 | ✓ (with post-fix) |
+
+**Markdown post-fix:** `compress_section` prepends a `?` state marker
+(Muninn's `.mn` format) to section headers. For a `CLAUDE.md` file read
+as markdown by Claude Code, this breaks H2 parsing. Fix: replace the
+`?Section:` output with the original `## Section` header after
+compression. Implemented as `_postfix_muninn_output()` in the test.
+
+**Key finding 3: Normative text must not pass through `compress_line`.**
+
+Tested individually, `compress_line` on RULE components gives a modest
+x1.03-x1.11 ratio (mostly strips filler like "by" in "word by word").
+But `compress_section` does more than line compression — it reorders,
+extracts facts, rewrites headers. The containment is at the
+compress_section boundary, not compress_line. Any chunk 7 implementation
+MUST isolate the RULES and sandwich blocks BEFORE calling compress_section.
+
+**Known trade-off on the memo:**
+
+Compressed memo loses some nuance. Example of the "tone" loss:
+- Original: `C'est un cadeau. Et c'est un bon cadeau.`
+- Compressed: (dropped — not a fact)
+
+Facts preserved: all ratios (x4.1, x2.6, x1.7, x4.5...), benchmark 37/40,
+MEMORY.md, tokenizer BPE, electrician, 11 months, Muninn architecture.
+
+Memo prose still readable but dense. Minor grammar artifacts
+("L'anglais compact ce qu' lit efficacement" — missing words).
+
+**Decision data for chunk 7:**
+
+- **GO hybrid** if Sky accepts the tone loss on the memo cousin
+  (53 lines saved, 736 tokens, under 200 cap, all RULES intact).
+- **NO-GO full compress** confirmed — would destroy chunk 2 work.
+- **Alternative:** just cut memo cousin entirely and put it in
+  `docs/MEMO_COUSIN.md` without import. Same net result, no compression
+  artifacts, but loses the on-boot visibility.
+
+**Tests:** `tests/test_chunk6_compress_claude_md.py` — 8 tests, all PASS:
+- Baseline sanity (chunk 2 invariants still hold)
+- Full `compress_file` pipeline measurement (reports damage)
+- `compress_line` on isolated RULE components (shows they're safe alone)
+- Memo cousin section isolated (measures standalone ratio x2.99)
+- `extract_facts` on memo (shows 17 facts extracted)
+- Hybrid compression (asserts all 8 RULES + sandwich intact)
+- Hybrid with markdown post-fix (asserts H2 headers preserved)
+- Final summary (printed verdict)
+
+Test artifacts saved to `.muninn/chunk6_*.md` (gitignored):
+- `chunk6_compressed_claude_md.txt` — full pipeline output (for post-mortem)
+- `chunk6_hybrid_candidate.md` — hybrid candidate without post-fix
+- `chunk6_final_candidate.md` — hybrid candidate with markdown post-fix
+
+**Chunk 6 does NOT touch CLAUDE.md.** Any application requires a chunk 7
+with Sky's explicit go on the trade-off.
+
+---
+
 ### CHUNK 5 — SubagentStart hook injects Muninn boot into sub-agents (2026-04-10) [DONE]
 
 Sub-agents (Explore, Plan, custom) used to spawn with **empty Muninn context**.
