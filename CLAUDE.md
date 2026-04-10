@@ -3,58 +3,46 @@
 <!-- ============================================================ -->
 <!-- HTML comments are stripped before injection (Anthropic doc).  -->
 <!-- Use them for maintainer notes without spending Sky's tokens.  -->
-<!-- Last refactor: 2026-04-10 (chunk 2 of leak-intel battle plan) -->
+<!--                                                               -->
+<!-- Last refactor: 2026-04-10 (chunk 10 — Phase B rewrite)        -->
+<!-- Empirical basis: chunk 9 eval harness, $5.65 API on Opus 4.6  -->
+<!-- 80 controlled runs (40 with-CLAUDE.md, 40 baseline).          -->
+<!-- Verdict: only 3 of original 8 RULES had measured causal       -->
+<!-- effect on Opus 4.6. The 5 removed RULES (lazy mode, lying,    -->
+<!-- preamble, push back, no new files) reproduced default 4.6     -->
+<!-- behavior - they were noise. See .muninn/chunk9_final_verdict  -->
+<!-- and CHANGELOG for full data.                                  -->
 <!-- ============================================================ -->
 
 <MUNINN_RULES priority="USER_OVERRIDE">
-Read first. Each rule names the bad reflex so you recognize it in yourself.
 
-<RULE id="1" name="No lazy mode">
-  Directive: Re-read Sky's request word by word. Address each point individually.
-  Bad reflex: Skim, latch onto first bit, answer with vague summary.
-  Correction: 3 points asked = 3 points answered. Code asked = code shipped.
+These rules survived empirical testing on Claude Opus 4.6. Each one was
+proven to change behavior measurably vs baseline. They are placed first
+because primacy bias is real and these are the rules that actually matter.
+
+<RULE id="1" name="Universal code, never repo-hardcoded" measured_effect="+100%">
+  Every file path in engine code must be parameterized — _REPO_PATH, env var,
+  function argument, or Path(__file__) relative. Never bake "C:/Users/ludov/MUNINN-"
+  into a function body.
+  Avoid: hardcoded absolute paths inside def/with open()/Path() lines.
+  If you do: stop, take the path as a parameter, pass it from the caller.
 </RULE>
 
-<RULE id="2" name="No lying by omission">
-  Directive: Don't know = say "I don't know". Mark [INCONNU] when generating.
-  Bad reflex: Fill gaps with fluent plausible text that pattern-matches.
-  Correction: Verify before claiming. Can't verify? Say so, ask Sky.
+<RULE id="2" name="Confirm before destructive actions" measured_effect="+100%">
+  Destructive or shared-state operations require explicit confirmation from Sky
+  before execution: git push --force, git reset --hard, rm -rf, DROP TABLE,
+  branch deletion, sending messages, modifying CI/CD.
+  Avoid: executing the command silently because Sky asked once.
+  If you do: stop, ask "this will <effect>, confirm?", wait for the answer.
 </RULE>
 
-<RULE id="3" name="Direct responses, no preamble">
-  Directive: Lead with the answer or the action.
-  Bad reflex: "Bien sur !", restating the request, intro paragraphs.
-  Correction: First sentence = the answer. One sentence if it fits.
-</RULE>
-
-<RULE id="4" name="Push back when reasoning is broken">
-  Directive: Wrong reasoning = say so with the why, even if Sky insists.
-  Bad reflex: Sycophancy — agree to keep peace, soft caveats that disappear.
-  Correction: "Non, parce que X" before "Oui mais". Honesty before comfort.
-</RULE>
-
-<RULE id="5" name="Universal code, never repo-hardcoded">
-  Directive: Every change works on any repo, not just MUNINN-. Use _REPO_PATH.
-  Bad reflex: Hardcode "C:/Users/ludov/MUNINN-" because "it works for now".
-  Correction: A literal path in engine/core/ containing "MUNINN-" = stop, parameterize.
-</RULE>
-
-<RULE id="6" name="No new files unless necessary">
-  Directive: Edit existing files. Create only when no existing home fits.
-  Bad reflex: New helper/util/abstraction for one-offs. New markdown doc.
-  Correction: Read existing first. Find where the change belongs. Then act.
-</RULE>
-
-<RULE id="7" name="Never display secrets">
-  Directive: Tokens, keys, passwords = NEVER printed, echoed, or quoted.
-  Bad reflex: `echo $TOKEN` to verify it's set. Token pasted in test fixture.
-  Correction: vault.py / scrub_secrets / env access without echo. If unsure, secret.
-</RULE>
-
-<RULE id="8" name="Confirm before destructive or shared-state actions">
-  Directive: push, force, drop, delete, send, CI/CD = confirm with Sky first.
-  Bad reflex: One prior approval = blanket authorization for similar future actions.
-  Correction: Each destructive action = its own confirmation, scoped tight.
+<RULE id="3" name="Never display secrets" measured_effect="+20%">
+  Never echo, print, or quote secrets in output: tokens, API keys, passwords,
+  private keys, .env values. This includes placeholder examples like ghp_xxxx
+  in tutorials — Sky uses scrub_secrets / vault.py for a reason.
+  Avoid: `echo $GITHUB_TOKEN`, pasting tokens in test fixtures, showing
+  expected output that contains a token format.
+  If you need to verify a token is set: `[ -n "$VAR" ] && echo set` (no value).
 </RULE>
 
 </MUNINN_RULES>
@@ -134,15 +122,14 @@ muninn.py prune [--force]     # Elagage R4 (froid -> supprime)
 muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 ```
 
-## Etat du projet (mars 2026)
+## Etat du projet (avril 2026)
 - 43 features + 39 briques Cube, 11 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- Engine: muninn.py 1509 + muninn_layers 1294 + muninn_tree 3608 + muninn_feed 1619 + cube.py 1056 + cube_providers 580 + cube_analysis 1759 + mycelium.py 2915 + mycelium_db 1329 = 18557 lignes total (14 fichiers)
+- Engine: ~19K lignes, 14 fichiers (voir WINTER_TREE.md)
 - mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
 - Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, Forge integration
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
-- Voir WINTER_TREE.md pour le detail complet
-
+- Hooks installes: 6 (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart)
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
   probleme Sky resolu nous:MEMORY.md
@@ -166,21 +153,21 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 - Python: `python` (or full path on Windows if needed)
 - Windows 11, bash shell, PYTHONIOENCODING=utf-8
 - Pas d'emojis sauf demande explicite
-- JAMAIS afficher de tokens git ou cles API
-- Tout doit etre UNIVERSEL — zero hardcode de repo specifique
+- Tout doit etre UNIVERSEL — zero hardcode de repo specifique (RULE 1)
 
 <MUNINN_SANDWICH_RECENCY>
 
-Recency bias is real. Repeating the 3 most critical rules at the bottom so
-they stay in your attention right before you generate.
+Recency bias is real. Repeating the 3 critical rules at the bottom so they
+stay in your attention right before you generate. These 3 are not opinion —
+they were measured to change behavior on Opus 4.6 (chunk 9, 2026-04-10).
 
-1. Re-read Sky's request word by word before answering. No lazy mode.
-   (RULE id=1)
+1. Parameterize every path in engine code. No "C:/Users/ludov/MUNINN-" in
+   function bodies. (RULE 1, +100% measured effect)
 
-2. Say "I don't know" when you don't know. Mark [INCONNU] when generating.
-   No lying by omission. (RULE id=2)
+2. Confirm before destructive actions: git push --force, rm -rf, DROP TABLE.
+   Stop, ask, wait for the answer. (RULE 2, +100% measured effect)
 
-3. Push back when reasoning is broken. Sycophancy is dishonesty.
-   "Non, parce que X" before "Oui mais". (RULE id=4)
+3. Never echo or display secrets, not even as placeholders. Use [ -n "$VAR" ]
+   to check existence without showing the value. (RULE 3, +20% measured effect)
 
 </MUNINN_SANDWICH_RECENCY>

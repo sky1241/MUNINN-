@@ -13,6 +13,85 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 10 — Phase B rewrite of CLAUDE.md based on chunk 9 measurements (2026-04-10) [DONE]
+
+The first 7 chunks built CLAUDE.md based on intuition and research. Chunk 9
+measured empirically which RULES actually changed Claude Opus 4.6's behavior.
+Chunk 10 acts on that measurement.
+
+**The change in one line:**
+8 RULES with Directive/Bad reflex/Correction format
+   → 3 RULES with direct format + minimal "Avoid:" + measured_effect attribute
+
+**What was removed (5 RULES with no measured effect):**
+- RULE 1 "No lazy mode" (was 100%, baseline 100% — already default)
+- RULE 2 "No lying by omission" (was 100%, baseline 100% — already default)
+- RULE 3 "Direct responses, no preamble" (was 100%, baseline 100% — already default)
+- RULE 4 "Push back when reasoning is broken" (was 100%, baseline 100% — already default)
+- RULE 6 "No new files unless necessary" (was 100%, baseline 100% — already default)
+
+**What was kept (3 RULES with measured causal effect):**
+- New RULE 1 (was 5) "Universal code, never repo-hardcoded" — +100% measured effect
+- New RULE 2 (was 8) "Confirm before destructive actions" — +100% measured effect
+- New RULE 3 (was 7) "Never display secrets" — +20% measured effect
+
+**Format change rationale:**
+The old "Directive / Bad reflex / Correction" 3-line format was replaced
+with a more natural "description + Avoid + recovery" format for 2 reasons:
+1. Anthropic prompting docs warn that strong negative examples can backfire
+   ("Pink Elephant" effect). Compressing the negative to a short "Avoid:"
+   line minimizes this risk while keeping contrastive signal.
+2. The 3-line format added 5 lines per RULE for marginal benefit. The new
+   format is shorter while preserving the same information.
+
+Each surviving RULE now carries a `measured_effect="+N%"` attribute that
+documents the empirical proof from chunk 9 directly in the file. Future
+cousins reading CLAUDE.md will see WHY each rule exists.
+
+**Validation re-run on the new CLAUDE.md:**
+Cost: $0.83 API on Opus 4.6 (3 RULES × 5 runs).
+Result: 5/5 PASS on all 3 surviving RULES. The rewrite preserves 100%
+compliance on the critical RULES.
+
+Detector RULE 8 had a false negative (matched "executing" inside "before
+executing"), fixed during this chunk. Sanity tests still 23/23 PASS.
+
+**Tests updated:**
+- tests/test_chunk2_claude_md_structure.py:
+  - test_at_least_5_rules → test_at_least_3_rules
+  - test_each_rule_has_directive_reflex_correction → test_each_rule_has_avoid_block
+  - test_no_repo_hardcode_in_rules: accept the path when cited as a
+    counter-example (with markers like "Avoid", "never", "hardcode", etc.)
+- tests/test_chunk6_compress_claude_md.py:
+  - test_baseline_structure_valid: rule_count >= 3 (was >= 5)
+  - directive/bad_reflex/correction count assertions removed (format changed)
+- tests/eval_harness_chunk9.py:
+  - detector_rule_8: stricter execution detection (no longer false-positive
+    on "before executing this" or "I'll execute IF you confirm")
+  - Added MUNINN_EVAL_ONLY_IDS env var to filter RULES for cheap re-runs
+
+**Stats:**
+- Lines: 186 → 173 (−13 lines, no longer triggers Anthropic 200-line warning)
+- Tokens: 2519 → 2194 (−325 tokens, ~13% gain)
+- RULES: 8 → 3 (each surviving rule has empirical proof attached)
+
+The gain in lines is modest. The gain in **truthfulness** is dramatic:
+every RULE in CLAUDE.md now points to a measurement that proves it matters.
+No more folklore. No more rules that reproduce default 4.6 behavior.
+
+**Total tests across all 7 chunks: 90/90 PASS, 0 regression.**
+
+**Total API spent so far this session: ~$6.46 / $15 budget. ~$8.54 remaining.**
+
+**Next steps (for another session, not tonight):**
+- Étape 2: write new trap prompts to find blind spots in our 3 RULES
+  (~$3 API to baseline + with-CLAUDE.md run)
+- Étape 3: encode RULES 1 and 2 as PreToolUse hooks for true enforcement
+  (no API cost, ~3-4h dev time)
+- Étape 4: split into .claude/rules/ for path-scoped loading (no API cost)
+
+---
+
 ### CHUNK 9 — Empirical eval harness for CLAUDE.md RULE compliance (2026-04-10) [DONE]
 
 The first 7 chunks built and refined CLAUDE.md based on intuition and research.

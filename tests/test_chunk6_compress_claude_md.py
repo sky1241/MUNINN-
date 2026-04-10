@@ -106,14 +106,23 @@ def baseline_report(claude_md_text):
 
 
 def test_baseline_structure_valid(baseline_report):
-    """CLAUDE.md current state must pass its own chunk 2 invariants."""
+    """CLAUDE.md current state must pass its own chunk 2 invariants.
+
+    Updated 2026-04-10 (Phase B / chunk 10): the original 8 RULES with
+    Directive/Bad reflex/Correction format have been reduced to 3 RULES
+    with a more natural format (description + Avoid:) after empirical
+    validation in chunk 9 (eval harness with $5.65 of API calls).
+    See .muninn/chunk9_final_verdict.md.
+    """
     r = baseline_report
     assert r["has_muninn_rules_open"] and r["has_muninn_rules_close"]
     assert r["has_sandwich_open"] and r["has_sandwich_close"]
-    assert r["rule_count"] >= 5
-    assert r["directive_count"] >= 5
-    assert r["bad_reflex_count"] >= 5
-    assert r["correction_count"] >= 5
+    assert r["rule_count"] >= 3, (
+        f"Expected at least 3 RULES (post Phase B), got {r['rule_count']}"
+    )
+    # Note: directive/bad_reflex/correction counts are no longer tracked
+    # because the format changed. The chunk 2 detector still counts them
+    # but they may be 0 in the new format.
     assert r["lines"] > 0
     assert r["tokens"] > 0
 
