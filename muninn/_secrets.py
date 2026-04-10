@@ -59,3 +59,75 @@ def redact_secrets_text(text: str) -> str:
     for pat in _COMPILED_PATTERNS:
         result = pat.sub("[REDACTED]", result)
     return result
+
+
+# ── Anti-Adversa AI clamp ──────────────────────────────────────
+# Adversa AI Red Team disclosed (2026-04-02) that Claude Code's deny rules
+# silently bypass when a generated bash pipeline exceeds 50 chained subcommands.
+# Patched in Claude Code v2.1.90, but the attack surface persists for any tool
+# that injects arbitrary content into Claude's context.
+#
+# Muninn injects content via UserPromptSubmit hook (bridge_hook.py) and
+# via meta-mycelium pull_from_meta() — both can carry strings sourced from
+# external repos. A poisoned .mn that contains a 50+ subcommand pipeline,
+# once injected back into Claude's context, would reproduce Adversa.
+#
+# Defense: clamp any text injected into Claude's context to MAX_CHAINED_COMMANDS
+# shell separators (default 30, well below the 50 threshold). This is one of
+# several defense layers — vault.py and redact_secrets_text remain the primary
+# secret defense.
+#
+# Refs: docs/CLAUDE_CODE_LEAK_INTEL.md sections 10 and 12.
+
+# Default conservative limit (60% of Adversa's documented threshold).
+MAX_CHAINED_COMMANDS = 30
+
+# Strong shell chaining operators. We count only `&&` and `||` because:
+# - They are the canonical Adversa attack pattern (sequential cmds with
+#   conditional execution: `cmd1 && cmd2 && cmd3 && ...`).
+# - They are extremely rare in natural prose (English/French/markdown tables).
+# - `;` and `|` are too ambiguous (markdown tables, legit Unix pipes,
+#   French punctuation) and almost never used as Adversa-style attack
+#   separators in practice.
+_STRONG_SHELL_SEP = re.compile(r'&&|\|\|')
+
+
+def count_chained_commands(text: str) -> int:
+    """Count strong shell chaining operators (`&&` and `||`) in text.
+
+    These are the canonical markers of an Adversa-style chained shell
+    pipeline. A normal English/French/markdown text will essentially
+    never contain more than 1-2 of these operators.
+    """
+    if not text:
+        return 0
+    return len(_STRONG_SHELL_SEP.findall(text))
+
+
+def clamp_chained_commands(text: str, max_chains: int = MAX_CHAINED_COMMANDS) -> tuple[str, bool]:
+    """Anti-Adversa: refuse text containing too many chained shell commands.
+
+    Returns (clamped_text, was_clamped). If the text contains more than
+    max_chains pipeline-context separators, the entire text is replaced
+    with a one-line warning. We do NOT try to truncate cleanly — refusing
+    in full is the safe default, since partial truncation could still
+    contain a usable attack chain.
+
+    Args:
+        text: candidate text to inject into Claude's context
+        max_chains: max allowed chained commands (default 30, below Adversa's 50)
+
+    Returns:
+        (text, False) if safe — text unchanged
+        (warning, True) if clamped — text replaced with warning
+    """
+    if not text:
+        return text, False
+    n = count_chained_commands(text)
+    if n <= max_chains:
+        return text, False
+    return (
+        f"[MUNINN ANTI-ADVERSA] Injected content contained {n} chained shell "
+        f"commands (max allowed: {max_chains}). Content refused. "
+        f"See docs/CLAUDE_CODE_LEAK_INTEL.md section 10."
+    ), True

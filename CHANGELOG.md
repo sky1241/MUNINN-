@@ -13,6 +13,68 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 4 — PostToolUseFailure hook auto-feeds errors.json (2026-04-10) [DONE]
+
+Until now, P18 (error/fix pairs) was scraped from the JSONL transcript after
+the fact — fragile and asynchronous. Claude Code's `PostToolUseFailure` hook
+delivers tool failures in real time with structured payload (tool_name,
+tool_input, error message, tool_use_id).
+
+**New hook handler:**
+- `engine/core/muninn.py::_generate_post_tool_failure_hook()` — generates a
+  self-contained `post_tool_failure_hook.py` in the target repo's
+  `.claude/hooks/` (same pattern as bridge_hook.py).
+- The generated handler is **standalone** (no engine import needed). It writes
+  directly to `.muninn/errors.json` in the existing P18 schema (error/fix/date).
+- Mirror copy `.claude/hooks/post_tool_failure_hook.py` (committed) for the
+  current repo. Other repos receive a fresh generated copy on `install_hooks`.
+
+**Handler design rules:**
+- NEVER raises (always exits 0 — failing hook must not block Claude session).
+- NEVER writes to stdout (PostToolUseFailure is non-blocking, output lost).
+- Atomic write via tempfile + os.replace.
+- Dedup: skip if last entry has identical (error, date) — handles tool retry loops.
+- Cap at MAX_ENTRIES=500 (drops oldest first to keep file bounded).
+- Summary truncated to 200 chars + "..." if longer.
+- Multiline error: keeps first line only.
+
+**install_hooks() updated:**
+- Adds `PostToolUseFailure` to required_hooks registry.
+- Generates the handler script alongside `bridge_hook.py`.
+- Existing 4 hooks (UserPromptSubmit/PreCompact/SessionEnd/Stop) untouched.
+
+**Side fix (chunk 3 retro-port):** the `_generate_bridge_hook()` template
+also gets the anti-Adversa clamp, otherwise the chunk 3 fix on the static
+`bridge_hook.py` would be **silently overwritten** the next time
+`install_hooks()` was called.
+
+**Architectural smell discovered (logged for future fix):** the `engine/core/`
+and `muninn/` package directories are **fully duplicated** in the repo. Modifs
+to `engine/core/_secrets.py`, `engine/core/muninn_tree.py`, and
+`engine/core/muninn.py` had to be mirrored to `muninn/_secrets.py`,
+`muninn/muninn_tree.py`, and `muninn/_engine.py` to be picked up by tests
+that `import muninn` (which resolves to the package). The `_ProxyModule`
+in `muninn/__init__.py` is supposed to bridge these but does not for
+new functions added in either location. **TODO (out of scope for this chunk):**
+unify under a single source of truth.
+
+**Tests:** `tests/test_chunk4_post_tool_failure_hook.py` — 12 tests, all PASS:
+- `feed_errors_json` creates an entry with strict P18 schema
+- Dedup blocks identical (error, date) but allows distinct errors
+- Cap at 500 entries (drops oldest)
+- Malformed payload = silent no-op (None, str, empty dict, missing keys)
+- Long error truncated at ~200 chars
+- Multiline error keeps first line only
+- Generator creates file with expected content
+- Generated handler runs via subprocess and writes errors.json correctly
+- Handler exits 0 on invalid JSON stdin (never blocks Claude)
+- `install_hooks` registers PostToolUseFailure in settings
+
+**Reversible:** revert commit. Existing P18 transcript-scraping path
+remains intact and complementary.
+
+---
+
 ### CHUNK 3 — Anti-Adversa clamp on hook injections (2026-04-10) [DONE]
 
 Adversa AI Red Team disclosed (2026-04-02) that Claude Code's deny rules
