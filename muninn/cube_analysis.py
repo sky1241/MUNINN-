@@ -455,14 +455,22 @@ def detect_dead_code(cube: Cube, all_cubes: list[Cube],
     return False
 
 
-def filter_dead_cubes(cubes: list[Cube], deps: list['Dependency']) -> tuple[list[Cube], list[Cube]]:
-    """B25: Filter dead cubes. Returns (active, dead)."""
+def filter_dead_cubes(cubes, deps) -> tuple:
+    """B25: Filter dead cubes. Returns (active, dead).
+    BUG-109 fix (brick 18): tolerate non-list inputs."""
+    if not isinstance(cubes, (list, tuple)) or not cubes:
+        return ([], [])
+    if not isinstance(deps, (list, tuple)):
+        deps = []
     active, dead = [], []
     for cube in cubes:
-        if detect_dead_code(cube, cubes, deps):
-            dead.append(cube)
-        else:
-            active.append(cube)
+        try:
+            if detect_dead_code(cube, cubes, deps):
+                dead.append(cube)
+            else:
+                active.append(cube)
+        except (AttributeError, TypeError):
+            continue
     return active, dead
 
 
@@ -1365,13 +1373,12 @@ def belief_propagation(cubes: list[Cube], store: CubeStore,
 
 # ─── B21: Survey Propagation pre-filtre ──────────────────────────────
 
-def survey_propagation_filter(cubes: list[Cube], store: CubeStore,
-                              neutral_threshold: float = 0.2) -> tuple[list[Cube], list[Cube]]:
-    """
-    B21: Survey Propagation pre-filter (Mezard-Parisi 2002).
-    Skips trivial cubes (~30% neutral, Schulte 2014).
-    Returns (non_trivial, trivial).
-    """
+def survey_propagation_filter(cubes, store,
+                              neutral_threshold: float = 0.2) -> tuple:
+    """B21: Survey Propagation pre-filter (Mezard-Parisi 2002).
+    BUG-109 fix (brick 18): tolerate non-list inputs."""
+    if not isinstance(cubes, (list, tuple)) or not cubes:
+        return ([], [])
     beliefs = belief_propagation(cubes, store, max_iter=5)
     trivial, non_trivial = [], []
 

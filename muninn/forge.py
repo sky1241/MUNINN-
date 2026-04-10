@@ -1306,6 +1306,11 @@ _DESTRUCTIVE_NAME_PATTERNS = [
     r"^run_", r"^exec_", r"^spawn_", r"^kill_",
     # hooks (anything in hook context is side-effecting by definition)
     r"_hook$", r"^hook_",
+    # query bridges and graph traversal (slow on real DBs, BUG-106 family)
+    r"^bridge", r"^spread_", r"^find_chain", r"^query_",
+    # CLI entry points and full-scan walkers
+    r"^cli_", r"^scan_", r"^walk_", r"^assign_", r"^process_",
+    r"^analyze_", r"^audit_", r"^report_",
 ]
 
 _DESTRUCTIVE_CALLS = {

@@ -125,11 +125,20 @@ def _parse_markdown_conversation(filepath: Path) -> list[str]:
     return texts
 
 
-def _detect_transcript_format(filepath: Path) -> str:
+def _detect_transcript_format(filepath) -> str:
     """P38: Detect transcript format from file content.
 
     Returns: 'jsonl', 'json', 'markdown', or 'unknown'.
+
+    BUG-107 fix (brick 18): wrap input with Path().
     """
+    if not filepath:
+        return "unknown"
+    if not isinstance(filepath, Path):
+        try:
+            filepath = Path(filepath)
+        except (TypeError, ValueError):
+            return "unknown"
     try:
         first_bytes = filepath.read_bytes()[:500]
         first_text = first_bytes.decode("utf-8", errors="ignore").strip()
@@ -169,13 +178,19 @@ def _detect_transcript_format(filepath: Path) -> str:
     return "unknown"
 
 
-def parse_transcript(jsonl_path: Path) -> list[str]:
+def parse_transcript(jsonl_path) -> list[str]:
     """Parse a transcript and extract text messages.
 
     P38: Auto-detects format: JSONL (Claude Code), JSON (claude.ai), markdown.
-    L0 FILTER: strips tool results (77% of transcript) down to 1-line summaries.
-    Keeps: user messages, assistant text, tool call names + args (not results).
+    BUG-107 fix (brick 18): wrap input with Path().
     """
+    if not jsonl_path:
+        return []
+    if not isinstance(jsonl_path, Path):
+        try:
+            jsonl_path = Path(jsonl_path)
+        except (TypeError, ValueError):
+            return []
     # P38: Multi-format detection
     fmt = _detect_transcript_format(jsonl_path)
     if fmt == "json":

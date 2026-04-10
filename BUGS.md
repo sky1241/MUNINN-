@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+3 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation infinite hang on big graphs, all fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 fact-span detection too narrow).
+## Status: 90+10+6 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash, all fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 partial fix). BUG-104 PARTIAL FIX in brick 17.
 
 ---
 
@@ -66,6 +66,36 @@
 - **Regression**: none. Pure functions like `redact_secrets_text`,
   `count_chained_commands`, `clamp_chained_commands` are still detected as
   safe and continue to be fuzzed normally.
+
+### BUG-109: cube_analysis.filter_dead_cubes / survey_propagation_filter crash on non-list
+- **Status**: FIXED (brick 18 commit pending)
+- **Symptom**: forge fuzzed `filter_dead_cubes(cubes='0', deps='0')` and got
+  `AttributeError: 'str' object has no attribute 'target'`.
+  Same family hit `survey_propagation_filter`.
+- **Root cause**: type hints `list[Cube]` / `list[Dependency]` not enforced
+  at runtime; both functions iterated their inputs assuming list-of-objects.
+- **Fix**: added `isinstance(..., (list, tuple))` guards. Empty / invalid
+  returns `([], [])`. Internal loop wraps `detect_dead_code` in
+  try/except `(AttributeError, TypeError)`. Mirrored to `muninn/`.
+- **Test**: `tests/test_props_cube_analysis.py` — 19 forge tests all pass.
+
+### BUG-108: muninn_tree.build_tree() crashes on str / nonexistent filepath
+- **Status**: FIXED (brick 18 commit pending)
+- **Symptom**: forge fuzzed `build_tree(filepath='')` and got
+  `AttributeError: 'str' object has no attribute 'name'` from line 634.
+- **Root cause**: function had `filepath: Path` hint but didn't wrap input.
+- **Fix**: 3 guards — empty -> ValueError, non-Path -> wrap with Path(),
+  nonexistent -> FileNotFoundError. Mirrored to `muninn/muninn_tree.py`.
+- **Test**: `tests/test_props_muninn_tree.py::test_build_tree_no_crash`.
+
+### BUG-107: muninn_feed.parse_transcript / _detect_transcript_format crash on str
+- **Status**: FIXED (brick 18 commit pending)
+- **Symptom**: forge fuzzed `parse_transcript(jsonl_path='')` and got
+  `AttributeError: 'str' object has no attribute 'read_bytes'`.
+- **Root cause**: same as BUG-108 — `Path`-typed parameter, no runtime wrap.
+- **Fix**: both functions wrap with `Path()`. Empty input returns
+  `[]` / `"unknown"`. Mirrored to `muninn/muninn_feed.py`.
+- **Test**: `tests/test_props_muninn_feed.py::test_parse_transcript_no_crash`.
 
 ### BUG-106: mycelium.spread_activation infinite hang on graphs > 500K edges
 - **Status**: FIXED (commit pending — brick 15)

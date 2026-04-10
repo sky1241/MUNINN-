@@ -591,8 +591,18 @@ def _tfidf_relevance(query: str, documents: dict) -> dict:
 
 # ── TREE BUILD ────────────────────────────────────────────────────
 
-def build_tree(filepath: Path):
-    """R3: compress BEFORE split. R2: split if over budget."""
+def build_tree(filepath):
+    """R3: compress BEFORE split. R2: split if over budget.
+
+    BUG-108 fix (brick 18): wrap with Path() and validate.
+    """
+    if not filepath:
+        raise ValueError("build_tree requires a non-empty filepath")
+    if not isinstance(filepath, Path):
+        filepath = Path(filepath)
+    if not filepath.exists():
+        raise FileNotFoundError(f"build_tree: {filepath} does not exist")
+
     tree = load_tree()
 
     compressed = _m.compress_file(filepath)
