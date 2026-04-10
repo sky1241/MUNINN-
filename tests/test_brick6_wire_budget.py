@@ -89,7 +89,9 @@ def test_l12_drops_filler_under_tight_budget(ml):
         "Fourth Muninn compression hit x4.5 ratio with commit abc1234.\n\n"
         "Fifth filler paragraph generic prose nothing important."
     )
-    os.environ["MUNINN_L12_BUDGET"] = "25"
+    # Budget chosen to fit both fact paragraphs (~23 + ~18 = ~41 BPE tokens)
+    # plus a small filler — but not all 5 paragraphs.
+    os.environ["MUNINN_L12_BUDGET"] = "50"
     out = ml._l12_budget_pass(text)
     # Both fact-rich paragraphs MUST be in the output
     assert "v2.3.1" in out, "BRICK 6 dropped fact span v2.3.1!"
@@ -124,14 +126,14 @@ def test_l12_zero_budget_returns_empty_or_unchanged(ml):
 
 
 def test_l12_preserves_iso_dates(ml):
-    """Budget must allow at least the fact-bearing chunk. The algorithm
-    can only enforce 'must-keep' if the chunk fits within the budget."""
+    """Budget must allow at least the fact-bearing chunk in BPE tokens."""
     text = (
         "Filler paragraph one with no facts whatsoever inside it at all.\n\n"
         "Critical: deployed on 2026-04-10 with full test coverage today.\n\n"
         "Filler paragraph three also empty of factual content here too."
     )
-    os.environ["MUNINN_L12_BUDGET"] = "15"
+    # Fact chunk is ~17 BPE tokens; budget 25 fits it comfortably
+    os.environ["MUNINN_L12_BUDGET"] = "25"
     out = ml._l12_budget_pass(text)
     assert "2026-04-10" in out
 
@@ -142,7 +144,8 @@ def test_l12_preserves_semvers(ml):
         "Migration to v2.3.1 was completed yesterday by the team.\n\n"
         "Closing paragraph also nothing critical to record here."
     )
-    os.environ["MUNINN_L12_BUDGET"] = "15"
+    # Fact chunk is ~15 BPE tokens
+    os.environ["MUNINN_L12_BUDGET"] = "25"
     out = ml._l12_budget_pass(text)
     assert "v2.3.1" in out
 
@@ -153,7 +156,8 @@ def test_l12_preserves_jira_tickets(ml):
         "BUG-101 was fixed by the auth team last week reportedly.\n\n"
         "Generic noise paragraph three also empty of facts."
     )
-    os.environ["MUNINN_L12_BUDGET"] = "15"
+    # Fact chunk is ~13 BPE tokens
+    os.environ["MUNINN_L12_BUDGET"] = "25"
     out = ml._l12_budget_pass(text)
     assert "BUG-101" in out
 
@@ -164,27 +168,27 @@ def test_l12_preserves_git_hashes(ml):
         "Commit abc1234 introduced the regression that broke the build.\n\n"
         "Filler three also empty no specific data points to record."
     )
-    os.environ["MUNINN_L12_BUDGET"] = "15"
+    # Fact chunk is ~12 BPE tokens
+    os.environ["MUNINN_L12_BUDGET"] = "25"
     out = ml._l12_budget_pass(text)
     assert "abc1234" in out
 
 
 def test_l12_documents_must_keep_limitation(ml):
     """Documents the known limitation: if a fact-bearing chunk is LARGER
-    than the entire budget, it cannot be kept. The hard rule is "must-keep
-    when it fits", not "must-keep no matter what". Future improvement
-    could be to compress the fact chunk further before dropping it."""
+    than the entire budget (in BPE tokens), it cannot be kept. The hard
+    rule is "must-keep when it fits", not "must-keep no matter what".
+    Future improvement: compress fact chunks further before dropping."""
     text = (
         "Critical: deployed v2.3.1 on 2026-04-10 with commit abc1234 "
         "fixing BUG-101 and reaching x4.5 compression ratio finally.\n\n"
         "Tiny filler."
     )
-    # Budget=5 — too small for the 20-token fact chunk
-    os.environ["MUNINN_L12_BUDGET"] = "5"
+    # Budget=8 — too small for the ~30-BPE-token fact chunk
+    os.environ["MUNINN_L12_BUDGET"] = "8"
     out = ml._l12_budget_pass(text)
     # The fact chunk is too big to fit, so the small filler wins
     assert "Tiny filler" in out
-    # Document: this is the known limitation, not a bug
 
 
 # ── Graceful degradation ─────────────────────────────────────
@@ -207,7 +211,9 @@ def test_l12_graceful_when_unavailable(ml):
 
 
 def test_l12_measurable_savings_on_filler_heavy(ml):
-    """Filler-heavy text MUST be reduced when L12 is enabled."""
+    """Filler-heavy text MUST be reduced when L12 is enabled.
+    Budget chosen to fit both fact paragraphs (~23 + ~18 = ~41 BPE tokens)
+    but not the 6 filler paragraphs."""
     text = "\n\n".join([
         "First filler paragraph completely generic without any specific facts.",
         "Second critical: shipped v2.3.1 on 2026-04-10 fixing BUG-101.",
@@ -218,7 +224,7 @@ def test_l12_measurable_savings_on_filler_heavy(ml):
         "Seventh filler paragraph empty content nothing useful inside this.",
         "Eighth filler paragraph generic prose absolutely no specific data.",
     ])
-    os.environ["MUNINN_L12_BUDGET"] = "25"
+    os.environ["MUNINN_L12_BUDGET"] = "60"
     out = ml._l12_budget_pass(text)
     saved = len(text) - len(out)
     pct = saved / len(text)

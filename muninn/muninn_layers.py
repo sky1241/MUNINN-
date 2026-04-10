@@ -52,7 +52,11 @@ except Exception:
 
 
 def _l12_budget_pass(text):
-    """Apply BudgetMem chunk selection if MUNINN_L12_BUDGET is set. Pure."""
+    """Apply BudgetMem chunk selection if MUNINN_L12_BUDGET is set. Pure.
+
+    Uses Muninn's tiktoken tokenizer for budget accounting so the env var
+    is interpreted in BPE tokens (matching the rest of the pipeline).
+    """
     import os as _os
     if not _BUDGET_SELECT_AVAILABLE or not text:
         return text or ""
@@ -66,9 +70,15 @@ def _l12_budget_pass(text):
     if budget <= 0:
         return text
     try:
-        return _budget_select_impl(text, budget_tokens=budget)
+        def _tt_count(t):
+            n = count_tokens(t)
+            return n[0] if isinstance(n, tuple) else n
+        return _budget_select_impl(text, budget_tokens=budget, token_count=_tt_count)
     except Exception:
-        return text
+        try:
+            return _budget_select_impl(text, budget_tokens=budget)
+        except Exception:
+            return text
 
 
 def _dedup_body_lines(lines):
@@ -1294,6 +1304,12 @@ def compress_file(filepath: Path) -> str:
     for cpat in _m._COMPILED_SECRET_PATTERNS:
         text = cpat.sub('[REDACTED]', text)
 
+    # PHASE B BRICK 6 FIX (2026-04-10): L12 BudgetMem chunk selection runs
+    # on the RAW text (after secret redaction, before any other compression)
+    # because that's where paragraphs are still separated by `\n\n`.
+    # OFF by default — opt-in via MUNINN_L12_BUDGET=<int>.
+    text = _l12_budget_pass(text)
+
     lines = text.split("\n")
 
     sections = []
@@ -1329,11 +1345,6 @@ def compress_file(filepath: Path) -> str:
 
     # L11: Rule Extraction — factorize repeated key=value patterns
     result = _extract_rules(result)
-
-    # PHASE B BRICK 6 (2026-04-10): L12 BudgetMem chunk selection. OFF by
-    # default — opt-in via MUNINN_L12_BUDGET=<int> environment variable.
-    # Runs BEFORE L9 so the LLM call sees a smaller input.
-    result = _l12_budget_pass(result)
 
     # Layer 9: LLM self-compress (optional, for large outputs)
     result = _llm_compress(result, context=str(filepath.name))
