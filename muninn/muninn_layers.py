@@ -24,6 +24,61 @@ except Exception:
     # the compression pipeline because of an optional extension.
     _LEXICONS_TIER1_PATTERNS = []
 
+# PHASE B BRICK 5 (2026-04-10): SimHash near-duplicate dedup wired into
+# compress_section(). Pure-Python, zero deps, graceful fallback if dedup.py
+# is missing. See muninn/dedup.py for the algorithm.
+try:
+    try:
+        from .dedup import simhash as _simhash
+        from .dedup import hamming_distance as _hamming
+    except ImportError:
+        from dedup import simhash as _simhash
+        from dedup import hamming_distance as _hamming
+    _DEDUP_AVAILABLE = True
+except Exception:
+    _DEDUP_AVAILABLE = False
+
+
+def _dedup_body_lines(lines):
+    """Drop SimHash near-duplicates from a section body. Pure.
+
+    Strict defaults (k=4 shingles, threshold=3, min_length=20) — only
+    collapses lines that are essentially identical except for typos /
+    punctuation / whitespace. Lines shorter than 20 chars pass through
+    unchanged. Tagged lines (B>, E>, F>, D>, A>) NEVER deduped.
+    """
+    if not _DEDUP_AVAILABLE or not lines:
+        return lines or []
+    out = []
+    seen_fps = []
+    for line in lines:
+        if not isinstance(line, str):
+            out.append(line)
+            continue
+        if len(line) >= 2 and line[:2] in ("B>", "E>", "F>", "D>", "A>"):
+            out.append(line)
+            continue
+        if len(line) < 20:
+            out.append(line)
+            continue
+        try:
+            fp = _simhash(line, bits=64, shingle_size=4)
+        except Exception:
+            out.append(line)
+            continue
+        is_dup = False
+        for prev_fp in seen_fps:
+            try:
+                if _hamming(fp, prev_fp) <= 3:
+                    is_dup = True
+                    break
+            except Exception:
+                continue
+        if not is_dup:
+            seen_fps.append(fp)
+            out.append(line)
+    return out
+
 
 class _ModRef:
     """Lazy reference to muninn engine — avoids circular import."""
@@ -728,6 +783,14 @@ def compress_section(header: str, lines: list[str]) -> str:
         cl = compress_line(line)
         if cl:
             body.append(cl)
+
+    # PHASE B BRICK 5 (2026-04-10): SimHash near-duplicate dedup on the
+    # post-compression body. Catches paraphrase / typo / punctuation
+    # repeats that survived L1-L7. Pure-Python, zero deps. Strict mode
+    # by default (k=4 shingles, threshold=3) — only collapses near-
+    # identical lines, no false positives on legitimately different
+    # content. See muninn/dedup.py for the algorithm.
+    body = _dedup_body_lines(body)
 
     if sum(len(b) for b in body) < 120:
         return f"{compressed_header}:{('|'.join(body))}"
