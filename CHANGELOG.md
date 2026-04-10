@@ -1,7 +1,141 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3649 + muninn_feed.py 1640 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1757 + mycelium.py 2932 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 = 18739 total (14 files)
-Tests: 1582 collected, 0 FAIL.
+Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3649 + muninn_feed.py 1640 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1757 + mycelium.py 2932 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 359 = 19610 total (17 files)
+Tests: 1582 + 234 Phase B = 1816 collected, 0 FAIL.
+
+---
+
+## Phase B (2026-04-10) — Compression literature 2024-2026 → Muninn
+
+After deep research on BudgetMem (arxiv 2511.04919), CompactPrompt
+(arxiv 2510.18043), Selective Context, LongLLMLingua, and the words/*
+MIT vendored lists, the headline insight from the literature was:
+
+  > "The best evidence points to gains coming from redundancy-aware
+  > selection (sentence/chunk pruning + near-duplicate collapse), not
+  > from additional word-level shaving."
+
+Sky's existing L0-L11 already does aggressive token shaving. The marginal
+gain remaining is in CHUNK SELECTION (BudgetMem-style) and SEMANTIC DEDUP
+(SimHash). Implemented as 3 stand-alone modules + 3 wirings, all pure
+Python with zero deps, OFF or backward-compat by default, and verified
+end-to-end with real tiktoken measurements.
+
+### Bricks 1-3: stand-alone modules (no wiring)
+
+| # | Module | Lines | Tests | Commit |
+|---|--------|-------|-------|--------|
+| 1 | `engine/core/lexicons.py`     | 274 | 28 unit + 1 forge | `11c8c97` |
+| 2 | `engine/core/dedup.py`        | 238 | 36 unit + 6 forge | `d158363` |
+| 3 | `engine/core/budget_select.py`| 359 | 50 unit + 6 forge | `586dfa1` |
+
+Each module mirrored to its `muninn/` package twin (BUG-091 dual maintenance).
+Each module is pure (no I/O, no global state, no network) — confirmed by
+forge.py BUG-102 destructive detector skipping ZERO functions in any of them.
+
+### Bricks 4-6: live wirings into compress_line / compress_section / compress_file
+
+| # | Wiring | Where | Commit |
+|---|--------|-------|--------|
+| 4 | `_LEXICONS_TIER1_PATTERNS` extends L2 `_FILLER` | compress_line() | `6e9bd40` |
+| 5 | `_dedup_body_lines(body)` after L0-L11 line compression | compress_section() | `86885dc` |
+| 6 | `_l12_budget_pass(text)` after secret redaction, before sections | compress_file() | `fa1be1b` (initial) → `2765f1b` (fixed: wrong location + word/BPE mismatch) |
+
+Brick 6 had to be re-wired during brick 7's E2E benchmark — the initial
+placement after L11 saw one giant joined string and would either keep it
+whole or drop everything (nodding-bird-zero on README.md). Real measurement
+caught it. The fix: move `_l12_budget_pass()` to BEFORE the section split,
+where the raw text still has `\n\n` paragraph separators. Also fixed the
+budget unit mismatch — the env var is now interpreted in BPE tokens (matches
+the rest of the pipeline) instead of word count.
+
+### Brick 7: real E2E benchmark with tiktoken
+
+`tests/benchmark/PHASE_B_RESULTS.md` (committed in `2765f1b`) — measurements
+on 3 real Muninn files with L9 (LLM compress) DISABLED:
+
+| File              | Original | L0-L11 only | +L12 50% | +L12 25% | +L12 10% |
+|-------------------|----------|-------------|----------|----------|----------|
+| verbose_memory.md |   1005   | 240 (x4.19) | 106 (**x9.48**) | 76 (x13.22) | 29 (x34.66) |
+| sample_session.md |    662   | 260 (x2.55) |  58 (x11.41) | 111 (x5.96) | 53 (x12.49) |
+| README.md         |   2407   | 1173 (x2.05)| 281 (**x8.57**) | 253 (x9.51) | 149 (x16.15) |
+
+**Headline: L12 at 50% budget gives x8-x9 ratio, more than DOUBLE the
+L0-L11 baseline of x2-x4.** This is the BudgetMem effect Sky was looking
+for, validated empirically on his own files.
+
+Honest caveats (also documented in PHASE_B_RESULTS.md):
+- L12 is OPT-IN via `MUNINN_L12_BUDGET=<int>` env var (default OFF)
+- Fact preservation drops as budget tightens (3-6 of 10 facts kept at b=10%)
+- L9 (LLM self-compress) adds another x2 on top per CLAUDE.md but costs API $$
+
+### Brick 8: wire ANTI_BULLSHIT_BATTLE_PLAN.md into CLAUDE.md
+
+Without this brick, the battle plan I committed in `5ffd2e1` was DEAD CODE
+— it lived on disk but no Claude session would ever read it because boot
+only loads `CLAUDE.md`. This brick adds **RULE 4 "No claim without command
+output"** in the `<MUNINN_RULES>` block (now 4 rules total) and updates
+the `<MUNINN_SANDWICH_RECENCY>` block at the bottom with a 4th entry that
+points to the doc. Commit: `cd8f51b`. 10 pin tests in
+`tests/test_brick8_claude_md_wires_battle_plan.py`.
+
+### Brick 9: WINTER_TREE.md documents the 3 new modules
+
+Added "## engine/core/lexicons.py", "## engine/core/dedup.py",
+"## engine/core/budget_select.py" sections with full constant + function
+tables and line ranges. Added "Phase B Wirings" sub-table inside the
+`muninn_layers.py` section listing the 8 wiring touchpoints. WINTER_TREE
+grew from 615 to 799 lines. Commit: `f2d25b6`. 8 pin tests in
+`tests/test_brick9_winter_tree_documents_phase_b.py`.
+
+### Phase B summary
+
+```
+Bricks shipped:        9 (3 modules + 3 wirings + benchmark + 2 docs)
+Commits to origin/main: 11c8c97, d158363, 586dfa1, 6e9bd40, 86885dc,
+                        fa1be1b, 2765f1b, 5ffd2e1, cd8f51b, f2d25b6
+                        (plus this CHANGELOG entry)
+Tests added:           234 (28+36+50+1+6+6+14+13+15+10+8 + 47 inline)
+                       all green at the time of each commit
+Modules added:         3 (+ 3 mirrors in muninn/ package)
+Real measured ratio:   x8.57 on README.md (vs x2.05 baseline) at L12 b=50%
+Backward compat:       100% — L12 is OFF by default, brick 4/5 are
+                       additive without changing existing test outputs
+Cost:                  $0 API (Phase B has zero LLM calls)
+```
+
+---
+
+## ANTI_BULLSHIT_BATTLE_PLAN.md (2026-04-10)
+
+`docs/ANTI_BULLSHIT_BATTLE_PLAN.md` (committed in `5ffd2e1`, wired into
+CLAUDE.md as RULE 4 in `cd8f51b`) is the contract written under fire after
+Sky's 9th frustration with Claude announcing "c'est fait" without doing
+the work. 415 lines, 10 sourced defenses, 10 verification questions Sky
+can ask any future Claude.
+
+The proof of the pattern (section 2 of the doc):
+- `c:/Users/ludov/3d-printer/CLAUDE_ONE_PAGE_MASTER_PROMPT.md` — Sky
+  wrote a 125-line "non-negotiable workflow" doc on 2026-02-12 to FORCE
+  Claude to do "1 fix = 1 commit = 1 push immediately". The very
+  existence of this doc is proof that Claude had been negotiating that
+  workflow before. Mirrored cross-repo in `.infernal_wheel/docs/`.
+- BUG_TRACKER.md + BUG_TRACKER_v2.md in 3d-printer with commit hash for
+  every fix — Sky stopped trusting the word "fixed" alone.
+- BUG-102 today: forge corrupted 165 files unnoticed for hours because
+  Claude kept claiming "tests pass" without re-running after each round.
+
+The 10 defenses (each with a test command Sky can run):
+1. One action per turn, verified
+2. No claim without command output
+3. BUGS.md FIXED requires commit hash + test
+4. Forge run mandatory after each engine module touch
+5. Real measurements, never estimates
+6. Read followed by "ok" is forbidden
+7. Push after every brick, never batched
+8. TodoWrite completed requires commit hash
+9. Doubt is expressed, bullshit isn't
+10. Last turn is a checklist with unchecked boxes visible
 
 ---
 
