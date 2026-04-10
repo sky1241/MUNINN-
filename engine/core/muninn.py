@@ -1078,6 +1078,49 @@ if __name__ == "__main__":
     return sas_path
 
 
+def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
+    """Copy the 3 PreToolUse enforcement hooks from Muninn source to target.
+
+    Chunk 12 of leak intel battle plan: enforces RULES 1, 2, 3 in code
+    rather than relying on CLAUDE.md text suggestions.
+
+    Returns dict mapping hook script name -> destination Path.
+    """
+    import shutil
+
+    hooks_dir = repo_path / ".claude" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    # Source hooks live in this same repo's .claude/hooks/
+    # We resolve via the engine file location, not via a hardcoded path.
+    muninn_root = Path(__file__).resolve().parent.parent.parent
+    source_dir = muninn_root / ".claude" / "hooks"
+
+    hook_names = [
+        "pre_tool_use_bash_destructive.py",
+        "pre_tool_use_bash_secrets.py",
+        "pre_tool_use_edit_hardcode.py",
+    ]
+    installed = {}
+    for name in hook_names:
+        src = source_dir / name
+        if not src.exists():
+            # If the source isn't here, we skip silently — the hooks are
+            # optional defense in depth, not critical.
+            continue
+        dst = hooks_dir / name
+        # Avoid copy-on-self when installing in the Muninn repo itself
+        try:
+            if src.resolve() == dst.resolve():
+                installed[name] = dst
+                continue
+        except OSError:
+            pass
+        shutil.copyfile(src, dst)
+        installed[name] = dst
+    return installed
+
+
 def install_hooks(repo_path: Path):
     """Install Claude Code hooks for automatic feed on PreCompact/SessionEnd/Stop/UserPromptSubmit.
 
@@ -1103,11 +1146,16 @@ def install_hooks(repo_path: Path):
     # (chunk 5 of leak intel battle plan)
     sas_path = _generate_subagent_start_hook(repo_path, engine_core_dir)
 
+    # Copy PreToolUse enforcement hooks (chunk 12 of leak intel battle plan)
+    # These enforce CLAUDE.md RULES 1, 2, 3 in code rather than text suggestion.
+    ptu_hooks = _install_pre_tool_use_hooks(repo_path)
+
     feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
     stop_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}" --trigger stop'
     bridge_cmd = f'python "{bridge_path}"'
     ptf_cmd = f'python "{ptf_path}"'
     sas_cmd = f'python "{sas_path}"'
+
     required_hooks = {
         "UserPromptSubmit": [{"type": "command", "command": bridge_cmd, "timeout": 5}],
         "PreCompact": [{"type": "command", "command": feed_cmd}],
@@ -1116,6 +1164,39 @@ def install_hooks(repo_path: Path):
         "PostToolUseFailure": [{"type": "command", "command": ptf_cmd, "timeout": 5}],
         "SubagentStart": [{"type": "command", "command": sas_cmd, "timeout": 10}],
     }
+
+    # PreToolUse hooks use a different format with matchers
+    # See https://code.claude.com/docs/en/hooks
+    pre_tool_entries = []
+    if "pre_tool_use_bash_destructive.py" in ptu_hooks:
+        pre_tool_entries.append({
+            "matcher": "Bash",
+            "hooks": [{
+                "type": "command",
+                "command": f'python "{ptu_hooks["pre_tool_use_bash_destructive.py"]}"',
+                "timeout": 5,
+            }],
+        })
+    if "pre_tool_use_bash_secrets.py" in ptu_hooks:
+        pre_tool_entries.append({
+            "matcher": "Bash",
+            "hooks": [{
+                "type": "command",
+                "command": f'python "{ptu_hooks["pre_tool_use_bash_secrets.py"]}"',
+                "timeout": 5,
+            }],
+        })
+    if "pre_tool_use_edit_hardcode.py" in ptu_hooks:
+        pre_tool_entries.append({
+            "matcher": "Edit|Write",
+            "hooks": [{
+                "type": "command",
+                "command": f'python "{ptu_hooks["pre_tool_use_edit_hardcode.py"]}"',
+                "timeout": 5,
+            }],
+        })
+    if pre_tool_entries:
+        required_hooks["PreToolUse"] = pre_tool_entries
 
     # Load existing settings or start fresh
     existing = {}
@@ -1128,6 +1209,22 @@ def install_hooks(repo_path: Path):
     existing_hooks = existing.get("hooks", {})
     installed = []
 
+    def _extract_commands(entries):
+        """Extract command strings from a hook entries list, supporting both
+        the simple format ({type, command}) and the matcher format
+        ({matcher, hooks: [{type, command}]}) used by PreToolUse."""
+        cmds = []
+        for e in entries or []:
+            if not isinstance(e, dict):
+                continue
+            if "command" in e:
+                cmds.append(e.get("command", ""))
+            elif "hooks" in e:
+                for h in e.get("hooks", []):
+                    if isinstance(h, dict):
+                        cmds.append(h.get("command", ""))
+        return cmds
+
     # Merge hook-by-hook: add missing hooks, update stale paths
     for hook_name, hook_entries in required_hooks.items():
         if hook_name not in existing_hooks:
@@ -1135,11 +1232,16 @@ def install_hooks(repo_path: Path):
             installed.append(hook_name)
         else:
             # Check if existing hook points to a stale muninn.py or bridge path
-            existing_cmds = [e.get("command", "") for e in existing_hooks[hook_name]]
-            new_cmd = hook_entries[0]["command"]
-            if any("muninn" in c.lower() for c in existing_cmds) and new_cmd not in existing_cmds:
-                existing_hooks[hook_name] = hook_entries
-                installed.append(f"{hook_name}(updated)")
+            existing_cmds = _extract_commands(existing_hooks[hook_name])
+            new_cmds = _extract_commands(hook_entries)
+            # If any existing cmd mentions muninn AND any new cmd is missing,
+            # treat as needing update
+            if any("muninn" in c.lower() or "pre_tool_use" in c.lower() or "bridge_hook" in c.lower()
+                   for c in existing_cmds):
+                missing_in_existing = [nc for nc in new_cmds if nc not in existing_cmds]
+                if missing_in_existing:
+                    existing_hooks[hook_name] = hook_entries
+                    installed.append(f"{hook_name}(updated)")
 
     if not installed:
         print(f"  Hooks already up-to-date (UserPromptSubmit + PreCompact + SessionEnd + Stop)")

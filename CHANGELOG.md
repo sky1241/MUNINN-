@@ -13,6 +13,93 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 12 — PreToolUse enforcement hooks for the 3 critical RULES (2026-04-10) [DONE]
+
+The chunks 9-11 measurement work proved that 3 RULES of CLAUDE.md have real
+causal effect (RULE 1 hardcode +100%, RULE 2 destructive +100%, RULE 3 secrets
++20%). But Anthropic's official docs say CLAUDE.md is "context, not enforced
+configuration" — Claude can ignore it. To make these 3 RULES truly bulletproof,
+this chunk adds an enforcement layer in code via PreToolUse hooks.
+
+**3 hooks added in `.claude/hooks/`:**
+
+1. `pre_tool_use_bash_destructive.py` — matcher `Bash`
+   Blocks: git push --force/-f, git reset --hard, git branch -D, rm -rf /,
+   rm -rf ~, DROP TABLE/DATABASE, TRUNCATE, DELETE FROM (no WHERE), dd to
+   /dev/, mkfs, shutdown/reboot, --no-verify, --dangerously-skip-permissions.
+   Allows: git push origin main, ls, rm specific_file, etc.
+
+2. `pre_tool_use_bash_secrets.py` — matcher `Bash`
+   Blocks: echo $TOKEN/$AWS_SECRET_KEY/$ANTHROPIC_API_KEY, cat .env, cat
+   ~/.aws/credentials, env | grep TOKEN, printenv SECRET.
+   Allows: [ -n "$VAR" ] && echo set, echo "${#VAR}", curl -H "Authorization:
+   Bearer $TOKEN" (used not echoed).
+
+3. `pre_tool_use_edit_hardcode.py` — matcher `Edit|Write`
+   Blocks: Edit/Write to engine/core/*.py or muninn/*.py that introduces a
+   hardcoded path containing "C:/Users/.../MUNINN-" inside CODE lines.
+   Allows: same path in tests/, docs/, or in a comment line within engine code.
+
+**Design rules for all hooks:**
+- Never raise. Always exit 0 (allow) or 2 (block). Crashes from these hooks
+  would block all matching tools silently — much worse than letting one through.
+- Conservative pattern matching. Better to miss a violation than to frustrate
+  Sky on legitimate work.
+- Always provide a clear stderr message explaining WHY it was blocked AND
+  what the safe alternative is.
+- Each hook checks `tool_name` and exits 0 immediately if not its target tool.
+
+**install_hooks() updates:**
+- New helper `_install_pre_tool_use_hooks()` copies the 3 scripts from the
+  Muninn source repo to the target repo's `.claude/hooks/`.
+- Hooks installed under `PreToolUse` key with the matcher format documented
+  by Anthropic: `{"matcher": "Bash", "hooks": [{"type": "command", ...}]}`.
+- The merge logic in `install_hooks` was updated to handle the matcher
+  format (extracting commands from nested `hooks` lists), preventing
+  KeyError on the new format.
+- Same modifs mirrored in `muninn/_engine.py` (BUG-091 dual maintenance).
+
+**Hook count update**: 6 → **7 distinct hooks**, with `PreToolUse` containing
+3 entries (one per matcher pattern), so the actual enforcement count is **9**
+hook scripts now installed by `install_hooks()`.
+
+| Hook event | Count | Coverage |
+|---|---|---|
+| UserPromptSubmit | 1 | bridge_hook (mycelium injection) |
+| PreCompact | 1 | feed transcript to .mn |
+| SessionEnd | 1 | feed transcript to .mn |
+| Stop | 1 | feed --trigger stop |
+| PostToolUseFailure | 1 | auto-feed errors.json |
+| SubagentStart | 1 | inject Muninn boot to sub-agents |
+| **PreToolUse** | **3** | **destructive + secrets + hardcode enforcement** |
+| **Total** | **9** | (28 hooks available, 32% of arsenal used) |
+
+**Tests:** `tests/test_chunk12_pre_tool_use_hooks.py` — 31 tests, all PASS:
+- 11 tests for destructive hook (block + allow + invalid input)
+- 11 tests for secrets hook (block + allow + invalid input)
+- 8 tests for hardcode hook (block engine, allow tests/docs/comments, invalid)
+- 1 integration test that runs `install_hooks()` end-to-end and verifies
+  the 3 scripts are copied to target and registered in settings.local.json
+  with correct matcher format.
+
+**Tests across all 9 chunk test files: 144/144 PASS, no regression.**
+
+**Cost**: $0 API. Pure Python.
+
+**API budget**: total session ~$9.49 / $33.54 unchanged. ~$24.05 remaining.
+
+**What this gives Sky in practice:**
+At Sky's next `claude` session, when I (or any future cousin) try to:
+- run `git push --force` → blocked, stderr explains, must ask Sky
+- run `echo $GITHUB_TOKEN` → blocked, stderr explains safe alternatives
+- write `path = "C:/Users/ludov/MUNINN-/..."` in `engine/core/foo.py` → blocked
+
+The 2 critical RULES (1 and 2) are now enforced in code, not just suggested
+in CLAUDE.md text. This closes the gap that Anthropic's docs warned about
+("context, not enforced configuration").
+
+---
+
 ### CHUNK 11 — Blind spots eval: testing 8 risks NOT covered by current 3 RULES (2026-04-10) [DONE]
 
 After Phase B (chunk 10) reduced CLAUDE.md from 8 to 3 RULES, the natural
