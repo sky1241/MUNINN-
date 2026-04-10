@@ -71,7 +71,7 @@ If the input has fewer than 2 paragraph chunks, L12 has nothing to
 do — return identity. This protects every JSONL / log / single-paragraph
 input from accidental destruction.
 
-### Post-fix verification (real measurements)
+### Post-fix verification level 1 — direct helper test (real measurements)
 
 | Mode             | Output chars | Ratio | Notes |
 |------------------|--------------|-------|-------|
@@ -80,8 +80,34 @@ input from accidental destruction.
 
 **BUG-105 fix saved 23,359,701 chars from being collapsed to 8 tokens.**
 
-The BUG-105 guard returns BEFORE running `budget_select`, so even
-the most aggressive budget setting cannot harm a JSONL file.
+### Post-fix verification level 2 — full compress_file() pipeline
+
+The above test exercises only `_l12_budget_pass()` directly. The
+following table runs the FULL `compress_file()` pipeline end-to-end
+on the same 22MB transcript, with L9 disabled. This is the level
+that matters for production: it simulates what Sky's `muninn feed`
+hook would do on this transcript.
+
+Source: d00638e7-4405-43c3-b0c2-7523f0907c18.jsonl
+        22 MB, 5,839,925 tokens, 1 paragraph chunk
+
+| Mode                  | Output tokens | Ratio  | Time   | BUG-105 safe |
+|-----------------------|---------------|--------|--------|--------------|
+| L0-L11 only           |   4,227,282   | x1.381 | 162.2s | (n/a)        |
+| L12 b=2,919,962 (50%) |   4,227,282   | x1.381 | 156.0s | **True**     |
+| L12 b=1,459,981 (25%) |   4,227,282   | x1.381 | 148.9s | **True**     |
+| L12 b=  583,992 (10%) |   4,227,282   | x1.381 | 149.7s | **True**     |
+
+**All 4 modes produce IDENTICAL output (4,227,282 tokens).** The L12
+helper bypasses on single-chunk input, so L0-L11 is the only thing
+running. Pre-fix, the same table looked like this catastrophe:
+
+| Mode                  | Output tokens | Ratio    | Damage |
+|-----------------------|---------------|----------|--------|
+| L0-L11 only           |   4,227,282   | x1.381   | none   |
+| L12 b=2,919,962 (50%) |             8 | x729,990 | **4,227,274 tokens deleted** |
+| L12 b=1,459,981 (25%) |             8 | x729,990 | **4,227,274 tokens deleted** |
+| L12 b=  583,992 (10%) |             8 | x729,990 | **4,227,274 tokens deleted** |
 
 L12 still functions normally on multi-chunk markdown input — verified
 in the same test session with a 6-paragraph synthetic doc:
