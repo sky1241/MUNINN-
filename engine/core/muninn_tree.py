@@ -2073,7 +2073,19 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
     # Skip observe+save in fast path — too slow for hooks.
     # The full bridge() or feed hooks handle persistence.
 
-    return "\n".join(lines)
+    output = "\n".join(lines)
+
+    # Anti-Adversa: defense-in-depth in case a poisoned mycelium concept
+    # contains a chained command sequence that would inject 50+ shell
+    # subcommands into Claude's context. See _secrets.clamp_chained_commands
+    # and docs/CLAUDE_CODE_LEAK_INTEL.md section 10.
+    try:
+        from _secrets import clamp_chained_commands
+        output, _ = clamp_chained_commands(output)
+    except Exception:
+        pass  # never break the fast-path on a defense failure
+
+    return output
 
 
 # ── B4: Endsley L3 Prediction ────────────────────────────────────

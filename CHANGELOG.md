@@ -13,6 +13,62 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 3 — Anti-Adversa clamp on hook injections (2026-04-10) [DONE]
+
+Adversa AI Red Team disclosed (2026-04-02) that Claude Code's deny rules
+silently bypass when a generated bash pipeline exceeds 50 chained subcommands.
+Patched in Claude Code v2.1.90 — but the attack surface persists for any
+tool that injects content into Claude's context.
+
+Muninn injects via UserPromptSubmit hook (`bridge_hook.py` -> `bridge_fast()`)
+and pulls from meta-mycelium (cross-repo). A poisoned `.mn` containing a 50+
+subcommand pipeline, once injected, would reproduce Adversa locally.
+
+**Defense added:**
+- New constant `MAX_CHAINED_COMMANDS = 30` in `engine/core/_secrets.py`
+  (60% of Adversa's documented threshold of 50, conservative margin).
+- New function `count_chained_commands(text)` — counts `&&` and `||`
+  occurrences. Strategy: only strong shell separators are counted; `;`
+  and `|` are too ambiguous (markdown tables, French punctuation,
+  legit Unix pipes) and almost never appear in Adversa-style attacks.
+- New function `clamp_chained_commands(text, max_chains)` — returns
+  `(text, was_clamped)`. If text exceeds the threshold, the entire
+  content is replaced with a one-line warning rather than truncated
+  (truncation could leave a usable attack chain).
+
+**Wiring (defense in depth, two layers):**
+- `engine/core/muninn_tree.py::bridge_fast()` — clamp output before return
+- `.claude/hooks/bridge_hook.py` — clamp output again at the final
+  injection point (in case bridge_fast is bypassed)
+
+Both wirings catch exceptions silently to never block hook execution
+on a defense failure (fail-open is the right default for hooks).
+
+**Tests:** `tests/test_chunk3_anti_adversa_clamp.py` — 20 tests, all PASS:
+- Empty text and clean text return zero
+- Single `|` and `;` are NOT counted (too ambiguous)
+- `&&` and `||` are counted correctly
+- 50 chained commands counted exactly
+- Clamp passes texts at and below threshold (boundary test)
+- Clamp refuses texts above threshold
+- Adversa 50-cmd scenario refused
+- Custom threshold respected
+- No false positives on:
+  - French prose with logical connectors
+  - Markdown tables with pipes
+  - Natural pipeline mentions in documentation
+  - Mycelium bridge typical output
+- E2E poisoned `.mn` scenario blocked
+- Default threshold guaranteed below Adversa's 50
+
+E2E smoke test confirmed: 60-cmd pipeline blocked, 'evil.com' string
+not present in output, replacement message contains 'ANTI-ADVERSA'.
+
+**Reversible:** revert commit. The defense functions are additive — no
+existing behavior changed when content is clean (was_clamped=False path).
+
+---
+
 ### CHUNK 2 — Refactor CLAUDE.md to XML format with negative examples (2026-04-10) [DONE]
 
 CLAUDE.md is delivered as user message after the system prompt (Anthropic doc).

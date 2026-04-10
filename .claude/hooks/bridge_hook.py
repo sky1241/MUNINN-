@@ -96,6 +96,14 @@ def main():
         muninn._refresh_tree_paths()
         result = muninn.bridge_fast(prompt)
         if result:
+            # Anti-Adversa clamp: refuse injection of any content containing
+            # >30 chained shell commands. Defense-in-depth at the final
+            # injection point. See docs/CLAUDE_CODE_LEAK_INTEL.md sec 10.
+            try:
+                from _secrets import clamp_chained_commands
+                result, _ = clamp_chained_commands(result)
+            except Exception:
+                pass  # never block hook execution on a defense failure
             print(result)
     except Exception:
         pass
