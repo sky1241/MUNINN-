@@ -237,6 +237,8 @@ def _safe_path(filepath) -> str:
 
 
 def get_codebook():
+    """Return the per-repo codebook (universal + mycelium-learned rules).
+    Lazy-loads on first call. Brick 20 docstring fix."""
     # globals on _m
     if _m._CB is None or _m._CB_REPO != _m._REPO_PATH:
         _m._CB = load_codebook(_m._REPO_PATH)

@@ -240,6 +240,11 @@ def _safe_path(filepath) -> str:
 
 
 def get_codebook():
+    """Return the per-repo codebook (universal + mycelium-learned rules).
+
+    Lazy-loads on first call. Re-loads when `_m._REPO_PATH` changes
+    (different repo target). Brick 20 docstring fix.
+    """
     # globals on _m
     if _m._CB is None or _m._CB_REPO != _m._REPO_PATH:
         _m._CB = load_codebook(_m._REPO_PATH)
@@ -725,6 +730,14 @@ def tag_memory_type(line: str) -> str:
 
 
 def compress_section(header: str, lines: list[str]) -> str:
+    """Compress a markdown ## section: header + body.
+
+    Pipeline:
+      - Extract state markers from header (✓/⟳/◉/✗)
+      - Compress sub-sections OR fall back to line-by-line compression
+      - Brick 5 SimHash dedup on the body before final join
+    Returns the compressed section as a single string.
+    """
     cb = get_codebook()
     text_rules = cb["text_rules"]
 
@@ -1303,6 +1316,20 @@ def _llm_compress(text: str, context: str = "") -> str:
 
 
 def compress_file(filepath: Path) -> str:
+    """Top-level compression entry point: read file, run full L0-L11 pipeline.
+
+    Pipeline order (Brick 6 wired L12 BudgetMem after secret redaction):
+      1. Read file as UTF-8
+      2. P10 secret redaction
+      3. L12 BudgetMem chunk selection (opt-in via MUNINN_L12_BUDGET)
+      4. Section split on `##` headers
+      5. compress_section for each section
+      6. Contradiction resolution
+      7. L10 cue distillation
+      8. L11 rule extraction
+      9. L9 LLM self-compress (optional, costs API)
+    Returns the compressed text. Empty string on read failure.
+    """
     filepath = Path(filepath)
     if not filepath.exists():
         return ""
@@ -1367,6 +1394,13 @@ def compress_file(filepath: Path) -> str:
 
 
 def decode_line(line: str) -> str:
+    """Reverse-decode a single compressed line back toward natural text.
+
+    Best-effort: applies the codebook in reverse (mycelium fusions ->
+    long forms, abbreviations -> phrases). NOT a perfect inverse —
+    L0/L1/L2 strip information that cannot be recovered.
+    Used for debugging and manual inspection of compressed output.
+    """
     cb = get_codebook()
     result = line
 
