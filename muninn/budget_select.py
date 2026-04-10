@@ -91,6 +91,7 @@ def _discourse_marker_count(text: str) -> int:
 # Same families as Muninn's L7 fact extraction — kept consistent on purpose.
 
 _FACT_SPAN_RES = (
+    # Hard facts (original)
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),                    # ISO date
     re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b"),              # slash date
     re.compile(r"\b\d+(?:\.\d+)?[KMGT]?\b"),                 # number with unit
@@ -100,6 +101,11 @@ _FACT_SPAN_RES = (
     re.compile(r"\bv?\d+\.\d+(?:\.\d+)?(?:-[a-z]+)?\b"),     # semver
     re.compile(r"https?://\S+"),                             # url
     re.compile(r"\b[A-Z]{2,}-\d+\b"),                        # ticket id (JIRA)
+    # BUG-104 fix (brick 17): soft facts
+    re.compile(r"\b[a-z_][a-zA-Z0-9_]{3,}\("),               # function call site
+    re.compile(r"\b[a-zA-Z_][\w.\-]*/[\w.\-/]{3,}"),         # file path
+    re.compile(r"\b[A-Z][a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]+\b"),  # CamelCase
+    re.compile(r"`[^`\n]{3,50}`"),                           # backtick code
 )
 
 

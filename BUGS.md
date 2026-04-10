@@ -174,31 +174,46 @@
   guard fires, so users know L12 is being skipped (currently silent
   degradation). Not critical, file as enhancement not bug.
 
-### BUG-104: L12 BudgetMem fact-span detector misses soft facts under tight budget
-- **Status**: OPEN (deferred — empirically measured 2026-04-10, brick 12)
+### BUG-104: L12 BudgetMem fact-recall loss at tight budgets (PARTIAL FIX brick 17)
+- **Status**: PARTIAL FIX (brick 17 extended has_fact_span, but the
+  benchmark numbers did not change — the actual root cause is different)
 - **Symptom**: at `MUNINN_L12_BUDGET=500` on `verbose_memory.md` (1005 tok),
   fact recall drops from **15/15 (100%) to 6/15 (40%)** — a -60 point loss.
   At b=250 it goes to 5/15 (33%, -67 points). Sample_session.md has the
   same pattern at smaller swings (80% → 60% → 53%). See
   `tests/benchmark/PHASE_B_FACT_RECALL.md` for the full table.
-- **Root cause**: `engine/core/budget_select.py:has_fact_span()` only matches
-  a finite set of regex (ISO date, semver, git hash, %, $money, JIRA ticket,
-  URL). It does NOT detect:
-    - Function / class names (`compress_line`, `Mycelium`)
-    - File paths (`engine/core/muninn.py`)
-    - Verbose facts ("the test was created on Tuesday")
-    - Identifiers in backticks
-  When a chunk only has these "soft facts", BudgetMem's must-keep hard rule
-  doesn't fire, so the chunk competes on the score-only path and loses to
-  position-bias filler chunks.
-- **Fix (TBD)**: extend `_FACT_SPAN_RES` with patterns for:
-    - `\b[a-z][a-zA-Z0-9_]+\(\)` (function call sites)
-    - `\b[A-Z][a-zA-Z0-9_]*[a-z]` (CamelCase identifiers, ≥4 chars)
-    - `[a-zA-Z_]+/[a-zA-Z_]+/[a-zA-Z_.]+` (path segments)
-    - `\` `[^\`]{3,30}\` `` (backtick-quoted code)
-  Risk: false positives on prose containing camelCase or paths in markdown
-  example blocks. Need to test on the existing fact-recall benchmark before
-  shipping.
+- **Original (wrong) root cause analysis**: I assumed has_fact_span() was
+  too narrow and missed soft facts (function names, paths, CamelCase,
+  backticks). I implemented brick 17 to extend `_FACT_SPAN_RES` with
+  4 new patterns and verified them on synthetic inputs (20 pin tests pass).
+  THEN I re-ran the verbose_memory.md / sample_session.md benchmark and
+  the numbers were UNCHANGED (still 6/15 at b=500, still 9/15 on session).
+  Investigation showed that the chunks on those files ALREADY had hard
+  facts (dates, version numbers) and were ALREADY marked must-keep —
+  the new patterns were redundant for those specific files.
+- **Actual root cause** (corrected analysis 2026-04-11): the must-keep
+  rule fires correctly. The problem is that the must-keep CHUNKS are
+  TOO BIG to all fit in the budget. Phase 1 packing (must-keep first)
+  can only fit some of them; the rest are dropped. Questions about facts
+  in dropped must-keep chunks fail. This is NOT a detector problem, it's
+  a chunk granularity problem — the chunks are paragraph-sized and on
+  technical content, paragraphs are too large to fit in tight budgets.
+- **Real fix (TBD)**: split big must-keep chunks into sub-chunks before
+  budget evaluation, OR run L0-L11 compression on must-keep chunks BEFORE
+  budget evaluation so they take fewer tokens, OR document that L12 is
+  only effective when budget >= largest_chunk_size.
+- **Brick 17 partial fix (committed)**: extended `_FACT_SPAN_RES` with
+  4 new patterns:
+    - `\b[a-z_][a-zA-Z0-9_]{3,}\(`            — function call sites
+    - `\b[a-zA-Z_][\w.\-]*/[\w.\-/]{3,}`      — file paths (3+ chars after /)
+    - `\b[A-Z][a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]+\b`  — proper CamelCase
+    - `` `[^`\n]{3,50}` ``                     — backtick-quoted code
+  These DO help on chunks that contain ONLY soft facts and no numbers
+  (verified by `test_soft_only_chunk_marked_must_keep`). They DO NOT help
+  on the existing benchmark files because those already have hard facts.
+  The patterns are conservative enough to avoid false positives on
+  ordinary prose ("Mycelium" alone does NOT match because it has no
+  inner uppercase — only proper CamelCase like "BudgetSelector" matches).
 - **Mitigation now**: L12 stays OPT-IN via env var (default OFF). The
   documented safe operating range in PHASE_B_FACT_RECALL.md is
   `MUNINN_L12_BUDGET >= compressed file size` — at that point L12 is

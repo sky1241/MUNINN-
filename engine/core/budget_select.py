@@ -89,8 +89,16 @@ def _discourse_marker_count(text: str) -> int:
 # ── Fact span detection (delegated regex) ───────────────────────
 # A chunk that contains ANY fact span is "must-keep" regardless of score.
 # Same families as Muninn's L7 fact extraction — kept consistent on purpose.
+#
+# BUG-104 fix (2026-04-11, brick 17): added 4 "soft fact" patterns to
+# catch the cases that Phase B brick 12 fact-recall benchmark exposed:
+# function call sites, file paths, CamelCase identifiers, backtick code.
+# Without these, technical content (Sky's transcripts) loses 60+ points
+# of fact recall at tight budgets because the must-keep rule never fires
+# on chunks that only have these "soft" facts.
 
 _FACT_SPAN_RES = (
+    # ── Hard facts (existing, unchanged) ──
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),                    # ISO date
     re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b"),              # slash date
     re.compile(r"\b\d+(?:\.\d+)?[KMGT]?\b"),                 # number with unit
@@ -100,6 +108,19 @@ _FACT_SPAN_RES = (
     re.compile(r"\bv?\d+\.\d+(?:\.\d+)?(?:-[a-z]+)?\b"),     # semver
     re.compile(r"https?://\S+"),                             # url
     re.compile(r"\b[A-Z]{2,}-\d+\b"),                        # ticket id (JIRA)
+    # ── Soft facts (BUG-104 fix, brick 17) ──
+    # Function / method call sites: foo() / module.bar() / Class.method()
+    # Requires at least 4 chars before "()" so we don't match noise like x()
+    re.compile(r"\b[a-z_][a-zA-Z0-9_]{3,}\("),
+    # File paths with at least one separator: engine/core/foo.py, src/bar.js
+    # Requires the segment to look path-y (alphanumeric + .-_)
+    re.compile(r"\b[a-zA-Z_][\w.\-]*/[\w.\-/]{3,}"),
+    # CamelCase identifiers: Mycelium, BudgetSelector, TestCase (≥4 chars,
+    # at least one inner uppercase, must start with uppercase + lowercase)
+    re.compile(r"\b[A-Z][a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]+\b"),
+    # Backtick-quoted code: `compress_line`, `BUG-104`
+    # Requires 3-50 chars between backticks to avoid matching prose tics
+    re.compile(r"`[^`\n]{3,50}`"),
 )
 
 
