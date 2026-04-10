@@ -32,11 +32,13 @@ import sys
 
 
 # Patterns that ALWAYS need confirmation, even if Sky asked once
+# Audit 2026-04-10: added foo/* glob, combined short flags (-fu), eval-wrapped
 DESTRUCTIVE_PATTERNS = [
-    # Force-push
+    # Force-push (long, short, with-lease)
     (r'\bgit\s+push\b[^|;&]*--force\b', "git push --force"),
-    (r'\bgit\s+push\b[^|;&]*-f\b', "git push -f"),
     (r'\bgit\s+push\b[^|;&]*--force-with-lease\b', "git push --force-with-lease"),
+    # Short flags: -f alone OR combined like -fu, -uf, -fuv
+    (r'\bgit\s+push\b[^|;&]*\s-[a-z]*f[a-z]*\b', "git push -f (short or combined)"),
 
     # Hard reset
     (r'\bgit\s+reset\b[^|;&]*--hard\b', "git reset --hard"),
@@ -49,8 +51,11 @@ DESTRUCTIVE_PATTERNS = [
     (r'\brm\s+-rf?\s+/(?:\s|$)', "rm -rf /"),
     (r'\brm\s+-rf?\s+~/?(?:\s|$)', "rm -rf ~"),
     (r'\brm\s+-rf?\s+\$HOME', "rm -rf $HOME"),
-    (r'\brm\s+-rf?\s+\.', "rm -rf . (current dir)"),
-    (r'\brm\s+-rf?\s+\*', "rm -rf *"),
+    (r'\brm\s+-rf?\s+\.\s*$', "rm -rf . (current dir)"),
+    (r'\brm\s+-rf?\s+\.\s', "rm -rf . (current dir)"),
+    # rm -rf glob patterns: *, *.ext, foo/*, ../foo, etc.
+    (r'\brm\s+-rf?\s+[^\s|;&]*\*', "rm -rf <glob>"),
+    (r'\brm\s+-rf?\s+\.\.', "rm -rf ../ (parent)"),
 
     # SQL destructive
     (r'\bDROP\s+(?:TABLE|DATABASE|SCHEMA|INDEX)\b', "DROP TABLE/DATABASE"),
@@ -67,6 +72,10 @@ DESTRUCTIVE_PATTERNS = [
     # Skip safety
     (r'--no-verify\b', "--no-verify (skip git hooks)"),
     (r'--dangerously-skip-permissions\b', "--dangerously-skip-permissions"),
+
+    # Eval/exec wrapping (executes its argument as shell command)
+    # We block any eval/exec/sh -c that contains another destructive marker
+    (r'\b(?:eval|exec|sh\s+-c|bash\s+-c)\b[^"\']*["\'][^"\']*(?:rm\s+-rf|--force|--no-verify|DROP\s+TABLE|TRUNCATE)', "eval/exec wrapping destructive"),
 ]
 
 # Compile once

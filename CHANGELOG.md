@@ -13,6 +13,72 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 16 — Full audit pass on chunks 1-15 hooks + 9 bugs fixed (2026-04-10) [DONE]
+
+Sky asked for a "military quality" audit of everything done today, with
+adversarial edge case testing. Found and fixed 9 real bugs across the
+hooks layer.
+
+**9 bugs found, all fixed, all pinned by anti-regression tests.**
+
+Bug catalog (full details in BUGS.md BUG-092 through BUG-100):
+
+| ID | Hook | Bug | Fix |
+|---|---|---|---|
+| 092 | bash_destructive | `rm -rf foo/*` glob in subdir was ALLOWED | regex now matches any token containing `*` |
+| 093 | bash_destructive | `git push -fu` combined short flags ALLOWED | regex now matches `\s-[a-z]*f[a-z]*\b` |
+| 094 | bash_destructive | `eval 'rm -rf /'` wrapped destructive ALLOWED | new pattern for eval/exec/sh -c wrappers |
+| 095 | bridge_hook | crashed exit 1 on `[1,2,3]` payload | type-check before .get() |
+| 096 | post_tool_failure_hook | same | same |
+| 097 | notification_audit_hook | same | same |
+| 098 | post_tool_use_edit_log | same | same |
+| 099 | config_change_hook | same | same |
+| 100 | bridge_hook + post_tool_failure templates in muninn.py + _engine.py | same bug in templates → would resurface on next install_hooks() | type-check added in templates too |
+
+Bugs 095-100 are the same root cause: hooks called `payload.get("cwd")`
+BEFORE checking `isinstance(payload, dict)`. The try/except protected the
+downstream call but not the .get() itself. Contract says hooks NEVER raise.
+
+**Verification methodology**:
+- Adversarial edge case sweep on 6 malformed payloads × 9 hooks = 54 cases
+- Adversarial pattern sweep on destructive hook: 18 dangerous + 12 legit
+- After fix: 9/9 hooks robust, 9/9 destructive patterns block, 0 false positives
+
+**75 new anti-regression tests added**:
+- `tests/test_chunk12_pre_tool_use_hooks.py`:
+  - 8 new destructive edge case tests (BUGS 092-094)
+  - 1 parametrized robustness test × 9 hooks × 6 payloads = 54 cases
+- `tests/test_audit_dual_tree_sync.py` (NEW):
+  - 12 sync markers checked across engine/core/ ↔ muninn/ pkg
+  - 1 sanity test on marker count
+  - Acts as a tripwire for BUG-091: if a future change breaks the dual-tree
+    mirror on these specific markers, this test fails. NOT a fix for BUG-091
+    (16/19 file pairs are still diverged from before today), just a
+    safety net for the chunks added today.
+
+**Total tests across all 12 chunk test files: 253/253 PASS, 0 regression.**
+(was 178 before audit — added 75 new tests in chunk 16)
+
+**Cost**: $0 API. Pure audit + Python tests.
+**API budget unchanged**: ~$9.49 / $33.54. ~$24.05 remaining.
+
+**Settings.local.json final state**: 10 hook events, 12 distinct scripts,
+all installed correctly, all script paths exist, JSON valid. Verified by
+audit.
+
+**Files touched in chunk 16**:
+- 5 hooks fixed: bridge_hook, post_tool_failure_hook, notification_audit_hook,
+  post_tool_use_edit_log, config_change_hook
+- 1 hook fixed: pre_tool_use_bash_destructive (3 destructive patterns)
+- 2 templates fixed: engine/core/muninn.py + muninn/_engine.py (BUG-091
+  dual maintenance)
+- 2 test files updated/added: test_chunk12_pre_tool_use_hooks.py extended,
+  test_audit_dual_tree_sync.py new
+- 3 docs updated: BUGS.md (BUG-092..100), WINTER_TREE.md (chunk 16 stats),
+  CHANGELOG.md (this entry)
+
+---
+
 ### CHUNK 15 — Scaling hooks + WAL Monitor analysis (2026-04-10) [DONE]
 
 After Sky asked "is the WAL Monitor enough to scale to 120 devs?", this

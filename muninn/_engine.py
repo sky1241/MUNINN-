@@ -852,8 +852,12 @@ def main():
     except (json.JSONDecodeError, UnicodeDecodeError, Exception):
         sys.exit(0)
 
+    # Audit 2026-04-10: type-check before .get() to never crash on bad input
+    if not isinstance(hook_input, dict):
+        sys.exit(0)
+
     prompt = hook_input.get("prompt", "")
-    if not prompt or len(prompt) < 10:
+    if not prompt or not isinstance(prompt, str) or len(prompt) < 10:
         sys.exit(0)
 
     # Secret detection — runs FIRST, before anything else
@@ -1010,6 +1014,10 @@ def main():
         raw = sys.stdin.buffer.read().decode("utf-8")
         payload = json.loads(raw)
     except Exception:
+        sys.exit(0)
+
+    # Audit 2026-04-10: type-check before .get() to never crash on bad input
+    if not isinstance(payload, dict):
         sys.exit(0)
 
     repo_path = payload.get("cwd") or os.getcwd()

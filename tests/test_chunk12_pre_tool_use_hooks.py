@@ -113,6 +113,106 @@ def test_destructive_blocks_no_verify():
     assert code == 2
 
 
+# ── Audit 2026-04-10 — bugs caught and fixed ───────────────────
+
+
+def test_destructive_blocks_rm_rf_glob_subdir():
+    """BUG-D1: rm -rf foo/* was allowed, should block."""
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm -rf foo/*"},
+    }
+    code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+    assert code == 2, "rm -rf foo/* should be blocked"
+
+
+def test_destructive_blocks_rm_rf_glob_extension():
+    """rm -rf *.log should also block."""
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm -rf *.log"},
+    }
+    code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+    assert code == 2
+
+
+def test_destructive_blocks_rm_rf_parent():
+    """rm -rf ../other should block (parent dir)."""
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm -rf ../other"},
+    }
+    code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+    assert code == 2
+
+
+def test_destructive_blocks_git_push_combined_short_flags():
+    """BUG-D3: git push -fu / -uf (combined short flags) was allowed."""
+    for cmd in ["git push -fu origin main", "git push -uf origin feature"]:
+        payload = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": cmd},
+        }
+        code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+        assert code == 2, f"Should block: {cmd}"
+
+
+def test_destructive_blocks_eval_wrapped():
+    """BUG-D2: eval-wrapped destructive commands were allowed."""
+    for cmd in [
+        "eval 'rm -rf /'",
+        "bash -c 'git push --force'",
+        "sh -c 'rm -rf /tmp/* --no-preserve-root'",
+    ]:
+        payload = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": cmd},
+        }
+        code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+        assert code == 2, f"Should block eval-wrapped: {cmd}"
+
+
+def test_destructive_no_false_positive_legit_push_short_u():
+    """git push -u origin feature (set-upstream short) should NOT block.
+
+    The new combined-short-flag pattern needs to NOT trigger on lone -u.
+    """
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "git push -u origin feature"},
+    }
+    code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+    assert code == 0, "git push -u should be allowed (set-upstream is not destructive)"
+
+
+def test_destructive_no_false_positive_rm_specific_file():
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm tests/temp.txt"},
+    }
+    code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+    assert code == 0
+
+
+def test_destructive_no_false_positive_rm_build_dir():
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm -rf build/"},
+    }
+    code, _, _ = run_hook(HOOK_DESTRUCTIVE, payload)
+    # build/ is technically a dir name, no glob, no dangerous location
+    # → should NOT block (developers do this all the time)
+    assert code == 0
+
+
 def test_destructive_allows_normal_git_push():
     payload = {
         "hook_event_name": "PreToolUse",
@@ -398,6 +498,54 @@ def test_hardcode_handles_invalid_json():
 
 
 # ── install_hooks integration ──────────────────────────────────
+
+
+@pytest.mark.parametrize("hook_name", [
+    "post_tool_failure_hook.py",
+    "subagent_start_hook.py",
+    "notification_audit_hook.py",
+    "post_tool_use_edit_log.py",
+    "config_change_hook.py",
+    "pre_tool_use_bash_destructive.py",
+    "pre_tool_use_bash_secrets.py",
+    "pre_tool_use_edit_hardcode.py",
+    "bridge_hook.py",
+])
+@pytest.mark.parametrize("payload_label,payload_bytes", [
+    ("list", b"[1, 2, 3]"),
+    ("string", b'"just a string"'),
+    ("int", b"42"),
+    ("null", b"null"),
+    ("invalid_json", b"garbage{{{"),
+    ("empty", b""),
+])
+def test_audit_all_hooks_robust_to_malformed_payloads(hook_name, payload_label, payload_bytes):
+    """Audit 2026-04-10: every hook must exit 0 on any malformed payload.
+
+    Bugs caught and fixed during this audit:
+    - post_tool_failure_hook.py: crashed on list payload (AttributeError on .get)
+    - notification_audit_hook.py: same
+    - post_tool_use_edit_log.py: same
+    - config_change_hook.py: same
+    - bridge_hook.py: same
+    Plus the 2 generators in engine/core/muninn.py and muninn/_engine.py.
+
+    The contract is: hooks NEVER crash. They exit 0 (silent skip) on bad
+    input. A crash would block the corresponding Claude operation silently.
+    """
+    hook_path = HOOKS_DIR / hook_name
+    if not hook_path.exists():
+        pytest.skip(f"Hook not present: {hook_name}")
+    result = subprocess.run(
+        [sys.executable, str(hook_path)],
+        input=payload_bytes,
+        capture_output=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, (
+        f"{hook_name} crashed on {payload_label} payload "
+        f"(exit={result.returncode}). Hooks must NEVER crash."
+    )
 
 
 def test_install_hooks_copies_pre_tool_use_hooks(tmp_path):

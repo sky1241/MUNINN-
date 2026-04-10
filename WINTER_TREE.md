@@ -7,12 +7,13 @@
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
 >
-> **Leak Intel Battle Plan (2026-04-10): 13 chunks complete.**
+> **Leak Intel Battle Plan (2026-04-10): 16 chunks complete.**
 > See CHANGELOG.md and docs/CLAUDE_CODE_LEAK_INTEL.md.
 >
-> Hooks: 4 -> **9 distinct scripts** registered under **7 hook events**:
+> Hooks: 4 -> **12 distinct scripts** registered under **10 hook events**:
 >   UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure,
->   SubagentStart, **PreToolUse (3 entries: bash-destructive + bash-secrets + edit-hardcode)**.
+>   SubagentStart, **PreToolUse (3 entries: bash-destructive + bash-secrets + edit-hardcode)**,
+>   PostToolUse, Notification, ConfigChange.
 >
 > CLAUDE.md: 8 RULES -> **3 RULES** (chunks 9-10 measured each one with API,
 > kept only those with proven causal effect on Opus 4.6: hardcode +100%,
@@ -23,7 +24,13 @@
 >
 > Anti-Adversa clamp on injected content (refuses >30 chained shell commands).
 > Anthropic native auto-memory disabled (single source of truth = Muninn).
-> 162 chunk tests / 0 regression. Empirical eval harness in tests/eval_harness_chunk{9,11}.py.
+>
+> **Audit chunk 16 (2026-04-10)**: 9 bugs found and fixed in the new hooks
+> (3 destructive pattern misses + 6 type-check crashes on malformed payload).
+> See BUGS.md BUG-092 to BUG-100. 75 new anti-regression tests added.
+>
+> **253 chunk tests / 0 regression** (was 178 before audit). Empirical eval
+> harness in tests/eval_harness_chunk{9,11}.py.
 
 ## Architecture
 

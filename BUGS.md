@@ -13,7 +13,85 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90 bugs fixed across 12 audit passes (2026-03-18). **1 OPEN** (architectural smell, 2026-04-10).
+## Status: 90+9 bugs fixed (90 from 12 audit passes 2026-03-18 + 9 from chunk 16 audit 2026-04-10). **1 OPEN** (BUG-091 architectural smell).
+
+---
+
+## Audit 2026-04-10 — chunk 16 — 9 bugs found and fixed
+
+Full audit pass on the 9 hooks added in chunks 4, 5, 12, 14, 15. Each bug
+caught by adversarial edge-case testing, fixed, and pinned by an
+anti-regression test in `test_chunk12_pre_tool_use_hooks.py` or
+`test_audit_dual_tree_sync.py`.
+
+### BUG-092: pre_tool_use_bash_destructive missed `rm -rf foo/*` glob
+- **Status**: FIXED
+- **Symptom**: `rm -rf foo/*` (glob in subdir) was ALLOWED. Same for `rm -rf *.log`.
+- **Root cause**: regex pattern `\brm\s+-rf?\s+\*` only matched literal `*`,
+  not `*.log` or `foo/*`.
+- **Fix**: replaced with `\brm\s+-rf?\s+[^\s|;&]*\*` (any token containing `*`)
+  + new pattern for `\.\.` (parent dir).
+- **Test**: `test_destructive_blocks_rm_rf_glob_subdir`,
+  `test_destructive_blocks_rm_rf_glob_extension`,
+  `test_destructive_blocks_rm_rf_parent`.
+
+### BUG-093: pre_tool_use_bash_destructive missed `git push -fu` combined flags
+- **Status**: FIXED
+- **Symptom**: `git push -fu origin main` (combined `-f` + `-u` short flags)
+  was ALLOWED. Sky uses `-fu` to force push + set upstream in one go.
+- **Root cause**: regex `\bgit\s+push\b[^|;&]*-f\b` matches `-f ` but not `-fu`
+  because the `\b` at the end requires word boundary, and `-fu` has `u` after `f`.
+- **Fix**: replaced with `\bgit\s+push\b[^|;&]*\s-[a-z]*f[a-z]*\b` matching any
+  short-flag combo containing `f`.
+- **Test**: `test_destructive_blocks_git_push_combined_short_flags`. Includes
+  no-false-positive check for legit `git push -u origin feature`.
+
+### BUG-094: pre_tool_use_bash_destructive missed eval/exec wrapping
+- **Status**: FIXED
+- **Symptom**: `eval 'rm -rf /'`, `bash -c 'git push --force'` were ALLOWED.
+- **Root cause**: regex patterns checked for direct command, not for the
+  destructive command being inside an eval/exec/sh -c wrapper.
+- **Fix**: new pattern matching `\b(?:eval|exec|sh\s+-c|bash\s+-c)\b`
+  followed by a quoted string containing destructive markers.
+- **Test**: `test_destructive_blocks_eval_wrapped`.
+
+### BUG-095 to BUG-100: 6 hooks crashed on non-dict payload
+- **Status**: FIXED (all 6)
+- **Symptom**: When stdin contained a JSON value that wasn't an object
+  (e.g. `[1,2,3]`, `"string"`, `42`, `null`), the hooks crashed with
+  `AttributeError: 'list' object has no attribute 'get'` and exited 1.
+  This violates the contract "hooks NEVER raise, always exit 0 or 2".
+- **Root cause**: `payload.get("cwd")` was called BEFORE checking
+  `isinstance(payload, dict)`. The `try/except` block protected the
+  downstream function call, not the `.get()` itself.
+- **Affected hooks**:
+  - bridge_hook.py
+  - post_tool_failure_hook.py
+  - notification_audit_hook.py
+  - post_tool_use_edit_log.py
+  - config_change_hook.py
+  - + the 2 generators in `engine/core/muninn.py` and `muninn/_engine.py`
+    (so the bug would resurface on next `install_hooks()`)
+- **Fix**: added `if not isinstance(payload, dict): sys.exit(0)` after
+  `json.loads()` and before any `.get()`. Also tightened `bridge_hook.py`
+  `prompt = ... .get("prompt", "")` with `isinstance(prompt, str)` check.
+- **Test**: parametrized test `test_audit_all_hooks_robust_to_malformed_payloads`
+  in `tests/test_chunk12_pre_tool_use_hooks.py` runs 9 hooks × 6 malformed
+  payloads = 54 cases. All exit 0.
+
+### BUG-091: engine/core/ vs muninn/ pkg fully duplicated [STILL OPEN]
+- **Status**: OPEN (unchanged from before audit)
+- **Audit progress**: chunk 16 added `tests/test_audit_dual_tree_sync.py`
+  which checks that 12 specific markers from today's modifs are mirrored
+  in BOTH trees. This is NOT a fix — it's a tripwire. If a future change
+  breaks the mirror on these markers, the test fails. Doesn't help for
+  files that diverged BEFORE today (16 of 19 file pairs are still
+  diverged, see audit output).
+- **Real fix is still TODO**: pick one source of truth, delete the other.
+
+---
+
+## Status: 90 bugs fixed across 12 audit passes (2026-03-18). 0 OPEN (pre-audit).
 
 ## BUG-091: engine/core/ and muninn/ package fully duplicated
 - **Status**: OPEN

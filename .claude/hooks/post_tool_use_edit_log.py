@@ -127,6 +127,10 @@ def main():
     except Exception:
         sys.exit(0)
 
+    # Audit 2026-04-10: type-check before .get() to never crash on bad input
+    if not isinstance(payload, dict):
+        sys.exit(0)
+
     repo_path = payload.get("cwd") or os.getcwd()
 
     try:

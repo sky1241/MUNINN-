@@ -98,6 +98,11 @@ def main():
     except Exception:
         sys.exit(0)
 
+    # Audit 2026-04-10: payload could be a list/str/None when stdin is
+    # malformed JSON. .get() would crash. Type-check before using.
+    if not isinstance(payload, dict):
+        sys.exit(0)
+
     repo_path = payload.get("cwd") or os.getcwd()
 
     try:
