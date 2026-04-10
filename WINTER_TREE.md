@@ -25,12 +25,17 @@
 > Anti-Adversa clamp on injected content (refuses >30 chained shell commands).
 > Anthropic native auto-memory disabled (single source of truth = Muninn).
 >
-> **Audit chunk 16 (2026-04-10)**: 9 bugs found and fixed in the new hooks
-> (3 destructive pattern misses + 6 type-check crashes on malformed payload).
-> See BUGS.md BUG-092 to BUG-100. 75 new anti-regression tests added.
+> **Audit chunks 16+17 (2026-04-10)**: 10 bugs found and fixed.
+> Chunk 16 (hand audit): 9 bugs in destructive patterns + payload type-checks.
+> Chunk 17 (forge + Hypothesis property tests): BUG-101 found by adversarial
+>   property testing — `_truncate_with_marker` was producing oversized output
+>   when `max_chars < 100`. Hand-written tests in chunk 5 missed it because
+>   they only used "reasonable" max_chars (≥1000).
+> See BUGS.md BUG-092 to BUG-101. 88 new anti-regression tests added.
 >
-> **253 chunk tests / 0 regression** (was 178 before audit). Empirical eval
-> harness in tests/eval_harness_chunk{9,11}.py.
+> **266 chunk tests / 0 regression** (was 178 before audit). Empirical eval
+> harness in tests/eval_harness_chunk{9,11}.py. Hypothesis property tests
+> in tests/test_audit_hypothesis_hooks.py + tests/test_props__secrets.py.
 
 ## Architecture
 

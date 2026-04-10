@@ -6,6 +6,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Hypothesis property test cache
+.hypothesis/
+
 # Secrets & Vault
 setup_key.py
 .env

@@ -1087,12 +1087,17 @@ def _emit_empty():
 
 
 def _truncate_with_marker(text, max_chars):
+    # BUG-101 fix (audit 2026-04-10): clamp negative slice and account for
+    # marker length.
+    if max_chars <= 0:
+        return ""
     if len(text) <= max_chars:
         return text
-    return (
-        text[: max_chars - 100]
-        + "\\n\\n[... Muninn slice truncated to fit sub-agent context ...]"
-    )
+    marker = "\\n\\n[... Muninn slice truncated to fit sub-agent context ...]"
+    if max_chars <= len(marker):
+        return marker[:max_chars]
+    slice_end = max(0, max_chars - len(marker))
+    return text[:slice_end] + marker
 
 
 def _find_tree_dir(repo_path):

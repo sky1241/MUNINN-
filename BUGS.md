@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+9 bugs fixed (90 from 12 audit passes 2026-03-18 + 9 from chunk 16 audit 2026-04-10). **1 OPEN** (BUG-091 architectural smell).
+## Status: 90+10 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10). **1 OPEN** (BUG-091 architectural smell).
 
 ---
 
@@ -78,6 +78,33 @@ anti-regression test in `test_chunk12_pre_tool_use_hooks.py` or
 - **Test**: parametrized test `test_audit_all_hooks_robust_to_malformed_payloads`
   in `tests/test_chunk12_pre_tool_use_hooks.py` runs 9 hooks × 6 malformed
   payloads = 54 cases. All exit 0.
+
+### BUG-101: _truncate_with_marker oversized output when max_chars < 100
+- **Status**: FIXED
+- **Symptom**: `_truncate_with_marker(text="x"*500, max_chars=50)` returned
+  509 chars instead of ≤50. The truncated output was longer than the input
+  AND larger than the cap.
+- **Root cause**: `text[: max_chars - 100]` produces a NEGATIVE slice when
+  max_chars < 100. Negative slice in Python takes everything except the
+  last N chars, so the result was `text[:-50]` = almost all of text. Then
+  the marker (~60 chars) was appended on top, exceeding max_chars by ~10x.
+- **Discovery method**: Hypothesis property test
+  `test_truncate_with_marker_no_crash` in `tests/test_audit_hypothesis_hooks.py`
+  with the invariant `len(result) <= max_chars when len(text) > max_chars`.
+  Hypothesis found the falsifying example automatically: `text="0"*500, max_chars=50`.
+- **Fix**: clamp slice index at 0, account for marker length, and if
+  `max_chars <= len(marker)` return marker truncated. Applied in:
+  - `.claude/hooks/subagent_start_hook.py`
+  - `engine/core/muninn.py` template (BUG-091 sync)
+  - `muninn/_engine.py` template (BUG-091 sync)
+- **Test**: `test_truncate_with_marker_no_crash` (200 random inputs).
+- **Lesson**: this bug had been in the code since chunk 5 (4 commits before
+  the audit). The 11 hand-written tests in `test_chunk5_subagent_start_hook.py`
+  did NOT catch it because they only used "reasonable" max_chars values
+  (1000+, 20000). Hypothesis caught it on the FIRST run with random integers
+  in [50, 100000]. This validates Sky's complaint "tu n'as pas utilisé forge
+  correctement" — adversarial property testing finds bugs that example-based
+  testing misses.
 
 ### BUG-091: engine/core/ vs muninn/ pkg fully duplicated [STILL OPEN]
 - **Status**: OPEN (unchanged from before audit)

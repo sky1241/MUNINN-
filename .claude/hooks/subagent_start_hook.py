@@ -51,13 +51,29 @@ def _emit_empty():
 
 
 def _truncate_with_marker(text: str, max_chars: int) -> str:
-    """Truncate text at max_chars, add a clear marker if truncated."""
+    """Truncate text at max_chars, add a clear marker if truncated.
+
+    BUG-101 fix (audit 2026-04-10): the previous version did
+    `text[: max_chars - 100]` which produces a NEGATIVE slice when
+    max_chars < 100, returning almost the whole text. Then the marker
+    was appended on top, exceeding max_chars by a lot.
+
+    Fix: clamp the slice index at 0 and account for the marker length
+    when computing the slice. If max_chars is smaller than the marker
+    itself, return the marker truncated.
+    """
+    if max_chars <= 0:
+        return ""
     if len(text) <= max_chars:
         return text
-    return (
-        text[: max_chars - 100]
-        + "\n\n[... Muninn slice truncated to fit sub-agent context ...]"
-    )
+    marker = "\n\n[... Muninn slice truncated to fit sub-agent context ...]"
+    # Reserve room for the marker. If max_chars is too small for any
+    # reasonable text, just return the marker (clamped).
+    if max_chars <= len(marker):
+        return marker[:max_chars]
+    # Slice text to leave room for the marker
+    slice_end = max(0, max_chars - len(marker))
+    return text[:slice_end] + marker
 
 
 def _find_tree_dir(repo_path: Path) -> Path | None:
