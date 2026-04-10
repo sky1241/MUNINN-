@@ -13,6 +13,74 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 13 — Path-scoped rules in `.claude/rules/` (2026-04-10) [DONE]
+
+Anthropic's official Claude Code documentation recommends using
+`.claude/rules/*.md` files with YAML frontmatter `paths:` to scope rules
+to specific file types. These files are loaded by Claude only when it
+touches matching files, freeing context for unrelated work.
+
+This chunk adds 2 path-scoped extension files. It does NOT remove anything
+from the root CLAUDE.md — the 3 RULES validated empirically (chunks 9-11)
+stay where they are. The `.claude/rules/*.md` files ENRICH with technical
+detail when Claude works on Python or git files.
+
+**New files:**
+
+`.claude/rules/python.md` (paths: `engine/**/*.py`, `muninn/**/*.py`,
+`tests/**/*.py`, `*.py`):
+- Extends RULE 1 (hardcode) with the 4 path-resolution patterns actually
+  used in this repo (Pattern A: `Path(__file__)`, Pattern B: function arg,
+  Pattern C: mutable `_REPO_PATH` global, Pattern D: env var fallback)
+- Documents BUG-091 dual-maintenance rule for `engine/core/` ↔ `muninn/`
+- Test conventions (pytest, eval harnesses are scripts not pytest)
+- Windows encoding gotchas (`PYTHONIOENCODING=utf-8`, `sys.stdout.buffer.write`)
+- Secrets in Python: how to test/check without echoing values
+
+`.claude/rules/git.md` (paths: `**/.gitignore`, `**/.gitattributes`,
+`**/.git/**`):
+- Extends RULE 2 (destructive) and RULE 3 (secrets) with git-specific cases
+- Lists all destructive operations blocked by `pre_tool_use_bash_destructive.py`
+- Workflow when a destructive command is blocked by the hook
+- Pre-commit safety checklist
+- Warning against `git add -A` / `git add .`
+
+**Why scoped, not moved:**
+The 3 RULES in CLAUDE.md root are loaded EVERY session (always-on). The
+.claude/rules/*.md files load CONDITIONALLY when matching paths are read.
+Splitting universal rules into conditional files would weaken them — Claude
+might never load python.md if it's editing a `.md` file in `docs/`. So we
+KEEP the universals in CLAUDE.md and ADD scoped technical detail in rules/.
+
+This is enrichment, not migration.
+
+**Tests**: `tests/test_chunk13_claude_rules_split.py` — 18 tests, all PASS:
+- `.claude/rules/` directory exists
+- python.md and git.md exist with valid frontmatter
+- frontmatter `paths:` is a list of glob patterns
+- python.md targets `.py` files, git.md targets git config files
+- python.md references RULE 1, git.md references RULES 2 and 3
+- python.md mentions known patterns (`_REPO_PATH`, `Path(__file__)`,
+  `engine/core`, `muninn`)
+- git.md mentions force-push
+- python.md body is substantive (≥500 chars)
+- CLAUDE.md still has at least 3 RULES (no regression on chunk 10)
+- CLAUDE.md still under 200 lines (no regression on chunk 10)
+- 4 sanity tests for the YAML frontmatter parser used in tests
+
+**Tests across all 10 chunk test files: 162/162 PASS, no regression.**
+
+**Cost**: $0 API. Pure markdown + Python tests.
+
+**API budget unchanged**: ~$9.49 / $33.54 spent. ~$24.05 remaining.
+
+**Stats:**
+- New files: `.claude/rules/python.md` (~120 lines), `.claude/rules/git.md` (~60 lines)
+- CLAUDE.md root: 173 lines (unchanged from chunk 10)
+- Total RULES coverage: 3 universal (CLAUDE.md) + 2 scoped extensions
+
+---
+
 ### CHUNK 12 — PreToolUse enforcement hooks for the 3 critical RULES (2026-04-10) [DONE]
 
 The chunks 9-11 measurement work proved that 3 RULES of CLAUDE.md have real
