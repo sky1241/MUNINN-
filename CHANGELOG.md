@@ -1,7 +1,40 @@
 # MUNINN — Changelog
 
 Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3649 + muninn_feed.py 1640 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1757 + mycelium.py 2932 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 = 18739 total (14 files)
-Tests: 1558 collected, 0 FAIL.
+Tests: 1564 collected, 0 FAIL.
+
+---
+
+## Claude Code Leak Intel + Battle Plan (2026-04-10) [WIP]
+
+Apres recherche complete sur le leak Claude Code (31/03/2026, sourcemap npm v2.1.88,
+~512K lignes TypeScript reconstruites) et la vuln Adversa AI, dossier intel ecrit
+dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de bataille
+en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
+Claude et boucher les trous heritees du leak.
+
+### CHUNK 1 — Disable Anthropic native auto-memory (2026-04-10) [DONE]
+
+Anthropic a active auto-memory natif par defaut depuis Claude Code v2.1.59. Il
+ecrit dans `~/.claude/projects/<project>/memory/MEMORY.md` (200 lignes / 25 KB
+charge a chaque session). Il tournait en parallele de Muninn — derive entre 2
+systemes memoire + 25 KB de contexte gaspilles par session.
+
+**Modif :**
+- `.claude/settings.local.json` : ajout `"autoMemoryEnabled": false`
+
+**Effet :** un seul systeme memoire (Muninn). 25 KB de contexte rendus par
+session. Hooks Muninn (UserPromptSubmit, PreCompact, SessionEnd, Stop) intacts.
+
+**Tests :** `tests/test_chunk1_auto_memory_disabled.py` — 6 tests, tous PASS :
+- Settings JSON valide
+- Cle `autoMemoryEnabled` presente
+- Valeur exactement `False`
+- Hooks Muninn toujours presents
+- Hooks pointent toujours vers muninn.py / bridge_hook.py
+- Pas de dossier auto-memory natif accidentellement copie dans le repo
+
+**Reversible :** 1 ligne (passer `false` -> `true` ou supprimer la cle).
 
 ---
 
