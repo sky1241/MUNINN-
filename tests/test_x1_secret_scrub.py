@@ -14,8 +14,17 @@ Tests:
   X1.11 multiple secrets in one text all redacted
 """
 import sys, os, tempfile, shutil
-from _secrets import redact_secrets_text
 from pathlib import Path
+
+# BRICK 14 (2026-04-11): fix the collection-time ImportError. The original
+# `from _secrets import redact_secrets_text` at module top tried to import
+# before any sys.path setup, so pytest collection blew up with
+# ModuleNotFoundError. Add the engine/core dir to sys.path FIRST, then import.
+_ENGINE_CORE = Path(__file__).resolve().parent.parent / "engine" / "core"
+if str(_ENGINE_CORE) not in sys.path:
+    sys.path.insert(0, str(_ENGINE_CORE))
+
+from _secrets import redact_secrets_text  # noqa: E402
 
 
 def test_x1_1_github_pat():
