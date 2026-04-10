@@ -1,0 +1,18 @@
+Cube Full Pipeline — 2026-03-19 19:41
+Provider: ollama
+Cubes: 0 active / 77 total (0 dead, 77 trivial)
+============================================================
+
+ Cy[REDACTED]    OK   SHA  Cumul       %     NCD
+─────────────────────────────────────────────
+     1     0     0     0      0    0.0%   1.000
+
+Total time: 0.0s
+
+--- Post-Cy[REDACTED] ---
+levels: {0: 0}
+rg_groups: 0
+rg_avg_size: 0
+cheeger: {'h_estimate': 0.0, 'lambda_2': 0.0, 'bottlenecks': []}
+gods_number: {'value': 0, 'total': 0, 'bounds': {'lrc_lower': 1, 'mera_estimate': 1, 'percolation_fc': 1.0, 'n_active': 0, 'n_dead': 0}}
+heatmap: {'tests/cube_corpus/analytics.py': {'count': 77, 'avg_temp': 0.0, 'hot': 0}}

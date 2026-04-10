@@ -1,0 +1,35 @@
+{
+  "date": "2026-03-26 02:55",
+  "model": "deepseek-coder:6.7b",
+  "file": "analytics.py",
+  "max_cubes": 20,
+  "htm_88": {
+    "label": "HTM (88 tok)",
+    "target_tokens": 88,
+    "n_cubes": 20,
+    "avg_cube_size": 93.95,
+    "tokens_per_face": 11.74375,
+    "exact": 0,
+    "success": 0,
+    "success_pct": 0.0,
+    "avg_ncd": 0.6591326748870151,
+    "min_ncd": 0.3209302325581395,
+    "max_ncd": 0.8767676767676768,
+    "elapsed": 4821.356139421463
+  },
+  "qtm_112": {
+    "label": "QTM (112 tok)",
+    "target_tokens": 112,
+    "n_cubes": 20,
+    "avg_cube_size": 117.85,
+    "tokens_per_face": 14.73125,
+    "exact": 0,
+    "success": 0,
+    "success_pct": 0.0,
+    "avg_ncd": 0.6221159917217549,
+    "min_ncd": 0.354014598540146,
+    "max_ncd": 0.9098639455782312,
+    "elapsed": 5460.621576309204
+  },
+  "verdict": "TIE"
+}
