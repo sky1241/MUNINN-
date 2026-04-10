@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation fixed 2026-04-10). **2 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives).
+## Status: 90+10+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation fixed 2026-04-10). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 fact-span detection too narrow).
 
 ---
 
@@ -66,6 +66,44 @@
 - **Regression**: none. Pure functions like `redact_secrets_text`,
   `count_chained_commands`, `clamp_chained_commands` are still detected as
   safe and continue to be fuzzed normally.
+
+### BUG-104: L12 BudgetMem fact-span detector misses soft facts under tight budget
+- **Status**: OPEN (deferred — empirically measured 2026-04-10, brick 12)
+- **Symptom**: at `MUNINN_L12_BUDGET=500` on `verbose_memory.md` (1005 tok),
+  fact recall drops from **15/15 (100%) to 6/15 (40%)** — a -60 point loss.
+  At b=250 it goes to 5/15 (33%, -67 points). Sample_session.md has the
+  same pattern at smaller swings (80% → 60% → 53%). See
+  `tests/benchmark/PHASE_B_FACT_RECALL.md` for the full table.
+- **Root cause**: `engine/core/budget_select.py:has_fact_span()` only matches
+  a finite set of regex (ISO date, semver, git hash, %, $money, JIRA ticket,
+  URL). It does NOT detect:
+    - Function / class names (`compress_line`, `Mycelium`)
+    - File paths (`engine/core/muninn.py`)
+    - Verbose facts ("the test was created on Tuesday")
+    - Identifiers in backticks
+  When a chunk only has these "soft facts", BudgetMem's must-keep hard rule
+  doesn't fire, so the chunk competes on the score-only path and loses to
+  position-bias filler chunks.
+- **Fix (TBD)**: extend `_FACT_SPAN_RES` with patterns for:
+    - `\b[a-z][a-zA-Z0-9_]+\(\)` (function call sites)
+    - `\b[A-Z][a-zA-Z0-9_]*[a-z]` (CamelCase identifiers, ≥4 chars)
+    - `[a-zA-Z_]+/[a-zA-Z_]+/[a-zA-Z_.]+` (path segments)
+    - `\` `[^\`]{3,30}\` `` (backtick-quoted code)
+  Risk: false positives on prose containing camelCase or paths in markdown
+  example blocks. Need to test on the existing fact-recall benchmark before
+  shipping.
+- **Mitigation now**: L12 stays OPT-IN via env var (default OFF). The
+  documented safe operating range in PHASE_B_FACT_RECALL.md is
+  `MUNINN_L12_BUDGET >= compressed file size` — at that point L12 is
+  effectively a no-op (correct behavior for safe default).
+- **Test**: `tests/test_brick12_l12_fact_recall.py` — 8 tests pin both
+  the no-regression contract (huge budget = identity) AND the BUG-104
+  envelope at b=500 (3-12 facts kept on verbose, 6-13 on session). The
+  BUG-104 envelope tests will FAIL the day this is fixed properly,
+  signalling that PHASE_B_FACT_RECALL.md needs an update.
+- **Why this is OPEN, not WONTFIX**: the user-facing impact is real
+  whenever someone uses L12 at tight budget without reading the doc.
+  Fixing the fact-span detector closes the gap entirely.
 
 ### BUG-103: scrub_secrets() regex patterns have false positives on plain SQL
 - **Status**: OPEN (deferred — separate fix from BUG-102)
