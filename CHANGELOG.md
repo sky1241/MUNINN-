@@ -13,6 +13,53 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 2 — Refactor CLAUDE.md to XML format with negative examples (2026-04-10) [DONE]
+
+CLAUDE.md is delivered as user message after the system prompt (Anthropic doc).
+It cannot beat system prompt instructions but it can win against default Claude
+reflexes if formatted right. Three levers applied:
+
+1. **XML compartments** — `<MUNINN_RULES>` and `<RULE id="N">` blocks act as
+   attention walls (Anthropic prompt engineering best practice).
+2. **Negative examples** — each rule names the bad reflex explicitly. Pattern
+   inhibition is statistically stronger than positive instructions alone.
+3. **Sandwich** — `<MUNINN_RULES>` at top (primacy) + `<MUNINN_SANDWICH_RECENCY>`
+   at bottom (recency). The 3 most critical rules repeat at the bottom.
+
+**8 RULES added:**
+- RULE 1: No lazy mode (re-read request word by word)
+- RULE 2: No lying by omission (say "I don't know")
+- RULE 3: Direct responses, no preamble
+- RULE 4: Push back when reasoning is broken (no sycophancy)
+- RULE 5: Universal code, never repo-hardcoded
+- RULE 6: No new files unless necessary
+- RULE 7: Never display secrets
+- RULE 8: Confirm before destructive or shared-state actions
+
+**Block-level HTML comments** added at top — stripped by Anthropic before
+injection (free maintainer notes, zero token cost).
+
+**Size note:** CLAUDE.md is now 239 lines vs Anthropic recommended <200.
+Decision: keep as-is. The adherence levers (XML/negatives/sandwich) work
+independently of strict size cap. Soft warning logged in test, not failed.
+If observed adherence drops in practice, the "Memo cousin" section (~70
+lines) is the obvious cut candidate.
+
+**Tests:** `tests/test_chunk2_claude_md_structure.py` — 11 tests, all PASS:
+- UTF-8 valid
+- Top XML block present and closed
+- Bottom sandwich block present and closed
+- At least 5 RULE blocks
+- Each RULE has Directive + Bad reflex + Correction
+- RULE ids unique
+- No repo hardcode outside negative example zones
+- Soft warning if >200 lines (not a fail)
+- HTML comments present for maintainer notes
+
+**Reversible:** `git checkout CLAUDE.md`
+
+---
+
 ### CHUNK 1 — Disable Anthropic native auto-memory (2026-04-10) [DONE]
 
 Anthropic a active auto-memory natif par defaut depuis Claude Code v2.1.59. Il
