@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation fixed 2026-04-10). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 fact-span detection too narrow).
+## Status: 90+10+2 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction, both fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 fact-span detection too narrow).
 
 ---
 
@@ -66,6 +66,63 @@
 - **Regression**: none. Pure functions like `redact_secrets_text`,
   `count_chained_commands`, `clamp_chained_commands` are still detected as
   safe and continue to be fuzzed normally.
+
+### BUG-105: L12 destroys files with no `\n\n` paragraph breaks (JSONL, logs)
+- **Status**: FIXED (commit pending — this brick 13)
+- **Symptom**: ran the Phase B brick 7 benchmark on a real Sky transcript:
+  `c:/Users/ludov/.claude/projects/c--Users-ludov-MUNINN-/d00638e7-...jsonl`
+  (22 MB, 5,839,925 BPE tokens, JSONL one-message-per-line, ZERO `\n\n`).
+  L0-L11 alone produced 4.2M tokens (x1.38). L12 with ANY budget setting
+  (b=2.9M, b=1.5M, b=583K) produced **8 tokens** for the entire 22MB file.
+  Effective ratio x729,990. The "compressed" output was 8 tokens of
+  garbage from cue distillation running on an empty input. The actual
+  transcript content was completely deleted.
+- **Root cause**: `engine/core/muninn_layers.py:_l12_budget_pass()` called
+  `budget_select.budget_select()` without checking the chunk count first.
+  `budget_select` splits on `\n\s*\n` to get paragraph chunks. JSONL files
+  have only `\n` separators, so the split returns a SINGLE chunk for the
+  entire 22MB file. BudgetMem then evaluates this one chunk:
+    - Marks it as must-keep (it has fact spans)
+    - Tries to fit it: chunk size (5.8M tok) >> budget (e.g. 1.5M tok)
+    - Phase 1 packing: doesn't fit, skip
+    - Phase 2 score-sorted: nothing else to pick from
+    - Returns: empty string ""
+  The rest of `compress_file()` runs on the empty string and produces
+  ~8 tokens of metadata (codebook header, cue distill noise).
+- **Fix**: added a chunk-count guard at the top of `_l12_budget_pass()`
+  in BOTH `engine/core/muninn_layers.py` and `muninn/muninn_layers.py`:
+  ```python
+  chunks = _re.split(r"\n\s*\n", text)
+  if len(chunks) < 2:
+      return text  # nothing to select between, return as-is
+  ```
+  When the input has fewer than 2 paragraph chunks, L12 has nothing to
+  do — return identity. This protects every JSONL / log / CSV / single-
+  paragraph input from accidental destruction.
+- **Verification (real, on the same 22MB transcript)**: post-fix,
+  `_l12_budget_pass(text)` with `MUNINN_L12_BUDGET=1000` returns the
+  full 23,359,701 chars unchanged. **Saved 23,359,701 chars from being
+  collapsed to 8 tokens.** L12 still functions normally on multi-chunk
+  markdown input — verified in the same test session with a 6-paragraph
+  synthetic doc (508 → 80 chars, facts kept).
+- **Test**: `tests/test_brick13_l12_bug_105_jsonl.py` — 9 pin tests:
+    - JSONL / log / CSV / single-paragraph .md inputs all pass through
+      L12 unchanged at any budget
+    - Empty / None inputs handled
+    - Multi-chunk markdown still compresses (BUG-105 is a guard, not a
+      kill switch)
+    - The exact real 22MB transcript from the benchmark passes through
+      unchanged at budget=1000
+    - PHASE_B_BIG_FILE_BENCHMARK.md doc exists and contains the headline
+      numbers (23,359,701 chars saved, 8 tokens disaster pre-fix)
+- **Why this is critical**: this is the EXACT primary use case Sky cares
+  about (compressing his Claude Code transcripts). Phase B brick 7 ratios
+  on small markdown benchmark files looked great (x8-x9), but the wiring
+  silently destroyed any JSONL transcript fed to it. Without this fix,
+  Sky shipping L12 to compress his transcripts would have lost data.
+- **Future improvement**: emit a one-time stderr warning when the BUG-105
+  guard fires, so users know L12 is being skipped (currently silent
+  degradation). Not critical, file as enhancement not bug.
 
 ### BUG-104: L12 BudgetMem fact-span detector misses soft facts under tight budget
 - **Status**: OPEN (deferred — empirically measured 2026-04-10, brick 12)

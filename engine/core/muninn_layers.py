@@ -50,8 +50,16 @@ def _l12_budget_pass(text):
     Uses Muninn's tiktoken tokenizer for budget accounting so MUNINN_L12_BUDGET
     is interpreted in BPE tokens (matching how the rest of the pipeline
     measures size). Falls back to word-count if tokenizer is unavailable.
+
+    BUG-105 SAFETY (2026-04-11): if the input has fewer than 2 paragraph
+    chunks (split on \\n\\s*\\n), L12 has nothing to do and would either
+    return the entire input or drop it entirely depending on whether the
+    single chunk fits the budget. On JSONL transcripts (one JSON per
+    line, no blank lines) this caused a 22MB / 5.8M token file to
+    collapse to 8 tokens. Defense: count chunks first; if < 2, identity.
     """
     import os as _os
+    import re as _re
     if not _BUDGET_SELECT_AVAILABLE or not text:
         return text or ""
     raw = _os.environ.get("MUNINN_L12_BUDGET")
@@ -63,6 +71,10 @@ def _l12_budget_pass(text):
         return text
     if budget <= 0:
         return text
+    # BUG-105 safety: refuse to run on single-chunk input
+    chunks = _re.split(r"\n\s*\n", text)
+    if len(chunks) < 2:
+        return text  # nothing to select between, return as-is
     # Tiktoken-aware token counter so the budget is in BPE tokens, not words
     try:
         def _tt_count(t):

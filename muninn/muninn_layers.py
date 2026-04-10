@@ -56,8 +56,13 @@ def _l12_budget_pass(text):
 
     Uses Muninn's tiktoken tokenizer for budget accounting so the env var
     is interpreted in BPE tokens (matching the rest of the pipeline).
+
+    BUG-105 SAFETY (2026-04-11): refuse to run when the input has fewer
+    than 2 paragraph chunks (no \\n\\n separators). On JSONL transcripts
+    this caused a 22MB file to collapse to 8 tokens.
     """
     import os as _os
+    import re as _re
     if not _BUDGET_SELECT_AVAILABLE or not text:
         return text or ""
     raw = _os.environ.get("MUNINN_L12_BUDGET")
@@ -68,6 +73,10 @@ def _l12_budget_pass(text):
     except (TypeError, ValueError):
         return text
     if budget <= 0:
+        return text
+    # BUG-105 safety: refuse to run on single-chunk input
+    chunks = _re.split(r"\n\s*\n", text)
+    if len(chunks) < 2:
         return text
     try:
         def _tt_count(t):
