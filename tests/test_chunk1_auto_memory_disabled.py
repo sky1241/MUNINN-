@@ -81,6 +81,10 @@ def test_hooks_still_point_to_muninn(settings):
         "pre_tool_use_bash_destructive.py",
         "pre_tool_use_bash_secrets.py",
         "pre_tool_use_edit_hardcode.py",
+        # Chunk 15 scaling hooks (audit, edit log, config change)
+        "notification_audit_hook.py",
+        "post_tool_use_edit_log.py",
+        "config_change_hook.py",
     )
 
     def _extract_commands(entries):
