@@ -154,6 +154,109 @@ L0-L7 + L10-L11 + L9: toutes les couches de compression.
 | decode_line | 1217-1229 | Decode ligne compressee |
 | verify_compression | 1230-1294 | Verifie qualite (facts preserves, ratio) |
 
+### Phase B Wirings (2026-04-10) — bricks 4, 5, 6
+| Wiring | Lignes | Role |
+|--------|--------|------|
+| `_LEXICONS_TIER1_PATTERNS` (module-level) | ~9-18 | Brick 4: lexicons tier1 patterns cached at init from `lexicons.get_safe_filler_patterns("tier1")`. 43 patterns, intensifiers + epistemic hedges. Pure additive in `compress_line()` L2 block. |
+| `_DEDUP_AVAILABLE` + `_simhash`/`_hamming` import | ~20-26 | Brick 5: SimHash + hamming distance imported from `dedup.py` for `compress_section()` body dedup. |
+| `_dedup_body_lines(lines)` helper | ~28-72 | Brick 5: pure helper called from `compress_section()` after the body collection, BEFORE the join. Tagged lines (B>/E>/F>/D>/A>) and short lines (<20 chars) NEVER deduped. Strict defaults k=4 shingles, threshold=3. |
+| `_BUDGET_SELECT_AVAILABLE` + `_budget_select_impl` import | ~74-82 | Brick 6: BudgetMem L12 chunk selection from `budget_select.py`. |
+| `_l12_budget_pass(text)` helper | ~84-118 | Brick 6: reads `MUNINN_L12_BUDGET` env var, applies BudgetMem chunk selection on raw text BEFORE secret redaction. Tiktoken-aware (`tokenizer.count_tokens` callback). OFF by default for full backward compat. |
+| `compress_line()` L2 inline tier1 loop | ~389-394 | 4-line addition: second `re.sub` loop using `_LEXICONS_TIER1_PATTERNS` after the existing `_FILLER` loop. Pure additive, no overlap with hand-picked list. |
+| `compress_section()` body dedup call | ~717-722 | 1-line addition: `body = _dedup_body_lines(body)` after L0-L11 line compression, before the join. |
+| `compress_file()` L12 pre-pass | ~1262-1268 | 1-line addition: `text = _l12_budget_pass(text)` after secret redaction, before section split. Wired here (not after L11) because raw text has `\n\n` paragraph separators that BudgetMem expects. |
+
+---
+
+## engine/core/lexicons.py — Vendored MIT word lists (Phase B brick 1)
+
+Pure data module, ZERO side effects. Mirrored to `muninn/lexicons.py`.
+Imported by `muninn_layers.py` to extend L2 filler stripping.
+
+| Constant / function | Lignes | Role |
+|---------------------|--------|------|
+| `MIT_FILLERS_EN`  | 47-63  | 83 entries verbatim from github.com/words/fillers (MIT) |
+| `MIT_HEDGES_EN`   | 67-95  | 162 entries verbatim from github.com/words/hedges (MIT) |
+| `MIT_WEASELS_EN`  | 99-119 | 116 entries verbatim from github.com/words/weasels (MIT) |
+| `DISCOURSE_MARKERS_EN` | 123-138 | 50 Cambridge dictionary markers |
+| `FRENCH_FILLERS`  | 142-149 | 22 French agent transcript fillers |
+| `L2_TIER1_SAFE`   | 153-167 | 43 ultra-conservative — adverbs of intensification + non-factual hedges. **Default tier wired in compress_line()**. |
+| `L2_TIER2_MODERATE` | 171-178 | 63 — adds soft quantifier-adjacent words for chat/meeting compression |
+| `get_tier3_raw()` | 184-199 | Pure helper: de-duped union of all MIT lists, sorted by length desc |
+| `DANGEROUS_NEVER_ADD` | 203-225 | Frozenset of 83 words that MUST NOT be in any tier (quantifiers, modals, action verbs, directional words, magnitudes) — safety net |
+| `get_safe_filler_patterns(tier)` | 228-260 | Pure helper: returns regex patterns for tier1/tier2/tier3/discourse/french |
+| `stats()` | 263-274 | Pure helper: returns counts for every list and tier |
+
+Tests: `tests/test_brick1_lexicons.py` (28 tests pass) +
+`tests/test_props_lexicons.py` (1 forge property test pass).
+Forge BUG-102 detector confirmed: 0 destructive functions in this module.
+
+---
+
+## engine/core/dedup.py — SimHash near-duplicate detection (Phase B brick 2)
+
+Charikar SimHash (STOC 2002) for line-level near-duplicate detection.
+Pure-Python, zero deps (uses `hashlib.blake2b` from stdlib).
+Mirrored to `muninn/dedup.py`. Imported by `muninn_layers.py` brick 5.
+
+| Function | Lignes | Role |
+|----------|--------|------|
+| `_tokenize(text)` | 50-54 | Pure: lowercased word tokens via `\b\w+\b` |
+| `_shingles(tokens, k=4)` | 57-66 | Pure: word k-grams sliding window, falls back to unigrams for short text |
+| `_hash_feature(feature, bits)` | 73-81 | Pure: blake2b-based feature hash, configurable bit width (32/64/128) |
+| `simhash(text, bits=64, shingle_size=4)` | 84-117 | Pure: Charikar fingerprint via +/-1 sum across all bit positions |
+| `hamming_distance(a, b)` | 120-124 | Pure: bit_count of XOR — number of differing bits |
+| `similar(a, b, threshold=3, ...)` | 127-141 | Pure: boolean wrapper around simhash + hamming |
+| `dedup_lines(lines, threshold=3, ...)` | 147-188 | Pure: removes near-dups in-order, keeps FIRST occurrence, skips short lines |
+| `dedup_paragraphs(text, threshold=3, ...)` | 191-211 | Pure: splits on `\n\n`, calls dedup_lines, rejoins |
+| `stats(text=, lines=)` | 214-238 | Pure diagnostic: token count, shingle count, dedup ratio |
+
+Operating range (empirically measured in tests):
+- **STRICT** (defaults k=4, t=3): catches typo / punctuation / whitespace / case
+- **LOOSE** (k=1, t=14): also catches polling-loop counter drifts
+- **NOT CAUGHT**: prefix paraphrases, word-order changes, synonym swaps
+
+Tests: `tests/test_brick2_dedup.py` (36 tests pass) +
+`tests/test_props_dedup.py` (6 forge property tests pass).
+Forge BUG-102 detector: 0 destructive functions.
+
+---
+
+## engine/core/budget_select.py — BudgetMem L12 chunk selection (Phase B brick 3)
+
+Implementation of BudgetMem (arxiv 2511.04919, 2025) — training-free
+chunk-level selective memory using interpretable features. Pure-Python,
+zero deps. Mirrored to `muninn/budget_select.py`. Imported by
+`muninn_layers.py` brick 6, opt-in via `MUNINN_L12_BUDGET` env var.
+
+| Function | Lignes | Role |
+|----------|--------|------|
+| `_tokenize(text)` / `_tokenize_preserve_case(text)` | 47-58 | Pure: word tokens (lower / case-preserving) |
+| `_DISCOURSE_MARKERS` constant | 63-72 | 26 multi-word discourse markers (Cambridge subset) |
+| `_discourse_marker_count(text)` | 75-83 | Pure: count of discourse markers in lowercased text |
+| `_FACT_SPAN_RES` | 89-99 | Compiled regexes: ISO date, semver, git hash, %, $money, JIRA, URL |
+| `has_fact_span(chunk)` | 102-109 | Pure: True iff chunk contains any fact span (hard-rule trigger) |
+| `compute_idf(chunks)` | 115-135 | Pure: returns `{term: idf}` map with smoothed IDF |
+| `_entity_density(chunk)` | 141-167 | Pure: capitalized mid-sentence words proxy for NER (no spaCy needed). Splits on `[.!?]+\s+` to skip sentence-initial caps |
+| `_tfidf_mean(chunk, idf_map)` | 170-184 | Pure: mean TF-IDF over chunk tokens |
+| `_position_score(idx, total)` | 187-196 | Pure: 1.0 for first/last 20%, 0.5 for middle |
+| `_number_density(chunk)` | 199-205 | Pure: fraction of tokens containing digits |
+| `_question_presence(chunk)` | 208-210 | Pure: 1.0 if "?" in chunk else 0.0 |
+| `_discourse_score(chunk)` | 213-215 | Pure: discourse marker count, capped at 1.0 |
+| `score_chunk(chunk, idf_map, pos, total)` | 218-241 | Pure: 6-feature weighted sum (entity 0.20 + tfidf 0.20 + position 0.15 + number 0.15 + question 0.10 + discourse 0.10) — exact weights from BudgetMem paper |
+| `_default_token_count(text)` | 247-249 | Pure: word count fallback when no tokenizer given |
+| `select_chunks(chunks, budget, ...)` | 252-303 | Pure: 2-phase pack — must-keep facts first, then score-sorted others. Returns kept indices in original order |
+| `budget_select(text, budget, ...)` | 306-326 | Pure: top-level — splits text by `\n\s*\n`, calls select_chunks, rejoins kept |
+| `stats(text=, chunks=, budget=)` | 329-359 | Pure diagnostic: paragraph count, score distribution, selection ratio |
+
+Tests: `tests/test_brick3_budget_select.py` (50 tests pass) +
+`tests/test_props_budget_select.py` (6 forge property tests pass).
+Forge BUG-102 detector: 0 destructive functions.
+
+Real measured impact (`tests/benchmark/PHASE_B_RESULTS.md`):
+- L0-L11 alone: x2-x4 ratio on real Muninn files
+- +L12 at 50% budget: **x8-x9 ratio** (more than double)
+
 ---
 
 ## muninn_tree.py — Arbre + Boot + Intelligence (3608 lignes)
