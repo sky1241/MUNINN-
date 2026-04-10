@@ -27,6 +27,43 @@ try:
 except Exception:
     _DEDUP_AVAILABLE = False
 
+# PHASE B BRICK 6 (2026-04-10): BudgetMem L12 chunk selection wired into
+# compress_file() as a final pass. OFF by default — opt-in via the
+# MUNINN_L12_BUDGET environment variable (token count). When set, it
+# splits the L0-L11 output into paragraphs, scores each, and drops the
+# lowest-scoring chunks until the budget is reached. Fact spans are
+# always kept (hard rule). See engine/core/budget_select.py.
+try:
+    from budget_select import budget_select as _budget_select_impl
+    _BUDGET_SELECT_AVAILABLE = True
+except Exception:
+    _BUDGET_SELECT_AVAILABLE = False
+
+
+def _l12_budget_pass(text):
+    """Apply BudgetMem chunk selection if MUNINN_L12_BUDGET is set. Pure.
+
+    Reads the budget from the environment so existing callers don't need
+    to change their API. If no budget is set, returns the text unchanged.
+    Any failure -> identity (never block compression).
+    """
+    import os as _os
+    if not _BUDGET_SELECT_AVAILABLE or not text:
+        return text or ""
+    raw = _os.environ.get("MUNINN_L12_BUDGET")
+    if not raw:
+        return text
+    try:
+        budget = int(raw)
+    except (TypeError, ValueError):
+        return text
+    if budget <= 0:
+        return text
+    try:
+        return _budget_select_impl(text, budget_tokens=budget)
+    except Exception:
+        return text  # safety
+
 
 def _dedup_body_lines(lines):
     """Drop SimHash near-duplicates from a section body. Pure.
@@ -1292,6 +1329,12 @@ def compress_file(filepath: Path) -> str:
 
     # L11: Rule Extraction — factorize repeated key=value patterns
     result = _extract_rules(result)
+
+    # PHASE B BRICK 6 (2026-04-10): L12 BudgetMem chunk selection. OFF by
+    # default — opt-in via MUNINN_L12_BUDGET=<int> environment variable.
+    # Runs BEFORE L9 (LLM self-compress) so the API call sees a smaller
+    # input, saving tokens and money. See _l12_budget_pass() above.
+    result = _l12_budget_pass(result)
 
     # Layer 9: LLM self-compress (optional, for large outputs)
     result = _llm_compress(result, context=str(filepath.name))
