@@ -13,7 +13,38 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90 bugs fixed across 12 audit passes (2026-03-18). 0 OPEN.
+## Status: 90 bugs fixed across 12 audit passes (2026-03-18). **1 OPEN** (architectural smell, 2026-04-10).
+
+## BUG-091: engine/core/ and muninn/ package fully duplicated
+- **Status**: OPEN
+- **Symptom**: Modifying a file in `engine/core/` does NOT affect code paths
+  that `import muninn` (the pip package). Discovered during chunk 4 of leak
+  intel battle plan: chunk 3's anti-Adversa clamp had to be mirrored from
+  `engine/core/_secrets.py` to `muninn/_secrets.py` to be picked up by tests.
+- **Root cause**: Two parallel trees exist after the pip-package refactor
+  (commit history mentions `_ProxyModule`). The proxy bridges some functions
+  but NOT new ones added in either location after the refactor. Files affected:
+  - engine/core/muninn.py vs muninn/_engine.py
+  - engine/core/_secrets.py vs muninn/_secrets.py
+  - engine/core/muninn_tree.py vs muninn/muninn_tree.py
+  - engine/core/muninn_layers.py vs muninn/muninn_layers.py
+  - engine/core/muninn_feed.py vs muninn/muninn_feed.py
+  - engine/core/mycelium.py vs muninn/mycelium.py
+  - (and ~10 others)
+- **Workaround used by chunks 3-5**: every modif applied in BOTH trees by hand.
+  This is unsustainable for non-trivial changes.
+- **Fix (proposed, out of scope for chunk 5)**: pick one source of truth
+  (probably `muninn/` since it's the pip-installable package), delete the
+  other, and update all import paths to go through the package. The `engine/core`
+  path should become a symlink, an alias, or simply removed.
+- **Test**: NONE yet. A test that compares both files for byte-equality
+  would catch this regression: `test_engine_muninn_sync.py`.
+- **Regression risk**: tests that hardcode `engine/core/` paths (there are
+  some) need updating.
+
+---
+
+## Status (2026-03-18): 90 bugs fixed across 12 audit passes. 0 OPEN.
 
 All bugs below were found and fixed during the exhaustive debug audit using Forge
 (--predict, --heatmap, --anomaly, --locate, --gen-props) + manual deep audit.
