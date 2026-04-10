@@ -13,6 +13,71 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 5 — SubagentStart hook injects Muninn boot into sub-agents (2026-04-10) [DONE]
+
+Sub-agents (Explore, Plan, custom) used to spawn with **empty Muninn context**.
+They had no idea what Sky's tree contained, what decisions existed, what
+errors were known. Every spawned agent had to rediscover everything.
+
+Claude Code's `SubagentStart` hook fires when a sub-agent is spawned and
+allows injecting `additionalContext` via `hookSpecificOutput`. This chunk
+wires Muninn boot into that injection point.
+
+**New hook handler:**
+- `engine/core/muninn.py::_generate_subagent_start_hook()` — generates a
+  self-contained `subagent_start_hook.py` in the target repo's
+  `.claude/hooks/` (same generator pattern as bridge_hook + post_tool_failure).
+- Same modifs mirrored in `muninn/_engine.py` (package).
+- Mirror copy `.claude/hooks/subagent_start_hook.py` (committed) for the
+  current repo.
+
+**Handler behavior:**
+- Reads `{agent_id, agent_type, cwd}` from stdin JSON.
+- Auto-detects `engine/core/` or `muninn/` package in the cwd.
+- Calls `muninn.boot(query=agent_type)` so the boot is scoped to the
+  sub-agent's purpose (Explore -> exploration concepts, Plan -> planning).
+- Caps result at MAX_INJECT_CHARS=20000 (~5000 tokens) to fit sub-agent
+  context windows.
+- Wraps with a header: `[MUNINN BOOT for {agent_type}]` + usage guidance
+  ("background context, not truth — verify before acting").
+- Emits JSON: `{"hookSpecificOutput": {"hookEventName": "SubagentStart",
+  "additionalContext": "..."}}`.
+
+**Fail-safe degradation:**
+- Invalid stdin -> emit empty additionalContext, exit 0.
+- No engine/core or muninn/ in cwd -> emit empty, exit 0.
+- Boot exception -> emit empty, exit 0.
+- Empty boot result -> emit empty, exit 0.
+
+NEVER blocks sub-agent spawn. Sub-agents that don't get Muninn context
+spawn exactly as before (empty), which is the pre-chunk behavior.
+
+**install_hooks() now registers 6 hooks:**
+1. UserPromptSubmit (bridge)
+2. PreCompact (feed)
+3. SessionEnd (feed)
+4. Stop (feed --trigger stop)
+5. PostToolUseFailure (chunk 4)
+6. SubagentStart (chunk 5) — NEW
+
+Up from 4 hooks pre-chunk-4 to 6 hooks now (28 events total available
+in Claude Code, so we use 21% of the arsenal — was 14% before chunks 4+5).
+
+**Tests:** `tests/test_chunk5_subagent_start_hook.py` — 10 tests, all PASS:
+- Generator file creation and structure
+- `install_hooks` registers SubagentStart and keeps all 5 other hooks intact
+- Subprocess valid payload -> JSON output validates against schema
+- Subprocess invalid stdin -> exit 0 + empty additionalContext
+- Subprocess empty stdin -> exit 0 + empty
+- Subprocess no engine_dir -> fail-safe to empty
+- `_truncate_with_marker` caps oversized boot
+- Full pipeline test with stub muninn module (deterministic, no real boot
+  call) verifies header injection and correct query forwarding
+
+**Reversible:** revert commit. Sub-agents go back to spawning empty.
+
+---
+
 ### CHUNK 4 — PostToolUseFailure hook auto-feeds errors.json (2026-04-10) [DONE]
 
 Until now, P18 (error/fix pairs) was scraped from the JSONL transcript after
