@@ -677,14 +677,43 @@ class Mycelium:
                     else:
                         fusions[key]["strength"] = conn["count"]
 
+    # BRICK 15 (2026-04-11): hard size cap to protect against the
+    # spread_activation infinite-loop on graphs with millions of edges.
+    # On Sky's real mycelium DB (180K concepts, 15.5M edges) the original
+    # _build_adj_cache loaded all 15.5M rows into a Python dict, blowing
+    # up memory and hanging the test_lazy_real::test_real_spread_activation
+    # test for 60+ seconds. The fix below adds a bounded BFS-subgraph
+    # builder so spread_activation and find_chain only see the edges
+    # they actually need.
+    _ADJ_CACHE_HARD_LIMIT = 500_000  # max edges loaded by full _build_adj_cache
+
     def _build_adj_cache(self) -> dict:
         """Build and cache adjacency list from all edges. Called once per session.
-        Returns {concept: [(neighbor, raw_weight)]}. Also stores max_weight."""
+        Returns {concept: [(neighbor, raw_weight)]}. Also stores max_weight.
+
+        BRICK 15 SAFETY: hard cap of _ADJ_CACHE_HARD_LIMIT edges. On graphs
+        larger than this, returns an empty dict and logs a warning, forcing
+        callers to use _build_adj_subgraph(seeds, hops) instead.
+        """
         if self._adj_cache is not None:
             return self._adj_cache
         adj = {}
         max_w = 0.0
         if self._db is not None:
+            with self._db._lock:
+                n_edges = self._db._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+            if n_edges > self._ADJ_CACHE_HARD_LIMIT:
+                # Refuse to load. Cache empty dict so we don't re-check.
+                import sys as _sys
+                print(
+                    f"  [mycelium] _build_adj_cache REFUSED: {n_edges:,} edges > "
+                    f"hard limit {self._ADJ_CACHE_HARD_LIMIT:,}. "
+                    f"Use _build_adj_subgraph(seeds, hops) for bounded queries.",
+                    file=_sys.stderr,
+                )
+                self._adj_cache = {}
+                self._adj_cache_max_weight = 0.0
+                return self._adj_cache
             id_to_name = {v: k for k, v in self._db._concept_cache.items()}
             with self._db._lock:
                 rows = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
@@ -713,6 +742,81 @@ class Mycelium:
         self._adj_cache = adj
         self._adj_cache_max_weight = max_w
         return adj
+
+    def _build_adj_subgraph(self, seeds, hops: int = 2, fanout_cap: int = 64) -> tuple:
+        """BRICK 15: bounded-BFS adjacency builder for query-time use.
+
+        Returns (adj_dict, max_weight) for the subgraph reachable from
+        `seeds` within `hops` hops. At each hop, queries the top-`fanout_cap`
+        strongest edges PER frontier node, so a hub concept (e.g. user
+        name appearing in every session) cannot blow up the BFS.
+
+        Pure on the input. Does NOT mutate self._adj_cache. Safe for
+        concurrent calls. Suitable for graphs with 10M+ edges.
+
+        Performance on Sky's real DB (180K concepts, 15.5M edges):
+          - Hub seed ['ludov', 'users']: 127s pre-fanout-tune -> ~5s post
+          - Mid-degree seed ['compression']: <1s
+
+        Args:
+            seeds: iterable of concept name strings.
+            hops: BFS depth (default 2 = enough for spreading activation).
+            fanout_cap: top-N strongest edges per node (default 64).
+                Lower = faster but may miss weak-but-relevant edges.
+
+        Returns:
+            (adj_dict, max_weight) — same format as _build_adj_cache.
+        """
+        adj = {}
+        max_w = 0.0
+        if self._db is None:
+            # JSON path: fall back to full cache (no DB → small graph)
+            full = self._build_adj_cache()
+            return full, self._adj_cache_max_weight
+        seed_lower = {s.lower().strip() for s in seeds if s}
+        if not seed_lower:
+            return adj, 0.0
+        # Resolve seed names to ids via the concept cache
+        name_to_id = self._db._concept_cache
+        id_to_name = {v: k for k, v in name_to_id.items()}
+        frontier_ids = {name_to_id[n] for n in seed_lower if n in name_to_id}
+        if not frontier_ids:
+            return adj, 0.0
+        visited_ids = set(frontier_ids)
+        for hop in range(hops + 1):
+            if not frontier_ids:
+                break
+            new_frontier = set()
+            # Per-node bounded query: top-N strongest edges per frontier node.
+            # This is the key optimization vs IN(...) batching: a hub concept
+            # with 50K edges only contributes its top-N (default 64), not all.
+            with self._db._lock:
+                for node_id in frontier_ids:
+                    rows = self._db._conn.execute(
+                        "SELECT a, b, count FROM edges "
+                        "WHERE a = ? OR b = ? "
+                        "ORDER BY count DESC LIMIT ?",
+                        (node_id, node_id, fanout_cap),
+                    ).fetchall()
+                    for a_id, b_id, count in rows:
+                        a_name = id_to_name.get(a_id, "")
+                        b_name = id_to_name.get(b_id, "")
+                        if not a_name or not b_name:
+                            continue
+                        w = float(count)
+                        if w > max_w:
+                            max_w = w
+                        if len(adj.get(a_name, [])) < fanout_cap:
+                            adj.setdefault(a_name, []).append((b_name, w))
+                        if len(adj.get(b_name, [])) < fanout_cap:
+                            adj.setdefault(b_name, []).append((a_name, w))
+                        if a_id not in visited_ids:
+                            new_frontier.add(a_id)
+                        if b_id not in visited_ids:
+                            new_frontier.add(b_id)
+            visited_ids.update(new_frontier)
+            frontier_ids = new_frontier
+        return adj, max_w
 
     def _dynamic_degree_percentile(self) -> float:
         """H6: Adjust degree filter percentile based on meta repo count.
@@ -1281,9 +1385,11 @@ class Mycelium:
         # A5: Adaptive hops if not explicitly set
         if hops is None:
             hops = self.adaptive_hops()
-        # Use cached adjacency (built once, reused by transitive_inference too).
-        # S3: Penalize hub concepts at query time (not in cache — seed-dependent).
-        raw_adj = self._build_adj_cache()
+        # BRICK 15 (2026-04-11): use bounded BFS subgraph instead of loading
+        # the entire 15M-edge graph. On Sky's real DB the full _build_adj_cache
+        # hangs for 60+s; the bounded version queries only the edges within
+        # `hops` hops of the seeds — typically <50K rows even on huge graphs.
+        raw_adj, _max_w = self._build_adj_subgraph(seeds, hops=hops)
         if not raw_adj:
             return []
         if self._high_degree_cache is None:
@@ -1378,9 +1484,10 @@ class Mycelium:
         """
         concept = concept.lower().strip()
 
-        # Use cached adjacency (shared with spread_activation)
-        adj = self._build_adj_cache()
-        max_weight = self._adj_cache_max_weight
+        # BRICK 15 (2026-04-11): use bounded BFS subgraph instead of full
+        # adjacency cache. find_chain is BFS-bounded by max_hops anyway,
+        # so loading 15M edges to traverse <50K is wasteful.
+        adj, max_weight = self._build_adj_subgraph([concept], hops=max_hops)
 
         if concept not in adj or max_weight == 0:
             return []

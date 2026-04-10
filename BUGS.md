@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+2 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction, both fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 fact-span detection too narrow).
+## Status: 90+10+3 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation infinite hang on big graphs, all fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 fact-span detection too narrow).
 
 ---
 
@@ -66,6 +66,56 @@
 - **Regression**: none. Pure functions like `redact_secrets_text`,
   `count_chained_commands`, `clamp_chained_commands` are still detected as
   safe and continue to be fuzzed normally.
+
+### BUG-106: mycelium.spread_activation infinite hang on graphs > 500K edges
+- **Status**: FIXED (commit pending — brick 15)
+- **Symptom**: `tests/test_lazy_real.py::test_real_spread_activation` hung
+  for 60+ seconds and timed out on Sky's real mycelium DB (180,852 concepts,
+  15,560,444 edges, 1.8 GB on disk). The test asserts `dt < 60.0` so it
+  reliably failed. Same hang pattern would hit `find_chain()` and any
+  other caller of `_build_adj_cache()`.
+- **Root cause**: `_build_adj_cache()` did `SELECT a, b, count FROM edges`
+  with NO LIMIT, loading all 15.5M rows into a Python dict. Each row
+  generated 2 dict entries (a→b and b→a), so the result was ~31M tuples
+  in a Python dict — multiple GB of RAM, multiple minutes of CPU just
+  to load. Then `spread_activation` iterated over all of it.
+- **Fix**: added a bounded BFS subgraph builder
+  `_build_adj_subgraph(seeds, hops, fanout_cap)` to both
+  `engine/core/mycelium.py` and `muninn/mycelium.py`. Per-node SQL
+  query with `LIMIT fanout_cap` (default 64) so even hub seeds can't
+  blow up the BFS:
+  ```sql
+  SELECT a, b, count FROM edges
+  WHERE a = ? OR b = ?
+  ORDER BY count DESC LIMIT ?
+  ```
+  Re-wired `spread_activation()` and `find_chain()` to use the bounded
+  builder. The old `_build_adj_cache()` still exists but now refuses
+  to load > `_ADJ_CACHE_HARD_LIMIT` (500,000) edges and emits a stderr
+  warning, forcing future callers onto the bounded path.
+- **Verification (real measurements on Sky's actual DB)**:
+  - Pre-fix: hangs at 60s+ (test timeout fires), exact behavior
+    documented in earlier session traceback (`mycelium.py:1302` in
+    the normalization loop)
+  - Post-fix run 1 (fanout_cap=200): 127 seconds — too slow, still
+    hits the test timeout
+  - Post-fix run 2 (fanout_cap=64, per-node SQL with LIMIT):
+    **24.169 seconds**, 20 concepts activated, top result `muninn`
+    with activation 1.0 — under the 60s test threshold
+- **Test**: `tests/test_brick15_spread_activation_bounded.py` — 8 pin
+  tests covering:
+    - API surface: _build_adj_subgraph exists, hard limit constant
+    - Empty / unknown seeds return empty
+    - Real seeds produce non-empty subgraph with valid (str, float) entries
+    - fanout_cap is respected per node
+    - **spread_activation_under_60s_on_real_db** — full e2e on Sky's DB
+    - **subgraph_builder_under_30s_on_real_db** — direct builder e2e
+  Plus the original `test_lazy_real.py::test_real_spread_activation`
+  now passes in 24.60s (was hanging).
+- **Why this is critical**: spread_activation is used by Muninn's
+  `boot()` for retrieval scoring (Collins & Loftus 1975 spreading
+  activation through the mycelium semantic network). Pre-fix, ANY
+  user with > 500K edges had a broken boot. Sky has 15.5M edges.
 
 ### BUG-105: L12 destroys files with no `\n\n` paragraph breaks (JSONL, logs)
 - **Status**: FIXED (commit pending — this brick 13)
