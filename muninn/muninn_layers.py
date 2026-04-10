@@ -10,6 +10,20 @@ try:
 except ImportError:
     from tokenizer import count_tokens, token_count
 
+# PHASE B BRICK 4 (2026-04-10): vendored MIT filler lexicons (tier 1).
+# Module-level import + patterns cached once at init. Pure data, no I/O.
+# See muninn/lexicons.py for tier definitions and safety constraints.
+try:
+    try:
+        from .lexicons import get_safe_filler_patterns as _get_lex_patterns
+    except ImportError:
+        from lexicons import get_safe_filler_patterns as _get_lex_patterns
+    _LEXICONS_TIER1_PATTERNS = _get_lex_patterns("tier1")
+except Exception:
+    # If lexicons.py is missing or broken, degrade gracefully — never block
+    # the compression pipeline because of an optional extension.
+    _LEXICONS_TIER1_PATTERNS = []
+
 
 class _ModRef:
     """Lazy reference to muninn engine — avoids circular import."""
@@ -396,6 +410,11 @@ def compress_line(line) -> str:
         r"\bpour\b", r"\bplus\b", r"\btout\b", r"\bmais\b",
     ]
     for filler in _FILLER:
+        result = re.sub(filler, "", result, flags=re.IGNORECASE)
+    # PHASE B BRICK 4: tier 1 MIT vendored lexicons (intensifiers + epistemic
+    # hedges with no factual content). Pure additive — no overlap with the
+    # hand-picked list above. Patterns are pre-compiled at module load.
+    for filler in _LEXICONS_TIER1_PATTERNS:
         result = re.sub(filler, "", result, flags=re.IGNORECASE)
     # "a"/"an": case-sensitive, only as English articles (before a word, not standalone "a" in math/code)
     result = re.sub(r"\ba (?=[a-z])", "", result)
