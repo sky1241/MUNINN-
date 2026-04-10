@@ -50,10 +50,27 @@ def test_claude_md_has_rule_4(claude_md_text):
     assert "No claim without command output" in claude_md_text
 
 
-def test_claude_md_has_4_rules(claude_md_text):
-    """We must have exactly 4 RULES, no fewer."""
+def test_claude_md_has_5_rules(claude_md_text):
+    """We must have exactly 5 RULES (1-3 empirical, 4 anti-bullshit, 5 forge).
+    Brick 16 added RULE 5 (forge after every engine module touch)."""
     count = claude_md_text.count('<RULE id=')
-    assert count == 4, f"expected 4 RULES, found {count}"
+    assert count == 5, f"expected 5 RULES, found {count}"
+
+
+def test_claude_md_has_rule_5(claude_md_text):
+    """Brick 16: RULE 5 (forge mandatory) must be present."""
+    assert 'RULE id="5"' in claude_md_text
+    assert "Forge after every engine module touch" in claude_md_text
+    assert "forge.py --gen-props" in claude_md_text
+
+
+def test_claude_md_sandwich_mentions_rule_5(claude_md_text):
+    """The recency-bias sandwich at the bottom must include RULE 5."""
+    start = claude_md_text.find("<MUNINN_SANDWICH_RECENCY>")
+    end = claude_md_text.find("</MUNINN_SANDWICH_RECENCY>")
+    sandwich = claude_md_text[start:end]
+    assert "RULE 5" in sandwich
+    assert "FORGE" in sandwich.upper()
 
 
 def test_claude_md_sandwich_mentions_rule_4(claude_md_text):

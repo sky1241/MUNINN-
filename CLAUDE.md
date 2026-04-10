@@ -75,6 +75,33 @@ because primacy bias is real and these are the rules that actually matter.
   of them at any time and you must be able to answer with a fresh command.
 </RULE>
 
+<RULE id="5" name="Forge after every engine module touch" priority="HIGH">
+  After modifying any file under engine/core/ or muninn/, run forge on it
+  before claiming the work is done. Forge is the reality-check tool that
+  catches BUG-101, BUG-102, BUG-105, BUG-106 before they hit production.
+
+  Required commands per touched module:
+    python forge.py --gen-props engine/core/<module>.py
+    python -m pytest tests/test_props_<module>.py -q
+
+  The BUG-102 destructive function detector is loaded by default — it will
+  skip side-effect functions (scrub_*, install_*, generate_*, _hook,
+  bootstrap_*, etc.) and emit a banner listing what was skipped. If forge
+  generates a test that calls a destructive function on the live repo, the
+  fix is in the destructive detector, NOT in --include-destructive.
+
+  When the property tests fail, the failing input is the bug. Don't
+  rationalize it away — fix the function or fix the property. The
+  Hypothesis falsifying example is the test case you write next.
+
+  Avoid: editing engine/core/foo.py and committing without running forge.
+  If you do: stop, run forge.py --gen-props on the file, fix anything
+  it finds, THEN commit. Document the forge run in the commit message
+  with the property test count and skipped function count.
+
+  See docs/ANTI_BULLSHIT_BATTLE_PLAN.md defense 4 for the contract.
+</RULE>
+
 </MUNINN_RULES>
 
 ## C'est quoi Muninn ?
@@ -187,10 +214,11 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 
 <MUNINN_SANDWICH_RECENCY>
 
-Recency bias is real. Repeating the 4 critical rules at the bottom so they
+Recency bias is real. Repeating the 5 critical rules at the bottom so they
 stay in your attention right before you generate. The first 3 were measured
-to change behavior on Opus 4.6 (chunk 9, 2026-04-10). RULE 4 was written
-under fire after the 9th time Claude lied about completion (2026-04-10).
+to change behavior on Opus 4.6 (chunk 9, 2026-04-10). RULES 4 and 5 were
+written under fire (2026-04-10/11) after the 9th time Claude lied about
+completion and BUG-105/BUG-106 demonstrated the cost of skipping forge.
 
 1. Parameterize every path in engine code. No "C:/Users/ludov/MUNINN-" in
    function bodies. (RULE 1, +100% measured effect)
@@ -206,5 +234,12 @@ under fire after the 9th time Claude lied about completion (2026-04-10).
    visible 3 lines above in the conversation. Read the full contract in
    docs/ANTI_BULLSHIT_BATTLE_PLAN.md. Sky will ask the 10 verification
    questions at any time. (RULE 4, ABSOLUTE — written under fire)
+
+5. FORGE AFTER EVERY ENGINE MODULE TOUCH. Modified engine/core/foo.py?
+   Run `python forge.py --gen-props engine/core/foo.py` THEN
+   `pytest tests/test_props_foo.py -q` BEFORE the commit. The Hypothesis
+   falsifying example is your next test case. BUG-101, BUG-102, BUG-105,
+   BUG-106 were ALL caught (or would have been caught) by this discipline.
+   (RULE 5, HIGH — written after BUG-106)
 
 </MUNINN_SANDWICH_RECENCY>
