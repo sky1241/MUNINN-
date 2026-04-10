@@ -1199,13 +1199,29 @@ if __name__ == "__main__":
 
 
 def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
-    """Copy the 3 PreToolUse enforcement hooks from Muninn source to target.
+    """Copy the 3 PreToolUse enforcement hooks from Muninn source to target."""
+    return _copy_hooks_from_source(repo_path, [
+        "pre_tool_use_bash_destructive.py",
+        "pre_tool_use_bash_secrets.py",
+        "pre_tool_use_edit_hardcode.py",
+    ])
 
-    Chunk 12 of leak intel battle plan: enforces RULES 1, 2, 3 in code
-    rather than relying on CLAUDE.md text suggestions.
 
-    Returns dict mapping hook script name -> destination Path.
+def _install_scaling_hooks(repo_path: Path) -> dict:
+    """Copy scaling/enterprise hooks (chunk 15) - NOT registered automatically.
+
+    Sky activates them manually via settings.local.json when a customer
+    needs compliance/audit/drift detection. See docs/SCALING_NOTES.md.
     """
+    return _copy_hooks_from_source(repo_path, [
+        "notification_audit_hook.py",
+        "post_tool_use_edit_log.py",
+        "config_change_hook.py",
+    ])
+
+
+def _copy_hooks_from_source(repo_path: Path, hook_names: list) -> dict:
+    """Generic helper: copy hook scripts from this Muninn source to target."""
     import shutil
 
     hooks_dir = repo_path / ".claude" / "hooks"
@@ -1214,11 +1230,6 @@ def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
     muninn_root = Path(__file__).resolve().parent.parent
     source_dir = muninn_root / ".claude" / "hooks"
 
-    hook_names = [
-        "pre_tool_use_bash_destructive.py",
-        "pre_tool_use_bash_secrets.py",
-        "pre_tool_use_edit_hardcode.py",
-    ]
     installed = {}
     for name in hook_names:
         src = source_dir / name
@@ -1263,6 +1274,9 @@ def install_hooks(repo_path: Path):
 
     # Copy PreToolUse enforcement hooks (chunk 12)
     ptu_hooks = _install_pre_tool_use_hooks(repo_path)
+
+    # Copy scaling hooks (chunk 15) - placed in target but not auto-registered
+    _install_scaling_hooks(repo_path)
 
     feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
     stop_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}" --trigger stop'

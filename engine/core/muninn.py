@@ -1126,30 +1126,54 @@ def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
 
     Returns dict mapping hook script name -> destination Path.
     """
+    return _copy_hooks_from_source(repo_path, [
+        "pre_tool_use_bash_destructive.py",
+        "pre_tool_use_bash_secrets.py",
+        "pre_tool_use_edit_hardcode.py",
+    ])
+
+
+def _install_scaling_hooks(repo_path: Path) -> dict:
+    """Copy the 3 scaling/enterprise hooks from Muninn source to target.
+
+    Chunk 15 of leak intel battle plan: scaffolding for Phase 3 enterprise
+    pitch (compliance, audit, drift detection). These hooks are COPIED to
+    the target's .claude/hooks/ but NOT registered in settings.local.json.
+    Sky/admin activates them manually when a customer needs them by editing
+    settings.local.json.
+
+    See docs/SCALING_NOTES.md for details.
+
+    Returns dict mapping hook script name -> destination Path.
+    """
+    return _copy_hooks_from_source(repo_path, [
+        "notification_audit_hook.py",
+        "post_tool_use_edit_log.py",
+        "config_change_hook.py",
+    ])
+
+
+def _copy_hooks_from_source(repo_path: Path, hook_names: list) -> dict:
+    """Generic helper: copy hook scripts from this Muninn source to target.
+
+    Source is .claude/hooks/ in the Muninn repo this code lives in.
+    Target is .claude/hooks/ in repo_path.
+    Skips silently if source script doesn't exist.
+    """
     import shutil
 
     hooks_dir = repo_path / ".claude" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
-    # Source hooks live in this same repo's .claude/hooks/
-    # We resolve via the engine file location, not via a hardcoded path.
     muninn_root = Path(__file__).resolve().parent.parent.parent
     source_dir = muninn_root / ".claude" / "hooks"
 
-    hook_names = [
-        "pre_tool_use_bash_destructive.py",
-        "pre_tool_use_bash_secrets.py",
-        "pre_tool_use_edit_hardcode.py",
-    ]
     installed = {}
     for name in hook_names:
         src = source_dir / name
         if not src.exists():
-            # If the source isn't here, we skip silently — the hooks are
-            # optional defense in depth, not critical.
             continue
         dst = hooks_dir / name
-        # Avoid copy-on-self when installing in the Muninn repo itself
         try:
             if src.resolve() == dst.resolve():
                 installed[name] = dst
@@ -1189,6 +1213,12 @@ def install_hooks(repo_path: Path):
     # Copy PreToolUse enforcement hooks (chunk 12 of leak intel battle plan)
     # These enforce CLAUDE.md RULES 1, 2, 3 in code rather than text suggestion.
     ptu_hooks = _install_pre_tool_use_hooks(repo_path)
+
+    # Copy scaling/enterprise hooks (chunk 15) - scripts are placed in
+    # target .claude/hooks/ but NOT registered in settings.local.json. Sky
+    # activates them manually when a customer needs compliance/audit features.
+    # See docs/SCALING_NOTES.md.
+    _install_scaling_hooks(repo_path)
 
     feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
     stop_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}" --trigger stop'

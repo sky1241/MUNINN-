@@ -13,6 +13,77 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 15 — Scaling hooks + WAL Monitor analysis (2026-04-10) [DONE]
+
+After Sky asked "is the WAL Monitor enough to scale to 120 devs?", this
+chunk does two things: (a) document the scaling story honestly, (b) add
+3 hooks that scaffold the Phase 3 enterprise pitch (compliance, audit,
+drift detection).
+
+**New doc: `docs/SCALING_NOTES.md`**
+- What the WAL Monitor actually solves (single-process WAL bloat)
+- 3 real risks at scale: networked FS locking, writer starvation,
+  checkpoint contention
+- 3-phase plan: today (≤50 devs local-first), 50-500 (PostgreSQL backend
+  ~1 week of work), 500+ (read replicas + distributed lock ~1 month)
+- Honest verdict: Muninn is shippable for 1-50 devs today. The WAL Monitor
+  is fine for that. Beyond, the bottleneck is "shared SQLite" not "WAL
+  bloat".
+
+**3 new hooks added (CODED, NOT activated by default):**
+
+1. `notification_audit_hook.py` (Notification → audit_log.jsonl)
+   - Append every Claude Code notification to .muninn/audit_log.jsonl
+   - For SOC 2 / ISO 27001 compliance: who asked what permission, when
+   - JSONL format, cap 10000 entries
+
+2. `post_tool_use_edit_log.py` (PostToolUse Edit|Write → edits_log.jsonl)
+   - Log every successful Edit/Write with file_path, old_size, new_size, delta
+   - For drift detection, dashboards, post-edit linting hooks
+   - JSONL format, cap 10000 entries
+
+3. `config_change_hook.py` (ConfigChange → config_changes.jsonl)
+   - Log when settings.local.json or .claude/rules/* change
+   - Validates that all hook script paths in the new settings still exist
+   - Catches broken settings.local.json early
+   - Supports both simple format and PreToolUse matcher format
+
+**Why NOT activated by default:**
+These are scaffolding for an eventual enterprise sale. Sky activates them
+manually via settings.local.json when a customer needs the audit trail
+or drift detection features. For solo Muninn use, they're noise.
+
+**Wire in install_hooks():**
+- New helper `_copy_hooks_from_source()` (factored out of the existing
+  `_install_pre_tool_use_hooks`)
+- New `_install_scaling_hooks(repo_path)` copies the 3 scripts to target
+  `.claude/hooks/` but does NOT add entries to `required_hooks`
+- Both `engine/core/muninn.py` and `muninn/_engine.py` updated (BUG-091).
+
+**Tests**: `tests/test_chunk15_scaling_hooks.py` — 15 tests, all PASS:
+- 4 notification_audit tests (creates log, appends multiple, invalid JSON, cap)
+- 5 post_tool_use_edit_log tests (Edit, Write, ignores Read, invalid JSON, cap)
+- 5 config_change tests (logs event, detects missing path, invalid settings,
+  invalid JSON input, supports PreToolUse matcher format)
+- 1 existence sanity test for all 3 hook scripts
+
+**Tests across all 11 chunk test files: 178/178 PASS, no regression.**
+
+**Cost**: $0 API.
+**API budget unchanged**: ~$9.49 / $33.54. ~$24.05 remaining.
+
+**Manual activation snippet** (Sky pastes into `.claude/settings.local.json`
+when needed):
+```json
+"Notification": [{"type": "command", "command": "python \".claude/hooks/notification_audit_hook.py\"", "timeout": 5}],
+"PostToolUse": [
+  {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "python \".claude/hooks/post_tool_use_edit_log.py\"", "timeout": 5}]}
+],
+"ConfigChange": [{"type": "command", "command": "python \".claude/hooks/config_change_hook.py\"", "timeout": 5}]
+```
+
+---
+
 ### CHUNK 14 — Activation hooks + LIGHT mode SubagentStart fix (2026-04-10) [DONE]
 
 After all the chunk 1-13 work, the hooks were CODED but not all ACTIVE in
