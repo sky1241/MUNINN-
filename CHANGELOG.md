@@ -13,6 +13,70 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 7 — Apply hybrid compression to CLAUDE.md (Muninn eats itself) (2026-04-10) [DONE]
+
+Application of the chunk 6 hybrid strategy. Sky said go: "tant qu'on est
+sous 200 et que ça fonctionne mieux et qu'il y a rien d'autre à faire,
+on s'en fou".
+
+**What was done:**
+- One-shot Python script (no permanent helper added — single-application use).
+- Located the `## Memo pour mon cousin` section (lines 146-216, 71 lines).
+- Verified isolation invariants: RULES block is BEFORE the memo, sandwich
+  is AFTER the memo (refused if not).
+- Called `compress_section()` on memo body only.
+- Restored the H2 markdown header (replaced Muninn's `?Section:` artefact
+  with the original `## Memo pour mon cousin —...`).
+- Reassembled CLAUDE.md as: `before + compressed_memo + after`.
+- Wrote back to disk.
+
+**Result:**
+
+| Metric | Before chunk 7 | After chunk 7 | Delta |
+|---|---|---|---|
+| lines | 239 | **186** | **-53** |
+| chars | 11405 | 8913 | -2492 |
+| tokens | 3255 | 2519 | **-736 (-22%)** |
+| `<MUNINN_RULES>` | ✓ | ✓ | preserved |
+| `<RULE id="N">` count | 8 | 8 | preserved |
+| `Directive:` count | 8 | 8 | preserved |
+| `Bad reflex:` count | 8 | 8 | preserved |
+| `Correction:` count | 8 | 8 | preserved |
+| `<MUNINN_SANDWICH_RECENCY>` | ✓ | ✓ | preserved |
+| H2 markdown headers | 9 | 9 | preserved |
+| Anthropic 200-line cap | warned (+39) | **under** | warning gone |
+
+**Tests:**
+- chunk 2 (CLAUDE.md structure): 11/11 PASS, **soft warning gone** —
+  the `test_under_recommended_line_cap` test no longer emits the
+  "239 lines > 200" warning.
+- chunk 6 (compression measurement): 8/8 PASS — the baseline test
+  re-validates that the new CLAUDE.md still satisfies all chunk 2
+  invariants and that the compression measurement logic works on
+  the new file.
+- All 6 chunks together: **67/67 PASS, 0 warnings**.
+
+**Trade-off applied (as accepted by Sky):**
+- Memo cousin loses some narrative tone. `"C'est un cadeau. Et c'est
+  un bon cadeau."` is dropped (not a fact).
+- Minor grammar artifacts in the compressed memo
+  (`"L'anglais compact ce qu' lit efficacement"` — missing words).
+- All hard facts preserved: ratios x4.1, x2.6, x1.7, x1.6, x4.5,
+  benchmark 37/40 (92%), MEMORY.md, tokenizer BPE, "Sky electricien
+  autodidacte 11 mois", "Muninn 11 couches".
+- The cousin who boots a fresh session still sees the architecture
+  via the compressed bullets — only the emotional framing is lost.
+
+**The 736 freed tokens are now available for future RULES additions
+without busting the 200-line cap.** If chunk 8+ adds new RULES, we can
+go up to ~25 more lines before hitting the soft warning again.
+
+**Reversible:** `git checkout HEAD~1 CLAUDE.md` (or revert this commit).
+The chunk 6 measurement test (`tests/test_chunk6_compress_claude_md.py`)
+can re-run the compression on the old version if needed.
+
+---
+
 ### CHUNK 6 — Measurement: can Muninn compress its own CLAUDE.md? (2026-04-10) [DONE]
 
 CLAUDE.md is 239 lines (over Anthropic's 200 recommendation from chunk 2).
