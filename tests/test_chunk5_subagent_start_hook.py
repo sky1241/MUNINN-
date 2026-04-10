@@ -235,31 +235,74 @@ def test_handler_truncates_oversized_boot(tmp_path, monkeypatch):
     assert "truncated" in capped.lower()
 
 
-def test_handler_format_with_mocked_boot(tmp_path):
-    """Verify the hook output JSON format using a deterministic muninn.boot stub.
+def test_handler_format_with_real_tree(tmp_path):
+    """Verify the LIGHT hook reads root.mn directly from disk.
 
-    This avoids depending on the real boot's performance characteristics
-    while still validating the full subprocess pipeline.
+    Updated 2026-04-10: the hook no longer calls muninn.boot() (it was 100s
+    on real Muninn tree). It now reads .muninn/tree/root.mn or memory/root.mn
+    directly from disk. This test creates a fake tree dir with a known root.mn
+    and verifies the hook reads it.
     """
     sys.path.insert(0, str(REPO_ROOT / "engine" / "core"))
     import muninn
 
     repo = tmp_path / "fake_repo"
     repo.mkdir()
-    # Create minimal fake engine/core inside fake repo with a stub muninn.py
-    fake_engine = repo / "engine" / "core"
-    fake_engine.mkdir(parents=True)
-    stub = fake_engine / "muninn.py"
-    stub.write_text(
-        "from pathlib import Path\n"
-        "_REPO_PATH = None\n"
-        "def _refresh_tree_paths():\n"
-        "    pass\n"
-        "def boot(query=''):\n"
-        "    return f'STUB boot result for query={query!r}'\n",
+    # Create a fake .muninn/tree/ with a root.mn the hook will find
+    tree_dir = repo / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True)
+    (tree_dir / "root.mn").write_text(
+        "FAKE_ROOT_MARKER:hello world from test\n",
+        encoding="utf-8",
+    )
+    # Also a branch matching "Explore" agent_type
+    (tree_dir / "explore_branch.mn").write_text(
+        "FAKE_BRANCH_MARKER:branch about exploration\n",
         encoding="utf-8",
     )
 
+    hook_file = muninn._generate_subagent_start_hook(
+        repo, REPO_ROOT / "engine" / "core"
+    )
+
+    payload = {
+        "hook_event_name": "SubagentStart",
+        "agent_id": "agent-stub",
+        "agent_type": "Explore",
+        "cwd": str(repo),
+    }
+    import time
+    t0 = time.time()
+    result = subprocess.run(
+        [sys.executable, str(hook_file)],
+        input=json.dumps(payload).encode("utf-8"),
+        capture_output=True,
+        timeout=10,
+    )
+    elapsed_ms = (time.time() - t0) * 1000
+    assert result.returncode == 0, (
+        f"Hook stderr: {result.stderr.decode()}"
+    )
+    # Hook MUST be fast — light file I/O only
+    assert elapsed_ms < 5000, f"Hook too slow: {elapsed_ms:.0f}ms (target <500ms)"
+
+    out = json.loads(result.stdout.decode("utf-8"))
+    spec = out["hookSpecificOutput"]
+    assert spec["hookEventName"] == "SubagentStart"
+    ctx = spec["additionalContext"]
+    assert "MUNINN LIGHT BOOT" in ctx
+    assert "Explore" in ctx
+    assert "FAKE_ROOT_MARKER" in ctx, "root.mn content not injected"
+    assert "FAKE_BRANCH_MARKER" in ctx, "matching branch not injected"
+
+
+def test_handler_no_tree_dir_fail_safe(tmp_path):
+    """If neither .muninn/tree nor memory/ exists, hook emits empty context."""
+    sys.path.insert(0, str(REPO_ROOT / "engine" / "core"))
+    import muninn
+
+    repo = tmp_path / "fake_repo"
+    repo.mkdir()
     hook_file = muninn._generate_subagent_start_hook(
         repo, REPO_ROOT / "engine" / "core"
     )
@@ -274,16 +317,8 @@ def test_handler_format_with_mocked_boot(tmp_path):
         [sys.executable, str(hook_file)],
         input=json.dumps(payload).encode("utf-8"),
         capture_output=True,
-        timeout=15,
+        timeout=10,
     )
-    assert result.returncode == 0, (
-        f"Hook stderr: {result.stderr.decode()}"
-    )
+    assert result.returncode == 0
     out = json.loads(result.stdout.decode("utf-8"))
-    spec = out["hookSpecificOutput"]
-    assert spec["hookEventName"] == "SubagentStart"
-    ctx = spec["additionalContext"]
-    assert "MUNINN BOOT" in ctx
-    assert "Explore" in ctx
-    assert "STUB boot result" in ctx
-    assert "query='Explore'" in ctx
+    assert out["hookSpecificOutput"]["additionalContext"] == ""

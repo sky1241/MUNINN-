@@ -13,6 +13,91 @@ dans `docs/CLAUDE_CODE_LEAK_INTEL.md` (14 sections, ~70 sources). Plan de batail
 en 5 chunks pour faire gagner les regles Muninn contre les reflexes par defaut de
 Claude et boucher les trous heritees du leak.
 
+### CHUNK 14 — Activation hooks + LIGHT mode SubagentStart fix (2026-04-10) [DONE]
+
+After all the chunk 1-13 work, the hooks were CODED but not all ACTIVE in
+Sky's `.claude/settings.local.json` (gitignored). Sky asked to activate
+them safely with smoke tests at each step.
+
+**The activation revealed a critical bug**: SubagentStart hook was calling
+`muninn.boot(query=agent_type)` which on Sky's real Muninn tree takes
+**105 seconds** (KIComp filtering, L10 cue distillation, spreading
+activation on a 30K-token budget). Claude Code's hook timeout would kill
+this every time, making sub-agents either hang or boot empty.
+
+**Fix: rewrite SubagentStart in LIGHT mode (pure file I/O).**
+
+Old behavior:
+- `import muninn`
+- `muninn._REPO_PATH = ...`
+- `muninn.boot(query=...)` → 105s on Sky's tree
+
+New LIGHT behavior:
+- Read `.muninn/tree/root.mn` (or `memory/root.mn`) directly from disk
+- Glob `*.mn` files in the tree dir, find one matching agent_type by
+  filename then by content head (first 500 chars)
+- Compose `[MUNINN LIGHT BOOT for X]\n=== root.mn ===\n... \n=== branch: Y ===\n...`
+- Cap at 20K chars
+- **Measured time on Sky's repo: 79ms** (1300x faster)
+
+This is a degradation of richness (no spreading activation, no rules
+extraction, no cue distillation) but a massive gain in usability. Sub-agents
+that boot in 79ms are usable; sub-agents that boot in 105s are dead.
+
+Both the static `.claude/hooks/subagent_start_hook.py` and the f-string
+template inside `_generate_subagent_start_hook()` (in `engine/core/muninn.py`
+AND `muninn/_engine.py` per BUG-091) were updated to the LIGHT version.
+
+**Activation steps performed:**
+1. Backup `.claude/settings.local.json` -> `.claude/settings.local.json.backup-2026-04-10`
+2. Add PostToolUseFailure + SubagentStart to settings (passive hooks first)
+3. Smoke test PostToolUseFailure: real Bash failure payload -> entry written
+   to `.muninn/errors.json` correctly in P18 schema. PASS.
+4. Smoke test SubagentStart with old code: TIMEOUT after 30s -> bug discovered
+5. Rewrite SubagentStart to LIGHT mode (engine + muninn + tests)
+6. Smoke test new LIGHT version: 79ms, JSON valid, root + branch read
+7. Add 3 PreToolUse hooks to settings (destructive, secrets, hardcode)
+8. Smoke test PreToolUse on real cases: 4 destructive blocks + 4 allows,
+   3 secrets blocks + 4 allows, 2 hardcode blocks + 4 allows. **0 false
+   positive, 0 false negative.**
+
+**Final state of `.claude/settings.local.json`** (still gitignored):
+- 7 hook events declaring 9 distinct scripts
+- UserPromptSubmit (bridge_hook), PreCompact, SessionEnd, Stop (Muninn feed)
+- PostToolUseFailure (auto-feed errors.json)
+- SubagentStart (LIGHT, 79ms)
+- PreToolUse with 3 entries: Bash destructive, Bash secrets, Edit|Write hardcode
+
+**Test updates:**
+- `tests/test_chunk1_auto_memory_disabled.py::test_hooks_still_point_to_muninn`:
+  was too strict, only accepted "muninn.py" or "bridge_hook.py" markers.
+  Updated to accept all 8 valid hook script names AND support the matcher
+  format (`PreToolUse` uses `{matcher, hooks: [...]}` instead of
+  `{type, command}`).
+- `tests/test_chunk5_subagent_start_hook.py::test_handler_format_with_mocked_boot`
+  -> renamed to `test_handler_format_with_real_tree`. Old test created a
+  stub `muninn.boot()` which is no longer called. New test creates a
+  fake `.muninn/tree/` with `root.mn` + a branch matching "Explore" and
+  verifies the hook reads them. Also asserts elapsed < 5000ms.
+- New test `test_handler_no_tree_dir_fail_safe` for the case where neither
+  `.muninn/tree` nor `memory/` exists.
+
+**Tests: 163/163 PASS across all 10 chunk test files. No regression.**
+
+**Cost**: $0 API. Pure activation + bug fix work.
+**API budget unchanged**: ~$9.49 / $33.54. ~$24.05 remaining.
+
+**What this means in practice**:
+At Sky's NEXT Claude Code session (after this commit), all 9 hooks are
+live. PostToolUseFailure starts logging errors automatically. SubagentStart
+injects the LIGHT slice when sub-agents spawn. The 3 PreToolUse hooks
+block destructive/secrets/hardcode operations with clear stderr feedback.
+
+Backup file `.claude/settings.local.json.backup-2026-04-10` is preserved
+locally (gitignored). To revert: `cp <backup> .claude/settings.local.json`.
+
+---
+
 ### CHUNK 13 — Path-scoped rules in `.claude/rules/` (2026-04-10) [DONE]
 
 Anthropic's official Claude Code documentation recommends using

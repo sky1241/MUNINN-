@@ -65,16 +65,48 @@ def test_hooks_section_intact(settings):
 
 
 def test_hooks_still_point_to_muninn(settings):
-    """Chaque hook doit toujours appeler muninn.py ou bridge_hook.py."""
+    """Chaque hook doit toujours appeler un script Muninn legitime.
+
+    Updated 2026-04-10: les hooks valides incluent maintenant les scripts
+    sous .claude/hooks/ ajoutes par les chunks 4, 5, 12 (post_tool_failure,
+    subagent_start, pre_tool_use_*). Le test verifie qu'aucun hook ne
+    pointe vers un script externe inconnu.
+    """
     hooks = settings["hooks"]
+    valid_markers = (
+        "muninn.py", "_engine.py",
+        "bridge_hook.py",
+        "post_tool_failure_hook.py",
+        "subagent_start_hook.py",
+        "pre_tool_use_bash_destructive.py",
+        "pre_tool_use_bash_secrets.py",
+        "pre_tool_use_edit_hardcode.py",
+    )
+
+    def _extract_commands(entries):
+        """Support both simple format and matcher format (PreToolUse)."""
+        cmds = []
+        for e in entries or []:
+            if not isinstance(e, dict):
+                continue
+            if "command" in e:
+                cmds.append(e.get("command", ""))
+            elif "hooks" in e:
+                for h in e.get("hooks", []):
+                    if isinstance(h, dict):
+                        cmds.append(h.get("command", ""))
+        return cmds
+
     for hook_name, entries in hooks.items():
         assert isinstance(entries, list) and entries, (
             f"Hook {hook_name} vide ou mal forme"
         )
-        cmd = entries[0].get("command", "")
-        assert ("muninn.py" in cmd) or ("bridge_hook.py" in cmd), (
-            f"Hook {hook_name} ne pointe plus vers Muninn : {cmd}"
-        )
+        cmds = _extract_commands(entries)
+        assert cmds, f"Hook {hook_name} aucun command extrait"
+        for cmd in cmds:
+            assert any(m in cmd for m in valid_markers), (
+                f"Hook {hook_name} ne pointe pas vers un script Muninn legitime : {cmd}"
+            )
 
 
 def test_no_native_memory_dir_in_repo():
