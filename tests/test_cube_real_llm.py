@@ -46,9 +46,20 @@ def ollama_available(model='deepseek-coder:6.7b'):
 
 OLLAMA_MODEL = 'deepseek-coder:6.7b'
 OLLAMA_OK = ollama_available(OLLAMA_MODEL)
+
+# BRICK 22 (2026-04-11): require BOTH Ollama up AND an explicit opt-in env
+# var. Without MUNINN_RUN_REAL_LLM_TESTS=1, the file is skipped even when
+# Ollama is reachable, because the actual /api/generate call can return
+# HTTP 500 / hang / take minutes — too unreliable for the default suite.
+#
+# To run these tests explicitly:
+#   set MUNINN_RUN_REAL_LLM_TESTS=1
+#   python -m pytest tests/test_cube_real_llm.py -v
+_REAL_LLM_OPT_IN = os.environ.get("MUNINN_RUN_REAL_LLM_TESTS") == "1"
 skip_no_ollama = pytest.mark.skipif(
-    not OLLAMA_OK,
-    reason=f"Ollama not available or model {OLLAMA_MODEL} not pulled"
+    not OLLAMA_OK or not _REAL_LLM_OPT_IN,
+    reason=f"real LLM test — set MUNINN_RUN_REAL_LLM_TESTS=1 to opt in "
+           f"(needs Ollama up + model {OLLAMA_MODEL})"
 )
 
 

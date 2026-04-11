@@ -17,16 +17,33 @@ import tempfile
 import shutil
 import pytest
 
-from cube import (
+# BRICK 22 (2026-04-11): add engine/core to sys.path BEFORE the cube import.
+# Without this, pytest collection blew up with ModuleNotFoundError on every
+# run, masking the rate-limit / hang issue we were trying to fix.
+_ENGINE_CORE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "engine", "core"
+)
+if _ENGINE_CORE not in sys.path:
+    sys.path.insert(0, _ENGINE_CORE)
+
+from cube import (  # noqa: E402
     Cube, CubeStore, ClaudeProvider,
     subdivide_file, assign_neighbors,
     reconstruct_cube, compute_ncd,
 )
 
-# Skip all tests if no API key
+# BRICK 22 (2026-04-11): require BOTH the API key AND an explicit opt-in
+# env var. Without MUNINN_RUN_REAL_API_TESTS=1 the file is skipped even
+# in dev where the API key is set, because the full run costs ~$2-3 and
+# takes minutes — too expensive for the default test suite.
+#
+# To run these tests explicitly:
+#   set MUNINN_RUN_REAL_API_TESTS=1
+#   python -m pytest tests/test_cube_real_api.py -v -s
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("ANTHROPIC_API_KEY"),
-    reason="ANTHROPIC_API_KEY not set — skip real API tests"
+    not os.environ.get("ANTHROPIC_API_KEY")
+    or os.environ.get("MUNINN_RUN_REAL_API_TESTS") != "1",
+    reason="real API test — set MUNINN_RUN_REAL_API_TESTS=1 to opt in (costs $2-3)"
 )
 
 CORPUS_DIR = os.path.join(os.path.dirname(__file__), "cube_corpus")

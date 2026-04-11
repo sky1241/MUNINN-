@@ -6,8 +6,14 @@ Tests:
   B4.3  Recently accessed branches penalized (score * 0.3)
   B4.4  Output format: list of (str, float) tuples
   B4.5  Real mycelium: predictions found for known concepts
+
+BRICK 22 (2026-04-11): tests that hit the REAL repo's mycelium DB
+need a per-test 90s timeout because spread_activation on Sky's
+15.5M-edge graph takes ~24s post-BUG-106-fix (was infinite pre-fix).
+The default suite timeout is 10s which is too tight for these.
 """
 import sys, os, tempfile, json, time
+import pytest
 def _setup_temp_repo(tmpdir):
     """Create minimal Muninn repo structure"""
     from pathlib import Path
@@ -31,8 +37,13 @@ def test_b4_1_empty():
         assert result == [], f"B4.1 FAIL: expected [], got {result}"
     print(f"  B4.1 PASS: empty concepts returns empty predictions")
 
+@pytest.mark.timeout(90)
 def test_b4_2_sorted():
-    """Predictions should be sorted by score descending"""
+    """Predictions should be sorted by score descending.
+
+    BRICK 22 timeout=90: hits the real Muninn mycelium DB. Post BUG-106
+    fix this runs in ~24s on Sky's 15.5M-edge graph.
+    """
     from pathlib import Path
     import muninn
     repo = Path(os.path.dirname(__file__)).parent

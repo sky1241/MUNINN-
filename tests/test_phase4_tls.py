@@ -16,7 +16,14 @@ from pathlib import Path
 
 import pytest
 
-from muninn.mycelium_db import MyceliumDB, today_days
+# BRICK 22 (2026-04-11): add engine/core to sys.path so the tests can do
+# `from sync_tls import TLSBackend` without ModuleNotFoundError. Same
+# pattern as brick 14 fix for test_x1_secret_scrub.py.
+_ENGINE_CORE = Path(__file__).resolve().parent.parent / "engine" / "core"
+if str(_ENGINE_CORE) not in sys.path:
+    sys.path.insert(0, str(_ENGINE_CORE))
+
+from muninn.mycelium_db import MyceliumDB, today_days  # noqa: E402
 
 
 # ── T1: SyncServer real CRDT merge ──────────────────────────────
@@ -202,9 +209,16 @@ class TestT4AuthACL:
 
 class TestTLSFactory:
     def test_factory_tls_config(self):
-        """Factory recognizes 'tls' backend type."""
+        """Factory recognizes 'tls' backend type.
+
+        BRICK 22 fix: import TLSBackend from the SAME module that
+        get_sync_backend() returns. The factory lives in muninn.sync_backend
+        and constructs muninn.sync_tls.TLSBackend, NOT engine/core/sync_tls.
+        Importing from `sync_tls` (engine/core path) gives a different
+        class object so isinstance fails even though the classes are
+        functionally identical (BUG-091 dual tree consequence).
+        """
         from muninn.sync_backend import get_sync_backend
-        # This will fail to connect but should create the backend
         try:
             backend = get_sync_backend({
                 "backend": "tls",
@@ -212,7 +226,7 @@ class TestTLSFactory:
                 "tls_port": 19998,
                 "tls_verify": False,
             })
-            from sync_tls import TLSBackend
+            from muninn.sync_tls import TLSBackend
             assert isinstance(backend, TLSBackend)
         except ImportError:
             pytest.skip("sync_tls import failed")

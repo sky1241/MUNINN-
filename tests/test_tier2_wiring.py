@@ -7,8 +7,13 @@ Tests:
   W4  B6 wired: session type adjusts scoring weights
   W5  B7 wired: injected fact appears in tree + mycelium
   W6  Integration: boot with wiring produces valid results
+
+BRICK 22 (2026-04-11): tests that hit the REAL repo's mycelium DB
+need a per-test 90s timeout because spread_activation on Sky's
+15.5M-edge graph takes ~24s post-BUG-106-fix.
 """
 import sys, os, tempfile, json, time, math
+import pytest
 def test_w1_sigmoid_k_adapts():
     """B5: spread_activation should use session-adapted k"""
     from muninn.mycelium import Mycelium
@@ -56,8 +61,13 @@ def test_w2_blind_spots_boost():
                 hits += 1
     print(f"  W2 PASS: {len(blind_spots)} blind spots, {len(bs_concepts)} concepts, {hits} branches boosted")
 
+@pytest.mark.timeout(90)
 def test_w3_predictions_bonus():
-    """B4: predict_next should return predictions that get bonus in scoring"""
+    """B4: predict_next should return predictions that get bonus in scoring.
+
+    BRICK 22 timeout=90: hits the real Muninn mycelium DB. Post-BUG-106
+    spread_activation runs in ~24s on Sky's 15.5M-edge graph.
+    """
     import muninn
     from pathlib import Path
     repo = Path(os.path.dirname(__file__)).parent
