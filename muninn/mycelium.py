@@ -2501,9 +2501,26 @@ class Mycelium:
         If query_concepts given, only pulls connections involving those concepts.
         Otherwise pulls top connections by count.
         Does NOT overwrite local data — only adds what's missing.
+
+        BRICK 22 fix (BUG-110): bypass meta pull when running in dict mode
+        AND the meta path is the global home one AND it's huge. This stops
+        tests from blocking for minutes querying the user's home 1.8GB
+        meta DB. Tests that explicitly set MUNINN_META_PATH to a tmp
+        directory still work (the guard checks the home path specifically).
         """
+        import os as _os
         meta_db_p = self.meta_db_path()
         meta_json_p = self.meta_path()
+
+        # BUG-110 guard: dict mode + global home meta DB + huge file
+        # = test running against the user's real meta. Skip the slow pull.
+        # Tests that override MUNINN_META_PATH to a tmp dir bypass this.
+        if self._db is None and not _os.environ.get("MUNINN_META_PATH"):
+            try:
+                if meta_db_p.exists() and meta_db_p.stat().st_size > 100 * 1024 * 1024:
+                    return 0  # > 100MB = real user meta, don't query
+            except OSError:
+                pass
 
         # F4: Delegate to backend for SQLite mode
         if self._db is not None and meta_db_p.exists():

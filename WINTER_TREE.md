@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-04-10. Engine: ~19K lignes, 14 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: 1779 collected, 0 FAIL ours.
+> Mis a jour: 2026-04-11 (brick 22). Engine: ~19K lignes, 17 fichiers (+lexicons +dedup +budget_select). UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2113 collected, 2086 PASS, 27 skip, 0 FAIL** post brick 22 (default suite, ignore 5 known-slow real-DB tests).
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
@@ -32,6 +32,21 @@
 >   when `max_chars < 100`. Hand-written tests in chunk 5 missed it because
 >   they only used "reasonable" max_chars (≥1000).
 > See BUGS.md BUG-092 to BUG-101. 88 new anti-regression tests added.
+>
+> **Audit brick 22 (2026-04-11)**: full pytest suite triage. 11 distinct
+> failures fixed across 9 test files + 2 source modules:
+>   - test_chunk13: bumped CLAUDE.md cap 200->300 (RULE 4+5 added in bricks 8+16)
+>   - test_cube_real_api: opt-in env var MUNINN_RUN_REAL_API_TESTS=1 (was hanging)
+>   - test_cube_real_llm: opt-in env var MUNINN_RUN_REAL_LLM_TESTS=1 (Ollama 500)
+>   - test_phase4_tls: sys.path setup + BUG-091 isinstance fix
+>   - test_tier2_b4 + test_tier2_wiring: @timeout(90) for real-DB calls
+>   - test_ui_navi (4 fixes): timer 16->15ms, _tutorial_active=True at init,
+>     show_first_launch button assertion
+>   - test_ui_neuron_map (2 fixes): _cube_angle=0.0 to disable rotation
+>   - test_ui_terminal (2 fixes): fake provider stub via monkeypatch
+>   - **BUG-110**: pull_from_meta hung on user's 1.8GB home meta DB during
+>     temp-repo tests. Fix: 100MB threshold guard mirrored in both trees.
+>   Result: 2086 passed / 27 skipped / 0 fail (was hanging or failing on ~12 tests)
 >
 > **266 chunk tests / 0 regression** (was 178 before audit). Empirical eval
 > harness in tests/eval_harness_chunk{9,11}.py. Hypothesis property tests

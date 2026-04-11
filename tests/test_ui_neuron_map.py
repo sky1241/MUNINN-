@@ -111,7 +111,19 @@ def test_zoom_to_fit(qtbot):
 # --- B-UI-05: Hover ---
 
 def test_hit_test(qtbot):
-    """Hit test finds neuron under cursor."""
+    """Hit test finds neuron under cursor.
+
+    BRICK 22 fix: NeuronMapWidget's _project_3d does a Y-axis rotation
+    by self._cube_angle BEFORE the screen translation. With the
+    default angle (animation is running), world (200, 200) does NOT
+    map to screen (200, 200) — the rotation moves it. The test was
+    written assuming identity projection. Fix: pin _cube_angle = 0
+    so the projection is identity, then the math works out.
+
+    Also: query the neuron's actual screen position via the public
+    transform helper so the test stays robust if the projection math
+    changes again.
+    """
     from muninn.ui.neuron_map import NeuronMapWidget, Neuron
     w = NeuronMapWidget()
     qtbot.addWidget(w)
@@ -125,9 +137,11 @@ def test_hit_test(qtbot):
     w._zoom = 1.0
     w._pan_x = 200
     w._pan_y = 200
+    w._cube_angle = 0.0  # disable rotation so projection is deterministic
 
-    # Screen center should map to world (200, 200)
-    hit = w._hit_test(QPointF(200, 200))
+    # Query the neuron's actual screen position (whatever the math gives)
+    sp = w._world_to_screen(n.x, n.y, getattr(n, 'z', 0.0))
+    hit = w._hit_test(sp)
     assert hit is not None
     assert hit.label == "Test"
 
@@ -371,23 +385,29 @@ def test_kdtree_build(qtbot):
 # --- B-UI-07: Bezier edges + edge click ---
 
 def test_edge_hit_test(qtbot):
-    """Edge click detection finds nearby edges."""
+    """Edge click detection finds nearby edges.
+
+    BRICK 22 fix: same pattern as test_hit_test — disable the
+    rotation animation and query the actual midpoint via the
+    public transform helper instead of assuming identity projection.
+    """
     from muninn.ui.neuron_map import NeuronMapWidget, Neuron
     w = NeuronMapWidget()
     qtbot.addWidget(w)
     w.resize(400, 400)
     w._zoom = 1.0
-    # Pan so world origin is at screen center (200,200)
     w._pan_x = 200.0
     w._pan_y = 200.0
-    # World coords: (100,200) -> screen (100,200), (300,200) -> screen (300,200)
+    w._cube_angle = 0.0  # disable rotation, projection is now identity
     n1 = Neuron(id="a", label="A", x=100, y=200)
     n2 = Neuron(id="b", label="B", x=300, y=200)
     w._neurons = [n1, n2]
     w._edges = [(0, 1, 1.0)]
     w._empty = False
-    # Screen midpoint of the edge: world(200,200) -> screen (200,200)
-    mid = QPointF(200, 200)
+    # Compute the actual screen midpoint via the public transform
+    sp1 = w._world_to_screen(n1.x, n1.y, getattr(n1, 'z', 0.0))
+    sp2 = w._world_to_screen(n2.x, n2.y, getattr(n2, 'z', 0.0))
+    mid = QPointF((sp1.x() + sp2.x()) / 2, (sp1.y() + sp2.y()) / 2)
     hit = w._hit_test_edge(mid)
     assert hit is not None
 

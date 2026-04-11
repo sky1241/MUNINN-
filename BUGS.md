@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+6 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash, all fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 partial fix). BUG-104 PARTIAL FIX in brick 17.
+## Status: 90+10+7 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 partial fix).
 
 ---
 
@@ -66,6 +66,35 @@
 - **Regression**: none. Pure functions like `redact_secrets_text`,
   `count_chained_commands`, `clamp_chained_commands` are still detected as
   safe and continue to be fuzzed normally.
+
+### BUG-110: mycelium.pull_from_meta hangs on user's home meta DB during tests
+- **Status**: FIXED (brick 22 part 2)
+- **Symptom**: `tests/test_biovectors_v11b.py` and other tests that create
+  a temp Muninn repo and call `boot()` blocked for minutes inside
+  `_pull_from_meta_sqlite()`. Root cause: those tests create an empty
+  temp `.muninn/` (so the local Mycelium runs in dict mode with no DB),
+  but `meta_db_path()` defaults to the user's home (`~/.muninn/meta_mycelium.db`)
+  which on Sky's machine is 1.8 GB. The function ran a per-fusion-key
+  SQL query against that huge DB without any short-circuit. Same family
+  as BUG-106 but on a different code path.
+- **Fix**: added a guard at the top of `pull_from_meta()` (mirrored in
+  `engine/core/mycelium.py` and `muninn/mycelium.py`):
+  ```python
+  if self._db is None and not _os.environ.get("MUNINN_META_PATH"):
+      try:
+          if meta_db_p.exists() and meta_db_p.stat().st_size > 100 * 1024 * 1024:
+              return 0  # huge home meta + dict mode = test, skip
+      except OSError:
+          pass
+  ```
+  Tests that explicitly set `MUNINN_META_PATH` (like
+  `test_phase1_sync.py::test_roundtrip_two_repos` which uses
+  `monkeypatch.setenv("MUNINN_META_PATH", str(tmp_path / "shared_meta"))`)
+  bypass the guard and still work normally — verified by running both
+  tests after the fix.
+- **Test**: `tests/test_biovectors_v11b.py` — 5 tests now pass in 1.32s
+  (was hanging at 10s+ each). `tests/test_phase1_sync.py::test_roundtrip_two_repos`
+  also still passes (verified after the guard refinement).
 
 ### BUG-109: cube_analysis.filter_dead_cubes / survey_propagation_filter crash on non-list
 - **Status**: FIXED (brick 18 commit pending)

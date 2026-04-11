@@ -24,14 +24,38 @@ def test_terminal_empty_state(qtbot):
     assert w._output.toPlainText() == ""
 
 
-def test_command_history(qtbot):
-    """Command history stores entries."""
-    from muninn.ui.terminal import TerminalWidget
-    w = TerminalWidget()
+def test_command_history(qtbot, monkeypatch):
+    """Command history stores entries.
+
+    BRICK 22 fix: the original test pressed Enter on a free-text input,
+    which calls _start_llm() which creates a REAL provider and a real
+    QThread that does a network call. The follow-up _stop_llm() tries to
+    join the thread but the network read doesn't honor the cancel flag,
+    so the test hangs forever (no per-thread timeout fires for C-blocking
+    socket reads).
+
+    Fix: stub create_provider() to return a fake provider that returns
+    immediately. The history test only cares about the _history list,
+    not the LLM behavior.
+    """
+    import muninn.ui.terminal as term_mod
+
+    class _FakeProvider:
+        name = "fake"
+        def generate(self, prompt, **kwargs):
+            return ""
+        def stream(self, prompt, **kwargs):
+            return iter([])
+        def chat(self, *args, **kwargs):
+            return ""
+
+    monkeypatch.setattr(term_mod, "create_provider", lambda *a, **k: _FakeProvider())
+
+    w = term_mod.TerminalWidget()
     qtbot.addWidget(w)
     w._input.setText("hello")
     w._on_enter()
-    w._stop_llm()  # Cancel LLM thread
+    w._stop_llm()  # Cancel LLM thread (now harmless because fake provider)
     assert len(w._history) == 1
     assert w._history[0] == "hello"
 
@@ -112,10 +136,27 @@ def test_flash_timer(qtbot):
     assert w._flash_timer.interval() == 150
 
 
-def test_command_signal(qtbot):
-    """command_entered signal emits on Enter."""
-    from muninn.ui.terminal import TerminalWidget
-    w = TerminalWidget()
+def test_command_signal(qtbot, monkeypatch):
+    """command_entered signal emits on Enter.
+
+    BRICK 22 fix: same hang as test_command_history — Enter triggers a
+    real LLM call. Stub create_provider() with a fake that returns
+    immediately.
+    """
+    import muninn.ui.terminal as term_mod
+
+    class _FakeProvider:
+        name = "fake"
+        def generate(self, prompt, **kwargs):
+            return ""
+        def stream(self, prompt, **kwargs):
+            return iter([])
+        def chat(self, *args, **kwargs):
+            return ""
+
+    monkeypatch.setattr(term_mod, "create_provider", lambda *a, **k: _FakeProvider())
+
+    w = term_mod.TerminalWidget()
     qtbot.addWidget(w)
     received = []
     w.command_entered.connect(lambda t: received.append(t))
