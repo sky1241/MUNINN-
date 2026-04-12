@@ -34,7 +34,7 @@ def test_constants():
     print(f"[PASS] Constants: TARGET={TARGET_TOKENS}, MIN={TOLERANCE_MIN}, MAX={TOLERANCE_MAX}")
 
 
-def test_cube_sizes(file_path: str, label: str):
+def _cube_sizes(file_path: str, label: str):
     """Test that cubes from a file are ~112 tokens."""
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -110,14 +110,14 @@ def main():
     for fname in TEST_FILES:
         fpath = os.path.join(CORPUS_DIR, fname)
         if os.path.exists(fpath):
-            r = test_cube_sizes(fpath, "CORPUS")
+            r = _cube_sizes(fpath, "CORPUS")
             results.append(r)
 
     # Test real project files
     for fname in REAL_FILES:
         fpath = os.path.join(PROJECT_ROOT, fname)
         if os.path.exists(fpath):
-            r = test_cube_sizes(fpath, "PROJECT")
+            r = _cube_sizes(fpath, "PROJECT")
             results.append(r)
 
     # Summary
