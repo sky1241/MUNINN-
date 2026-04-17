@@ -1682,20 +1682,20 @@ class Mycelium:
                 sorted_deg = sorted(degree.items(), key=lambda x: -x[1])
                 top_concepts = set(c for c, _ in sorted_deg[:MAX_ZONE_CONCEPTS])
 
-            # P7: Single-pass — collect concepts AND edges in one scan
+            # P7: Bounded edge scan — query per-concept neighbors instead of
+            # loading all 11M+ edges. Each concept gets top-64 strongest edges.
+            # Robinet scaling: O(concepts * fanout) instead of O(all_edges).
+            ZONE_FANOUT = 64
             edge_triples = []
-            with self._db._lock:
-                all_edges = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
-            for row in all_edges:
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                if not a_name or not b_name:
-                    continue
-                if top_concepts and (a_name not in top_concepts or b_name not in top_concepts):
-                    continue
-                concepts.add(a_name)
-                concepts.add(b_name)
-                edge_triples.append((a_name, b_name, row[2]))
+            scan_concepts = top_concepts if top_concepts else set(id_to_name.values())
+            for concept in scan_concepts:
+                neighbors = self._db.neighbors(concept, top_n=ZONE_FANOUT)
+                for neighbor, count in neighbors:
+                    if top_concepts and neighbor not in top_concepts:
+                        continue
+                    concepts.add(concept)
+                    concepts.add(neighbor)
+                    edge_triples.append((concept, neighbor, count))
             concepts = sorted(concepts)
             idx = {c: i for i, c in enumerate(concepts)}
             N = len(concepts)
@@ -1807,23 +1807,17 @@ class Mycelium:
                 concept_to_zone[concept] = zone_name
 
         # Tag connections: zone = zone of concept_a (or shared if both same zone)
+        # Robinet: iterate only zone concepts' neighbors, not all 11M+ edges.
         tagged = 0
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            with self._db._lock:
-                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
-            for row in edge_rows:
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                if not a_name or not b_name:
-                    continue
-                zone_a = concept_to_zone.get(a_name)
-                zone_b = concept_to_zone.get(b_name)
-                if zone_a:
-                    self._db.add_zone_to_edge(a_name, b_name, zone_a)
+            for concept, zone_name in concept_to_zone.items():
+                neighbors = self._db.neighbors(concept, top_n=64)
+                for neighbor, _ in neighbors:
+                    self._db.add_zone_to_edge(concept, neighbor, zone_name)
                     tagged += 1
-                if zone_b and zone_b != zone_a:
-                    self._db.add_zone_to_edge(a_name, b_name, zone_b)
+                    zone_b = concept_to_zone.get(neighbor)
+                    if zone_b and zone_b != zone_name:
+                        self._db.add_zone_to_edge(concept, neighbor, zone_b)
         else:
             conns = self.data["connections"]
             for key, conn in conns.items():
@@ -1994,24 +1988,19 @@ class Mycelium:
         else:
             top_concepts_set = set(degree.keys())
 
-        # Build connection set and adjacency ONLY for top concepts
+        # Build connection set and adjacency ONLY for top concepts.
+        # Robinet: query per-concept neighbors instead of loading all edges.
         conn_set = set()
         adj = {}
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            with self._db._lock:
-                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
-            for row in edge_rows:
-                a = id_to_name.get(row[0], "")
-                b = id_to_name.get(row[1], "")
-                if not a or not b:
-                    continue
-                if a in top_concepts_set or b in top_concepts_set:
-                    conn_set.add((a, b))
-                    conn_set.add((b, a))
-                if a in top_concepts_set and b in top_concepts_set:
-                    adj.setdefault(a, set()).add(b)
-                    adj.setdefault(b, set()).add(a)
+            for concept in top_concepts_set:
+                neighbors = self._db.neighbors(concept, top_n=64)
+                for neighbor, _ in neighbors:
+                    conn_set.add((concept, neighbor))
+                    conn_set.add((neighbor, concept))
+                    if neighbor in top_concepts_set:
+                        adj.setdefault(concept, set()).add(neighbor)
+                        adj.setdefault(neighbor, set()).add(concept)
         else:
             for key in conns:
                 parts = key.split("|")
