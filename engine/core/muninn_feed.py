@@ -1172,6 +1172,23 @@ def feed_from_hook(repo_path: Path):
             if pushed > 0:
                 print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
                 _hook_log(repo_path, f"SYNC: {pushed} -> meta")
+            # CHUNK 1: Auto-decay — run once per session (SessionEnd).
+            # Debounced: only runs if hook_event is SessionEnd (not PreCompact
+            # which can fire multiple times per session).
+            if hook_event == "SessionEnd":
+                dead = m.decay()
+                if dead > 0:
+                    m.save()
+                    print(f"MUNINN DECAY: {dead} dead connections removed")
+                    _hook_log(repo_path, f"DECAY: {dead} dead")
+                # CHUNK 6: Light sleep consolidation — merge cold branches.
+                # Only runs at SessionEnd, only if there are cold branches.
+                try:
+                    _m._sleep_consolidate()
+                    _hook_log(repo_path, "SLEEP_CONSOLIDATE: done")
+                except Exception as e:
+                    print(f"MUNINN CONSOLIDATE warning: {e}", file=sys.stderr)
+            m.close()
         except Exception as e:
             print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
 

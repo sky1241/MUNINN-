@@ -333,6 +333,8 @@ class MainWindow(QMainWindow):
             "degree": neuron.degree,
             "neighbors": self._get_neighbor_pairs(neuron),
             "files": [neuron.entry] if neuron.entry else [],
+            "temperature": neuron.temperature if neuron.temperature else None,
+            "zone": neuron.zone if neuron.zone else None,
         })
 
         # Status bar

@@ -1044,6 +1044,24 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
     config = config or CubeConfig()
     store = CubeStore(config.db_path)
 
+    # CHUNK 2: Load mycelium so cube↔mycelium loop is live in prod.
+    # B29 (feed_mycelium_from_results) and _add_semantic_neighbors
+    # both need a real Mycelium instance to work.
+    mycelium = None
+    try:
+        from pathlib import Path as _P
+        _rp = _P(repo_path) if repo_path else _P(".")
+        try:
+            from engine.core.mycelium import Mycelium as _Myc
+        except ImportError:
+            try:
+                from .mycelium import Mycelium as _Myc
+            except ImportError:
+                from mycelium import Mycelium as _Myc
+        mycelium = _Myc(_rp)
+    except Exception:
+        pass  # Graceful: cube works without mycelium, just no cross-learning
+
     try:
         provider = config.get_provider()
         cubes = store.get_cubes_by_level(level)
@@ -1066,6 +1084,7 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
                 config=config,
                 ast_hints=ast_hints,
                 healed=healed,
+                mycelium=mycelium,
             )
             all_results.extend(results)
 
@@ -1101,6 +1120,12 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
         }
     finally:
         store.close()
+        if mycelium is not None:
+            try:
+                mycelium.save()
+                mycelium.close()
+            except Exception:
+                pass
 
 
 def cli_status(config: Optional[CubeConfig] = None) -> dict:

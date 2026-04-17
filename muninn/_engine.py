@@ -314,6 +314,11 @@ def scan_repo(repo_path: Path, output_path: str = None):
             # Confidence from relative frequency (0-100)
             max_count = candidates[0][1] if candidates else 1
             confidence = min(100, int(100 * count / max_count))
+            # CHUNK 3: temperature from relative frequency (0.0-1.0)
+            temperature = count / max_count if max_count > 0 else 0.0
+            # Zone from pattern type
+            zone_map = {"word": "Concepts", "entity": "Entites",
+                        "path": "Structure", "number": "Metriques"}
             nodes.append({
                 "id": nid,
                 "label": pattern,
@@ -322,6 +327,8 @@ def scan_repo(repo_path: Path, output_path: str = None):
                 "entry": "",
                 "depth": 0 if ptype == "entity" else 1,
                 "confidence": confidence,
+                "temperature": round(temperature, 3),
+                "zone": zone_map.get(ptype, ""),
             })
 
         # Build connections: co-occurrence within same file

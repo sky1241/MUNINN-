@@ -329,6 +329,7 @@ class SyncServer:
 
         db = MyceliumDB(Path(self.meta_db_path))
         result = {"connections": [], "fusions": [], "count": 0}
+        query_ids = set()  # CHUNK 8 fix: init before the if/else
         try:
             if concepts:
                 query_ids = set()
@@ -358,6 +359,26 @@ class SyncServer:
                     "count": row[2], "first_seen": row[3], "last_seen": row[4],
                 })
             result["count"] = len(result["connections"])
+
+            # CHUNK 8: Also pull fusions (same as SharedFileBackend)
+            if query_ids:
+                ph = ",".join("?" * len(query_ids))
+                fusion_rows = db._conn.execute(f"""
+                    SELECT a, b, form, strength, fused_at FROM fusions
+                    WHERE a IN ({ph}) OR b IN ({ph})
+                """, list(query_ids) + list(query_ids)).fetchall()
+            else:
+                fusion_rows = db._conn.execute(
+                    "SELECT a, b, form, strength, fused_at FROM fusions "
+                    "ORDER BY strength DESC LIMIT ?", (max_pull,)
+                ).fetchall()
+            for row in fusion_rows:
+                a_name = db._id_to_name.get(row[0]) or db._concept_name(row[0])
+                b_name = db._id_to_name.get(row[1]) or db._concept_name(row[1])
+                result["fusions"].append({
+                    "a": a_name, "b": b_name,
+                    "form": row[2], "strength": row[3], "fused_at": row[4],
+                })
         finally:
             db.close()
         return result
@@ -537,6 +558,19 @@ class TLSBackend:
                     first_seen=days_to_date(conn["first_seen"]),
                     last_seen=days_to_date(conn["last_seen"]),
                 )
+                pulled += 1
+
+        # CHUNK 8: Also pull fusions from TLS server
+        for fusion in result.get("fusions", []):
+            a, b = fusion["a"], fusion["b"]
+            if not local_db.has_fusion(a, b):
+                a_id = local_db._get_or_create_concept(a)
+                b_id = local_db._get_or_create_concept(b)
+                local_db._conn.execute("""
+                    INSERT OR IGNORE INTO fusions (a, b, form, strength, fused_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (a_id, b_id, fusion.get("form", f"{a}+{b}"),
+                      fusion.get("strength", 1), fusion.get("fused_at", "")))
                 pulled += 1
 
         local_db.commit()

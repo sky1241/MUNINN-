@@ -978,6 +978,23 @@ def extract_tags(text: str) -> list[str]:
         if count >= 2 and ident not in _STOP and ident not in tags and len(tags) < 10:
             tags.add(ident)
 
+    # CHUNK 5: Enrich tags with mycelium concepts if available.
+    # get_related() finds semantically linked concepts that pure regex misses.
+    if tags and _m._REPO_PATH:
+        try:
+            if _m._CORE_DIR not in sys.path:
+                sys.path.insert(0, _m._CORE_DIR)
+            from mycelium import Mycelium
+            m = Mycelium(_m._REPO_PATH)
+            for seed in list(tags)[:3]:  # top 3 tags as seeds
+                related = m.get_related(seed, top_n=3)
+                for concept, _w in related:
+                    if concept not in _STOP and len(concept) >= 4 and len(tags) < 10:
+                        tags.add(concept)
+            m.close()
+        except Exception:
+            pass  # Graceful: tags work without mycelium
+
     return sorted(tags)[:10]
 
 

@@ -27,6 +27,7 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # (file, function) pairs known to be over thresholds
     ("muninn_tree.py", "boot"),       # 646 lines
     ("muninn.py",      "main"),       # 503 lines (CLI dispatcher)
+    ("muninn.py",      "scan_repo"),  # 210+ lines (CHUNK 9: + neuron map gen)
     ("bible_scraper.py", "_core_bible"),  # 478 lines (private helper)
     ("muninn_tree.py", "prune"),      # 409 lines
     ("orchestrator.py", "scan"),      # 370 lines

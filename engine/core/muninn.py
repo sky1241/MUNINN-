@@ -75,10 +75,11 @@ from muninn_feed import *    # noqa: F401,F403
 
 # ── SCAN — auto-generate local codebook (R5) ────────────────────
 
-def scan_repo(repo_path: Path):
+def scan_repo(repo_path: Path, output_path: str = None):
     """Scan a repo to auto-generate its local codebook.
     Finds frequent words, entities, paths, numbers and assigns short codes.
-    This is R5: codebook local per node."""
+    This is R5: codebook local per node.
+    CHUNK 9: If output_path given, writes neuron map JSON for UI."""
     repo_path = repo_path.resolve()
     print(f"=== MUNINN SCAN: {repo_path.name} ===")
 
@@ -242,6 +243,59 @@ def scan_repo(repo_path: Path):
     for pattern, code in shown[:15]:
         orig = next((c[1] for c in candidates if c[0] == pattern), 0)
         print(f"    '{pattern}' -> '{code}' ({orig}x)")
+
+    # CHUNK 9: Generate neuron map JSON for UI if output requested
+    if output_path:
+        nodes = []
+        connections = []
+        node_ids = set()
+        level_map = {"word": "F", "entity": "R", "path": "I", "number": "B"}
+        zone_map = {"word": "Concepts", "entity": "Entites",
+                    "path": "Structure", "number": "Metriques"}
+        max_count = candidates[0][1] if candidates else 1
+        for i, (pattern, count, savings, ptype) in enumerate(candidates[:80]):
+            nid = re.sub(r'[^a-zA-Z0-9_]', '_', pattern.lower())
+            if nid in node_ids:
+                nid = f"{nid}_{i}"
+            node_ids.add(nid)
+            confidence = min(100, int(100 * count / max_count))
+            temperature = count / max_count if max_count > 0 else 0.0
+            nodes.append({
+                "id": nid, "label": pattern,
+                "level": level_map.get(ptype, "F"),
+                "status": "done" if pattern in encode else "todo",
+                "entry": "", "depth": 0 if ptype == "entity" else 1,
+                "confidence": confidence,
+                "temperature": round(temperature, 3),
+                "zone": zone_map.get(ptype, ""),
+            })
+        # Co-occurrence connections
+        file_concepts = {}
+        for f in repo_path.rglob("*"):
+            if f.is_file() and f.suffix in {".py", ".md", ".txt", ".rs", ".ts", ".js"}:
+                try:
+                    text = f.read_text(encoding="utf-8", errors="ignore")[:10000]
+                    present = [n["id"] for n in nodes if n["label"].lower() in text.lower()]
+                    for a in present:
+                        for b in present:
+                            if a < b:
+                                connections.append({"from": a, "to": b})
+                except (PermissionError, OSError):
+                    pass
+        # Dedup connections
+        seen = set()
+        deduped = []
+        for c in connections:
+            key = (c["from"], c["to"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(c)
+        scan_data = {"nodes": nodes, "connections": deduped[:500]}
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(scan_data, f, ensure_ascii=False, indent=2)
+        print(f"\n  Neuron map: {len(nodes)} nodes, {len(deduped)} connections -> {output_path}")
 
 
 def analyze_file(filepath: Path) -> dict:
@@ -1474,6 +1528,7 @@ def main():
     parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
                         help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
     parser.add_argument("--force", action="store_true", help="Force operation (e.g., prune without dry-run)")
+    parser.add_argument("--output", help="Output path for scan neuron map JSON (CHUNK 9)")
     parser.add_argument("--password", help="Password for vault lock/unlock (AES-256)")
 
     args = parser.parse_args()
@@ -1637,7 +1692,7 @@ def main():
         if not args.file:
             print("ERROR: repo path required. Usage: muninn.py scan <repo-path>")
             sys.exit(1)
-        scan_repo(Path(args.file))
+        scan_repo(Path(args.file), output_path=getattr(args, 'output', None))
         return
 
     if args.command == "bootstrap":

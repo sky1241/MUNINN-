@@ -52,6 +52,8 @@ class Neuron:
     z: float = 0.0
     degree: int = 0
     category: str = ""
+    temperature: float = 0.0  # CHUNK 3: from scan frequency ratio
+    zone: str = ""  # CHUNK 3: from pattern type
 
 
 # Shape constants for daltonism support
@@ -303,6 +305,8 @@ class NeuronMapWidget(QWidget):
                 confidence=n.get("confidence", 0),
                 depth=n.get("depth", 0),
                 depends=n.get("depends", []),
+                temperature=n.get("temperature", 0.0),
+                zone=n.get("zone", ""),
             )
             neuron.category = LEVEL_SHAPES.get(neuron.level, SHAPE_CIRCLE)
             self._neurons.append(neuron)

@@ -5,6 +5,46 @@ Tests: **2190+ collected, PASS, 27 skip, 0 FAIL** (post brick 25, default suite)
 
 ---
 
+## Brick 26 (2026-04-17) — Branchement complet: 7 chunks, tout connecte
+
+Audit de branchement complet: identifie tout ce qui etait code mais pas
+connecte entre les systemes. 7 connexions manquantes corrigees.
+
+### CHUNK 1: Decay auto dans SessionEnd hook
+  mycelium.decay() tourne a chaque fin de session (debounced: SessionEnd
+  seulement, pas PreCompact). Le mycelium respire enfin automatiquement.
+
+### CHUNK 2: cli_run branche avec Mycelium
+  `cube run` passait mycelium=None — la boucle cube↔mycelium etait morte
+  en prod. Fix: instancie Mycelium(repo_path) et le passe a
+  run_destruction_cycle. B29 + _add_semantic_neighbors sont vivants.
+
+### CHUNK 3: UI temperatures/zones alimentees
+  Neuron dataclass + scan JSON: temperature (0.0-1.0 frequence relative)
+  et zone (Concepts/Entites/Structure/Metriques). Detail panel les affiche.
+
+### CHUNK 5: extract_tags enrichi par mycelium
+  get_related() sur les top-3 tags ajoute des concepts semantiquement lies
+  que le regex frequency rate. Les branches ont des tags plus intelligents.
+
+### CHUNK 6: sleep_consolidation auto dans SessionEnd
+  _sleep_consolidate() tourne apres decay dans le hook SessionEnd.
+  Les branches froides fusionnent automatiquement.
+
+### CHUNK 8: TLSBackend pull fusions
+  Le serveur TLS envoyait les fusions dans le dict mais ne les query pas.
+  Le client les recevait mais ne les inserait pas. Fix des deux cotes.
+
+### CHUNK 9: scan_repo --output aligne
+  engine/core/muninn.py avait pas le flag --output ni la generation
+  neuron map JSON. Aligne avec _engine.py (pip package).
+
+### Deferes (features nouvelles, pas branchements manquants)
+  CHUNK 4 (scan structurel dans UI) et CHUNK 7 (tree view → tree.json)
+  sont des evolutions futures, pas des connexions cassees.
+
+---
+
 ## Brick 25 (2026-04-17) — Full codebase audit: 6 bugs fixed, 17 new tests, forge template fixed
 
 Complete audit of all engine/core/ files (17 modules, ~19K lines), tests/
