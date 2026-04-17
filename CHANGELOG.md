@@ -1,7 +1,56 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3673 + muninn_feed.py 1661 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1775 + mycelium.py 3145 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 359 = 19886 total (17 files)
-Tests: **2173 collected, 2147 PASS, 27 skip, 0 FAIL** (post brick 24, default suite, ignore 5 known-slow real-DB tests).
+Engine: muninn.py 1964 + muninn_layers.py 1480 + muninn_tree.py 3672 + muninn_feed.py 1660 + cube.py 1052 + cube_providers.py 652 + cube_analysis.py 1774 + mycelium.py 3145 + mycelium_db.py 1338 + sync_backend.py 1136 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 413 + vault.py 523 = ~19K total (18 files)
+Tests: **2190+ collected, PASS, 27 skip, 0 FAIL** (post brick 25, default suite).
+
+---
+
+## Brick 25 (2026-04-17) — Full codebase audit: 6 bugs fixed, 17 new tests, forge template fixed
+
+Complete audit of all engine/core/ files (17 modules, ~19K lines), tests/
+(175 files, 41K lines), hooks, configs, and muninn/ package.
+8 bugs analyzed, 6 fixed, 1 false positive, 1 deferred.
+
+### H1 (HIGH): vault.py memory wipe broken
+  `fp.read_bytes()` returns immutable `bytes` — `_zero_bytes()` silently
+  failed because it needs `bytearray`. Plaintext stayed in RAM after
+  lock/unlock. Fix: wrap in `bytearray()` in both `lock()` and `unlock()`.
+
+### H2: _wal_check_count — NOT A BUG
+  Analyzed the logic: `not (count % 50)` fires at count=0,50,100...
+  The `getattr` default=0 + increment at L404 works correctly.
+  Audit agent's report was wrong.
+
+### H3 (HIGH): muninn/ package divergence — DEFERRED
+  15 files diverge from engine/core/ (imports are structurally different:
+  bare imports in engine/core/ vs relative imports in muninn/ package).
+  Brute-copy breaks the package. Requires a dedicated import-rewrite pass.
+
+### M1 (MEDIUM): mycelium_db.py upsert_connection data integrity
+  Import mode used `count = ?` which could downgrade a locally-stronger
+  connection during meta-pull. Fix: `count = MAX(edges.count, ?)`.
+
+### M2 (MEDIUM): sync_backend.py bare TLSBackend import
+  `from sync_tls import TLSBackend` had no fallback — fails in package
+  context. Fix: triple-fallback (engine.core, relative, bare).
+
+### M3 (MEDIUM): cube.py dead locks
+  `_quarantine_lock` and `_anomaly_lock` defined in both cube.py and
+  cube_analysis.py — two separate Lock objects. Only cube_analysis uses
+  them. Fix: removed dead definitions from cube.py, updated lock test.
+
+### M5 (MEDIUM): _SECRET_PATTERNS duplicated
+  27 regex patterns copied between muninn.py and _secrets.py.
+  Fix: muninn.py now imports from _secrets.py (single source of truth).
+
+### L7 (LOW): forge template hardcoded paths
+  `--gen-props` baked `C:\Users\ludov\MUNINN-\engine\core` into every
+  generated test file. Fix: relative path via `os.path.join(...)`.
+  All 11 test_props_*.py files regenerated — zero hardcoded paths.
+
+### Test results
+  17/17 new tests PASS (tests/test_bugfix_audit_brick25.py, 0.84s)
+  Full suite PASS, 27 skip, 0 fail
 
 ---
 

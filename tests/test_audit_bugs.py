@@ -828,18 +828,24 @@ class TestRecordQuarantineLock:
     """record_quarantine/record_anomaly must use module-level locks."""
 
     def test_module_level_locks_exist(self):
-        """Locks must be module-level, not hasattr-initialized."""
-        import cube
-        assert hasattr(cube, '_quarantine_lock'), "Module-level _quarantine_lock required"
-        assert hasattr(cube, '_anomaly_lock'), "Module-level _anomaly_lock required"
-        assert isinstance(cube._quarantine_lock, type(threading.Lock()))
-        assert isinstance(cube._anomaly_lock, type(threading.Lock()))
+        """Locks must be module-level in cube_analysis (M3 fix: moved from cube.py).
+        cube_analysis is imported into cube via star-import, but the locks
+        are not in __all__ so they stay only in cube_analysis's own namespace."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
+        import cube_analysis
+        assert hasattr(cube_analysis, '_quarantine_lock'), "Module-level _quarantine_lock required"
+        assert hasattr(cube_analysis, '_anomaly_lock'), "Module-level _anomaly_lock required"
+        assert isinstance(cube_analysis._quarantine_lock, type(threading.Lock()))
+        assert isinstance(cube_analysis._anomaly_lock, type(threading.Lock()))
 
     def test_no_hasattr_lock_init(self):
         """Source must NOT use hasattr for lock initialization (race condition)."""
-        import inspect, cube
-        src_q = inspect.getsource(cube.record_quarantine)
-        src_a = inspect.getsource(cube.record_anomaly)
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
+        import inspect, cube_analysis
+        src_q = inspect.getsource(cube_analysis.record_quarantine)
+        src_a = inspect.getsource(cube_analysis.record_anomaly)
         assert "hasattr" not in src_q, "record_quarantine must not use hasattr for lock"
         assert "hasattr" not in src_a, "record_anomaly must not use hasattr for lock"
 

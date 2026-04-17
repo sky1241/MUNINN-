@@ -3,35 +3,36 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine\\core'))
 
 from hypothesis import given, strategies as st, settings
 from engine.core._secrets import *
 
 @given(text=st.text(max_size=100))
-@settings(max_examples=50, deadline=None)
+@settings(max_examples=50)
 def test_redact_secrets_text_no_crash(text):
     """Smoke: redact_secrets_text() does not crash on arbitrary input"""
-    # Property test for redact_secrets_text
+    # from engine.core._secrets import redact_secrets_text
     try:
         redact_secrets_text(text)
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100))
-@settings(max_examples=50, deadline=None)
+@settings(max_examples=50)
 def test_count_chained_commands_no_crash(text):
     """Smoke: count_chained_commands() does not crash on arbitrary input"""
-    # Property test for count_chained_commands
+    # from engine.core._secrets import count_chained_commands
     try:
         count_chained_commands(text)
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), max_chains=st.integers(-1000, 1000))
-@settings(max_examples=50, deadline=None)
+@settings(max_examples=50)
 def test_clamp_chained_commands_no_crash(text, max_chains):
     """Smoke: clamp_chained_commands() does not crash on arbitrary input"""
-    # Property test for clamp_chained_commands
+    # from engine.core._secrets import clamp_chained_commands
     try:
         clamp_chained_commands(text, max_chains)
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):

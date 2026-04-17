@@ -26,9 +26,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-# Module-level locks for thread-safe JSONL append (avoid init race in hasattr)
-_quarantine_lock = threading.Lock()
-_anomaly_lock = threading.Lock()
+# M3 fix: _quarantine_lock and _anomaly_lock moved to cube_analysis.py
+# (only used there). Removed dead definitions here.
 
 from engine.core.tokenizer import token_count
 try:

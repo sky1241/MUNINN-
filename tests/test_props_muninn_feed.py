@@ -3,7 +3,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, r'C:\\Users\\ludov\\MUNINN-\\engine\\core')
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine\\core'))
 
 from hypothesis import given, strategies as st, settings
 from engine.core.muninn_feed import *
@@ -18,7 +18,6 @@ from engine.core.muninn_feed import *
 #   - feed_history  (name matches /^feed/)
 #   - feed_watch  (name matches /^feed/)
 #   - ingest  (name matches /^ingest/)
-#   - touch_heartbeat  (calls .write_text())
 
 
 @given(jsonl_path=st.text(max_size=50))

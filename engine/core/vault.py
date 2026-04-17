@@ -272,17 +272,17 @@ class Vault:
             data = None
             ct = None
             try:
-                data = fp.read_bytes()
-                ct = _encrypt_bytes(data, self._key)
+                data = bytearray(fp.read_bytes())  # H1 fix: mutable so _zero_bytes works
+                ct = bytearray(_encrypt_bytes(data, self._key))
                 vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
                 vault_path.write_bytes(ct)
                 total_bytes += len(data)
                 _secure_delete(fp)  # Overwrite + delete plaintext
                 encrypted += 1
             finally:
-                if data and isinstance(data, (bytearray, memoryview)):
+                if data:
                     _zero_bytes(data)
-                if ct and isinstance(ct, (bytearray, memoryview)):
+                if ct:
                     _zero_bytes(ct)
 
         _audit_log(self.muninn_dir, "lock", True, files=encrypted, bytes_total=total_bytes)
@@ -299,14 +299,16 @@ class Vault:
         failed_files = []
 
         for vp in locked:
-            data = vp.read_bytes()
+            data = bytearray(vp.read_bytes())  # H1 fix: mutable for _zero_bytes
             plaintext = None
             try:
-                plaintext = _decrypt_bytes(data, self._key)
+                plaintext = bytearray(_decrypt_bytes(data, self._key))
             except Exception as e:
                 print(f"WARNING: failed to decrypt {vp.name}: {e}", file=sys.stderr)
                 failed_files.append({"file": vp.name, "error": str(e)})
                 continue
+            finally:
+                _zero_bytes(data)  # Always wipe encrypted data from RAM
             try:
                 # Restore original path (strip .vault)
                 orig_path = vp.with_suffix("")
@@ -315,7 +317,7 @@ class Vault:
                 vp.unlink()  # Remove encrypted
                 decrypted += 1
             finally:
-                if plaintext and isinstance(plaintext, (bytearray, memoryview)):
+                if plaintext:
                     _zero_bytes(plaintext)
 
         success = len(failed_files) == 0

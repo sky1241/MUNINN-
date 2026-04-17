@@ -3,7 +3,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, r'C:\\Users\\ludov\\MUNINN-\\engine\\core')
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine\\core'))
 
 from hypothesis import given, strategies as st, settings
 from engine.core.lang_lexicons import *

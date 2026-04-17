@@ -478,7 +478,13 @@ def get_sync_backend(config: dict = None) -> SyncBackend:
         remote = config.get("git_remote")
         return GitBackend(Path(git_path), remote=remote)
     elif backend_type == "tls":
-        from sync_tls import TLSBackend
+        try:
+            from engine.core.sync_tls import TLSBackend
+        except ImportError:
+            try:
+                from .sync_tls import TLSBackend
+            except ImportError:
+                from sync_tls import TLSBackend
         return TLSBackend(
             host=config.get("tls_host", "localhost"),
             port=config.get("tls_port", 9477),

@@ -384,14 +384,16 @@ class MyceliumDB:
             td = today_days()
 
             if count is not None:
-                # Import mode: set exact count and dates
+                # Import mode: set exact count and dates.
+                # M1 fix: use MAX(existing, new) to never downgrade a locally
+                # stronger connection during meta-pull sync.
                 fs = date_to_days(first_seen) if first_seen else td
                 ls = date_to_days(last_seen) if last_seen else td
                 self._conn.execute("""
                     INSERT INTO edges (a, b, count, first_seen, last_seen)
                     VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(a, b) DO UPDATE SET
-                        count = ?,
+                        count = MAX(edges.count, ?),
                         first_seen = MIN(edges.first_seen, ?),
                         last_seen = MAX(edges.last_seen, ?)
                 """, (a_id, b_id, count, fs, ls, count, fs, ls))

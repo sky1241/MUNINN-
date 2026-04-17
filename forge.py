@@ -1455,8 +1455,9 @@ def gen_props(root, module_path, include_destructive=False):
         "import os",
         # Repo root (so `engine.core.foo` resolves)
         f"sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))",
-        # Module parent dir (so sibling imports inside the module resolve)
-        f"sys.path.insert(0, r{repr(str(mod_path.parent))})",
+        # L7 fix: module parent dir relative to test file, not hardcoded absolute path.
+        # Computes the engine/core/ path from the test file location (tests/ -> repo root -> engine/core/).
+        f"sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), {repr(str(mod_path.parent.relative_to(root)))}))",
         "",
         "from hypothesis import given, strategies as st, settings",
         f"from {import_path} import *",
