@@ -896,10 +896,18 @@ def extract_ast_hints(cube: Cube) -> dict:
         'n_tokens': cube.token_count,
     }
 
-    # First and last line anchors — the most important hint
+    # Line anchors: first, last, + every 5th line as checkpoints
     if non_empty:
         hints['first_line'] = non_empty[0]
         hints['last_line'] = non_empty[-1]
+    # Intermediate anchors — like puzzle pieces in the middle
+    anchors = []
+    for idx, line in enumerate(non_empty):
+        if idx == 0 or idx == len(non_empty) - 1:
+            continue  # first/last already covered
+        if (idx + 1) % 5 == 0:  # every 5th line
+            anchors.append((idx + 1, line))
+    hints['anchors'] = anchors
 
     # Detect indentation from first indented line
     for line in lines:

@@ -476,12 +476,15 @@ class FIMReconstructor:
             else:
                 prompt_parts.append(f"Indentation: {len(indent_hint)} spaces")
 
-        # First/last line anchors — strongest constraint
+        # Line anchors — first, last, + checkpoints
         if ast_hints:
             if ast_hints.get('first_line'):
-                prompt_parts.append(f"First line: {ast_hints['first_line']}")
+                prompt_parts.append(f"Line 1: {ast_hints['first_line']}")
+            if ast_hints.get('anchors'):
+                for line_num, line_text in ast_hints['anchors'][:5]:
+                    prompt_parts.append(f"Line {line_num}: {line_text}")
             if ast_hints.get('last_line'):
-                prompt_parts.append(f"Last line: {ast_hints['last_line']}")
+                prompt_parts.append(f"Line {n_lines}: {ast_hints['last_line']}")
 
             # All identifiers found in the missing code
             if ast_hints.get('identifiers'):
