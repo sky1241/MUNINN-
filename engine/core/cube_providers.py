@@ -428,70 +428,51 @@ class FIMReconstructor:
         after = sorted([n for n in same_file if n.line_start >= cube.line_end],
                        key=lambda c: c.line_start)
 
-        # Try FIM first if available
+        # Try native FIM first if provider supports it
         if self.provider.supports_fim and before and after:
             ext_prefix = "\n".join(c.content for c in before)
             ext_suffix = "\n".join(c.content for c in after)
             return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
 
-        # Build structured prompt — lexicon + constraints + neighbors
-        parts = []
-        parts.append(f"You are reconstructing {lang} code from file {cube.file_origin}.")
+        # ─── FIM prompt: code with hole + minimal context ────────────
         n_lines = cube.line_end - cube.line_start + 1
-        parts.append(f"Lines {cube.line_start}-{cube.line_end} are missing ({n_lines} lines, ~{cube.token_count} tokens).")
-        parts.append("")
 
-        # Inject language lexicon — constrains formatting + syntax
-        lexicon_text = format_lexicon_prompt(lang_key)
-        if lexicon_text:
-            parts.append(lexicon_text)
-            parts.append("")
+        prefix = "\n".join(c.content for c in before[-4:]) if before else ""
+        suffix = "\n".join(c.content for c in after[:4]) if after else ""
 
-        # Inject AST constraints if available
+        # Build code block with hole
+        code_parts = []
+        if prefix:
+            code_parts.append(prefix)
+        code_parts.append(f"<FILL {n_lines} lines>")
+        if suffix:
+            code_parts.append(suffix)
+        code_block = "\n".join(code_parts)
+
+        # Compact prompt: file context + code with hole + constraints
+        prompt_parts = [
+            f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing)",
+            f"Write EXACTLY the {n_lines} missing lines. Output ONLY code. No fences.",
+        ]
+
+        # AST constraints — one line each, no headers
         if ast_hints:
-            parts.append("=== CONSTRAINTS (from static analysis) ===")
             if ast_hints.get('functions'):
-                parts.append(f"Functions defined: {', '.join(ast_hints['functions'])}")
+                prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
             if ast_hints.get('classes'):
-                parts.append(f"Classes defined: {', '.join(ast_hints['classes'])}")
+                prompt_parts.append(f"Classes: {', '.join(ast_hints['classes'])}")
             if ast_hints.get('imports'):
-                parts.append(f"Imports used: {', '.join(ast_hints['imports'])}")
-            if ast_hints.get('variables'):
-                parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
-            if ast_hints.get('indent_char'):
-                parts.append(f"Indentation: {ast_hints['indent_char']}")
-            if ast_hints.get('indent_level'):
-                parts.append(f"Base indent level: {ast_hints['indent_level']}")
-            parts.append("=== END CONSTRAINTS ===")
-            parts.append("")
+                prompt_parts.append(f"Imports: {', '.join(ast_hints['imports'])}")
 
-        # Inject previous failed attempts as negative examples
+        # Previous failed attempts — compact
         if previous_attempts:
-            parts.append("=== PREVIOUS ATTEMPTS (these were WRONG — do NOT repeat) ===")
+            prompt_parts.append("Wrong attempts (do NOT repeat):")
             for i, attempt in enumerate(previous_attempts[-3:], 1):
-                parts.append(f"--- Attempt {i} (failed) ---")
-                parts.append(attempt)
-            parts.append("=== END PREVIOUS ATTEMPTS ===")
-            parts.append("Analyze the failures above. Produce a DIFFERENT, more accurate version.")
-            parts.append("")
+                prompt_parts.append(f"#{i}: {attempt[:200]}")
 
-        if before:
-            parts.append("=== CODE BEFORE (ends at line {}) ===".format(cube.line_start - 1))
-            for b in before[-4:]:  # last 4 before-cubes max
-                parts.append(b.content)
-            parts.append("")
-
-        if after:
-            parts.append("=== CODE AFTER (starts at line {}) ===".format(cube.line_end + 1))
-            for a in after[:4]:  # first 4 after-cubes max
-                parts.append(a.content)
-            parts.append("")
-
-        parts.append(f"Write EXACTLY {n_lines} lines of {lang} code for lines {cube.line_start}-{cube.line_end}.")
-        parts.append("Match the style, indentation, and conventions of the surrounding code.")
-        parts.append("Output ONLY the code. No markdown fences. No explanation.")
-
-        prompt = "\n".join(parts)
+        prompt_parts.append("")
+        prompt_parts.append(code_block)
+        prompt = "\n".join(prompt_parts)
 
         # Constrain output to ~1.5x expected size (not 3x)
         constrained_tokens = min(max_tokens, cube.token_count * 2)
