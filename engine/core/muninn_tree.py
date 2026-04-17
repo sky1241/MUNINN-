@@ -1206,11 +1206,13 @@ def boot(query: str = "") -> str:
         # TF-IDF relevance scores (0-1)
         relevance_scores = _tfidf_relevance(query, branch_contents)
 
-        # B5: Adapt sigmoid k based on session mode (convergent/divergent)
+        # B5: Session mode detection (convergent/divergent) — used for weight
+        # adjustment in B6 below, but _sigmoid_k is no longer read by
+        # spread_activation (refactored to min-max normalization).
         try:
             session_mode = detect_session_mode()
-            m._sigmoid_k = session_mode["suggested_k"]  # type: ignore[possibly-undefined]
         except Exception as e:
+            session_mode = None
             print(f"  [warn] B5 session mode: {e}", file=sys.stderr)
 
         # Spreading Activation (Collins & Loftus 1975) — semantic boost
@@ -1310,6 +1312,12 @@ def boot(query: str = "") -> str:
                                     continue
             except Exception as e:
                 print(f"  [warn] V3B BToM: {e}", file=sys.stderr)
+
+        # Close mycelium — all spreading activation / transitive work is done
+        try:
+            m.close()  # type: ignore[possibly-undefined]
+        except (NameError, AttributeError):
+            pass
 
         # B6: Adjust scoring weights by session type
         w_recall = 0.15
@@ -2902,6 +2910,7 @@ def prune(dry_run: bool = True):
                 print(f"  MYCELIUM DECAY: {dead_edges} dead connections removed")
             else:
                 print(f"  MYCELIUM DECAY: 0 dead (all connections healthy)")
+            m_decay.close()
         except Exception as e:
             print(f"  MYCELIUM DECAY skipped: {e}", file=sys.stderr)
 
@@ -2923,6 +2932,7 @@ def prune(dry_run: bool = True):
                 print(f"  H2 DREAM: {len(dream_insights)} insights generated")
                 for ins in dream_insights[:3]:
                     print(f"    [{ins['type']}] {ins['text'][:80]}")
+            m.close()
         except Exception as e:
             print(f"  H1/H2 skipped: {e}", file=sys.stderr)
 
@@ -3065,6 +3075,7 @@ def prune(dry_run: bool = True):
             if _regen_facts_total > 0 or _regen_tags_total > 0:
                 print(f"  V9A+ REGEN: {_regen_facts_total} facts + "
                       f"{_regen_tags_total} tags diffused to survivors")
+            m_regen.close()
         except Exception as e:
             import traceback
             print(f"  V9A+ regen failed: {e}", file=sys.stderr)

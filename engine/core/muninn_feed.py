@@ -389,8 +389,9 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path,
                   f"saving at {offset + fed}/{len(texts)} ({jsonl_path.name})")
             break
 
-    # Final save
+    # Final save + close (prevent SQLite connection leak)
     m.save()
+    m.close()
     if not _timed_out:
         progress[file_key] = {"offset": len(texts), "size": file_size}
     else:
@@ -1181,11 +1182,23 @@ def feed_from_hook(repo_path: Path):
                     m.save()
                     print(f"MUNINN DECAY: {dead} dead connections removed")
                     _hook_log(repo_path, f"DECAY: {dead} dead")
-                # CHUNK 6: Light sleep consolidation — merge cold branches.
-                # Only runs at SessionEnd, only if there are cold branches.
+                # CHUNK 6 fix: Load tree, find cold branches, pass to consolidate.
+                # _sleep_consolidate requires (cold_branches, nodes) args.
                 try:
-                    _m._sleep_consolidate()
-                    _hook_log(repo_path, "SLEEP_CONSOLIDATE: done")
+                    tree = _m.load_tree()
+                    nodes = {n["name"]: n for n in tree.get("nodes", []) if isinstance(n, dict)}
+                    cold = []
+                    for name, node in nodes.items():
+                        if name == "root":
+                            continue
+                        recall = _m._ebbinghaus_recall(node)
+                        if recall < 0.15:
+                            cold.append((name, node))
+                    if cold:
+                        merged = _m._sleep_consolidate(cold, nodes)
+                        if merged:
+                            _m.save_tree(tree)
+                            _hook_log(repo_path, f"SLEEP_CONSOLIDATE: {len(merged)} merged")
                 except Exception as e:
                     print(f"MUNINN CONSOLIDATE warning: {e}", file=sys.stderr)
             m.close()
