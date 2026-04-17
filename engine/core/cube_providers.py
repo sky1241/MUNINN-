@@ -548,10 +548,10 @@ class FIMReconstructor:
                     break
             cleaned = '\n'.join(lines[start:end])
 
-        # Enforce exact line count — truncate excess lines
+        # Smart line count adjustment — join continuation lines instead of truncating
         out_lines = cleaned.split('\n')
         if len(out_lines) > n_lines:
-            cleaned = '\n'.join(out_lines[:n_lines])
+            cleaned = _adjust_line_count(out_lines, n_lines)
 
         return cleaned
 
@@ -746,6 +746,96 @@ class LevelResult:
 
 
 # ─── B40: Die-and-retry with waves ─────────────────────────────────────
+
+def _is_continuation(prev_line: str, curr_line: str) -> float:
+    """Detect if curr_line is a continuation of prev_line.
+
+    Returns a score 0.0 (not continuation) to 1.0 (definitely continuation).
+    Language-agnostic: based on ending character + indentation difference.
+
+    Higher score = more likely a line wrap (not a new block).
+    - `(` alone at end = 1.0 (function call split)
+    - `,` at end = 0.8 (argument list)
+    - `{` at end = 0.1 (block open — usually NOT a line wrap)
+    """
+    prev_stripped = prev_line.rstrip()
+    if not prev_stripped or not curr_line.strip():
+        return 0.0
+
+    # Current line must be indented more than previous
+    prev_indent = len(prev_line) - len(prev_line.lstrip())
+    curr_indent = len(curr_line) - len(curr_line.lstrip())
+    if curr_indent <= prev_indent:
+        return 0.0
+
+    last_char = prev_stripped[-1]
+
+    # Score by ending character — how likely is this a line wrap?
+    scores = {
+        '(': 1.0,    # function call split — almost always a wrap
+        ',': 0.8,    # argument list continuation
+        '.': 0.7,    # method chain
+        '+': 0.7, '-': 0.6,  # expression continuation
+        '[': 0.5,    # array/index
+        '?': 0.5, ':': 0.4,  # ternary
+        '\\': 0.9,   # explicit line continuation
+        '{': 0.1,    # block open — usually NOT a wrap
+        '|': 0.3, '&': 0.3,
+    }
+    score = scores.get(last_char, 0.0)
+
+    # Operators
+    if prev_stripped.endswith(('||', '&&')):
+        score = 0.6
+
+    return score
+
+
+def _adjust_line_count(lines: list[str], target: int) -> str:
+    """Adjust output to target line count by joining continuation lines.
+
+    Language-agnostic: finds lines that are continuations of the previous
+    line (more indented + prev ends with open delimiter) and joins them.
+    Picks the SHORTEST continuation lines first (most obvious joins).
+    Only joins as many as needed to reach the target count.
+
+    Falls back to truncation if no joinable lines found.
+    """
+    if len(lines) <= target:
+        return '\n'.join(lines)
+
+    excess = len(lines) - target
+    result = list(lines)
+
+    for _ in range(excess):
+        # Find all joinable pairs, pick highest score (most likely a line wrap)
+        candidates = []
+        for i in range(1, len(result)):
+            score = _is_continuation(result[i - 1], result[i])
+            if score > 0.0:
+                candidates.append((-score, i))  # negative for descending sort
+
+        if not candidates:
+            break  # no more joinable pairs
+
+        # Join the highest-score pair first (most obvious line wrap)
+        candidates.sort()
+        _, best_idx = candidates[0]
+        prev = result[best_idx - 1].rstrip()
+        # No space after open paren/bracket — natural join
+        if prev and prev[-1] in ('(', '['):
+            combined = prev + result[best_idx].strip()
+        else:
+            combined = prev + ' ' + result[best_idx].strip()
+        result[best_idx - 1] = combined
+        result.pop(best_idx)
+
+    # If still too many lines, truncate as last resort
+    if len(result) > target:
+        result = result[:target]
+
+    return '\n'.join(result)
+
 
 def _compress_attempt(text: str) -> str:
     """Compress a failed attempt using Muninn L1-L7 (regex, no API).
