@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-04-17 (brick 26). Engine: ~20K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2190+ collected, PASS, 27 skip, 0 FAIL** post brick 26. Branchement complet: decay auto, cube↔mycelium live, UI temp/zone, sleep consolidation auto, TLS fusions, scan --output.
+> Mis a jour: 2026-04-17 (brick 29). Engine: ~20K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2236 collected, PASS, 27 skip, 0 FAIL** post brick 29. 30 cerveaux testes avec vrais donnees. Pipeline ordre fixe: decay→consolidate→sync. Tout branche.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.

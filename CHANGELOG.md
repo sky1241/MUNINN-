@@ -5,6 +5,31 @@ Tests: **2190+ collected, PASS, 27 skip, 0 FAIL** (post brick 25, default suite)
 
 ---
 
+## Brick 28-29 (2026-04-17) — Audit final + test tous les cerveaux
+
+### Brick 28: Audit final
+  CRITIQUE: _sleep_consolidate() crashait silencieusement dans SessionEnd
+    (TypeError: args manquants). Fix: charge l'arbre, calcule cold branches.
+  MEDIUM: Mycelium .close() manquant dans boot, prune (x3), feed_from_transcript.
+  MEDIUM: _sigmoid_k dead code nettoye (B5 session mode).
+  Fix Ollama health check: verifie le modele specifique, pas juste le serveur.
+
+### Brick 29: Test TOUS les cerveaux
+  30 fonctions d'intelligence testees avec de VRAIES donnees (pas du
+  inspect.getsource). 29 PASS, 1 SKIP. Couvre:
+  - Mycelium: spreading activation, transitive inference, get_related,
+    anomalies, blind spots, dream, trip, decay, compression rules (12/12)
+  - Tree: ebbinghaus, actr, session mode, extract tags, ncd (5/5)
+  - Cube: temperature, tononi, kaplan-meier, dead code, gods number,
+    hebbian, belief propagation, ncd, heatmap, provider (12/12)
+
+### Fix ordre pipeline
+  decay AVANT sync_to_meta dans le hook SessionEnd. Le meta recevait
+  les connexions mortes avant qu'elles soient nettoyees. Ordre corrige:
+  decay -> sleep_consolidate -> sync_to_meta.
+
+---
+
 ## Brick 27 (2026-04-17) — Cube system: 6 connexions mortes rebranchees
 
 Audit complet de tout le pipeline Cube (60 fonctions, 3 fichiers).
