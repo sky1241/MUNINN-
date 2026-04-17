@@ -495,11 +495,10 @@ class FIMReconstructor:
             if ast_hints.get('variables'):
                 prompt_parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
 
-        # Previous failed attempts — compact
-        if previous_attempts:
-            prompt_parts.append("Wrong attempts (do NOT repeat):")
-            for i, attempt in enumerate(previous_attempts[-3:], 1):
-                prompt_parts.append(f"#{i}: {attempt[:200]}")
+        # Best previous attempt — positive memory (improve, don't avoid)
+        if previous_attempts and previous_attempts[0]:
+            prompt_parts.append("Your best attempt so far (improve it, fix errors):")
+            prompt_parts.append(previous_attempts[0])
 
         prompt_parts.append("")
         prompt_parts.append(code_block)
@@ -775,7 +774,6 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
 
     on_attempt: optional callback(wave, attempt, ncd, sha_match) for progress.
     """
-    all_failed: list[str] = []
     best_ncd = 1.0
     best_reconstruction = ""
     total_attempts = 0
@@ -784,17 +782,17 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
         for attempt in range(1, attempts_per_wave + 1):
             total_attempts += 1
 
-            # Compress previous failures for injection (last 3 max)
-            compressed_attempts = None
-            if all_failed:
-                compressed_attempts = all_failed[-3:]
+            # Positive memory: inject best attempt so far (not failures)
+            best_so_far = None
+            if best_reconstruction:
+                best_so_far = [best_reconstruction]
 
             try:
                 result = reconstruct_cube(
                     cube, neighbors, provider,
                     ncd_threshold=0.0,  # we only care about SHA
                     ast_hints=ast_hints,
-                    previous_attempts=compressed_attempts,
+                    previous_attempts=best_so_far,
                     temperature=temperature,
                 )
 
@@ -815,9 +813,6 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                         best_ncd=result.ncd_score,
                         best_reconstruction=result.reconstruction,
                     )
-
-                # Compress this failed attempt for next iteration
-                all_failed.append(_compress_attempt(result.reconstruction))
 
             except Exception:
                 if on_attempt:
