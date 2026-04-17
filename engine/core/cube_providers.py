@@ -466,26 +466,34 @@ class FIMReconstructor:
         # Compact prompt: file context + code with hole + all constraints
         prompt_parts = [
             f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing)",
-            f"Write EXACTLY the {n_lines} missing lines. Output ONLY code. No fences.",
+            f"Write EXACTLY {n_lines} lines. Output ONLY code. No fences. No explanation.",
         ]
 
         # Indentation constraint
         if indent_hint:
             if '\t' in indent_hint:
-                prompt_parts.append(f"Indentation: tabs ({len(indent_hint)} tab(s))")
+                prompt_parts.append(f"Indentation: tabs")
             else:
                 prompt_parts.append(f"Indentation: {len(indent_hint)} spaces")
 
-        # AST constraints — functions, classes, imports AND variables
+        # First/last line anchors — strongest constraint
         if ast_hints:
+            if ast_hints.get('first_line'):
+                prompt_parts.append(f"First line: {ast_hints['first_line']}")
+            if ast_hints.get('last_line'):
+                prompt_parts.append(f"Last line: {ast_hints['last_line']}")
+
+            # All identifiers found in the missing code
+            if ast_hints.get('identifiers'):
+                prompt_parts.append(f"Identifiers: {', '.join(ast_hints['identifiers'][:30])}")
+
+            # Structured hints (backward compat)
             if ast_hints.get('functions'):
-                prompt_parts.append(f"Functions defined here: {', '.join(ast_hints['functions'])}")
+                prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
             if ast_hints.get('classes'):
-                prompt_parts.append(f"Types/structs defined here: {', '.join(ast_hints['classes'])}")
-            if ast_hints.get('imports'):
-                prompt_parts.append(f"Imports: {', '.join(ast_hints['imports'])}")
+                prompt_parts.append(f"Types: {', '.join(ast_hints['classes'])}")
             if ast_hints.get('variables'):
-                prompt_parts.append(f"Variables used: {', '.join(ast_hints['variables'][:20])}")
+                prompt_parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
 
         # Previous failed attempts — compact
         if previous_attempts:
@@ -525,6 +533,12 @@ class FIMReconstructor:
                     end = j
                     break
             cleaned = '\n'.join(lines[start:end])
+
+        # Enforce exact line count — truncate excess lines
+        out_lines = cleaned.split('\n')
+        if len(out_lines) > n_lines:
+            cleaned = '\n'.join(out_lines[:n_lines])
+
         return cleaned
 
 

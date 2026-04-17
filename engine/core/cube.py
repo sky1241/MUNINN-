@@ -874,22 +874,34 @@ def extract_ast_hints(cube: Cube) -> dict:
     """
     Extract structural constraints from a cube's content before destruction.
     These hints constrain the LLM during reconstruction.
-    Returns dict with functions, classes, imports, variables, indent info.
+
+    Language-agnostic approach: extract ALL identifiers from the code,
+    plus first/last lines as anchors. Works for any language without
+    hardcoded patterns per language.
     """
     content = cube.content
     lines = content.split('\n')
+    non_empty = [l for l in lines if l.strip()]
     hints = {
         'functions': [],
         'classes': [],
         'imports': [],
         'variables': [],
+        'identifiers': [],     # ALL unique identifiers in the cube
+        'first_line': '',      # anchor: first non-empty line
+        'last_line': '',       # anchor: last non-empty line
         'indent_char': None,
         'indent_level': 0,
         'n_lines': len(lines),
         'n_tokens': cube.token_count,
     }
 
-    # Detect indentation
+    # First and last line anchors — the most important hint
+    if non_empty:
+        hints['first_line'] = non_empty[0]
+        hints['last_line'] = non_empty[-1]
+
+    # Detect indentation from first indented line
     for line in lines:
         stripped = line.lstrip()
         if stripped and line != stripped:
@@ -902,11 +914,40 @@ def extract_ast_hints(cube: Cube) -> dict:
             hints['indent_level'] = len(indent)
             break
 
-    # Language-agnostic extraction via regex
+    # Extract ALL identifiers — language-agnostic
+    # Matches any word that looks like a code identifier (not a keyword, not a number)
+    all_ids = set()
+    for line in lines:
+        # Find all identifier-like tokens: starts with letter or _, at least 2 chars
+        ids = re.findall(r'\b([a-zA-Z_]\w{1,})\b', line)
+        all_ids.update(ids)
+
+    # Remove common keywords (universal across languages)
+    _KEYWORDS = {
+        'if', 'else', 'for', 'while', 'return', 'break', 'continue',
+        'switch', 'case', 'default', 'try', 'catch', 'finally', 'throw',
+        'new', 'delete', 'this', 'self', 'true', 'false', 'null', 'nil',
+        'none', 'void', 'int', 'float', 'double', 'string', 'bool',
+        'import', 'from', 'package', 'module', 'include', 'require',
+        'class', 'struct', 'enum', 'interface', 'trait', 'type',
+        'def', 'func', 'function', 'fn', 'fun', 'sub', 'proc',
+        'public', 'private', 'protected', 'internal', 'static',
+        'const', 'let', 'var', 'val', 'mut', 'final', 'readonly',
+        'async', 'await', 'yield', 'defer', 'go', 'chan', 'select',
+        'pub', 'crate', 'mod', 'use', 'impl', 'where', 'match',
+        'elif', 'elsif', 'unless', 'until', 'begin', 'end', 'do',
+        'and', 'or', 'not', 'in', 'is', 'as', 'with', 'pass', 'raise',
+        'extends', 'implements', 'override', 'abstract', 'sealed',
+        'export', 'declare', 'namespace', 'typeof', 'instanceof',
+    }
+    identifiers = sorted(all_ids - _KEYWORDS)
+    hints['identifiers'] = identifiers[:50]  # cap at 50 to not bloat prompt
+
+    # Still extract structured hints for backward compatibility
     for line in lines:
         stripped = line.strip()
 
-        # Functions: def, func, fn, function, fun, sub, proc
+        # Functions (universal patterns)
         m = re.match(
             r'(?:pub\s+)?(?:async\s+)?(?:static\s+)?'
             r'(?:def|func|fn|function|fun|sub|proc)\s+'
@@ -915,17 +956,13 @@ def extract_ast_hints(cube: Cube) -> dict:
             hints['functions'].append(m.group(1))
             continue
 
-        # Methods with return types (Go, Rust, Java, Kotlin, etc.)
-        m = re.match(
-            r'(?:pub|public|private|protected|internal)?\s*'
-            r'(?:static\s+)?(?:suspend\s+)?'
-            r'(?:fun|func|fn|def|void|int|string|bool|float|double)\s+'
-            r'([a-zA-Z_]\w*)\s*[(<]', stripped)
+        # Methods with receiver (Go: func (x *T) Name())
+        m = re.match(r'func\s*\([^)]+\)\s+([a-zA-Z_]\w*)', stripped)
         if m and m.group(1) not in hints['functions']:
             hints['functions'].append(m.group(1))
             continue
 
-        # Classes: class, struct, enum, interface, trait, type
+        # Classes/structs/types (starts with uppercase)
         m = re.match(
             r'(?:pub\s+)?(?:data\s+|sealed\s+|abstract\s+)?'
             r'(?:class|struct|enum|interface|trait|type)\s+'
@@ -939,11 +976,16 @@ def extract_ast_hints(cube: Cube) -> dict:
             hints['imports'].append(stripped[:80])
             continue
 
-        # Variable assignments (simple patterns)
+        # Variable assignments (universal: let/const/var/val/mut + Go := )
         m = re.match(
             r'(?:let|const|var|val|mut)\s+([a-zA-Z_]\w*)', stripped)
         if m:
             hints['variables'].append(m.group(1))
+        else:
+            # Go short assignment: name :=
+            m = re.match(r'([a-zA-Z_]\w*)\s*:=', stripped)
+            if m:
+                hints['variables'].append(m.group(1))
 
     return hints
 
