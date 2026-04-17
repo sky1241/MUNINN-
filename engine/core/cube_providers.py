@@ -404,7 +404,8 @@ class FIMReconstructor:
     def reconstruct_with_neighbors(self, cube: Cube, neighbors: list[Cube],
                                    max_tokens: int = 256,
                                    ast_hints: dict | None = None,
-                                   previous_attempts: list[str] | None = None) -> str:
+                                   previous_attempts: list[str] | None = None,
+                                   temperature: float = 0.0) -> str:
         """
         Reconstruct a cube using its neighbors as context.
 
@@ -434,11 +435,24 @@ class FIMReconstructor:
             ext_suffix = "\n".join(c.content for c in after)
             return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
 
-        # ─── FIM prompt: code with hole + minimal context ────────────
+        # ─── FIM prompt: code with hole + constraints ────────────────
         n_lines = cube.line_end - cube.line_start + 1
 
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
         suffix = "\n".join(c.content for c in after[:4]) if after else ""
+
+        # Detect indentation from suffix (first non-empty line)
+        indent_hint = ""
+        if suffix:
+            for sline in suffix.split('\n'):
+                if sline and sline != sline.lstrip():
+                    indent_hint = sline[:len(sline) - len(sline.lstrip())]
+                    break
+        if not indent_hint and prefix:
+            for pline in reversed(prefix.split('\n')):
+                if pline and pline != pline.lstrip():
+                    indent_hint = pline[:len(pline) - len(pline.lstrip())]
+                    break
 
         # Build code block with hole
         code_parts = []
@@ -449,20 +463,29 @@ class FIMReconstructor:
             code_parts.append(suffix)
         code_block = "\n".join(code_parts)
 
-        # Compact prompt: file context + code with hole + constraints
+        # Compact prompt: file context + code with hole + all constraints
         prompt_parts = [
             f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing)",
             f"Write EXACTLY the {n_lines} missing lines. Output ONLY code. No fences.",
         ]
 
-        # AST constraints — one line each, no headers
+        # Indentation constraint
+        if indent_hint:
+            if '\t' in indent_hint:
+                prompt_parts.append(f"Indentation: tabs ({len(indent_hint)} tab(s))")
+            else:
+                prompt_parts.append(f"Indentation: {len(indent_hint)} spaces")
+
+        # AST constraints — functions, classes, imports AND variables
         if ast_hints:
             if ast_hints.get('functions'):
-                prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
+                prompt_parts.append(f"Functions defined here: {', '.join(ast_hints['functions'])}")
             if ast_hints.get('classes'):
-                prompt_parts.append(f"Classes: {', '.join(ast_hints['classes'])}")
+                prompt_parts.append(f"Types/structs defined here: {', '.join(ast_hints['classes'])}")
             if ast_hints.get('imports'):
                 prompt_parts.append(f"Imports: {', '.join(ast_hints['imports'])}")
+            if ast_hints.get('variables'):
+                prompt_parts.append(f"Variables used: {', '.join(ast_hints['variables'][:20])}")
 
         # Previous failed attempts — compact
         if previous_attempts:
@@ -477,16 +500,31 @@ class FIMReconstructor:
         # Constrain output to ~1.5x expected size (not 3x)
         constrained_tokens = min(max_tokens, cube.token_count * 2)
 
-        raw = self.provider.generate(prompt, max_tokens=constrained_tokens)
-        # Strip markdown code fences that LLMs love to add
-        cleaned = raw.strip()
-        if cleaned.startswith('```'):
+        raw = self.provider.generate(prompt, max_tokens=constrained_tokens, temperature=temperature)
+
+        # Clean response: remove code fences but PRESERVE indentation
+        cleaned = raw
+        # Strip only trailing whitespace, not leading (preserves indentation)
+        cleaned = cleaned.rstrip()
+        # Remove leading blank lines only
+        while cleaned.startswith('\n'):
+            cleaned = cleaned[1:]
+        # Strip markdown code fences
+        if cleaned.lstrip().startswith('```'):
             lines = cleaned.split('\n')
-            if lines[-1].strip() == '```':
-                lines = lines[1:-1]
-            else:
-                lines = lines[1:]
-            cleaned = '\n'.join(lines)
+            # Find the opening fence
+            start = 0
+            for j, line in enumerate(lines):
+                if line.lstrip().startswith('```'):
+                    start = j + 1
+                    break
+            # Find the closing fence
+            end = len(lines)
+            for j in range(len(lines) - 1, start - 1, -1):
+                if lines[j].lstrip().startswith('```'):
+                    end = j
+                    break
+            cleaned = '\n'.join(lines[start:end])
         return cleaned
 
 
@@ -551,7 +589,8 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
                      provider: LLMProvider,
                      ncd_threshold: float = 0.3,
                      ast_hints: dict | None = None,
-                     previous_attempts: list[str] | None = None) -> ReconstructionResult:
+                     previous_attempts: list[str] | None = None,
+                     temperature: float = 0.0) -> ReconstructionResult:
     """
     B16: Reconstruct a cube using its neighbors + LLM.
 
@@ -565,6 +604,7 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
         cube, neighbors, max_tokens=cube.token_count * 3,
         ast_hints=ast_hints,
         previous_attempts=previous_attempts,
+        temperature=temperature,
     )
 
     # B17: SHA-256 validation
@@ -710,6 +750,7 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                            attempts_per_wave: int = 11,
                            max_waves: int = 11,
                            ast_hints: dict | None = None,
+                           temperature: float = 0.3,
                            on_attempt: callable = None) -> WaveResult:
     """
     B40: Die-and-retry reconstruction with waves.
@@ -740,6 +781,7 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                     ncd_threshold=0.0,  # we only care about SHA
                     ast_hints=ast_hints,
                     previous_attempts=compressed_attempts,
+                    temperature=temperature,
                 )
 
                 if result.ncd_score < best_ncd:
