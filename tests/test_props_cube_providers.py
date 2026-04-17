@@ -7,14 +7,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from hypothesis import given, strategies as st, settings
 from engine.core.cube_providers import *
+# BUG-102 (forge): the following functions were SKIPPED because
+# they have side effects (write to disk, run subprocess, hit
+# network). Fuzzing them without isolation would corrupt the repo.
+# To test them, write isolated tests by hand using tmp_path.
+#   - run_progressive_levels  (name matches /^run_/)
 
-@given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), ncd_threshold=st.floats(allow_nan=False, allow_infinity=False), ast_hints=st.text(max_size=50))
+
+@given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), ncd_threshold=st.floats(allow_nan=False, allow_infinity=False), ast_hints=st.text(max_size=50), previous_attempts=st.text(max_size=50))
 @settings(max_examples=50)
-def test_reconstruct_cube_no_crash(cube, neighbors, provider, ncd_threshold, ast_hints):
+def test_reconstruct_cube_no_crash(cube, neighbors, provider, ncd_threshold, ast_hints, previous_attempts):
     """Smoke: reconstruct_cube() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_cube
     try:
-        reconstruct_cube(cube, neighbors, provider, ncd_threshold, ast_hints)
+        reconstruct_cube(cube, neighbors, provider, ncd_threshold, ast_hints, previous_attempts)
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
@@ -45,5 +51,15 @@ def test_compute_ncd_no_crash(a, b):
     # from engine.core.cube_providers import compute_ncd
     try:
         compute_ncd(a, b)
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+        pass  # Expected rejections are OK
+
+@given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), attempts_per_wave=st.integers(-1000, 1000), max_waves=st.integers(-1000, 1000), ast_hints=st.text(max_size=50), on_attempt=st.text(max_size=50))
+@settings(max_examples=50)
+def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, on_attempt):
+    """Smoke: reconstruct_cube_waves() does not crash on arbitrary input"""
+    # from engine.core.cube_providers import reconstruct_cube_waves
+    try:
+        reconstruct_cube_waves(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, on_attempt)
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK

@@ -3,7 +3,8 @@ Cube Providers — LLM providers, FIM reconstruction, and validation.
 
 Classes: LLMProvider (ABC), OllamaProvider, ClaudeProvider, OpenAIProvider,
          FIMReconstructor, MockLLMProvider, ReconstructionResult.
-Functions: reconstruct_cube, validate_reconstruction, compute_hotness, compute_ncd.
+Functions: reconstruct_cube, reconstruct_cube_waves, run_progressive_levels,
+           validate_reconstruction, compute_hotness, compute_ncd.
 """
 
 import json
@@ -29,7 +30,9 @@ except ImportError:
 __all__ = [
     "LLMProvider", "OllamaProvider", "ClaudeProvider", "OpenAIProvider",
     "FIMReconstructor", "MockLLMProvider", "ReconstructionResult",
-    "reconstruct_cube", "validate_reconstruction", "compute_hotness", "compute_ncd",
+    "WaveResult", "LevelResult",
+    "reconstruct_cube", "reconstruct_cube_waves", "run_progressive_levels",
+    "validate_reconstruction", "compute_hotness", "compute_ncd",
 ]
 
 class LLMProvider(ABC):
@@ -400,13 +403,18 @@ class FIMReconstructor:
 
     def reconstruct_with_neighbors(self, cube: Cube, neighbors: list[Cube],
                                    max_tokens: int = 256,
-                                   ast_hints: dict | None = None) -> str:
+                                   ast_hints: dict | None = None,
+                                   previous_attempts: list[str] | None = None) -> str:
         """
         Reconstruct a cube using its neighbors as context.
 
         This is the core reconstruction: neighbors provide the context,
         the cube content is what we're trying to reconstruct.
         Injects language lexicon + AST constraints for maximum precision.
+
+        previous_attempts: list of prior failed reconstructions (compressed
+        by Muninn L1-L7) injected as negative examples so the model learns
+        from its mistakes instead of retrying blind.
         """
         # Detect language from file extension
         ext = os.path.splitext(cube.file_origin)[1].lower() if cube.file_origin else ''
@@ -455,6 +463,16 @@ class FIMReconstructor:
             if ast_hints.get('indent_level'):
                 parts.append(f"Base indent level: {ast_hints['indent_level']}")
             parts.append("=== END CONSTRAINTS ===")
+            parts.append("")
+
+        # Inject previous failed attempts as negative examples
+        if previous_attempts:
+            parts.append("=== PREVIOUS ATTEMPTS (these were WRONG — do NOT repeat) ===")
+            for i, attempt in enumerate(previous_attempts[-3:], 1):
+                parts.append(f"--- Attempt {i} (failed) ---")
+                parts.append(attempt)
+            parts.append("=== END PREVIOUS ATTEMPTS ===")
+            parts.append("Analyze the failures above. Produce a DIFFERENT, more accurate version.")
             parts.append("")
 
         if before:
@@ -551,7 +569,8 @@ class ReconstructionResult:
 def reconstruct_cube(cube: Cube, neighbors: list[Cube],
                      provider: LLMProvider,
                      ncd_threshold: float = 0.3,
-                     ast_hints: dict | None = None) -> ReconstructionResult:
+                     ast_hints: dict | None = None,
+                     previous_attempts: list[str] | None = None) -> ReconstructionResult:
     """
     B16: Reconstruct a cube using its neighbors + LLM.
 
@@ -564,6 +583,7 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
     reconstruction = fim.reconstruct_with_neighbors(
         cube, neighbors, max_tokens=cube.token_count * 3,
         ast_hints=ast_hints,
+        previous_attempts=previous_attempts,
     )
 
     # B17: SHA-256 validation
@@ -648,5 +668,243 @@ def compute_ncd(a: str, b: str) -> float:
 
     ncd = (cab - min(ca, cb)) / max(ca, cb)
     return max(0.0, min(1.0, ncd))  # Clamp to [0, 1]
+
+
+# ─── B40: Wave result ──────────────────────────────────────────────────
+
+@dataclass
+class WaveResult:
+    """Result of a die-and-retry wave on one cube."""
+    cube_id: str
+    sha_matched: bool
+    wave_number: int          # which wave found SHA match (0 = not found)
+    attempt_in_wave: int      # attempt within the winning wave (0 = not found)
+    total_attempts: int       # total attempts across all waves
+    best_ncd: float           # best NCD seen across all attempts
+    best_reconstruction: str  # the closest reconstruction so far
+
+
+@dataclass
+class LevelResult:
+    """Result of a full level run (all cubes at one size)."""
+    level: int                # x1, x2, x3...
+    target_tokens: int        # 112, 224, 336...
+    n_cubes: int
+    sha_matched: int
+    sha_pct: float
+    avg_best_ncd: float
+    heatmap: list[WaveResult]
+
+
+# ─── B40: Die-and-retry with waves ─────────────────────────────────────
+
+def _compress_attempt(text: str) -> str:
+    """Compress a failed attempt using Muninn L1-L7 (regex, no API).
+
+    Falls back to truncation if muninn_layers is not available.
+    """
+    try:
+        from engine.core.muninn_layers import compress_line
+    except ImportError:
+        try:
+            from muninn_layers import compress_line
+        except ImportError:
+            compress_line = None
+
+    if compress_line is not None:
+        try:
+            lines = text.split('\n')
+            compressed = [compress_line(line) for line in lines]
+            return '\n'.join(line for line in compressed if line.strip())
+        except Exception:
+            pass
+
+    # Fallback: keep first 20 lines max
+    lines = text.split('\n')
+    return '\n'.join(lines[:20])
+
+
+def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
+                           provider: LLMProvider,
+                           attempts_per_wave: int = 11,
+                           max_waves: int = 11,
+                           ast_hints: dict | None = None,
+                           on_attempt: callable = None) -> WaveResult:
+    """
+    B40: Die-and-retry reconstruction with waves.
+
+    Each wave = `attempts_per_wave` tries. SHA-256 match = exit.
+    Failed attempts are compressed by Muninn L1-L7 and injected
+    as negative examples in the next attempt's prompt.
+
+    on_attempt: optional callback(wave, attempt, ncd, sha_match) for progress.
+    """
+    all_failed: list[str] = []
+    best_ncd = 1.0
+    best_reconstruction = ""
+    total_attempts = 0
+
+    for wave in range(1, max_waves + 1):
+        for attempt in range(1, attempts_per_wave + 1):
+            total_attempts += 1
+
+            # Compress previous failures for injection (last 3 max)
+            compressed_attempts = None
+            if all_failed:
+                compressed_attempts = all_failed[-3:]
+
+            try:
+                result = reconstruct_cube(
+                    cube, neighbors, provider,
+                    ncd_threshold=0.0,  # we only care about SHA
+                    ast_hints=ast_hints,
+                    previous_attempts=compressed_attempts,
+                )
+
+                if result.ncd_score < best_ncd:
+                    best_ncd = result.ncd_score
+                    best_reconstruction = result.reconstruction
+
+                if on_attempt:
+                    on_attempt(wave, attempt, result.ncd_score, result.exact_match)
+
+                if result.exact_match:
+                    return WaveResult(
+                        cube_id=cube.id,
+                        sha_matched=True,
+                        wave_number=wave,
+                        attempt_in_wave=attempt,
+                        total_attempts=total_attempts,
+                        best_ncd=result.ncd_score,
+                        best_reconstruction=result.reconstruction,
+                    )
+
+                # Compress this failed attempt for next iteration
+                all_failed.append(_compress_attempt(result.reconstruction))
+
+            except Exception:
+                if on_attempt:
+                    on_attempt(wave, attempt, 1.0, False)
+
+    # All waves exhausted, no SHA match
+    return WaveResult(
+        cube_id=cube.id,
+        sha_matched=False,
+        wave_number=0,
+        attempt_in_wave=0,
+        total_attempts=total_attempts,
+        best_ncd=best_ncd,
+        best_reconstruction=best_reconstruction,
+    )
+
+
+# ─── B41: Progressive levels with mycelium accumulation ────────────────
+
+def run_progressive_levels(file_path: str, content: str,
+                           provider: LLMProvider,
+                           base_tokens: int = 112,
+                           max_levels: int = 11,
+                           attempts_per_wave: int = 11,
+                           max_waves: int = 11,
+                           max_cubes_per_level: int = 20,
+                           mycelium_db_path: str = None,
+                           ast_hints: dict | None = None,
+                           on_cube: callable = None,
+                           on_level: callable = None) -> list[LevelResult]:
+    """
+    B41: Progressive level reconstruction with mycelium accumulation.
+
+    Level x1: cubes of base_tokens (112). Waves until SHA or exhaustion.
+    Level x2: cubes of base_tokens*2 (224). Mycelium carries over from x1.
+    Level x3: cubes of base_tokens*3 (336). Mycelium carries over from x1+x2.
+    ...up to max_levels.
+
+    Each successful SHA reconstruction feeds the mycelium via observe(),
+    so later levels benefit from accumulated co-occurrence knowledge.
+    """
+    from cube import CubeStore, subdivide_file, assign_neighbors
+
+    # Optional mycelium wiring
+    mycelium = None
+    if mycelium_db_path:
+        try:
+            from engine.core.mycelium_db import MyceliumDB
+            mycelium = MyceliumDB(mycelium_db_path)
+        except ImportError:
+            try:
+                from mycelium_db import MyceliumDB
+                mycelium = MyceliumDB(mycelium_db_path)
+            except ImportError:
+                pass
+
+    results: list[LevelResult] = []
+    import tempfile, shutil
+
+    for level in range(1, max_levels + 1):
+        target_tokens = base_tokens * level
+
+        tmp = tempfile.mkdtemp()
+        db_path = os.path.join(tmp, f"level_{level}.db")
+
+        cubes = subdivide_file(
+            content=content, file_path=file_path,
+            target_tokens=target_tokens,
+        )
+        store = CubeStore(db_path)
+        for c in cubes:
+            store.save_cube(c)
+        assign_neighbors(cubes, [], store, max_neighbors=9)
+
+        n = min(len(cubes), max_cubes_per_level)
+        heatmap: list[WaveResult] = []
+
+        for i in range(n):
+            tc = cubes[i]
+            ne = store.get_neighbors(tc.id)
+            nc = [store.get_cube(nid) for nid, _, _ in ne if store.get_cube(nid)]
+
+            wave_result = reconstruct_cube_waves(
+                tc, nc, provider,
+                attempts_per_wave=attempts_per_wave,
+                max_waves=max_waves,
+                ast_hints=ast_hints,
+                on_attempt=None,
+            )
+            heatmap.append(wave_result)
+
+            if on_cube:
+                on_cube(level, i + 1, n, wave_result)
+
+            # Feed mycelium on SHA match — accumulate learning
+            if wave_result.sha_matched and mycelium is not None:
+                mycelium.observe(wave_result.best_reconstruction,
+                                zone=f"cube_level_{level}")
+
+        sha_matched = sum(1 for w in heatmap if w.sha_matched)
+        avg_ncd = (sum(w.best_ncd for w in heatmap) / len(heatmap)
+                   if heatmap else 1.0)
+
+        level_result = LevelResult(
+            level=level,
+            target_tokens=target_tokens,
+            n_cubes=n,
+            sha_matched=sha_matched,
+            sha_pct=100.0 * sha_matched / n if n else 0.0,
+            avg_best_ncd=avg_ncd,
+            heatmap=heatmap,
+        )
+        results.append(level_result)
+
+        if on_level:
+            on_level(level_result)
+
+        store.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+        # Early exit: if 100% SHA at this level, no need to continue
+        if sha_matched == n:
+            break
+
+    return results
 
 
