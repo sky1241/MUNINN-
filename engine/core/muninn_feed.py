@@ -1169,21 +1169,15 @@ def feed_from_hook(repo_path: Path):
             if _m._CORE_DIR not in sys.path: sys.path.insert(0, _m._CORE_DIR)
             from mycelium import Mycelium
             m = Mycelium(repo_path)
-            pushed = m.sync_to_meta()
-            if pushed > 0:
-                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-                _hook_log(repo_path, f"SYNC: {pushed} -> meta")
-            # CHUNK 1: Auto-decay — run once per session (SessionEnd).
-            # Debounced: only runs if hook_event is SessionEnd (not PreCompact
-            # which can fire multiple times per session).
+            # ORDER FIX: decay BEFORE sync — don't push stale connections to meta.
+            # Debounced: only runs if hook_event is SessionEnd (not PreCompact).
             if hook_event == "SessionEnd":
                 dead = m.decay()
                 if dead > 0:
                     m.save()
                     print(f"MUNINN DECAY: {dead} dead connections removed")
                     _hook_log(repo_path, f"DECAY: {dead} dead")
-                # CHUNK 6 fix: Load tree, find cold branches, pass to consolidate.
-                # _sleep_consolidate requires (cold_branches, nodes) args.
+                # Sleep consolidate cold branches after decay
                 try:
                     tree = _m.load_tree()
                     nodes = {n["name"]: n for n in tree.get("nodes", []) if isinstance(n, dict)}
@@ -1201,6 +1195,11 @@ def feed_from_hook(repo_path: Path):
                             _hook_log(repo_path, f"SLEEP_CONSOLIDATE: {len(merged)} merged")
                 except Exception as e:
                     print(f"MUNINN CONSOLIDATE warning: {e}", file=sys.stderr)
+            # THEN sync clean data to meta
+            pushed = m.sync_to_meta()
+            if pushed > 0:
+                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
+                _hook_log(repo_path, f"SYNC: {pushed} -> meta")
             m.close()
         except Exception as e:
             print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
