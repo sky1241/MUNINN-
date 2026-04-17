@@ -1,7 +1,56 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3673 + muninn_feed.py 1661 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1775 + mycelium.py 3061 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 359 = 19802 total (17 files)
-Tests: **2113 collected, 2086 PASS, 27 skip, 0 FAIL** (post brick 22, default suite, ignore 5 known-slow real-DB tests).
+Engine: muninn.py 1532 + muninn_layers.py 1294 + muninn_tree.py 3673 + muninn_feed.py 1661 + cube.py 1053 + cube_providers.py 652 + cube_analysis.py 1775 + mycelium.py 3145 + mycelium_db.py 1336 + sync_backend.py 1130 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 359 = 19886 total (17 files)
+Tests: **2173 collected, 2147 PASS, 27 skip, 0 FAIL** (post brick 24, default suite, ignore 5 known-slow real-DB tests).
+
+---
+
+## Brick 24 (2026-04-17) — Mycelium deep audit: 6 bugs fixed, 26 new tests
+
+Full diagnostic of all 22 public mycelium methods on the real 11.7M-edge
+database. 2 critical crashes (MemoryError), 1 high (stopword pollution),
+3 medium fixes. 26 regression tests added.
+
+### BUG-M1 (CRITICAL): dream() MemoryError
+  `SELECT a, b, count FROM edges` loaded 11.7M rows into RAM.
+  Fix: use `all_degrees()` + `top_connections(n=5000)` for sampling.
+  Tested: 20 insights generated in 91s on real DB, zero OOM.
+
+### BUG-M2 (CRITICAL): trip() + _bfs_zones() MemoryError
+  `_bfs_zones()` loaded all edges into adj dict, BFS with `list.pop(0)`.
+  Fix: bounded subgraph (max_concepts=5000, fanout=32 per concept),
+  `collections.deque` for O(1) popleft. trip() conn_set bounded to
+  zone concepts only instead of all 11.7M edges.
+  Tested: 44 zones, 5 dream connections, zero OOM.
+
+### BUG-M3 (HIGH): detect_zones() silent failure
+  Returns `{}` when numpy/scipy missing, forces `_bfs_zones` fallback
+  which OOMed. Fixed by M2 — `_bfs_zones` now scales to 11.7M edges.
+
+### BUG-M4 (HIGH): get_related() returns stopwords
+  `get_related('compression')` returned `['pas', 'est', 'les', ...]`.
+  Fix: filter `_get_high_degree_concepts()` from results by default.
+  New param `filter_stopwords=True` (backward compat via `=False`).
+  Tested: `['narratif', 'noa', 'first names', ...]` — 0 stopwords.
+
+### BUG-M6 (MEDIUM): get_compression_rules() fusion pollution
+  Returned 445K raw fusions (including personal data and noise).
+  Fix: SQL-native fetch with min_strength=10, hub filter, max_rules=5000.
+  Tested: 5000 rules, 0 stopword concepts.
+
+### BUG-M8 (MEDIUM): orphan concept accumulation
+  58570 orphan concepts accumulated (no cleanup after edge decay).
+  Fix: `cleanup_orphan_concepts()` called in `decay()` after deletions.
+
+### Not bugs
+  BUG-M5: `get_learned_fillers()` returns `[]` by design (disabled after
+    data loss incident, see Audit V4 BUG 8).
+  BUG-M7: `meta_path`/`meta_db_path` are `@staticmethod` by design —
+    all callers use `()`. Not a bug.
+
+### Test results
+  26/26 new tests PASS (tests/test_bugfix_mycelium.py, 0.88s)
+  2147/2147 full suite PASS, 27 skip, 0 fail (460s)
 
 ---
 

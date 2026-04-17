@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-04-11 (brick 22). Engine: ~19K lignes, 17 fichiers (+lexicons +dedup +budget_select). UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2113 collected, 2086 PASS, 27 skip, 0 FAIL** post brick 22 (default suite, ignore 5 known-slow real-DB tests).
+> Mis a jour: 2026-04-17 (brick 24). Engine: ~19K lignes, 17 fichiers (+lexicons +dedup +budget_select). UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2173 collected, 2147 PASS, 27 skip, 0 FAIL** post brick 24 (default suite, ignore 5 known-slow real-DB tests).
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
@@ -66,7 +66,7 @@
      muninn_tree.py 3649L (arbre+boot+intelligence)
      muninn_feed.py 1640L (feed+hooks)
       |
-   [mycelium.py 2932L + db 1336L]            0 SOL — champignon vivant
+   [mycelium.py 3145L + db 1336L]            0 SOL — champignon vivant
       |
    [sync_backend.py 1128L]               -0.5 Sync federe (SharedFile/Git/TLS)
       |
@@ -532,7 +532,7 @@ Destruction cycle, temperatures, math, niveaux, git, scheduling, anomalies.
 
 ---
 
-## mycelium.py — Champignon Vivant (2932 lignes)
+## mycelium.py — Champignon Vivant (3145 lignes)
 
 ### Mycelium (class, 54-2779)
 | Methode | Lignes | Role |
@@ -541,14 +541,19 @@ Destruction cycle, temperatures, math, niveaux, git, scheduling, anomalies.
 | observe_with_concepts | ~300 | Observe avec concepts externes (OpenAlex) |
 | observe_latex | ~350 | Observe LaTeX (\section/\begin chunks) |
 | spread_activation | ~500 | Collins & Loftus 1975: propagation semantique |
-| decay | ~600 | Decay half-life (immortalite zones 3+) |
-| adaptive_fusion_threshold | ~700 | A1: seuil adaptatif sqrt(n)*0.4 |
-| adaptive_decay_half_life | ~750 | A2: half-life adaptatif (sessions/jours) |
+| decay | ~969 | Decay half-life (immortalite zones 3+). BUG-M8: auto-cleanup orphans |
+| get_compression_rules | ~1270 | BUG-M6: filtre hubs+min_strength+max_rules (was 445K, now 5K) |
+| get_related | ~1296 | BUG-M4: filtre stopwords par defaut (filter_stopwords=True) |
+| adaptive_fusion_threshold | ~1088 | A1: seuil adaptatif sqrt(n)*0.4 |
+| adaptive_decay_half_life | ~1100 | A2: half-life adaptatif (sessions/jours) |
 | cleanup_orphan_concepts | ~800 | A3: vire concepts sans edges |
 | vacuum_if_needed | ~850 | A4: auto-vacuum apres decay |
 | adaptive_hops | ~900 | A5: hops adaptatif (sparse=3, dense=1) |
 | detect_anomalies | ~1000 | B2: graph anomaly detection |
 | detect_blind_spots | ~1100 | B3: structural holes (Burt 1992) |
+| _bfs_zones | ~2180 | BUG-M2/M3: bounded subgraph + deque (was OOM on 11.7M edges) |
+| dream | ~2236 | BUG-M1: sampled via top_connections+all_degrees (was OOM) |
+| trip | ~2032 | BUG-M2: bounded conn_set via zone concepts only |
 
 ### CLI (2780-2915)
 | main | 2780-2915 | CLI: observe/spread/decay/zones/detect/blind_spots |

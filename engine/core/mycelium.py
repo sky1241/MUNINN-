@@ -1044,6 +1044,9 @@ class Mycelium:
                     self._db.delete_stale_fusions(min_edge_count=1)
                 except (sqlite3.OperationalError, AttributeError):
                     pass
+            # BUG-M8: cleanup orphan concepts left behind by dead edges
+            if dead_ids:
+                self.cleanup_orphan_concepts()
             self._adj_cache = None  # M10 fix: invalidate after decay
             # A4: Auto-vacuum if decay took > 10s
             if time.time() - _decay_start > 10.0:
@@ -1267,46 +1270,103 @@ class Mycelium:
             return self._db.get_all_fusions()
         return self.data.get("fusions", {})
 
-    def get_compression_rules(self) -> dict:
+    def get_compression_rules(self, min_strength: float = 10,
+                              max_rules: int = 5000) -> dict:
         """Generate compression rules from the mycelium.
 
         Returns a dict {pattern: replacement} for the compressor.
         Strongest fusions -> shortest codes.
+
+        Filters: only fusions with strength >= min_strength, concepts
+        of length >= MIN_CONCEPT_LEN, and not in high-degree stopword set.
+        Capped at max_rules to avoid loading 445K+ fusions into the
+        compression pipeline. Fixed after BUG-M6 (fusion pollution).
         """
-        fusions = self.get_fusions()
-        if not fusions:
-            return {}
+        if self._high_degree_cache is None:
+            self._high_degree_cache = self._get_high_degree_concepts()
+        hub_set = self._high_degree_cache
 
-        # Sort by strength (most fused first)
-        ranked = sorted(fusions.items(), key=lambda x: x[1]["strength"], reverse=True)
+        if self._db is not None:
+            # SQL-native: fetch only strong fusions, sorted by strength
+            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            with self._db._lock:
+                rows = self._db._conn.execute(
+                    "SELECT a, b, strength FROM fusions "
+                    "WHERE strength >= ? ORDER BY strength DESC LIMIT ?",
+                    (min_strength, max_rules * 2),
+                ).fetchall()
+            rules = {}
+            for a_id, b_id, strength in rows:
+                a = id_to_name.get(a_id)
+                b = id_to_name.get(b_id)
+                if not a or not b:
+                    continue
+                if a in hub_set or b in hub_set:
+                    continue
+                if len(a) < self.MIN_CONCEPT_LEN or len(b) < self.MIN_CONCEPT_LEN:
+                    continue
+                key = self._key(a, b)
+                rules[key] = {
+                    "concepts": [a, b],
+                    "form": f"{a}+{b}",
+                    "strength": strength,
+                }
+                if len(rules) >= max_rules:
+                    break
+            return rules
+        else:
+            fusions = self.get_fusions()
+            if not fusions:
+                return {}
+            ranked = sorted(fusions.items(),
+                            key=lambda x: x[1]["strength"], reverse=True)
+            rules = {}
+            for key, fusion in ranked:
+                if fusion["strength"] < min_strength:
+                    break
+                concepts = fusion["concepts"]
+                if any(c in hub_set for c in concepts):
+                    continue
+                if any(len(c) < self.MIN_CONCEPT_LEN for c in concepts):
+                    continue
+                rules[key] = {
+                    "concepts": concepts,
+                    "form": fusion["form"],
+                    "strength": fusion["strength"],
+                }
+                if len(rules) >= max_rules:
+                    break
+            return rules
 
-        rules = {}
-        for key, fusion in ranked:
-            concepts = fusion["concepts"]
-            # The compression rule: when both concepts appear nearby,
-            # they can be referenced as a single block
-            rules[key] = {
-                "concepts": concepts,
-                "form": fusion["form"],
-                "strength": fusion["strength"],
-            }
-
-        return rules
-
-    def get_related(self, concept: str, top_n: int = 5) -> list[tuple[str, float]]:
+    def get_related(self, concept: str, top_n: int = 5,
+                    filter_stopwords: bool = True) -> list[tuple[str, float]]:
         """Get concepts most strongly connected to a given concept.
 
         Returns list of (related_concept, weight) sorted by effective weight.
         In federated mode, prioritizes connections from the current zone.
+
+        When filter_stopwords=True (default), high-degree hub concepts
+        (stopwords like 'est', 'les', 'pas') are excluded from results
+        to surface meaningful semantic neighbors. Fixed after BUG-M4.
         """
         if not concept:
             return []
         concept = str(concept).lower().strip()
+
+        # Build stopword set for filtering (lazy-cached)
+        hub_set: set[str] = set()
+        if filter_stopwords:
+            if self._high_degree_cache is None:
+                self._high_degree_cache = self._get_high_degree_concepts()
+            hub_set = self._high_degree_cache
+
         if self._db is not None:
-            # Fetch more than needed to allow zone reordering, but cap to avoid full scan
+            # Fetch more than needed to allow zone reordering + stopword filtering
             neighbors = self._db.neighbors(concept, top_n=max(50, top_n * 10))
             related = []
             for name, count in neighbors:
+                if name in hub_set:
+                    continue
                 if self.federated:
                     key = self._key(concept, name)
                     weight = self.effective_weight(key, count)
@@ -1327,6 +1387,8 @@ class Mycelium:
                     continue
                 if concept in parts:
                     other = parts[1] if parts[0] == concept else parts[0]
+                    if other in hub_set:
+                        continue
                     if self.federated:
                         weight = self.effective_weight(key)
                         if "zones" in val and self.zone in val["zones"]:
@@ -2082,24 +2144,28 @@ class Mycelium:
         zone_names = list(zones.keys())
         zone_concepts = {z: set(concepts) for z, concepts in zones.items()}
 
-        # Build conn_set for fast lookup
+        # Build conn_set for fast lookup — only for zone concepts (bounded)
+        # Memory-safe: only load edges between concepts that are in zones,
+        # not all 11M+ edges. Fixed after BUG-M2 MemoryError.
+        all_zone_concepts = set()
+        for members in zones.values():
+            all_zone_concepts.update(members)
+
         conn_set = set()
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            with self._db._lock:
-                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
-            for row in edge_rows:
-                a_name = id_to_name.get(row[0], "")
-                b_name = id_to_name.get(row[1], "")
-                if a_name and b_name:
-                    conn_set.add((a_name, b_name))
-                    conn_set.add((b_name, a_name))
+            for concept in all_zone_concepts:
+                neighbors = self._db.neighbors(concept, top_n=64)
+                for neighbor, _ in neighbors:
+                    if neighbor in all_zone_concepts:
+                        conn_set.add((concept, neighbor))
+                        conn_set.add((neighbor, concept))
         else:
             for key in conns:
                 parts = key.split("|")
                 if len(parts) == 2:
-                    conn_set.add((parts[0], parts[1]))
-                    conn_set.add((parts[1], parts[0]))
+                    if parts[0] in all_zone_concepts and parts[1] in all_zone_concepts:
+                        conn_set.add((parts[0], parts[1]))
+                        conn_set.add((parts[1], parts[0]))
 
         # 4. Create dream connections between distant clusters
         dreams = []
@@ -2177,41 +2243,58 @@ class Mycelium:
                 entropy -= p * math.log2(p)
         return entropy
 
-    def _bfs_zones(self, degree: dict) -> dict[str, list[str]]:
-        """Fallback zone detection via connected components (no scipy needed)."""
-        adj = {}
+    def _bfs_zones(self, degree: dict,
+                   fanout: int = 32, max_concepts: int = 5000) -> dict[str, list[str]]:
+        """Fallback zone detection via connected components (no scipy needed).
+
+        Memory-safe: builds adjacency from top-degree concepts only (bounded
+        by *max_concepts*), each with at most *fanout* strongest neighbors.
+        Uses collections.deque for O(1) popleft instead of list.pop(0).
+        """
+        from collections import deque
+
+        # Pick the top-degree concepts as seeds — these define the zones
+        if not degree:
+            return {}
+        sorted_concepts = sorted(degree.items(), key=lambda x: -x[1])
+        seeds = [c for c, _ in sorted_concepts[:max_concepts]]
+        seed_set = set(seeds)
+
+        # Build bounded adjacency: top-fanout neighbors per seed
+        adj: dict[str, list[str]] = {}
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            with self._db._lock:
-                edge_rows = self._db._conn.execute("SELECT a, b FROM edges").fetchall()
-            for row in edge_rows:
-                a = id_to_name.get(row[0], "")
-                b = id_to_name.get(row[1], "")
-                if not a or not b:
-                    continue
-                adj.setdefault(a, set()).add(b)
-                adj.setdefault(b, set()).add(a)
+            for concept in seeds:
+                neighbors = self._db.neighbors(concept, top_n=fanout)
+                adj[concept] = [n for n, _ in neighbors if n in seed_set]
         else:
             conns = self.data["connections"]
-            for key in conns:
+            # Pre-build per-concept edge list
+            concept_edges: dict[str, list[tuple[str, float]]] = {}
+            for key, val in conns.items():
                 parts = key.split("|")
                 if len(parts) != 2:
                     continue
                 a, b = parts
-                adj.setdefault(a, set()).add(b)
-                adj.setdefault(b, set()).add(a)
+                cnt = val.get("count", 1) if isinstance(val, dict) else 1
+                if a in seed_set:
+                    concept_edges.setdefault(a, []).append((b, cnt))
+                if b in seed_set:
+                    concept_edges.setdefault(b, []).append((a, cnt))
+            for concept in seeds:
+                edges = concept_edges.get(concept, [])
+                edges.sort(key=lambda x: -x[1])
+                adj[concept] = [n for n, _ in edges[:fanout] if n in seed_set]
 
-        visited = set()
-        zones = {}
-        zone_id = 0
-        for start in adj:
+        # BFS connected components with deque
+        visited: set[str] = set()
+        zones: dict[str, list[str]] = {}
+        for start in seeds:
             if start in visited:
                 continue
-            # BFS
-            queue = [start]
-            component = []
+            queue = deque([start])
+            component: list[str] = []
             while queue:
-                node = queue.pop(0)
+                node = queue.popleft()
                 if node in visited:
                     continue
                 visited.add(node)
@@ -2223,7 +2306,6 @@ class Mycelium:
                 top = sorted(component, key=lambda c: -degree.get(c, 0))[:3]
                 name = "/".join(top)
                 zones[name] = component
-                zone_id += 1
 
         return zones
 
@@ -2233,7 +2315,7 @@ class Mycelium:
     # generate insights: temporal correlations, absences, anomalies.
     # Writes to .muninn/insights.json for boot surfacing.
 
-    def dream(self) -> list[dict]:
+    def dream(self, strong_pair_limit: int = 5000) -> list[dict]:
         """H2: Generate insights by analyzing the mycelium graph.
 
         Detects:
@@ -2244,6 +2326,9 @@ class Mycelium:
 
         Returns list of insight dicts, also saves to .muninn/insights.json.
         Source: Wilson & McNaughton 1994 (sleep consolidation generates insights).
+
+        Memory-safe: uses all_degrees() + top_connections() instead of loading
+        all 11M+ edges into RAM. Fixed after BUG-M1 MemoryError.
         """
         import math
 
@@ -2256,48 +2341,48 @@ class Mycelium:
 
         insights = []
 
-        # Build degree + adjacency
-        degree = {}
-        adj = {}
-        avg_count_sum = 0.0
-        avg_count_n = 0
-
+        # Build degree dict (memory-safe: uses SQL aggregation in DB mode)
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
-            strong_pairs = []
-            with self._db._lock:
-                all_edges = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
-            for row in all_edges:
-                a = id_to_name.get(row[0], "")
-                b = id_to_name.get(row[1], "")
-                if not a or not b:
+            degree = self._db.all_degrees()
+        else:
+            degree = {}
+            conns = self.data["connections"]
+            for key in conns:
+                parts = key.split("|")
+                if len(parts) != 2:
                     continue
-                cnt = row[2]
-                degree[a] = degree.get(a, 0) + 1
-                degree[b] = degree.get(b, 0) + 1
-                adj.setdefault(a, set()).add(b)
-                adj.setdefault(b, set()).add(a)
-                avg_count_sum += cnt
-                avg_count_n += 1
-                if cnt >= 10:
-                    strong_pairs.append((a, b, cnt))
+                degree[parts[0]] = degree.get(parts[0], 0) + 1
+                degree[parts[1]] = degree.get(parts[1], 0) + 1
+
+        if not degree:
+            return []
+
+        # Strong pairs: fetch only top-N strongest edges (not all 11M)
+        strong_pairs = []
+        if self._db is not None:
+            top_conns = self._db.top_connections(n=strong_pair_limit)
+            for key, info in top_conns:
+                parts = key.split("|")
+                if len(parts) == 2:
+                    cnt = info.get("count", 0) if isinstance(info, dict) else 0
+                    strong_pairs.append((parts[0], parts[1], cnt))
+            # Compute average count from degree sums (approximate but O(1))
+            avg_count_n = n_conns
+            # Use the median of strong pairs as a proxy for avg
+            avg_count_sum = sum(c for _, _, c in strong_pairs)
         else:
             conns = self.data["connections"]
-            strong_pairs = []
+            avg_count_sum = 0.0
+            avg_count_n = 0
             for key, conn in conns.items():
                 parts = key.split("|")
                 if len(parts) != 2:
                     continue
-                a, b = parts
                 cnt = conn.get("count", 1)
-                degree[a] = degree.get(a, 0) + 1
-                degree[b] = degree.get(b, 0) + 1
-                adj.setdefault(a, set()).add(b)
-                adj.setdefault(b, set()).add(a)
                 avg_count_sum += cnt
                 avg_count_n += 1
                 if cnt >= 10:
-                    strong_pairs.append((a, b, cnt))
+                    strong_pairs.append((parts[0], parts[1], cnt))
 
         if not degree:
             return []
@@ -2315,11 +2400,19 @@ class Mycelium:
                 })
 
         # 2. Absences: high-degree concepts with no direct connection
+        # Memory-safe: check pairs via DB lookup instead of full adj dict
         sorted_concepts = sorted(degree.items(), key=lambda x: -x[1])
         top_concepts = [c for c, d in sorted_concepts[:min(30, len(sorted_concepts))]]
         for i, a in enumerate(top_concepts):
             for b in top_concepts[i+1:]:
-                if b not in adj.get(a, set()):
+                connected = False
+                if self._db is not None:
+                    connected = self._db.has_connection(a, b)
+                else:
+                    key1 = f"{a}|{b}"
+                    key2 = f"{b}|{a}"
+                    connected = key1 in conns or key2 in conns
+                if not connected:
                     score = (degree[a] + degree[b]) / 2
                     if score >= 5:
                         insights.append({
