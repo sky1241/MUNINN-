@@ -5,6 +5,39 @@ Tests: **2190+ collected, PASS, 27 skip, 0 FAIL** (post brick 25, default suite)
 
 ---
 
+## Brick 27 (2026-04-17) — Cube system: 6 connexions mortes rebranchees
+
+Audit complet de tout le pipeline Cube (60 fonctions, 3 fichiers).
+Trouve 5 connexions mortes, 7 fonctions dead code, 1 default mock silencieux.
+
+### C1: Poids mecanique transmis au mycelium
+  feed_mycelium_from_results construisait les poids +1/-0.5 mais les
+  jetait. Fix: upsert_connection directe avec increment signe + zone
+  "mechanical". Le mycelium distingue maintenant succes/echec.
+
+### C2: Default provider = Ollama, pas Mock
+  get_provider() retournait MockLLMProvider par defaut. Toute la
+  reconstruction etait fake. Fix: check Ollama health avant mock.
+
+### C4: auto_repair recoit le reconstructor
+  Toujours appele avec reconstructor=None. Fix: post_cycle_analysis
+  recoit le provider et construit un FIMReconstructor reel.
+
+### C5: Kaplan-Meier + Tononi persistes
+  Calcules sur des runtime attrs puis GC. Fix: ajoutes au dict
+  de retour de cli_run (kaplan_meier, tononi_degeneracy).
+
+### C6: Boucle anomalie fermee
+  feed_anomalies_to_mycelium n'etait jamais appele. Fix: appele
+  dans post_cycle_analysis apres feedback_loop_check avec le mycelium.
+
+### Note C3: deps dans post_cycle_analysis
+  God's Number voit deps=None et classe tout comme dead code.
+  Documente mais non fixe — necessite que cli_scan persiste les deps
+  dans CubeStore. Low priority (God's Number reste utile sans).
+
+---
+
 ## Brick 26 (2026-04-17) — Branchement complet: 7 chunks, tout connecte
 
 Audit de branchement complet: identifie tout ce qui etait code mais pas

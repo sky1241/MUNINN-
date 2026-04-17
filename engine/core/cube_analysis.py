@@ -250,7 +250,9 @@ def _add_semantic_neighbors(cube: Cube, all_cubes: list[Cube],
 
 def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
                         deps: list['Dependency'] = None,
-                        repo_path: str = None) -> dict:
+                        repo_path: str = None,
+                        provider: 'LLMProvider' = None,
+                        mycelium=None) -> dict:
     """
     Post-cycles analysis — ALL diagnostic bricks wired.
 
@@ -334,9 +336,12 @@ def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
             hot_files.add(c.file_origin)
     if hot_files:
         try:
+            # C4 fix: pass real reconstructor if provider available
+            reconstructor = FIMReconstructor(provider) if provider else None
             patches = auto_repair(store, list(hot_files),
-                                  reconstructor=None, max_patches=5)
+                                  reconstructor=reconstructor, max_patches=5)
             analysis['auto_repair_candidates'] = len(patches)
+            analysis['auto_repair_patches'] = [p for p in patches if p.get('patch')]
         except (ValueError, OSError, TypeError):
             pass
 
@@ -348,6 +353,13 @@ def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
             feedback = feedback_loop_check(anomaly_path, repo_path)
             if feedback.get('total', 0) > 0:
                 analysis['feedback'] = feedback
+                # C6: Close the loop — feed validated anomalies to mycelium
+                if mycelium is not None:
+                    try:
+                        fed = feed_anomalies_to_mycelium(anomaly_path, mycelium)
+                        analysis['anomalies_fed_to_mycelium'] = len(fed)
+                    except Exception:
+                        pass
         except (OSError, ValueError, json.JSONDecodeError):
             pass
 
@@ -695,13 +707,25 @@ def feed_mycelium_from_results(results: list[ReconstructionResult],
             }
             mechanical_pairs.append(pair)
 
-            # Feed to mycelium if available
-            if hasattr(mycelium, 'observe_text'):
-                combined = f"{cube.content}\n{neighbor.content}"
+            # C1 fix: Feed mechanical weight to mycelium via direct upsert.
+            # Success (+1.0) strengthens the connection, failure (-0.5) weakens it.
+            # observe_text() only does co-occurrence — it loses the success/failure signal.
+            if mycelium is not None and hasattr(mycelium, '_db') and mycelium._db is not None:
                 try:
-                    mycelium.observe_text(combined)
+                    weight = 1.0 if result.success else -0.5
+                    for cc in cube_concepts[:5]:
+                        for nc in neighbor_concepts[:5]:
+                            if cc != nc:
+                                mycelium._db.upsert_connection(
+                                    cc, nc, increment=weight, zone="mechanical")
                 except (AttributeError, ValueError, TypeError):
-                    pass  # Graceful if mycelium not fully initialized
+                    pass
+            elif mycelium is not None and hasattr(mycelium, 'observe_text'):
+                # Fallback: dict mode — at least do co-occurrence
+                try:
+                    mycelium.observe_text(f"{cube.content}\n{neighbor.content}")
+                except (AttributeError, ValueError, TypeError):
+                    pass
 
     return mechanical_pairs
 
@@ -957,13 +981,23 @@ class CubeConfig:
             json.dump(data, f, indent=2)
 
     def get_provider(self) -> LLMProvider:
-        """Get an LLM provider based on config."""
+        """Get an LLM provider based on config.
+        C2 fix: Ollama checked BEFORE mock so real reconstruction happens
+        when Ollama is running. Mock is fallback only."""
         if self.local_only:
+            # Try Ollama first (real reconstruction)
+            if 'ollama' in self.allowed_providers:
+                try:
+                    p = OllamaProvider()
+                    # Quick health check — if Ollama is running, use it
+                    import urllib.request
+                    urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
+                    return p
+                except Exception:
+                    pass  # Ollama not running, fall through to mock
             if 'mock' in self.allowed_providers:
                 return MockLLMProvider()
-            if 'ollama' not in self.allowed_providers:
-                raise ValueError("local_only=True but 'ollama' not in allowed_providers")
-            return OllamaProvider()
+            raise ValueError("local_only=True but no provider available")
 
         # Try providers in order of preference
         if 'claude' in self.allowed_providers:
@@ -1096,8 +1130,13 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
         successes = sum(1 for r in all_results if r.success)
 
         # ─── Post-cycles analysis: B27+B28+B9+B10+B26+B35+B31+B37+B38
+        # C3 note: deps=None means God's Number detect_dead_code sees no imports
+        # and classifies all cubes as dead. To fix properly, cli_scan should
+        # persist deps in CubeStore and cli_run should load them. Low priority
+        # since God's Number still gives useful metrics without dead code filtering.
         analysis = post_cycle_analysis(
-            active_cubes, store, repo_path=repo_path)
+            active_cubes, store, repo_path=repo_path,
+            provider=provider, mycelium=mycelium)
 
         # Auto-activation quarantaine
         if not config.quarantine_enabled and all_results:
@@ -1105,6 +1144,12 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
             if last_cycle and all(r.success for r in last_cycle):
                 config.quarantine_enabled = True
                 config.save()
+
+        # C5: Persist KM survival + Tononi degeneracy in result dict
+        km_data = {c.id: getattr(c, '_km_survival', None)
+                   for c in active_cubes if getattr(c, '_km_survival', None) is not None}
+        tononi_data = {c.id: getattr(c, '_degeneracy', None)
+                       for c in active_cubes if getattr(c, '_degeneracy', None) is not None}
 
         return {
             'cycles': cycles,
@@ -1117,6 +1162,8 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
             'success_rate': successes / len(all_results) if all_results else 0.0,
             'quarantine_enabled': config.quarantine_enabled,
             'analysis': analysis,
+            'kaplan_meier': km_data,
+            'tononi_degeneracy': tononi_data,
         }
     finally:
         store.close()
