@@ -985,16 +985,22 @@ class CubeConfig:
         C2 fix: Ollama checked BEFORE mock so real reconstruction happens
         when Ollama is running. Mock is fallback only."""
         if self.local_only:
-            # Try Ollama first (real reconstruction)
+            # Try Ollama first (real reconstruction) — only if it has models loaded
             if 'ollama' in self.allowed_providers:
                 try:
-                    p = OllamaProvider()
-                    # Quick health check — if Ollama is running, use it
-                    import urllib.request
-                    urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
-                    return p
+                    import urllib.request, json as _json
+                    resp = urllib.request.urlopen(
+                        "http://localhost:11434/api/tags", timeout=2)
+                    tags = _json.loads(resp.read())
+                    model_names = [m.get("name", "").split(":")[0]
+                                   for m in tags.get("models", [])]
+                    # Check the target model is actually available
+                    target = self.ollama_model if hasattr(self, 'ollama_model') else "codellama"
+                    target_base = target.split(":")[0]
+                    if target_base in model_names:
+                        return OllamaProvider()
                 except Exception:
-                    pass  # Ollama not running, fall through to mock
+                    pass  # Ollama not running or model missing, fall through to mock
             if 'mock' in self.allowed_providers:
                 return MockLLMProvider()
             raise ValueError("local_only=True but no provider available")
