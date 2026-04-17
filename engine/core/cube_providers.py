@@ -488,7 +488,19 @@ class FIMReconstructor:
 
             # All identifiers found in the missing code
             if ast_hints.get('identifiers'):
+                cube_ids = set(ast_hints['identifiers'])
                 prompt_parts.append(f"Identifiers: {', '.join(ast_hints['identifiers'][:30])}")
+
+                # Cross-reference: identifiers from neighbors that match cube's identifiers
+                # This catches method names called in neighbors (e.g. mc.flushLoop())
+                neighbor_ids = set()
+                for n in neighbors:
+                    n_text = n.content if hasattr(n, 'content') else ''
+                    n_ids = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', n_text))
+                    neighbor_ids.update(n_ids)
+                shared = sorted(cube_ids & neighbor_ids)
+                if shared:
+                    prompt_parts.append(f"Confirmed by neighbors: {', '.join(shared[:20])}")
 
             # Structured hints (backward compat)
             if ast_hints.get('functions'):
