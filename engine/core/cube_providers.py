@@ -436,7 +436,10 @@ class FIMReconstructor:
             return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
 
         # ─── FIM prompt: code with hole + constraints ────────────────
-        n_lines = cube.line_end - cube.line_start + 1
+        # Use normalized line count (not raw line_start/end which may include
+        # trailing blanks that normalize_content strips)
+        from cube import normalize_content as _nc
+        n_lines = len(_nc(cube.content).split('\n'))
 
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
         suffix = "\n".join(c.content for c in after[:4]) if after else ""
