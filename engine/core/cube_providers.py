@@ -1053,11 +1053,18 @@ def run_progressive_levels(file_path: str, content: str,
             ne = store.get_neighbors(tc.id)
             nc = [store.get_cube(nid) for nid, _, _ in ne if store.get_cube(nid)]
 
+            # Extract AST hints per cube (not global)
+            try:
+                from cube import extract_ast_hints as _extract
+                cube_hints = _extract(tc)
+            except ImportError:
+                cube_hints = ast_hints
+
             wave_result = reconstruct_cube_waves(
                 tc, nc, provider,
                 attempts_per_wave=attempts_per_wave,
                 max_waves=max_waves,
-                ast_hints=ast_hints,
+                ast_hints=cube_hints,
                 on_attempt=None,
             )
             heatmap.append(wave_result)
