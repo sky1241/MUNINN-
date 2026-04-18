@@ -94,6 +94,7 @@ def test_waves_sha_never_matches():
     result = reconstruct_cube_waves(
         cube, neighbors, provider,
         attempts_per_wave=3, max_waves=2,
+        ncd_give_up=1.0,  # don't give up for this test
     )
 
     assert result.sha_matched is False

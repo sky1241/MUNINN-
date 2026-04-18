@@ -747,6 +747,44 @@ class LevelResult:
 
 # ─── B40: Die-and-retry with waves ─────────────────────────────────────
 
+def _annealing_schedule(n: int) -> list[float]:
+    """Generate a cold-hot-cold temperature schedule for n attempts.
+
+    Starts at 0.0 (deterministic best guess), ramps up to explore,
+    then cools down to refine. Like metal annealing — heat to reshape,
+    cool to set.
+
+    Kirkpatrick et al. 1983 + Zhou et al. 2023 (AdapT for code).
+    """
+    if n <= 1:
+        return [0.0]
+    if n <= 3:
+        return [0.0, 0.2, 0.0][:n]
+
+    # Peak at ~40% through the schedule
+    peak_idx = max(1, int(n * 0.4))
+    peak_temp = 0.4  # max exploration temperature
+
+    schedule = []
+    for i in range(n):
+        if i <= peak_idx:
+            # Ramp up: 0.0 → peak_temp
+            t = peak_temp * (i / peak_idx)
+        else:
+            # Cool down: peak_temp → 0.0
+            remaining = n - 1 - peak_idx
+            if remaining > 0:
+                t = peak_temp * (1.0 - (i - peak_idx) / remaining)
+            else:
+                t = 0.0
+        schedule.append(round(t, 3))
+
+    # Force first and last to 0.0 (deterministic bookends)
+    schedule[0] = 0.0
+    schedule[-1] = 0.0
+    return schedule
+
+
 def _is_continuation(prev_line: str, curr_line: str) -> float:
     """Detect if curr_line is a continuation of prev_line.
 
@@ -866,39 +904,47 @@ def _compress_attempt(text: str) -> str:
 def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                            provider: LLMProvider,
                            attempts_per_wave: int = 11,
-                           max_waves: int = 11,
+                           max_waves: int = 1,
                            ast_hints: dict | None = None,
                            temperature: float = 0.3,
+                           ncd_give_up: float = 0.3,
                            on_attempt: callable = None) -> WaveResult:
     """
-    B40: Die-and-retry reconstruction with waves.
+    B40: Annealing reconstruction — 1 wave, variable temperature.
 
-    Each wave = `attempts_per_wave` tries. SHA-256 match = exit.
-    Failed attempts are compressed by Muninn L1-L7 and injected
-    as negative examples in the next attempt's prompt.
+    Temperature schedule: cold → hot → cold (simulated annealing in 1 wave).
+    Stops early on SHA match. Gives up if best NCD > ncd_give_up after wave.
+    Positive memory: injects best attempt so far for refinement.
+
+    Based on AdapT (Zhou et al. 2023, AAAI 2024) + simulated annealing
+    (Kirkpatrick et al. 1983). Max 11 API calls per cube.
 
     on_attempt: optional callback(wave, attempt, ncd, sha_match) for progress.
     """
+    # Annealing schedule: cold-hot-cold
+    # Start deterministic (best guess), explore (find alternatives), refine (lock in)
+    n = attempts_per_wave
+    schedule = _annealing_schedule(n)
+
     best_ncd = 1.0
     best_reconstruction = ""
     total_attempts = 0
 
     for wave in range(1, max_waves + 1):
-        for attempt in range(1, attempts_per_wave + 1):
+        for attempt in range(1, n + 1):
             total_attempts += 1
+            temp = schedule[attempt - 1] if attempt <= len(schedule) else temperature
 
-            # Positive memory: inject best attempt so far (not failures)
-            best_so_far = None
-            if best_reconstruction:
-                best_so_far = [best_reconstruction]
-
+            # Pure Best-of-N: each attempt is independent (no memory injection)
+            # Data shows memory (positive or negative) makes results WORSE.
+            # Best NCD is always attempt 1 (no context pollution).
             try:
                 result = reconstruct_cube(
                     cube, neighbors, provider,
-                    ncd_threshold=0.0,  # we only care about SHA
+                    ncd_threshold=0.0,
                     ast_hints=ast_hints,
-                    previous_attempts=best_so_far,
-                    temperature=temperature,
+                    previous_attempts=None,
+                    temperature=temp,
                 )
 
                 if result.ncd_score < best_ncd:
@@ -922,6 +968,10 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
             except Exception:
                 if on_attempt:
                     on_attempt(wave, attempt, 1.0, False)
+
+        # After wave: give up if too far
+        if best_ncd > ncd_give_up:
+            break  # this cube needs a bigger level, stop wasting calls
 
     # All waves exhausted, no SHA match
     return WaveResult(
