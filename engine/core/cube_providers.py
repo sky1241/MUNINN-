@@ -784,8 +784,10 @@ def _annealing_schedule(n: int) -> list[float]:
     """
     if n <= 1:
         return [0.0]
-    if n <= 3:
-        return [0.0, 0.2, 0.0][:n]
+    if n == 2:
+        return [0.0, 0.0]
+    if n == 3:
+        return [0.0, 0.2, 0.0]
 
     # Peak at ~40% through the schedule
     peak_idx = max(1, int(n * 0.4))
@@ -826,6 +828,11 @@ def _is_continuation(prev_line: str, curr_line: str) -> float:
     if not prev_stripped or not curr_line.strip():
         return 0.0
 
+    # COBOL continuation: column 7 = '-' (fixed-format) — check FIRST
+    # COBOL doesn't follow indent rules, so this must be before indent check
+    if len(curr_line) >= 7 and curr_line[6] == '-':
+        return 1.0
+
     # Current line must be indented more than previous (or equal if prev ends with open paren)
     # Normalize tabs to 4 spaces for comparison (mixed indent files)
     prev_expanded = prev_line.expandtabs(4)
@@ -838,10 +845,6 @@ def _is_continuation(prev_line: str, curr_line: str) -> float:
         return 0.0
     if curr_indent == prev_indent and not allow_equal:
         return 0.0
-
-    # COBOL continuation: column 7 = '-' (fixed-format)
-    if len(curr_line) >= 7 and curr_line[6] == '-':
-        return 1.0
 
     last_char = prev_stripped[-1]
 
