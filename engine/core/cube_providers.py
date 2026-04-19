@@ -948,12 +948,19 @@ def _insert_missing_blanks(lines: list[str], target: int,
 
         # TIER 1: After closing brace/end/END-*, before non-blank non-brace
         is_block_end = (
-            curr in ('}', ')', 'end', 'end.', 'END', 'END.')
-            or curr.startswith(('END-', 'end-'))
+            curr in ('}', ')', 'end', 'end.', 'END', 'END.',
+                     'fi', 'done', 'esac', ';;',       # Shell
+                     'endif', 'endfor', 'endwhile',     # Jinja/some langs
+                     'end;',                             # Pascal/PL-SQL
+                     )
+            or curr.startswith(('END-', 'end-'))        # COBOL
             or curr.endswith(('END-PERFORM.', 'END-IF.', 'END-EVALUATE.',
                               'END-READ.', 'END-WRITE.', 'END-COMPUTE.'))
         )
-        is_next_block_end = next_line in ('}', ')', 'end', 'END') or next_line.startswith(('END-', 'end-'))
+        is_next_block_end = (
+            next_line in ('}', ')', 'end', 'END', 'fi', 'done', 'esac', 'end;')
+            or next_line.startswith(('END-', 'end-'))
+        )
         if is_block_end and next_line and not is_next_block_end:
             tier1.append(i + 1)
 
@@ -965,7 +972,11 @@ def _insert_missing_blanks(lines: list[str], target: int,
         _DECL = ('func ', 'def ', 'class ', 'type ', 'fn ', 'pub fn ',
                  'pub struct ', 'pub enum ', 'impl ', 'sub ', 'proc ',
                  'PERFORM ', 'SECTION.', 'DIVISION.',  # COBOL
-                 'PROCEDURE ', 'IDENTIFICATION ')       # COBOL
+                 'PROCEDURE ', 'IDENTIFICATION ',       # COBOL
+                 'function ', 'function()',              # Shell/JS
+                 'CREATE ', 'ALTER ', 'DROP ',          # SQL
+                 'BEGIN', 'DECLARE ',                    # SQL/PL-SQL
+                 )
         if next_line and any(next_line.startswith(d) for d in _DECL):
             tier2.append(i + 1)
 
