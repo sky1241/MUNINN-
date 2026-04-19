@@ -888,6 +888,8 @@ def extract_ast_hints(cube: Cube) -> dict:
         'imports': [],
         'variables': [],
         'identifiers': [],     # ALL unique identifiers in the cube
+        'strings': [],         # string literals ("closed", "error: %v", etc.)
+        'type_sigs': [],       # type signatures (field Type `tag`)
         'first_line': '',      # anchor: first non-empty line
         'last_line': '',       # anchor: last non-empty line
         'indent_char': None,
@@ -950,6 +952,33 @@ def extract_ast_hints(cube: Cube) -> dict:
     }
     identifiers = sorted(all_ids - _KEYWORDS)
     hints['identifiers'] = identifiers[:50]  # cap at 50 to not bloat prompt
+
+    # Extract string literals — the values inside quotes
+    # These are critical: "closed", "open", "session not found" etc.
+    # Without them the model guesses synonyms ("inactive" vs "closed")
+    all_strings = set()
+    for line in lines:
+        # Double-quoted strings (Go, Java, JS, Python, etc.)
+        all_strings.update(re.findall(r'"([^"]{1,60})"', line))
+        # Single-quoted strings (Python, Ruby, etc.)
+        all_strings.update(re.findall(r"'([^']{1,60})'", line))
+    # Remove empty strings and pure whitespace
+    hints['strings'] = sorted(s for s in all_strings if s.strip())[:20]
+
+    # Extract type signatures — "Name Type `tag`" patterns
+    # Catches struct field types: Items interface{}, Total int64, etc.
+    # Language-agnostic: looks for "word type" or "word []type" or "word *type"
+    type_sigs = []
+    for line in lines:
+        stripped = line.strip()
+        # Struct field pattern: FieldName Type (with optional pointer/slice/map)
+        m = re.match(
+            r'([A-Z]\w+)\s+'
+            r'((?:\[\]|\*|map\[[\w.]+\])?[\w.*\[\]{}]+)'
+            r'(?:\s+`.*`)?$', stripped)
+        if m:
+            type_sigs.append(f"{m.group(1)} {m.group(2)}")
+    hints['type_sigs'] = type_sigs[:20]
 
     # Still extract structured hints for backward compatibility
     for line in lines:

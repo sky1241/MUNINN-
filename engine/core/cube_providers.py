@@ -505,13 +505,21 @@ class FIMReconstructor:
                 if shared:
                     prompt_parts.append(f"Confirmed by neighbors: {', '.join(shared[:20])}")
 
-            # Structured hints (backward compat)
+            # Structured hints
             if ast_hints.get('functions'):
                 prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
             if ast_hints.get('classes'):
                 prompt_parts.append(f"Types: {', '.join(ast_hints['classes'])}")
             if ast_hints.get('variables'):
                 prompt_parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
+
+            # String literals — exact values the model must reproduce
+            if ast_hints.get('strings'):
+                prompt_parts.append(f"Strings: {', '.join(repr(s) for s in ast_hints['strings'][:15])}")
+
+            # Type signatures — field name + type (struct fields, params)
+            if ast_hints.get('type_sigs'):
+                prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
 
         # Best previous attempt — positive memory (improve, don't avoid)
         if previous_attempts and previous_attempts[0]:
@@ -902,20 +910,32 @@ def _insert_missing_blanks(lines: list[str], target: int,
     missing = target - len(lines)
     result = list(lines)
 
-    # Find insertion points: after } or end-of-block, before new declaration
-    # These are places where blank separators naturally go
+    # Find insertion points — places where blank separators naturally go.
+    # Language-agnostic: structural boundaries between code blocks.
     candidates = []
     for i in range(len(result) - 1):
         curr = result[i].strip()
         next_line = result[i + 1].strip()
 
         # After closing brace/end, before non-blank non-brace
-        if curr in ('}', 'end', 'end.', 'END', 'END.') and next_line and next_line not in ('}', ')'):
+        if curr in ('}', ')', 'end', 'end.', 'END', 'END.') and next_line and next_line not in ('}', ')'):
             candidates.append(i + 1)
 
-        # After return/break before new function/type
-        if curr.startswith(('return ', 'return\t')) and next_line.startswith(('func ', 'def ', 'class ', 'type ', 'fn ', 'pub ')):
+        # After return/break/pass before new declaration
+        if curr.startswith(('return ', 'return\t', 'break', 'pass')) and next_line:
             candidates.append(i + 1)
+
+        # Before function/class/type declarations (any indentation level)
+        _DECL = ('func ', 'def ', 'class ', 'type ', 'fn ', 'pub fn ',
+                 'pub struct ', 'pub enum ', 'impl ', 'sub ', 'proc ')
+        if next_line and any(next_line.startswith(d) for d in _DECL):
+            if i + 1 not in candidates:
+                candidates.append(i + 1)
+
+        # After a comment block (// --- or # ---) before code
+        if (curr.startswith('//') or curr.startswith('#')) and next_line and not next_line.startswith(('//','#')):
+            if i + 1 not in candidates:
+                candidates.append(i + 1)
 
     # If anchors available, prefer positions that match anchor line numbers
     if ast_hints and ast_hints.get('anchors'):
