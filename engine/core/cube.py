@@ -958,11 +958,25 @@ def extract_ast_hints(cube: Cube) -> dict:
     # These are critical: "closed", "open", "session not found" etc.
     # Without them the model guesses synonyms ("inactive" vs "closed")
     all_strings = set()
-    for line in lines:
-        # Double-quoted strings (Go, Java, JS, Python, etc.)
-        all_strings.update(re.findall(r'"([^"]{1,60})"', line))
-        # Single-quoted strings (Python, Ruby, etc.)
-        all_strings.update(re.findall(r"'([^']{1,60})'", line))
+    full_text = '\n'.join(lines)
+    # Strip triple-quotes first to avoid false matches
+    clean_text = re.sub(r'"""(?:(?!""").)*"""', '""', full_text, flags=re.DOTALL)
+    clean_text = re.sub(r"'''(?:(?!''').)*'''", "''", clean_text, flags=re.DOTALL)
+    # Double-quoted strings (Go, Java, JS, Python, etc.)
+    all_strings.update(re.findall(r'"([^"\n]{1,60})"', clean_text))
+    # Single-quoted strings (Python, Ruby, etc.)
+    all_strings.update(re.findall(r"'([^'\n]{1,60})'", clean_text))
+    # Backtick strings (Go raw, JS template literals)
+    all_strings.update(re.findall(r'`([^`]{1,60})`', full_text))
+    # Python triple-quoted (""" or ''') — extract content between triple quotes
+    for m in re.finditer(r'"""((?:(?!""").){1,60})"""', full_text, re.DOTALL):
+        val = m.group(1).strip()
+        if val and '\n' not in val:  # only single-line content (multi-line = docstring, skip)
+            all_strings.add(val)
+    for m in re.finditer(r"'''((?:(?!''').){1,60})'''", full_text, re.DOTALL):
+        val = m.group(1).strip()
+        if val and '\n' not in val:
+            all_strings.add(val)
     # Remove empty strings and pure whitespace
     hints['strings'] = sorted(s for s in all_strings if s.strip())[:20]
 

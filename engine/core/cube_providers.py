@@ -473,8 +473,13 @@ class FIMReconstructor:
         code_block = "\n".join(code_parts)
 
         # Compact prompt: file context + code with hole + all constraints
+        position = ""
+        if not prefix:
+            position = " (START of file)"
+        elif not suffix:
+            position = " (END of file)"
         prompt_parts = [
-            f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing)",
+            f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing{position})",
             f"Write EXACTLY {n_lines} lines. Output ONLY code. No fences. No explanation.",
         ]
 
@@ -527,9 +532,9 @@ class FIMReconstructor:
             if ast_hints.get('type_sigs'):
                 prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
 
-        # Best previous attempt — positive memory (improve, don't avoid)
+        # Previous attempt (if provided) — used for iterative refinement
         if previous_attempts and previous_attempts[0]:
-            prompt_parts.append("Your best attempt so far (improve it, fix errors):")
+            prompt_parts.append("Previous attempt (improve it):")
             prompt_parts.append(previous_attempts[0])
 
         prompt_parts.append("")
