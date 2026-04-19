@@ -567,12 +567,17 @@ class FIMReconstructor:
 
         # Smart line count adjustment
         out_lines = cleaned.split('\n')
+        # Strip trailing empty lines before count check
+        while len(out_lines) > n_lines and out_lines and out_lines[-1].strip() == '':
+            out_lines.pop()
         if len(out_lines) > n_lines:
             # Too many lines: join continuation lines
             cleaned = _adjust_line_count(out_lines, n_lines)
         elif len(out_lines) < n_lines:
             # Too few lines: insert missing blank lines using anchors
             cleaned = _insert_missing_blanks(out_lines, n_lines, ast_hints)
+        else:
+            cleaned = '\n'.join(out_lines)
 
         return cleaned
 
