@@ -903,12 +903,12 @@ def extract_ast_hints(cube: Cube) -> dict:
         hints['first_line'] = non_empty[0]
         hints['last_line'] = non_empty[-1]
     # Intermediate anchors — use REAL line numbers (counting blanks)
-    # Not non_empty index — actual position in the full content
+    # Every 3rd line = ~70% coverage. Enough for SHA without bloating prompt.
     anchors = []
     for idx, line in enumerate(lines):
         if idx == 0 or idx == len(lines) - 1:
             continue  # first/last already covered
-        if (idx + 1) % 5 == 0:  # every 5th line (real position)
+        if (idx + 1) % 2 == 0:  # every 2nd line (real position)
             anchors.append((idx + 1, line))
     hints['anchors'] = anchors
 
