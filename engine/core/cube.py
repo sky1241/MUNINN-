@@ -902,12 +902,13 @@ def extract_ast_hints(cube: Cube) -> dict:
     if non_empty:
         hints['first_line'] = non_empty[0]
         hints['last_line'] = non_empty[-1]
-    # Intermediate anchors — like puzzle pieces in the middle
+    # Intermediate anchors — use REAL line numbers (counting blanks)
+    # Not non_empty index — actual position in the full content
     anchors = []
-    for idx, line in enumerate(non_empty):
-        if idx == 0 or idx == len(non_empty) - 1:
+    for idx, line in enumerate(lines):
+        if idx == 0 or idx == len(lines) - 1:
             continue  # first/last already covered
-        if (idx + 1) % 5 == 0:  # every 5th line
+        if (idx + 1) % 5 == 0:  # every 5th line (real position)
             anchors.append((idx + 1, line))
     hints['anchors'] = anchors
 

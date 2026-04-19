@@ -438,7 +438,13 @@ class FIMReconstructor:
         # ─── FIM prompt: code with hole + constraints ────────────────
         # Use normalized line count (not raw line_start/end which may include
         # trailing blanks that normalize_content strips)
-        from cube import normalize_content as _nc
+        try:
+            from cube import normalize_content as _nc
+        except ImportError:
+            try:
+                from engine.core.cube import normalize_content as _nc
+            except ImportError:
+                _nc = lambda t: t.strip()
         n_lines = len(_nc(cube.content).split('\n'))
 
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
@@ -875,11 +881,15 @@ def _adjust_line_count(lines: list[str], target: int) -> str:
         candidates.sort()
         _, best_idx = candidates[0]
         prev = result[best_idx - 1].rstrip()
+        continuation = result[best_idx].strip()
         # No space after open paren/bracket — natural join
+        # No space before operator prefix (+, -, *, /, etc.)
         if prev and prev[-1] in ('(', '['):
-            combined = prev + result[best_idx].strip()
+            combined = prev + continuation
+        elif continuation and continuation[0] in ('+', '-', '*', '/', '%', '&', '|', ')', ']', '}', ',', ';'):
+            combined = prev + continuation
         else:
-            combined = prev + ' ' + result[best_idx].strip()
+            combined = prev + ' ' + continuation
         result[best_idx - 1] = combined
         result.pop(best_idx)
 
@@ -918,7 +928,8 @@ def _insert_missing_blanks(lines: list[str], target: int,
         next_line = result[i + 1].strip()
 
         # After closing brace/end, before non-blank non-brace
-        if curr in ('}', ')', 'end', 'end.', 'END', 'END.') and next_line and next_line not in ('}', ')'):
+        # Only count the LAST } in a sequence (not intermediate ones)
+        if curr in ('}', ')', 'end', 'end.', 'END', 'END.') and next_line and next_line not in ('}', ')', 'end', 'END'):
             candidates.append(i + 1)
 
         # After return/break/pass before new declaration
@@ -945,14 +956,11 @@ def _insert_missing_blanks(lines: list[str], target: int,
                 if anchor_num - 1 not in candidates:
                     candidates.insert(0, min(anchor_num - 1, len(result)))
 
-    # Insert blanks at best candidates (from bottom to top to preserve indices)
-    candidates = sorted(set(candidates), reverse=True)
-    inserted = 0
-    for pos in candidates:
-        if inserted >= missing:
-            break
+    # Insert blanks at best candidates (top-first, but insert bottom-up)
+    candidates = sorted(set(candidates))  # ascending = top of file first
+    to_insert = candidates[:missing]      # take only as many as needed
+    for pos in sorted(to_insert, reverse=True):  # bottom-up preserves indices
         result.insert(pos, '')
-        inserted += 1
 
     # If still short, insert at end
     while len(result) < target:
