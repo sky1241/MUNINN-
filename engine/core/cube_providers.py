@@ -839,6 +839,10 @@ def _is_continuation(prev_line: str, curr_line: str) -> float:
     if curr_indent == prev_indent and not allow_equal:
         return 0.0
 
+    # COBOL continuation: column 7 = '-' (fixed-format)
+    if len(curr_line) >= 7 and curr_line[6] == '-':
+        return 1.0
+
     last_char = prev_stripped[-1]
 
     # Score by ending character — how likely is this a line wrap?
@@ -934,43 +938,62 @@ def _insert_missing_blanks(lines: list[str], target: int,
 
     # Find insertion points — places where blank separators naturally go.
     # Language-agnostic: structural boundaries between code blocks.
-    candidates = []
+    # Two priority tiers: block-end boundaries first, then statements.
+    tier1 = []  # block-end boundaries (highest priority)
+    tier2 = []  # statement boundaries
+
     for i in range(len(result) - 1):
         curr = result[i].strip()
         next_line = result[i + 1].strip()
 
-        # After closing brace/end, before non-blank non-brace
-        # Only count the LAST } in a sequence (not intermediate ones)
-        if curr in ('}', ')', 'end', 'end.', 'END', 'END.') and next_line and next_line not in ('}', ')', 'end', 'END'):
-            candidates.append(i + 1)
+        # TIER 1: After closing brace/end/END-*, before non-blank non-brace
+        is_block_end = (
+            curr in ('}', ')', 'end', 'end.', 'END', 'END.')
+            or curr.startswith(('END-', 'end-'))
+            or curr.endswith(('END-PERFORM.', 'END-IF.', 'END-EVALUATE.',
+                              'END-READ.', 'END-WRITE.', 'END-COMPUTE.'))
+        )
+        is_next_block_end = next_line in ('}', ')', 'end', 'END') or next_line.startswith(('END-', 'end-'))
+        if is_block_end and next_line and not is_next_block_end:
+            tier1.append(i + 1)
 
-        # After return/break/pass before new declaration
+        # TIER 2: After return/break/pass before new declaration
         if curr.startswith(('return ', 'return\t', 'break', 'pass')) and next_line:
-            candidates.append(i + 1)
+            tier2.append(i + 1)
 
-        # Before function/class/type declarations (any indentation level)
+        # Before function/class/type/paragraph declarations (any language)
         _DECL = ('func ', 'def ', 'class ', 'type ', 'fn ', 'pub fn ',
-                 'pub struct ', 'pub enum ', 'impl ', 'sub ', 'proc ')
+                 'pub struct ', 'pub enum ', 'impl ', 'sub ', 'proc ',
+                 'PERFORM ', 'SECTION.', 'DIVISION.',  # COBOL
+                 'PROCEDURE ', 'IDENTIFICATION ')       # COBOL
         if next_line and any(next_line.startswith(d) for d in _DECL):
-            if i + 1 not in candidates:
-                candidates.append(i + 1)
+            tier2.append(i + 1)
 
         # After a comment block (// --- or # ---) before code
-        if (curr.startswith('//') or curr.startswith('#')) and next_line and not next_line.startswith(('//','#')):
-            if i + 1 not in candidates:
-                candidates.append(i + 1)
+        if (curr.startswith('//') or curr.startswith('#') or curr.startswith('*')) and next_line and not next_line.startswith(('//','#','*')):
+            tier2.append(i + 1)
 
-    # If anchors available, prefer positions that match anchor line numbers
+    # Merge tiers: tier1 first (block boundaries), then tier2 (statements)
+    # If anchors say a specific position is blank, that's highest priority
+    tier0 = []  # anchor-confirmed blanks
     if ast_hints and ast_hints.get('anchors'):
         for anchor_num, anchor_text in ast_hints['anchors']:
             if anchor_text.strip() == '' and 0 < anchor_num <= len(result) + missing:
-                # This anchor IS a blank line — prioritize inserting here
-                if anchor_num - 1 not in candidates:
-                    candidates.insert(0, min(anchor_num - 1, len(result)))
+                tier0.append(min(anchor_num - 1, len(result)))
 
-    # Insert blanks at best candidates (top-first, but insert bottom-up)
-    candidates = sorted(set(candidates))  # ascending = top of file first
-    to_insert = candidates[:missing]      # take only as many as needed
+    # Priority: anchor blanks > block-end > statement
+    candidates = []
+    for pos in sorted(set(tier0)):
+        if pos not in candidates:
+            candidates.append(pos)
+    for pos in sorted(set(tier1)):
+        if pos not in candidates:
+            candidates.append(pos)
+    for pos in sorted(set(tier2)):
+        if pos not in candidates:
+            candidates.append(pos)
+
+    to_insert = candidates[:missing]
     for pos in sorted(to_insert, reverse=True):  # bottom-up preserves indices
         result.insert(pos, '')
 
