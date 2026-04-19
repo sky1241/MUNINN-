@@ -450,6 +450,9 @@ class FIMReconstructor:
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
         suffix = "\n".join(c.content for c in after[:4]) if after else ""
 
+        # Learn patterns from neighbors — no hardcoded keyword lists
+        neighbor_patterns = _learn_patterns_from_neighbors(neighbors)
+
         # Detect indentation from suffix (first non-empty line)
         indent_hint = ""
         if suffix:
@@ -577,10 +580,12 @@ class FIMReconstructor:
             out_lines.pop()
         if len(out_lines) > n_lines:
             # Too many lines: join continuation lines
-            cleaned = _adjust_line_count(out_lines, n_lines)
+            cleaned = _adjust_line_count(out_lines, n_lines,
+                                          learned=neighbor_patterns)
         elif len(out_lines) < n_lines:
-            # Too few lines: insert missing blank lines using anchors
-            cleaned = _insert_missing_blanks(out_lines, n_lines, ast_hints)
+            # Too few lines: insert missing blank lines
+            cleaned = _insert_missing_blanks(out_lines, n_lines, ast_hints,
+                                              learned=neighbor_patterns)
         else:
             cleaned = '\n'.join(out_lines)
 
@@ -778,6 +783,46 @@ class LevelResult:
 
 # ─── B40: Die-and-retry with waves ─────────────────────────────────────
 
+def _learn_patterns_from_neighbors(neighbors: list) -> dict:
+    """Learn blank-line and continuation patterns from neighbor cubes.
+
+    Instead of hardcoded keyword lists, scan the actual neighbor code
+    to discover what patterns THIS codebase uses for:
+    - blank_triggers: lines after which a blank line appears
+    - continuation_chars: chars at end of lines that continue on next line
+
+    Works for ANY language because it learns from the code itself.
+    """
+    blank_triggers = set()    # stripped line content that precedes a blank
+    continuation_endings = set()  # last char of lines followed by indented continuation
+
+    for n in neighbors:
+        content = n.content if hasattr(n, 'content') else ''
+        lines = content.split('\n')
+
+        for j in range(len(lines) - 1):
+            curr = lines[j]
+            next_line = lines[j + 1]
+            curr_stripped = curr.strip()
+            next_stripped = next_line.strip()
+
+            # Learn blank triggers: what comes before a blank line?
+            if next_stripped == '' and curr_stripped:
+                blank_triggers.add(curr_stripped)
+
+            # Learn continuation: what ends a line that continues on the next?
+            if curr_stripped and next_stripped:
+                curr_indent = len(curr.expandtabs(4)) - len(curr.expandtabs(4).lstrip())
+                next_indent = len(next_line.expandtabs(4)) - len(next_line.expandtabs(4).lstrip())
+                if next_indent > curr_indent and curr_stripped:
+                    continuation_endings.add(curr_stripped[-1])
+
+    return {
+        'blank_triggers': blank_triggers,
+        'continuation_endings': continuation_endings,
+    }
+
+
 def _annealing_schedule(n: int) -> list[float]:
     """Generate a cold-hot-cold temperature schedule for n attempts.
 
@@ -874,7 +919,8 @@ def _is_continuation(prev_line: str, curr_line: str) -> float:
     return score
 
 
-def _adjust_line_count(lines: list[str], target: int) -> str:
+def _adjust_line_count(lines: list[str], target: int,
+                       learned: dict | None = None) -> str:
     """Adjust output to target line count by joining continuation lines.
 
     Language-agnostic: finds lines that are continuations of the previous
@@ -890,11 +936,18 @@ def _adjust_line_count(lines: list[str], target: int) -> str:
     excess = len(lines) - target
     result = list(lines)
 
+    # Boost chars that neighbors actually use for continuations
+    learned_endings = learned.get('continuation_endings', set()) if learned else set()
+
     for _ in range(excess):
         # Find all joinable pairs, pick highest score (most likely a line wrap)
         candidates = []
         for i in range(1, len(result)):
             score = _is_continuation(result[i - 1], result[i])
+            # Boost if this ending char was seen in neighbors
+            prev_stripped = result[i - 1].rstrip()
+            if prev_stripped and prev_stripped[-1] in learned_endings:
+                score = max(score, 0.5)  # at least 0.5 if neighbors do it
             if score > 0.0:
                 candidates.append((-score, i))  # negative for descending sort
 
@@ -925,7 +978,8 @@ def _adjust_line_count(lines: list[str], target: int) -> str:
 
 
 def _insert_missing_blanks(lines: list[str], target: int,
-                           ast_hints: dict | None = None) -> str:
+                           ast_hints: dict | None = None,
+                           learned: dict | None = None) -> str:
     """Insert missing blank lines to reach target line count.
 
     When the LLM generates fewer lines than expected, it's almost always
@@ -945,14 +999,22 @@ def _insert_missing_blanks(lines: list[str], target: int,
     result = list(lines)
 
     # Find insertion points — places where blank separators naturally go.
-    # Language-agnostic: structural boundaries between code blocks.
+    # LEARNED patterns from neighbors take priority over hardcoded keywords.
     # Two priority tiers: block-end boundaries first, then statements.
-    tier1 = []  # block-end boundaries (highest priority)
-    tier2 = []  # statement boundaries
+    tier_learned = []  # patterns learned from neighbor cubes
+    tier1 = []  # block-end boundaries (fallback)
+    tier2 = []  # statement boundaries (fallback)
+
+    # TIER LEARNED: if neighbors show that "}" is followed by blank, use that
+    blank_triggers = learned.get('blank_triggers', set()) if learned else set()
 
     for i in range(len(result) - 1):
         curr = result[i].strip()
         next_line = result[i + 1].strip()
+
+        # Learned patterns first — this line was followed by blank in neighbors
+        if curr in blank_triggers and next_line:
+            tier_learned.append(i + 1)
 
         # TIER 1: After closing brace/end/END-*, before non-blank non-brace
         is_block_end = (
@@ -1014,9 +1076,12 @@ def _insert_missing_blanks(lines: list[str], target: int,
             if anchor_text.strip() == '' and 0 < anchor_num <= len(result) + missing:
                 tier0.append(min(anchor_num - 1, len(result)))
 
-    # Priority: anchor blanks > block-end > statement
+    # Priority: anchor blanks > LEARNED > block-end > statement
     candidates = []
     for pos in sorted(set(tier0)):
+        if pos not in candidates:
+            candidates.append(pos)
+    for pos in sorted(set(tier_learned)):
         if pos not in candidates:
             candidates.append(pos)
     for pos in sorted(set(tier1)):
