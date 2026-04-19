@@ -1,7 +1,71 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 1964 + muninn_layers.py 1480 + muninn_tree.py 3672 + muninn_feed.py 1660 + cube.py 1052 + cube_providers.py 652 + cube_analysis.py 1774 + mycelium.py 3145 + mycelium_db.py 1338 + sync_backend.py 1136 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 413 + vault.py 523 = ~19K total (18 files)
-Tests: **2190+ collected, PASS, 27 skip, 0 FAIL** (post brick 25, default suite).
+Engine: muninn.py 1964 + muninn_layers.py 1480 + muninn_tree.py 3672 + muninn_feed.py 1660 + cube.py 1132 + cube_providers.py 1244 + cube_analysis.py 1774 + mycelium.py 3145 + mycelium_db.py 1338 + sync_backend.py 1136 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 413 + vault.py 523 = ~20K total (18 files)
+Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
+
+---
+
+## Brick 30 (2026-04-15 to 2026-04-19) — SHA-256 Exact Reconstruction
+
+### Summary
+First SHA-256 exact match on reconstructed code. LLM (Sonnet) reconstructs
+destroyed Go code byte-for-byte from neighbors + extracted metadata.
+2/10 cubes SHA match on first attempt. 33 commits, 6 major fixes.
+
+### B40: Die-and-retry waves
+- `reconstruct_cube_waves()`: annealing temperature schedule (cold-hot-cold)
+- Best-of-N sampling: each attempt independent, keep lowest NCD
+- `ncd_give_up=0.3`: stop wasting calls on unreconstructible cubes
+- Based on Kirkpatrick 1983 (simulated annealing) + Zhou 2023 (AdapT, AAAI 2024)
+
+### B41: Progressive levels with mycelium accumulation
+- `run_progressive_levels()`: x1 (112 tok) -> x2 (224) -> ... -> x11 (1232)
+- Each level: bigger cubes = more internal context = easier reconstruction
+- Mycelium.observe() on SHA match — accumulated learning carries between levels
+- Best level: x4 (448 tok), avg NCD=0.196 with Sonnet
+
+### FIM prompt (v3)
+- Replaced verbose 30-line prompt with code-with-hole format
+- `<FILL N lines>` marker between prefix and suffix code
+- Compact constraints: file name, line range, indentation, identifiers
+
+### Smart hints (language-agnostic)
+- `extract_ast_hints()` rewritten: extracts ALL identifiers via regex
+- String literals extracted ("closed", "open", "%s:%s")
+- Type signatures extracted (Items interface{}, Total int64)
+- First/last line anchors + every 2nd line as error-correction parity
+- Neighbor cross-reference: shared identifiers confirmed in prompt
+- Works on Go, Python, JSX, Rust, TypeScript, C, COBOL, Shell, SQL
+
+### Post-processing
+- `_adjust_line_count()`: score-based continuation join (( = 1.0, { = 0.1)
+- `_insert_missing_blanks()`: 3-tier priority (anchors > block-end > statements)
+- Block-end patterns: } (C-like), end (Ruby), fi/done/esac (Shell),
+  END-IF/END-PERFORM (COBOL), end; (Pascal/PL-SQL), endif (Jinja)
+- Trailing blank strip before line count adjustment
+- No space before operators in join (+, -, *, /)
+- Tabs normalized to 4 spaces for mixed-indent comparison
+
+### Bug fixes
+- Variables extracted by AST but never injected in prompt
+- raw.strip() destroyed leading indentation
+- n_lines from raw line_start/end instead of normalized content
+- Anchor line numbers used non_empty index instead of real position
+- normalize_content import not guarded with fallback
+- AST hints per-cube in progressive levels (was global None)
+
+### Results
+- SHA-256 EXACT MATCH: 2/10 cubes with Sonnet (cubes 15, 30)
+- Best NCD: 0.040 (cube 30), 0.065 (cube 50), 0.074 (cube 35)
+- Post-processing offline: Python 4/5, Go 5/5, JSX 5/5, Rust 5/5, TS 6/5, C 6/5
+- Haiku progressive levels: best avg NCD=0.266 (level x3)
+- Sonnet progressive levels: best avg NCD=0.196 (level x4)
+
+### Files changed
+- engine/core/cube_providers.py: 652 -> 1244 lines (+592)
+- engine/core/cube.py: 1052 -> 1132 lines (+80)
+- tests/test_cube_waves.py: NEW (10 tests)
+- tests/cube_corpus/RESULTS_WAVES.md: NEW
 
 ---
 

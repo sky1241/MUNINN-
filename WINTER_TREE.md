@@ -2,7 +2,7 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-04-17 (brick 29). Engine: ~20K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2236 collected, PASS, 27 skip, 0 FAIL** post brick 29. 30 cerveaux testes avec vrais donnees. Pipeline ordre fixe: decay→consolidate→sync. Tout branche.
+> Mis a jour: 2026-04-19 (brick 30). Engine: ~20K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**. Brick 30: SHA-256 exact match on reconstructed code (2/10 cubes Sonnet). FIM prompt v3, smart hints, annealing, progressive levels. 7 langages testes offline.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
@@ -73,7 +73,7 @@
    [vault.py + sync_tls.py 601L]           -1 Sous-sol — securite + reseau
       |
    cube.py 1056L (core)                    -2 Fondations — resilience
-     cube_providers.py 580L (LLM)
+     cube_providers.py 1244L (LLM+reconstruction+waves)
      cube_analysis.py 1759L (analyse+CLI)
       |
    [wal_monitor 109L + tokenizer 43L]      -3 Racines — infrastructure
@@ -432,9 +432,9 @@ Scanner, dataclasses, subdivision, CubeStore, dependencies, neighbors.
 
 ---
 
-## cube_providers.py — LLM Providers (580 lignes)
+## cube_providers.py — LLM Providers + Reconstruction (1244 lignes)
 
-Providers, FIM reconstruction, validation, NCD.
+Providers, FIM reconstruction, validation, NCD, die-and-retry waves, progressive levels.
 
 ### Providers B11-B14 (35-283)
 | Classe | Lignes | Role |
@@ -444,20 +444,41 @@ Providers, FIM reconstruction, validation, NCD.
 | ClaudeProvider | 172-229 | B13: Claude API |
 | OpenAIProvider | 230-283 | B14: OpenAI compatible |
 
-### FIM & Mock B15 (284-478)
+### FIM Reconstruction B15 (284-580)
+| Classe/Fonction | Lignes | Role |
+|--------|--------|------|
+| FIMReconstructor | 284-580 | B15: FIM prompt + smart hints + post-processing |
+| reconstruct_with_neighbors | 403-580 | Core: code-with-hole prompt, anchors, identifiers, strings, types |
+| _adjust_line_count | 843-895 | Smart join: score-based continuation detection |
+| _insert_missing_blanks | 897-990 | 3-tier blank insertion (anchors > block-end > statements) |
+| _is_continuation | 803-842 | Line wrap scoring (0.0-1.0, language-agnostic) |
+| _annealing_schedule | 775-801 | Cold-hot-cold temperature curve (Kirkpatrick 1983) |
+
+### Mock & Results (562-625)
 | Classe | Lignes | Role |
 |--------|--------|------|
-| FIMReconstructor | 284-423 | B15: lexicon + AST + FIM/prompt |
-| MockLLMProvider | 424-466 | Mock pour tests |
-| ReconstructionResult | 467-478 | Resultat reconstruction |
+| MockLLMProvider | 562-610 | Mock pour tests |
+| ReconstructionResult | 612-625 | Resultat reconstruction |
 
-### Reconstruction B16-B19 (479-580)
+### Reconstruction B16-B19 (626-720)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| reconstruct_cube | 479-525 | B16: orchestre B15+B17+B18+B19 |
-| validate_reconstruction | 526-536 | B17: SHA-256 compare |
-| compute_hotness | 537-553 | B18: perplexite voisins |
-| compute_ncd | 554-580 | B19: NCD zlib (seuil 0.3) |
+| reconstruct_cube | 626-670 | B16: orchestre B15+B17+B18+B19 |
+| validate_reconstruction | 672-682 | B17: SHA-256 compare |
+| compute_hotness | 684-700 | B18: perplexite voisins |
+| compute_ncd | 702-720 | B19: NCD zlib (seuil 0.3) |
+
+### Die-and-retry B40 (722-770)
+| Element | Lignes | Role |
+|---------|--------|------|
+| WaveResult | 722-735 | Resultat d'une wave |
+| LevelResult | 737-748 | Resultat d'un level progressif |
+| reconstruct_cube_waves | 750-770 | B40: Best-of-N + annealing, ncd_give_up |
+
+### Progressive levels B41 (1050-1120)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| run_progressive_levels | 1050-1120 | B41: x1->x2->...->x11, mycelium accumulation |
 
 ---
 

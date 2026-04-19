@@ -76,3 +76,52 @@ Memory injection shows marginal improvement. Haiku plateaus quickly (temperature
 - QTM face=14 (112 tok) = optimal for Python (best NCD + zero errors)
 - HTM face=11 (88 tok) = better for Go (shorter blocks)
 - 3x3x3 QTM (208 tok) = too big, causes timeouts and worse NCD
+
+## 6. SHA-256 Exact Match — Sonnet (2026-04-19)
+
+### Single attempt (10 cubes, server.go, 112 tok)
+| Cube | Result |
+|------|--------|
+| 5 | NCD=0.118 |
+| 10 | NCD=0.188 |
+| **15** | **SHA MATCH** |
+| 20 | NCD=0.301 |
+| 25 | NCD=0.089 |
+| **30** | **SHA MATCH** |
+| 35 | NCD=0.074 |
+| 40 | NCD=0.176 |
+| 45 | NCD=0.088 |
+| 50 | NCD=0.111 |
+
+**2/10 SHA match (20%) on first attempt with Sonnet.**
+
+### Progressive levels — Sonnet (5 levels x 5 cubes)
+| Level | Tokens | SHA | Avg NCD |
+|-------|--------|-----|---------|
+| x1 | 112 | 0/5 | 0.338 |
+| x2 | 224 | 0/5 | 0.211 |
+| x3 | 336 | 0/5 | 0.243 |
+| x4 | 448 | 0/5 | 0.196 |
+| x5 | 560 | 0/5 | 0.254 |
+
+### Progressive levels — Haiku (5 levels x 5 cubes)
+| Level | Tokens | SHA | Avg NCD |
+|-------|--------|-----|---------|
+| x1 | 112 | 0/5 | 0.316 |
+| x2 | 224 | 0/5 | 0.290 |
+| x3 | 336 | 0/5 | 0.266 |
+| x4 | 448 | 0/5 | 0.276 |
+| x5 | 560 | 0/5 | 0.308 |
+
+## 7. Post-processing offline results (7 languages)
+| Language | Blank insert | Smart join |
+|----------|-------------|------------|
+| Python | 4/5 | 2/5 |
+| Go | 2/5 | 3/5 |
+| JSX | 3/5 | 2/5 |
+| Rust | 3/5 | 3/5 |
+| TypeScript | 1/5 | 5/5 |
+| C | 3/5 | 3/5 |
+| COBOL | 0/5 | 0/5 |
+
+Shell (fi/done/esac) and SQL (END;/CREATE) tested offline: PASS.
