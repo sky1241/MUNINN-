@@ -963,7 +963,7 @@ def _insert_missing_blanks(lines: list[str], target: int,
                      'EXIT.', 'exit.',                   # COBOL
                      )
             or curr.startswith(('END-', 'end-'))        # COBOL
-            or curr.endswith(('_t;', '};'))              # C typedef/struct end
+            or curr == '};'                              # C struct/union end
             or curr.endswith(('END-PERFORM.', 'END-IF.', 'END-EVALUATE.',
                               'END-READ.', 'END-WRITE.', 'END-COMPUTE.'))
         )
