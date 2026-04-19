@@ -908,7 +908,7 @@ def extract_ast_hints(cube: Cube) -> dict:
     for idx, line in enumerate(lines):
         if idx == 0 or idx == len(lines) - 1:
             continue  # first/last already covered
-        if (idx + 1) % 2 == 0:  # every 2nd line (real position)
+        if (idx + 1) % 5 == 0:  # every 5th line (real position)
             anchors.append((idx + 1, line))
     hints['anchors'] = anchors
 
