@@ -960,8 +960,10 @@ def _insert_missing_blanks(lines: list[str], target: int,
                      'fi', 'done', 'esac', ';;',       # Shell
                      'endif', 'endfor', 'endwhile',     # Jinja/some langs
                      'end;',                             # Pascal/PL-SQL
+                     'EXIT.', 'exit.',                   # COBOL
                      )
             or curr.startswith(('END-', 'end-'))        # COBOL
+            or curr.endswith(('_t;', '};'))              # C typedef/struct end
             or curr.endswith(('END-PERFORM.', 'END-IF.', 'END-EVALUATE.',
                               'END-READ.', 'END-WRITE.', 'END-COMPUTE.'))
         )
@@ -984,12 +986,24 @@ def _insert_missing_blanks(lines: list[str], target: int,
                  'function ', 'function()',              # Shell/JS
                  'CREATE ', 'ALTER ', 'DROP ',          # SQL
                  'BEGIN', 'DECLARE ',                    # SQL/PL-SQL
+                 'typedef ', 'struct ', 'enum ',        # C
+                 'const (', 'var (',                    # Go grouped declarations
+                 'export default ', 'export function ',   # JS/TS modules
                  )
         if next_line and any(next_line.startswith(d) for d in _DECL):
             tier2.append(i + 1)
 
         # After a comment block (// --- or # ---) before code
         if (curr.startswith('//') or curr.startswith('#') or curr.startswith('*')) and next_line and not next_line.startswith(('//','#','*')):
+            tier2.append(i + 1)
+
+        # Before a comment separator (// ===, /* ===, *===, # ---) after code
+        _COMMENT_SEP = ('//', '/*', '*=', '# ', '#!', '* ')
+        if next_line and any(next_line.startswith(s) for s in _COMMENT_SEP) and curr and not any(curr.startswith(s) for s in _COMMENT_SEP):
+            tier2.append(i + 1)
+
+        # Before @decorator (Python) or annotation
+        if next_line and next_line.startswith('@'):
             tier2.append(i + 1)
 
     # Merge tiers: tier1 first (block boundaries), then tier2 (statements)
