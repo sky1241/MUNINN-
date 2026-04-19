@@ -551,10 +551,14 @@ class FIMReconstructor:
                     break
             cleaned = '\n'.join(lines[start:end])
 
-        # Smart line count adjustment — join continuation lines instead of truncating
+        # Smart line count adjustment
         out_lines = cleaned.split('\n')
         if len(out_lines) > n_lines:
+            # Too many lines: join continuation lines
             cleaned = _adjust_line_count(out_lines, n_lines)
+        elif len(out_lines) < n_lines:
+            # Too few lines: insert missing blank lines using anchors
+            cleaned = _insert_missing_blanks(out_lines, n_lines, ast_hints)
 
         return cleaned
 
@@ -874,6 +878,65 @@ def _adjust_line_count(lines: list[str], target: int) -> str:
     # If still too many lines, truncate as last resort
     if len(result) > target:
         result = result[:target]
+
+    return '\n'.join(result)
+
+
+def _insert_missing_blanks(lines: list[str], target: int,
+                           ast_hints: dict | None = None) -> str:
+    """Insert missing blank lines to reach target line count.
+
+    When the LLM generates fewer lines than expected, it's almost always
+    because it skipped blank separator lines between code blocks.
+
+    Strategy: find positions where a blank line belongs (after closing
+    braces, before function declarations, between logical sections)
+    and insert blanks until we reach target count.
+
+    Language-agnostic: uses structural patterns (closing brace followed
+    by non-blank = missing separator).
+    """
+    if len(lines) >= target:
+        return '\n'.join(lines)
+
+    missing = target - len(lines)
+    result = list(lines)
+
+    # Find insertion points: after } or end-of-block, before new declaration
+    # These are places where blank separators naturally go
+    candidates = []
+    for i in range(len(result) - 1):
+        curr = result[i].strip()
+        next_line = result[i + 1].strip()
+
+        # After closing brace/end, before non-blank non-brace
+        if curr in ('}', 'end', 'end.', 'END', 'END.') and next_line and next_line not in ('}', ')'):
+            candidates.append(i + 1)
+
+        # After return/break before new function/type
+        if curr.startswith(('return ', 'return\t')) and next_line.startswith(('func ', 'def ', 'class ', 'type ', 'fn ', 'pub ')):
+            candidates.append(i + 1)
+
+    # If anchors available, prefer positions that match anchor line numbers
+    if ast_hints and ast_hints.get('anchors'):
+        for anchor_num, anchor_text in ast_hints['anchors']:
+            if anchor_text.strip() == '' and 0 < anchor_num <= len(result) + missing:
+                # This anchor IS a blank line — prioritize inserting here
+                if anchor_num - 1 not in candidates:
+                    candidates.insert(0, min(anchor_num - 1, len(result)))
+
+    # Insert blanks at best candidates (from bottom to top to preserve indices)
+    candidates = sorted(set(candidates), reverse=True)
+    inserted = 0
+    for pos in candidates:
+        if inserted >= missing:
+            break
+        result.insert(pos, '')
+        inserted += 1
+
+    # If still short, insert at end
+    while len(result) < target:
+        result.append('')
 
     return '\n'.join(result)
 
