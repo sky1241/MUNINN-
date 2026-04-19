@@ -793,7 +793,7 @@ def _learn_patterns_from_neighbors(neighbors: list) -> dict:
 
     Works for ANY language because it learns from the code itself.
     """
-    blank_triggers = set()    # stripped line content that precedes a blank
+    blank_triggers = set()    # STRUCTURAL patterns (last char/word) that precede blanks
     continuation_endings = set()  # last char of lines followed by indented continuation
 
     for n in neighbors:
@@ -806,9 +806,11 @@ def _learn_patterns_from_neighbors(neighbors: list) -> dict:
             curr_stripped = curr.strip()
             next_stripped = next_line.strip()
 
-            # Learn blank triggers: what comes before a blank line?
+            # Learn blank triggers: STRUCTURAL pattern of what precedes blank
+            # Store only the last char or last token — not the full line content
             if next_stripped == '' and curr_stripped:
-                blank_triggers.add(curr_stripped)
+                # Last char is the structural signal (}, ), ;, ., etc.)
+                blank_triggers.add(curr_stripped[-1])
 
             # Learn continuation: what ends a line that continues on the next?
             if curr_stripped and next_stripped:
@@ -999,22 +1001,14 @@ def _insert_missing_blanks(lines: list[str], target: int,
     result = list(lines)
 
     # Find insertion points — places where blank separators naturally go.
-    # LEARNED patterns from neighbors take priority over hardcoded keywords.
     # Two priority tiers: block-end boundaries first, then statements.
-    tier_learned = []  # patterns learned from neighbor cubes
-    tier1 = []  # block-end boundaries (fallback)
-    tier2 = []  # statement boundaries (fallback)
-
-    # TIER LEARNED: if neighbors show that "}" is followed by blank, use that
-    blank_triggers = learned.get('blank_triggers', set()) if learned else set()
+    # Keywords are universal per language (}, fi, END-IF, etc.)
+    tier1 = []  # block-end boundaries
+    tier2 = []  # statement boundaries
 
     for i in range(len(result) - 1):
         curr = result[i].strip()
         next_line = result[i + 1].strip()
-
-        # Learned patterns first — this line was followed by blank in neighbors
-        if curr in blank_triggers and next_line:
-            tier_learned.append(i + 1)
 
         # TIER 1: After closing brace/end/END-*, before non-blank non-brace
         is_block_end = (
@@ -1076,12 +1070,9 @@ def _insert_missing_blanks(lines: list[str], target: int,
             if anchor_text.strip() == '' and 0 < anchor_num <= len(result) + missing:
                 tier0.append(min(anchor_num - 1, len(result)))
 
-    # Priority: anchor blanks > LEARNED > block-end > statement
+    # Priority: anchor blanks > block-end > statement
     candidates = []
     for pos in sorted(set(tier0)):
-        if pos not in candidates:
-            candidates.append(pos)
-    for pos in sorted(set(tier_learned)):
         if pos not in candidates:
             candidates.append(pos)
     for pos in sorted(set(tier1)):
