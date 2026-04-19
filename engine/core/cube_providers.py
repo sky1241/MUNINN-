@@ -826,10 +826,17 @@ def _is_continuation(prev_line: str, curr_line: str) -> float:
     if not prev_stripped or not curr_line.strip():
         return 0.0
 
-    # Current line must be indented more than previous
-    prev_indent = len(prev_line) - len(prev_line.lstrip())
-    curr_indent = len(curr_line) - len(curr_line.lstrip())
-    if curr_indent <= prev_indent:
+    # Current line must be indented more than previous (or equal if prev ends with open paren)
+    # Normalize tabs to 4 spaces for comparison (mixed indent files)
+    prev_expanded = prev_line.expandtabs(4)
+    curr_expanded = curr_line.expandtabs(4)
+    prev_indent = len(prev_expanded) - len(prev_expanded.lstrip())
+    curr_indent = len(curr_expanded) - len(curr_expanded.lstrip())
+    # Allow equal indent when prev ends with ( or [ (common in Python, Rust)
+    allow_equal = prev_stripped[-1] in ('(', '[', ',')
+    if curr_indent < prev_indent:
+        return 0.0
+    if curr_indent == prev_indent and not allow_equal:
         return 0.0
 
     last_char = prev_stripped[-1]
