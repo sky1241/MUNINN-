@@ -447,9 +447,9 @@ class FIMReconstructor:
                 _nc = lambda t: t.strip()
         n_lines = len(_nc(cube.content).split('\n'))
 
-        # 2 neighbors each side (not 4) — less noise, better signal
-        prefix = "\n".join(c.content for c in before[-2:]) if before else ""
-        suffix = "\n".join(c.content for c in after[:2]) if after else ""
+        # 4 neighbors each side — tested: more context = better SHA rate
+        prefix = "\n".join(c.content for c in before[-4:]) if before else ""
+        suffix = "\n".join(c.content for c in after[:4]) if after else ""
 
         # Learn patterns from neighbors
         neighbor_patterns = _learn_patterns_from_neighbors(neighbors)
