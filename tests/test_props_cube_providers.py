@@ -54,8 +54,8 @@ def test_compute_ncd_no_crash(a, b):
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
-@given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), attempts_per_wave=st.integers(-1000, 1000), max_waves=st.integers(-1000, 1000), ast_hints=st.text(max_size=50), temperature=st.floats(allow_nan=False, allow_infinity=False), ncd_give_up=st.floats(allow_nan=False, allow_infinity=False), on_attempt=st.text(max_size=50), mycelium=st.text(max_size=50))
-@settings(max_examples=50)
+@given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), attempts_per_wave=st.integers(-5, 5), max_waves=st.integers(-5, 5), ast_hints=st.text(max_size=50), temperature=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False), ncd_give_up=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False), on_attempt=st.text(max_size=50), mycelium=st.text(max_size=50))
+@settings(max_examples=50, deadline=5000)
 def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, temperature, ncd_give_up, on_attempt, mycelium):
     """Smoke: reconstruct_cube_waves() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_cube_waves

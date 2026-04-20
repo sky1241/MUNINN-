@@ -56,10 +56,30 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 - AST hints per-cube in progressive levels (was global None)
 
 ### Results
-- **Full run: 28/80 SHA (35%)** on server.go, Sonnet, 1 call/cube
-- 47/80 under NCD 0.1 (59% near-SHA)
-- Best NCD: 0.030
+- **Full run with anchor forcing: 37/80 SHA (46%)** on server.go, Sonnet, 1 call/cube
+- Previous best (no forcing): 28/80 (35%) — **+9 SHA (+31% improvement)**
+- 25/80 under NCD 0.05 (31% near-perfect)
 - Post-processing offline: 925 cubes, 8 languages, blank 42%, join 60%
+
+### Anchor forcing (2026-04-20)
+After model generates N lines, replace anchor positions (every 2nd line)
+with stored original content. Model only needs to get GAP lines right.
+50% of lines guaranteed byte-exact (like RAID parity).
+- 69/74 cubes (93%) benefit from anchor forcing
+- Language-agnostic: anchors are stored original lines, not patterns
+
+### Mycelium READ+WRITE (2026-04-20)
+_query_mycelium(): spreading activation on cube identifiers to discover
+related concepts from prior reconstructions. Injected in prompt.
+- Tested: no measurable SHA improvement (identifiers already in hints)
+- Pipeline complete: WRITE on SHA match + READ during reconstruction
+
+### Prompt experiments (2026-04-20)
+- v4 (constraints last, 2 neighbors): 24/80 (30%) — worse, reverted
+- v5 (+ style rule): 24/80 (30%) — no improvement, reverted
+- v6 (interleaved anchors): 0/6 — much worse, model can't follow format
+- v3 (original): **best**, restored as default
+- Lesson: more neighbors = better. Prompt structure changes don't help.
 
 ### Prompt experiments (2026-04-20)
 - v3 (original): **28/80 SHA (35%)** — BEST, restored as default
