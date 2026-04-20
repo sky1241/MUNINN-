@@ -467,73 +467,83 @@ class FIMReconstructor:
                     indent_hint = pline[:len(pline) - len(pline.lstrip())]
                     break
 
-        # Build interleaved code block: known lines + <FILL> gaps
-        # Instead of one big <FILL 15 lines>, sandwich each unknown line
-        # between known anchors. The model fills 1 line at a time.
-        try:
-            from cube import normalize_content as _nc2
-        except ImportError:
-            try:
-                from engine.core.cube import normalize_content as _nc2
-            except ImportError:
-                _nc2 = lambda t: t.strip()
-
-        orig_lines = _nc2(cube.content).split('\n')
-
-        # Build anchor map: line_index -> exact line text
-        anchor_map = {}
-        if ast_hints:
-            if ast_hints.get('first_line'):
-                anchor_map[0] = ast_hints['first_line']
-            if ast_hints.get('last_line'):
-                anchor_map[n_lines - 1] = ast_hints['last_line']
-            if ast_hints.get('anchors'):
-                for line_num, line_text in ast_hints['anchors']:
-                    idx = line_num - 1  # 1-indexed to 0-indexed
-                    if 0 <= idx < n_lines:
-                        anchor_map[idx] = line_text
-
-        # Build interleaved block
-        fill_lines = []
-        n_fills = 0
-        for idx in range(n_lines):
-            if idx in anchor_map:
-                fill_lines.append(anchor_map[idx])
-            else:
-                fill_lines.append('<FILL>')
-                n_fills += 1
-        interleaved = '\n'.join(fill_lines)
-
-        # Code block: prefix + interleaved + suffix
+        # Build code block with hole
         code_parts = []
         if prefix:
             code_parts.append(prefix)
-        code_parts.append(interleaved)
+        code_parts.append(f"<FILL {n_lines} lines>")
         if suffix:
             code_parts.append(suffix)
         code_block = "\n".join(code_parts)
 
-        # Compact prompt
+        # Prompt: instructions + hints THEN code block
+        # This is prompt v3 — tested at 28/80 SHA (35%), best result.
         position = ""
         if not prefix:
             position = " (START of file)"
         elif not suffix:
             position = " (END of file)"
-
         prompt_parts = [
-            f"File: {cube.file_origin}{position}",
-            f"Replace each <FILL> with exactly 1 line of {lang} code.",
-            f"Output ALL {n_lines} lines (anchors + fills). No fences.",
+            f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing{position})",
+            f"Write EXACTLY {n_lines} lines. Output ONLY code. No fences. No explanation.",
         ]
 
-        # Identifiers + strings — compact
+        # Indentation constraint
+        if indent_hint:
+            if '\t' in indent_hint:
+                prompt_parts.append("Indentation: tabs")
+            else:
+                prompt_parts.append(f"Indentation: {len(indent_hint)} spaces")
+
+        # Line anchors — first, last, + checkpoints
         if ast_hints:
+            if ast_hints.get('first_line'):
+                prompt_parts.append(f"Line 1: {ast_hints['first_line']}")
+            if ast_hints.get('anchors'):
+                for line_num, line_text in ast_hints['anchors'][:5]:
+                    prompt_parts.append(f"Line {line_num}: {line_text}")
+            if ast_hints.get('last_line'):
+                prompt_parts.append(f"Line {n_lines}: {ast_hints['last_line']}")
+
+            # All identifiers found in the missing code
             if ast_hints.get('identifiers'):
-                prompt_parts.append(f"Identifiers: {', '.join(ast_hints['identifiers'][:25])}")
+                cube_ids = set(ast_hints['identifiers'])
+                prompt_parts.append(f"Identifiers: {', '.join(ast_hints['identifiers'][:30])}")
+
+                # Cross-reference with neighbors
+                neighbor_ids = set()
+                for n in neighbors:
+                    n_text = n.content if hasattr(n, 'content') else ''
+                    n_ids = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', n_text))
+                    neighbor_ids.update(n_ids)
+                shared = sorted(cube_ids & neighbor_ids)
+                if shared:
+                    prompt_parts.append(f"Confirmed by neighbors: {', '.join(shared[:20])}")
+
+            # Structured hints
+            if ast_hints.get('functions'):
+                prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
+            if ast_hints.get('classes'):
+                prompt_parts.append(f"Types: {', '.join(ast_hints['classes'])}")
+            if ast_hints.get('variables'):
+                prompt_parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
+
+            # String literals
             if ast_hints.get('strings'):
-                prompt_parts.append(f"Strings: {', '.join(repr(s) for s in ast_hints['strings'][:10])}")
+                prompt_parts.append(f"Strings: {', '.join(repr(s) for s in ast_hints['strings'][:15])}")
+
+            # Type signatures
             if ast_hints.get('type_sigs'):
-                prompt_parts.append(f"Types: {'; '.join(ast_hints['type_sigs'][:8])}")
+                prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
+
+            # Mycelium-discovered related concepts (from previous reconstructions)
+            if ast_hints.get('mycelium_related'):
+                prompt_parts.append(f"Related (from prior reconstructions): {', '.join(ast_hints['mycelium_related'])}")
+
+        # Previous attempt (if provided)
+        if previous_attempts and previous_attempts[0]:
+            prompt_parts.append("Previous attempt (improve it):")
+            prompt_parts.append(previous_attempts[0])
 
         prompt_parts.append("")
         prompt_parts.append(code_block)
