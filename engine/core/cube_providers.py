@@ -536,6 +536,10 @@ class FIMReconstructor:
             if ast_hints.get('type_sigs'):
                 prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
 
+            # Mycelium-discovered related concepts (from previous reconstructions)
+            if ast_hints.get('mycelium_related'):
+                prompt_parts.append(f"Related (from prior reconstructions): {', '.join(ast_hints['mycelium_related'])}")
+
         # Previous attempt (if provided)
         if previous_attempts and previous_attempts[0]:
             prompt_parts.append("Previous attempt (improve it):")
@@ -655,15 +659,29 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
                      ncd_threshold: float = 0.3,
                      ast_hints: dict | None = None,
                      previous_attempts: list[str] | None = None,
-                     temperature: float = 0.0) -> ReconstructionResult:
+                     temperature: float = 0.0,
+                     mycelium=None) -> ReconstructionResult:
     """
     B16: Reconstruct a cube using its neighbors + LLM.
 
     1. Build prompt from neighbors context + lexicon + AST hints
-    2. Call LLM to reconstruct
-    3. Validate via SHA-256 (B17) and NCD fallback (B19)
-    4. Score perplexity (B18)
+    2. Query mycelium for related patterns (if available)
+    3. Call LLM to reconstruct
+    4. Validate via SHA-256 (B17) and NCD fallback (B19)
+    5. Score perplexity (B18)
     """
+    # Enrich hints with mycelium knowledge (if available)
+    if mycelium is not None and ast_hints and ast_hints.get('identifiers'):
+        myc_hints = _query_mycelium(mycelium, ast_hints['identifiers'])
+        if myc_hints:
+            if ast_hints.get('identifiers'):
+                # Add mycelium-discovered identifiers that aren't in hints yet
+                existing = set(ast_hints['identifiers'])
+                new_ids = [h for h in myc_hints if h not in existing]
+                if new_ids:
+                    ast_hints = dict(ast_hints)  # copy to not mutate
+                    ast_hints['mycelium_related'] = new_ids[:10]
+
     fim = FIMReconstructor(provider)
     reconstruction = fim.reconstruct_with_neighbors(
         cube, neighbors, max_tokens=cube.token_count * 3,
@@ -783,6 +801,32 @@ class LevelResult:
 
 
 # ─── B40: Die-and-retry with waves ─────────────────────────────────────
+
+def _query_mycelium(mycelium, identifiers: list[str]) -> list[str]:
+    """Query mycelium for concepts related to the cube's identifiers.
+
+    Uses spreading activation: seed with cube identifiers, find related
+    concepts the mycelium learned from previous reconstructions.
+    Returns new identifiers not already in the hints.
+    """
+    try:
+        # Use spread_activation for semantic discovery
+        if hasattr(mycelium, 'spread_activation'):
+            related = mycelium.spread_activation(
+                seeds=identifiers[:10], hops=2, decay=0.5, top_n=15
+            )
+            return [concept for concept, _weight in related]
+        # Fallback: get_related per identifier
+        elif hasattr(mycelium, 'get_related'):
+            all_related = set()
+            for ident in identifiers[:5]:
+                related = mycelium.get_related(ident, top_n=3)
+                all_related.update(c for c, _w in related)
+            return sorted(all_related)
+    except Exception:
+        pass
+    return []
+
 
 def _learn_patterns_from_neighbors(neighbors: list) -> dict:
     """Learn blank-line and continuation patterns from neighbor cubes.
@@ -1127,7 +1171,8 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                            ast_hints: dict | None = None,
                            temperature: float = 0.3,
                            ncd_give_up: float = 0.3,
-                           on_attempt: callable = None) -> WaveResult:
+                           on_attempt: callable = None,
+                           mycelium=None) -> WaveResult:
     """
     B40: Annealing reconstruction — 1 wave, variable temperature.
 
@@ -1164,6 +1209,7 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                     ast_hints=ast_hints,
                     previous_attempts=None,
                     temperature=temp,
+                    mycelium=mycelium,
                 )
 
                 if result.ncd_score < best_ncd:
@@ -1282,6 +1328,7 @@ def run_progressive_levels(file_path: str, content: str,
                 max_waves=max_waves,
                 ast_hints=cube_hints,
                 on_attempt=None,
+                mycelium=mycelium,
             )
             heatmap.append(wave_result)
 
