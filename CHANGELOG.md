@@ -61,6 +61,15 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 - 25/80 under NCD 0.05 (31% near-perfect)
 - Post-processing offline: 925 cubes, 8 languages, blank 42%, join 60%
 
+### Keyword filter fix (2026-04-20)
+_KEYWORDS list was too aggressive — filtered language-specific words that
+carry information (defer, bool, interface, mut, pub, struct, enum, etc.)
+alongside true noise (if, else, for, return, true, false).
+
+Reduced from ~80 words to ~25. Only truly universal noise removed.
+Not language-specific: same filter for all languages, no per-language lists.
+Audit showed 7/15 near-SHA cubes had missing identifiers due to over-filtering.
+
 ### Anchor forcing (2026-04-20)
 After model generates N lines, replace anchor positions (every 2nd line)
 with stored original content. Model only needs to get GAP lines right.

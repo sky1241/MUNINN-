@@ -933,23 +933,15 @@ def extract_ast_hints(cube: Cube) -> dict:
         ids = re.findall(r'\b([a-zA-Z_]\w{1,})\b', line)
         all_ids.update(ids)
 
-    # Remove common keywords (universal across languages)
+    # Remove ONLY true noise — words that appear in virtually ALL code blocks
+    # of ANY language. Everything else stays (defer, bool, mut, interface, etc.
+    # carry information — not every block has them).
     _KEYWORDS = {
         'if', 'else', 'for', 'while', 'return', 'break', 'continue',
-        'switch', 'case', 'default', 'try', 'catch', 'finally', 'throw',
+        'switch', 'case', 'default', 'try', 'catch', 'finally',
         'new', 'delete', 'this', 'self', 'true', 'false', 'null', 'nil',
-        'none', 'void', 'int', 'float', 'double', 'string', 'bool',
-        'import', 'from', 'package', 'module', 'include', 'require',
-        'class', 'struct', 'enum', 'interface', 'trait', 'type',
-        'def', 'func', 'function', 'fn', 'fun', 'sub', 'proc',
-        'public', 'private', 'protected', 'internal', 'static',
-        'const', 'let', 'var', 'val', 'mut', 'final', 'readonly',
-        'async', 'await', 'yield', 'defer', 'go', 'chan', 'select',
-        'pub', 'crate', 'mod', 'use', 'impl', 'where', 'match',
-        'elif', 'elsif', 'unless', 'until', 'begin', 'end', 'do',
-        'and', 'or', 'not', 'in', 'is', 'as', 'with', 'pass', 'raise',
-        'extends', 'implements', 'override', 'abstract', 'sealed',
-        'export', 'declare', 'namespace', 'typeof', 'instanceof',
+        'none', 'do', 'then', 'in', 'is', 'as', 'or', 'and', 'not',
+        'from', 'with', 'pass', 'elif', 'elsif',
     }
     identifiers = sorted(all_ids - _KEYWORDS)
     hints['identifiers'] = identifiers[:50]  # cap at 50 to not bloat prompt
