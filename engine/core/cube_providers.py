@@ -454,19 +454,20 @@ class FIMReconstructor:
         # Learn patterns from neighbors
         neighbor_patterns = _learn_patterns_from_neighbors(neighbors)
 
-        # Detect indentation from context
+        # Detect indentation from suffix (first non-empty line)
         indent_hint = ""
-        for ctx in (suffix, prefix):
-            if not ctx:
-                continue
-            for line in (ctx.split('\n') if ctx == suffix else reversed(ctx.split('\n'))):
-                if line and line != line.lstrip():
-                    indent_hint = line[:len(line) - len(line.lstrip())]
+        if suffix:
+            for sline in suffix.split('\n'):
+                if sline and sline != sline.lstrip():
+                    indent_hint = sline[:len(sline) - len(sline.lstrip())]
                     break
-            if indent_hint:
-                break
+        if not indent_hint and prefix:
+            for pline in reversed(prefix.split('\n')):
+                if pline and pline != pline.lstrip():
+                    indent_hint = pline[:len(pline) - len(pline.lstrip())]
+                    break
 
-        # Build code with hole — code FIRST, constraints LAST (recency bias)
+        # Build code block with hole
         code_parts = []
         if prefix:
             code_parts.append(prefix)
@@ -475,63 +476,73 @@ class FIMReconstructor:
             code_parts.append(suffix)
         code_block = "\n".join(code_parts)
 
-        # Position hint
+        # Prompt: instructions + hints THEN code block
+        # This is prompt v3 — tested at 28/80 SHA (35%), best result.
         position = ""
         if not prefix:
-            position = " START"
+            position = " (START of file)"
         elif not suffix:
-            position = " END"
+            position = " (END of file)"
+        prompt_parts = [
+            f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing{position})",
+            f"Write EXACTLY {n_lines} lines. Output ONLY code. No fences. No explanation.",
+        ]
 
-        # Prompt: code block first, then constraints (model reads constraints
-        # right before generating — recency bias, "Lost in the Middle" fix)
-        prompt_parts = [code_block, "", "---"]
-
-        # Compact constraints — all on minimal lines, no redundancy
-        constraint_line = f"{n_lines} lines, {cube.file_origin}:{cube.line_start}-{cube.line_end}{position}"
+        # Indentation constraint
         if indent_hint:
-            indent_desc = "tabs" if '\t' in indent_hint else f"{len(indent_hint)}sp"
-            constraint_line += f", {indent_desc}"
-        prompt_parts.append(constraint_line)
+            if '\t' in indent_hint:
+                prompt_parts.append("Indentation: tabs")
+            else:
+                prompt_parts.append(f"Indentation: {len(indent_hint)} spaces")
 
-        # Anchors — the strongest signal, right before generation
+        # Line anchors — first, last, + checkpoints
         if ast_hints:
-            anchors = []
             if ast_hints.get('first_line'):
-                anchors.append(f"L1:{ast_hints['first_line']}")
+                prompt_parts.append(f"Line 1: {ast_hints['first_line']}")
             if ast_hints.get('anchors'):
-                for ln, lt in ast_hints['anchors'][:7]:
-                    anchors.append(f"L{ln}:{lt}")
+                for line_num, line_text in ast_hints['anchors'][:5]:
+                    prompt_parts.append(f"Line {line_num}: {line_text}")
             if ast_hints.get('last_line'):
-                anchors.append(f"L{n_lines}:{ast_hints['last_line']}")
-            if anchors:
-                prompt_parts.append('\n'.join(anchors))
+                prompt_parts.append(f"Line {n_lines}: {ast_hints['last_line']}")
 
-            # Identifiers + strings + types — one compact block
-            hints_parts = []
-            if ast_hints.get('strings'):
-                hints_parts.append(f"str:{','.join(repr(s) for s in ast_hints['strings'][:10])}")
-            if ast_hints.get('type_sigs'):
-                hints_parts.append(f"types:{';'.join(ast_hints['type_sigs'][:8])}")
+            # All identifiers found in the missing code
             if ast_hints.get('identifiers'):
-                hints_parts.append(f"ids:{','.join(ast_hints['identifiers'][:20])}")
-            if hints_parts:
-                prompt_parts.append(' | '.join(hints_parts))
+                cube_ids = set(ast_hints['identifiers'])
+                prompt_parts.append(f"Identifiers: {', '.join(ast_hints['identifiers'][:30])}")
 
-        # One-line language formatting rule (from lang_lexicons)
-        try:
-            from lang_lexicons import get_lexicon
-        except ImportError:
-            try:
-                from engine.core.lang_lexicons import get_lexicon
-            except ImportError:
-                get_lexicon = lambda x: None
-        lex = get_lexicon(ext.lstrip('.')) if ext else None
-        if lex and 'formatting' in lex:
-            # Just the first 2 formatting rules — enough to constrain style
-            rules = lex['formatting'][:2]
-            prompt_parts.append(f"Style: {'; '.join(rules)}")
+                # Cross-reference with neighbors
+                neighbor_ids = set()
+                for n in neighbors:
+                    n_text = n.content if hasattr(n, 'content') else ''
+                    n_ids = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', n_text))
+                    neighbor_ids.update(n_ids)
+                shared = sorted(cube_ids & neighbor_ids)
+                if shared:
+                    prompt_parts.append(f"Confirmed by neighbors: {', '.join(shared[:20])}")
 
-        prompt_parts.append("Output ONLY the missing code. No fences.")
+            # Structured hints
+            if ast_hints.get('functions'):
+                prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
+            if ast_hints.get('classes'):
+                prompt_parts.append(f"Types: {', '.join(ast_hints['classes'])}")
+            if ast_hints.get('variables'):
+                prompt_parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
+
+            # String literals
+            if ast_hints.get('strings'):
+                prompt_parts.append(f"Strings: {', '.join(repr(s) for s in ast_hints['strings'][:15])}")
+
+            # Type signatures
+            if ast_hints.get('type_sigs'):
+                prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
+
+        # Previous attempt (if provided)
+        if previous_attempts and previous_attempts[0]:
+            prompt_parts.append("Previous attempt (improve it):")
+            prompt_parts.append(previous_attempts[0])
+
+        prompt_parts.append("")
+        prompt_parts.append(code_block)
         prompt = "\n".join(prompt_parts)
 
         # Constrain output to ~1.5x expected size (not 3x)
