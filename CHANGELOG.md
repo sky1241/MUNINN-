@@ -5,11 +5,12 @@ Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 
 ---
 
-## Brick 30 (2026-04-15 to 2026-04-19) — SHA-256 Exact Reconstruction
+## Brick 30 (2026-04-15 to 2026-04-20) — SHA-256 Exact Reconstruction
 
 ### Summary
 First SHA-256 exact match on reconstructed code. LLM (Sonnet) reconstructs
 destroyed Go code byte-for-byte from neighbors + extracted metadata.
+**Best result: 28/80 SHA (35%) on server.go with 1 Sonnet call per cube.**
 2/10 cubes SHA match on first attempt. 33 commits, 6 major fixes.
 
 ### B40: Die-and-retry waves
@@ -55,16 +56,39 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 - AST hints per-cube in progressive levels (was global None)
 
 ### Results
-- SHA-256 EXACT MATCH: 2/10 cubes with Sonnet (cubes 15, 30)
-- Best NCD: 0.040 (cube 30), 0.065 (cube 50), 0.074 (cube 35)
-- Post-processing offline: Python 4/5, Go 5/5, JSX 5/5, Rust 5/5, TS 6/5, C 6/5
-- Haiku progressive levels: best avg NCD=0.266 (level x3)
-- Sonnet progressive levels: best avg NCD=0.196 (level x4)
+- **Full run: 28/80 SHA (35%)** on server.go, Sonnet, 1 call/cube
+- 47/80 under NCD 0.1 (59% near-SHA)
+- Best NCD: 0.030
+- Post-processing offline: 925 cubes, 8 languages, blank 42%, join 60%
+
+### Prompt experiments (2026-04-20)
+- v3 (original): **28/80 SHA (35%)** — BEST, restored as default
+- v4 (constraints last, 2 neighbors): 24/80 (30%) — worse, reverted
+- v5 (+ style rule): 24/80 (30%) — no improvement, reverted
+- Lesson: more neighbors = better. Prompt structure matters less than context.
+
+### Learned patterns
+- `_learn_patterns_from_neighbors()`: scans neighbor code for continuation patterns
+- JOIN improved: Kotlin +22, Python +3, Go +1
+- BLANK triggers from neighbors: caused false positives, disabled
+
+### Multi-language audit (offline, 925 cubes)
+| Language | Blank | Join |
+|----------|-------|------|
+| Python | 40/62 (64%) | 41/62 (66%) |
+| Go | 45/70 (64%) | 45/70 (64%) |
+| JSX | 18/62 (29%) | 25/62 (40%) |
+| Rust | 35/50 (70%) | 26/50 (52%) |
+| TypeScript | 67/161 (42%) | 127/161 (79%) |
+| C | 31/190 (16%) | 156/190 (82%) |
+| COBOL | 29/95 (30%) | 0/95 (0%) |
+| Kotlin | 117/235 (50%) | 140/235 (60%) |
 
 ### Files changed
-- engine/core/cube_providers.py: 652 -> 1244 lines (+592)
+- engine/core/cube_providers.py: 652 -> ~1200 lines
 - engine/core/cube.py: 1052 -> 1132 lines (+80)
 - tests/test_cube_waves.py: NEW (10 tests)
+- tests/test_offline_stress.py: NEW (24 tests)
 - tests/cube_corpus/RESULTS_WAVES.md: NEW
 
 ---
