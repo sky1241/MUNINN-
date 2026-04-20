@@ -594,6 +594,27 @@ class FIMReconstructor:
         else:
             cleaned = '\n'.join(out_lines)
 
+        # Force known anchor lines — replace model output with stored originals
+        # The model only needs to get the GAP lines right. Anchors are guaranteed.
+        if ast_hints:
+            anchor_map = {}
+            if ast_hints.get('first_line'):
+                anchor_map[0] = ast_hints['first_line']
+            if ast_hints.get('last_line'):
+                anchor_map[n_lines - 1] = ast_hints['last_line']
+            if ast_hints.get('anchors'):
+                for line_num, line_text in ast_hints['anchors']:
+                    idx = line_num - 1
+                    if 0 <= idx < n_lines:
+                        anchor_map[idx] = line_text
+
+            if anchor_map:
+                final_lines = cleaned.split('\n')
+                for idx, anchor_text in anchor_map.items():
+                    if idx < len(final_lines):
+                        final_lines[idx] = anchor_text
+                cleaned = '\n'.join(final_lines)
+
         return cleaned
 
 
