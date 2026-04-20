@@ -56,9 +56,11 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 - AST hints per-cube in progressive levels (was global None)
 
 ### Results
-- **Full run with anchor forcing: 37/80 SHA (46%)** on server.go, Sonnet, 1 call/cube
-- Previous best (no forcing): 28/80 (35%) — **+9 SHA (+31% improvement)**
-- 25/80 under NCD 0.05 (31% near-perfect)
+- **L1 with anchor forcing: 37/80 SHA (46%)** on server.go, Sonnet, 1 call/cube
+- **L2 (224 tok): 5/44 SHA (11%)** with mycelium from L1 + anchor forcing
+- **Total L1+L2: 42 SHA on 124 cubes**
+- Previous L1 (no forcing): 28/80 (35%) — anchor forcing = **+9 SHA**
+- Previous L2 (no mycelium): 4/44 (9%) — mycelium + forcing = +1 SHA
 - Post-processing offline: 925 cubes, 8 languages, blank 42%, join 60%
 
 ### Keyword filter fix (2026-04-20)
