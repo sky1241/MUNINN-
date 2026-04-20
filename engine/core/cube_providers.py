@@ -517,6 +517,20 @@ class FIMReconstructor:
             if hints_parts:
                 prompt_parts.append(' | '.join(hints_parts))
 
+        # One-line language formatting rule (from lang_lexicons)
+        try:
+            from lang_lexicons import get_lexicon
+        except ImportError:
+            try:
+                from engine.core.lang_lexicons import get_lexicon
+            except ImportError:
+                get_lexicon = lambda x: None
+        lex = get_lexicon(ext.lstrip('.')) if ext else None
+        if lex and 'formatting' in lex:
+            # Just the first 2 formatting rules — enough to constrain style
+            rules = lex['formatting'][:2]
+            prompt_parts.append(f"Style: {'; '.join(rules)}")
+
         prompt_parts.append("Output ONLY the missing code. No fences.")
         prompt = "\n".join(prompt_parts)
 
