@@ -618,20 +618,24 @@ class FIMReconstructor:
                         anchor_map[idx] = line_text
 
             # Force constant lines — they're DATA, not deducible
+            # Match by POSITION in original content, not by model output
             if ast_hints.get('constant_lines'):
-                final_lines_check = cleaned.split('\n')
+                try:
+                    from cube import normalize_content as _nc_const
+                except ImportError:
+                    try:
+                        from engine.core.cube import normalize_content as _nc_const
+                    except ImportError:
+                        _nc_const = lambda t: t.strip()
+                orig_for_const = _nc_const(cube.content).split('\n')
                 for const_line in ast_hints['constant_lines']:
-                    const_stripped = const_line.strip()
-                    # Find which line index this constant belongs to
-                    for idx in range(min(len(final_lines_check), n_lines)):
+                    # Normalize spaces for comparison (alignment differs)
+                    const_norm = re.sub(r'  +', ' ', const_line.strip())
+                    for idx in range(min(len(orig_for_const), n_lines)):
                         if idx not in anchor_map:
-                            # Check if this gap line SHOULD be this constant
-                            # by matching the variable name
-                            var_match = re.match(r'\s*(\w+)\s*=', const_stripped)
-                            if var_match:
-                                var_name = var_match.group(1)
-                                if var_name in (final_lines_check[idx] if idx < len(final_lines_check) else ''):
-                                    anchor_map[idx] = const_line
+                            orig_norm = re.sub(r'  +', ' ', orig_for_const[idx].strip())
+                            if orig_norm == const_norm:
+                                anchor_map[idx] = orig_for_const[idx]
 
             # Force struct field lines — they contain JSON tags, types, names
             # that are DATA (omitempty, field order, tag format)
