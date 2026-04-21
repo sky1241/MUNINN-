@@ -660,6 +660,7 @@ class MockLLMProvider(LLMProvider):
         return self._responses.get('fim', '# mock FIM result\npass')
 
 
+
 # ─── B16: Moteur de reconstruction ───────────────────────────────────
 
 @dataclass
@@ -793,6 +794,103 @@ def compute_ncd(a: str, b: str) -> float:
 
     ncd = (cab - min(ca, cb)) / max(ca, cb)
     return max(0.0, min(1.0, ncd))  # Clamp to [0, 1]
+
+
+# ─── B42: Line-by-line reconstruction ───────────────────────────────
+
+def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
+                              provider: LLMProvider,
+                              ast_hints: dict | None = None,
+                              mycelium=None) -> ReconstructionResult:
+    """
+    B42: Reconstruct each gap line independently.
+
+    Instead of filling all gaps at once (model loses track),
+    fill ONE gap at a time between two known anchor lines.
+    Each call = 1 line of output. Trivially easy for the model.
+
+    Language-agnostic: works on any code.
+    """
+    try:
+        from cube import normalize_content as _nc
+    except ImportError:
+        try:
+            from engine.core.cube import normalize_content as _nc
+        except ImportError:
+            _nc = lambda t: t.strip()
+
+    orig_lines = _nc(cube.content).split('\n')
+    n_lines = len(orig_lines)
+
+    # Build anchor map
+    anchor_map = {}
+    if ast_hints:
+        if ast_hints.get('first_line'):
+            anchor_map[0] = ast_hints['first_line']
+        if ast_hints.get('last_line'):
+            anchor_map[n_lines - 1] = ast_hints['last_line']
+        if ast_hints.get('anchors'):
+            for line_num, line_text in ast_hints['anchors']:
+                idx = line_num - 1
+                if 0 <= idx < n_lines:
+                    anchor_map[idx] = line_text
+
+    # Sort neighbors by line position
+    same_file = [n for n in neighbors if n.file_origin == cube.file_origin]
+    before = sorted([n for n in same_file if n.line_end <= cube.line_start],
+                    key=lambda c: c.line_start)
+    after = sorted([n for n in same_file if n.line_start >= cube.line_end],
+                   key=lambda c: c.line_start)
+
+    # Context for edge gaps
+    context_before = "\n".join(c.content for c in before[-2:]) if before else ""
+    context_after = "\n".join(c.content for c in after[:2]) if after else ""
+
+    # Build result: anchors forced, gaps filled one by one
+    result_lines = [''] * n_lines
+    for idx in range(n_lines):
+        if idx in anchor_map:
+            result_lines[idx] = anchor_map[idx]
+            continue
+
+        # Get surrounding lines (already filled anchors or previous gaps)
+        line_before = result_lines[idx - 1] if idx > 0 else (
+            context_before.split('\n')[-1] if context_before else '')
+        line_after = anchor_map.get(idx + 1, '') if idx + 1 < n_lines else (
+            context_after.split('\n')[0] if context_after else '')
+
+        # Compact prompt
+        prompt = f"{line_before}\n<FILL 1 line>\n{line_after}\nWrite the 1 missing line. Output ONLY code, no fences."
+
+        if ast_hints and ast_hints.get('identifiers'):
+            prompt += f"\nUse: {', '.join(ast_hints['identifiers'][:15])}"
+
+        try:
+            raw = provider.generate(prompt, max_tokens=100, temperature=0.0)
+            cleaned = raw.strip()
+            if '\n' in cleaned:
+                cleaned = cleaned.split('\n')[0]
+            if cleaned.startswith('```'):
+                cleaned = cleaned.lstrip('`').strip()
+            result_lines[idx] = cleaned
+        except Exception:
+            result_lines[idx] = ''
+
+    reconstruction = '\n'.join(result_lines)
+    recon_sha = sha256_hash(reconstruction)
+    exact_match = (recon_sha == cube.sha256)
+    ncd = compute_ncd(cube.content, reconstruction)
+
+    return ReconstructionResult(
+        cube_id=cube.id,
+        original_sha256=cube.sha256,
+        reconstruction=reconstruction,
+        reconstruction_sha256=recon_sha,
+        exact_match=exact_match,
+        ncd_score=ncd,
+        perplexity=0.0,
+        success=exact_match,
+    )
 
 
 # ─── B40: Wave result ──────────────────────────────────────────────────
