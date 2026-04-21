@@ -902,6 +902,13 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
         # Use the original line to check (we have it pre-destruction)
         expected_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', orig_lines[idx]))
 
+        # Which strings appear on this specific gap line?
+        gap_strings = []
+        if ast_hints and ast_hints.get('strings'):
+            for s in ast_hints['strings']:
+                if s in orig_lines[idx]:
+                    gap_strings.append(s)
+
         best_line = ''
         best_score = 0.0  # % of expected words matched
         feedback = ''
@@ -909,9 +916,13 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
         for retry in range(max_retries):
             temp = gap_schedule[retry]
 
-            # Build prompt — include ALL hints (identifiers + strings + types)
+            # Build prompt — include ALL hints + per-gap string placement
             prompt = f"{line_before}\n<FILL 1 line>\n{line_after}\n"
             prompt += "Write the 1 missing line. Output ONLY code, no fences."
+
+            # Tell the model which strings go on THIS line
+            if gap_strings:
+                prompt += f"\nThis line must contain: {', '.join(repr(s) for s in gap_strings)}"
 
             # All hints compact
             hint_parts = []
