@@ -917,14 +917,45 @@ def extract_ast_hints(cube: Cube) -> dict:
     if non_empty:
         hints['first_line'] = non_empty[0]
         hints['last_line'] = non_empty[-1]
-    # Intermediate anchors — use REAL line numbers (counting blanks)
-    # Every 3rd line = ~70% coverage. Enough for SHA without bloating prompt.
+    # RAID adaptatif: anchor density based on cube complexity.
+    # Simple code (assignments, returns) → every 3rd line (33% stored)
+    # Complex code (branches, loops, atomics) → every 1.5 lines (66% stored)
+    # More complexity = more parity = more SHA match chance.
+    complexity = 0
+    for line in lines:
+        s = line.strip()
+        if s.startswith(('if ', 'for ', 'switch ', 'select ', 'case ')):
+            complexity += 2
+        elif s.startswith(('func ', 'def ', 'class ', 'type ')):
+            complexity += 1
+        elif 'atomic.' in s or 'sync.' in s or 'chan ' in s:
+            complexity += 2
+        elif '<<' in s or '>>' in s:
+            complexity += 1
+
+    # Decide anchor interval
+    if complexity >= 8 or len(lines) > 20:
+        interval = 1  # anchor EVERY line for complex cubes (except gaps from interval)
+        # Actually: store 3 out of 4 lines
+        anchor_mod = 4  # every line EXCEPT every 4th
+    elif complexity >= 4:
+        interval = 2  # every 2nd line
+        anchor_mod = 2
+    else:
+        interval = 3  # every 3rd line for simple cubes
+        anchor_mod = 3
+
     anchors = []
     for idx, line in enumerate(lines):
         if idx == 0 or idx == len(lines) - 1:
             continue  # first/last already covered
-        if (idx + 1) % 2 == 0:  # every 2nd line — error correction parity
-            anchors.append((idx + 1, line))
+        if anchor_mod == 4:
+            # Store 3 out of 4: skip every 4th
+            if (idx + 1) % 4 != 0:
+                anchors.append((idx + 1, line))
+        else:
+            if (idx + 1) % anchor_mod == 0:
+                anchors.append((idx + 1, line))
     hints['anchors'] = anchors
 
     # Detect indentation from first indented line
