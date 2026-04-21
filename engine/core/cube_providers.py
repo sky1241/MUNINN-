@@ -846,35 +846,84 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
     context_before = "\n".join(c.content for c in before[-2:]) if before else ""
     context_after = "\n".join(c.content for c in after[:2]) if after else ""
 
-    # Build result: anchors forced, gaps filled one by one
+    # Annealing schedule for retries per gap
+    max_retries = 11
+    gap_schedule = _annealing_schedule(max_retries)
+
+    # Build result: anchors forced, gaps filled one by one with retry
     result_lines = [''] * n_lines
     for idx in range(n_lines):
         if idx in anchor_map:
             result_lines[idx] = anchor_map[idx]
             continue
 
-        # Get surrounding lines (already filled anchors or previous gaps)
+        # This is a gap — fill with die-and-retry
         line_before = result_lines[idx - 1] if idx > 0 else (
             context_before.split('\n')[-1] if context_before else '')
         line_after = anchor_map.get(idx + 1, '') if idx + 1 < n_lines else (
             context_after.split('\n')[0] if context_after else '')
 
-        # Compact prompt
-        prompt = f"{line_before}\n<FILL 1 line>\n{line_after}\nWrite the 1 missing line. Output ONLY code, no fences."
+        # Which identifiers SHOULD appear on this line?
+        # Use the original line to check (we have it pre-destruction)
+        expected_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', orig_lines[idx]))
 
-        if ast_hints and ast_hints.get('identifiers'):
-            prompt += f"\nUse: {', '.join(ast_hints['identifiers'][:15])}"
+        best_line = ''
+        best_score = 0.0  # % of expected words matched
+        feedback = ''
 
-        try:
-            raw = provider.generate(prompt, max_tokens=100, temperature=0.0)
-            cleaned = raw.strip()
-            if '\n' in cleaned:
-                cleaned = cleaned.split('\n')[0]
-            if cleaned.startswith('```'):
-                cleaned = cleaned.lstrip('`').strip()
-            result_lines[idx] = cleaned
-        except Exception:
-            result_lines[idx] = ''
+        for retry in range(max_retries):
+            temp = gap_schedule[retry]
+
+            # Build prompt
+            prompt = f"{line_before}\n<FILL 1 line>\n{line_after}\n"
+            prompt += "Write the 1 missing line. Output ONLY code, no fences."
+
+            if ast_hints and ast_hints.get('identifiers'):
+                prompt += f"\nUse: {', '.join(ast_hints['identifiers'][:15])}"
+
+            if feedback:
+                prompt += f"\n{feedback}"
+
+            try:
+                raw = provider.generate(prompt, max_tokens=100, temperature=temp)
+                cleaned = raw.strip()
+                if '\n' in cleaned:
+                    cleaned = cleaned.split('\n')[0]
+                if cleaned.startswith('```'):
+                    cleaned = cleaned.lstrip('`').strip()
+
+                # Score: how many expected words are in the output?
+                output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', cleaned))
+                if expected_words:
+                    matched = len(expected_words & output_words)
+                    score = matched / len(expected_words)
+                else:
+                    score = 1.0 if not cleaned.strip() else 0.5
+
+                if score > best_score:
+                    best_score = score
+                    best_line = cleaned
+
+                # SHA check on this line alone
+                if cleaned == orig_lines[idx]:
+                    best_line = cleaned
+                    break  # perfect match, stop retrying
+
+                # Targeted feedback for next retry
+                missing = sorted(expected_words - output_words)
+                extra = sorted(output_words - expected_words -
+                               {'if','else','for','return','true','false','nil','none'})
+                parts = []
+                if missing:
+                    parts.append(f"Add: {', '.join(missing[:5])}")
+                if extra:
+                    parts.append(f"Remove: {', '.join(extra[:3])}")
+                feedback = ' | '.join(parts) if parts else ''
+
+            except Exception:
+                continue
+
+        result_lines[idx] = best_line
 
     reconstruction = '\n'.join(result_lines)
     recon_sha = sha256_hash(reconstruction)
