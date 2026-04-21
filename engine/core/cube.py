@@ -329,7 +329,22 @@ def normalize_content(text: str) -> str:
         else:
             result.append(line)
             prev_blank = False
-    return '\n'.join(result)
+    # Collapse multiple spaces WITHIN lines (not indentation)
+    # "requestCount:   make(...)" → "requestCount: make(...)"
+    # Indentation (leading whitespace) is preserved — it's structure.
+    # Mid-line alignment spaces are visual noise — same code either way.
+    import re
+    normalized = []
+    for line in result:
+        if not line:
+            normalized.append(line)
+            continue
+        indent = len(line) - len(line.lstrip())
+        indent_str = line[:indent]
+        code_part = line[indent:]
+        code_part = re.sub(r'  +', ' ', code_part)
+        normalized.append(indent_str + code_part)
+    return '\n'.join(normalized)
 
 
 def sha256_hash(text: str) -> str:
