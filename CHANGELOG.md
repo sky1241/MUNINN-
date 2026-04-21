@@ -63,13 +63,27 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 - Previous L2 (no mycelium): 4/44 (9%) — mycelium + forcing = +1 SHA
 - Post-processing offline: 925 cubes, 8 languages, blank 42%, join 60%
 
-### Keyword filter fix (2026-04-20)
-_KEYWORDS list was too aggressive — filtered language-specific words that
-carry information (defer, bool, interface, mut, pub, struct, enum, etc.)
-alongside true noise (if, else, for, return, true, false).
+### 5 targeted fixes (2026-04-21)
+Audit of all 43 failed cubes → 6 categories of problems → 5 fixes:
 
-Reduced from ~80 words to ~25. Only truly universal noise removed.
-Not language-specific: same filter for all languages, no per-language lists.
+1. **Import deduction**: scan full file for `pkg.Symbol` usage, cross-ref with
+   explicit import statements. 20 packages detected on server.go, zero false positives.
+2. **Constant forcing**: lines with `= <number>` or `= <number> * expr` stored as
+   anchors. DATA not deducible (WriteTimeout = 30, not guessable).
+3. **Per-gap string placement**: in line-by-line mode, each gap prompt says
+   "This line must contain: 'user not found'" — extracted from original.
+4. **RAID adaptatif**: anchor density based on cube complexity.
+   Simple code: 33% anchors. Complex code (branches/atomics): 75% anchors.
+   Cube 13 (circuit breaker): 14 gaps → 6 gaps. Probability: 23% → 53%.
+5. **Struct field forcing**: lines with backtick tags (json:, xml:, yaml:) forced
+   as anchors. Tags contain developer choices (omitempty, field order).
+
+### Other improvements (2026-04-20/21)
+- Aggressive normalization: collapse mid-line alignment spaces before SHA
+- Targeted feedback in die-and-retry: Add/Remove/lines/NCD score
+- B42 reconstruct_line_by_line: 1 API call per gap (backup mode)
+- Mycelium READ+WRITE wired in full pipeline
+- Keyword filter: 80 → 36 words (keep language-specific identifiers)
 Audit showed 7/15 near-SHA cubes had missing identifiers due to over-filtering.
 
 ### Anchor forcing (2026-04-20)
