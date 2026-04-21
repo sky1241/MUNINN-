@@ -1214,21 +1214,25 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
     best_ncd = 1.0
     best_reconstruction = ""
     total_attempts = 0
+    missing_feedback = None  # targeted feedback: "you forgot these words"
 
     for wave in range(1, max_waves + 1):
         for attempt in range(1, n + 1):
             total_attempts += 1
             temp = schedule[attempt - 1] if attempt <= len(schedule) else temperature
 
-            # Pure Best-of-N: each attempt is independent (no memory injection)
-            # Data shows memory (positive or negative) makes results WORSE.
-            # Best NCD is always attempt 1 (no context pollution).
+            # Targeted feedback: not "here's your wrong code" but
+            # "you forgot these specific words". Language-agnostic.
+            feedback = None
+            if missing_feedback:
+                feedback = [f"Missing from your output: {', '.join(missing_feedback)}"]
+
             try:
                 result = reconstruct_cube(
                     cube, neighbors, provider,
                     ncd_threshold=0.0,
                     ast_hints=ast_hints,
-                    previous_attempts=None,
+                    previous_attempts=feedback,
                     temperature=temp,
                     mycelium=mycelium,
                 )
@@ -1250,6 +1254,14 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                         best_ncd=result.ncd_score,
                         best_reconstruction=result.reconstruction,
                     )
+
+                # Targeted feedback: find identifiers missing from output
+                if ast_hints and ast_hints.get('identifiers'):
+                    output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b',
+                                                   result.reconstruction))
+                    expected = set(ast_hints['identifiers'])
+                    missing = sorted(expected - output_words)
+                    missing_feedback = missing[:10] if missing else None
 
             except Exception:
                 if on_attempt:
