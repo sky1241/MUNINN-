@@ -895,7 +895,9 @@ def extract_ast_hints(cube: Cube) -> dict:
     hardcoded patterns per language.
     """
     content = cube.content
-    lines = content.split('\n')
+    # Use NORMALIZED lines for anchors — must match what SHA is computed on
+    _nc_lines = normalize_content(content).split('\n')
+    lines = _nc_lines  # anchors index into normalized content
     non_empty = [l for l in lines if l.strip()]
     hints = {
         'functions': [],
