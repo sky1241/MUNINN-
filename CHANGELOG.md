@@ -55,13 +55,37 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 - normalize_content import not guarded with fallback
 - AST hints per-cube in progressive levels (was global None)
 
-### Results
-- **L1 with anchor forcing: 37/80 SHA (46%)** on server.go, Sonnet, 1 call/cube
-- **L2 (224 tok): 5/44 SHA (11%)** with mycelium from L1 + anchor forcing
-- **Total L1+L2: 42 SHA on 124 cubes**
-- Previous L1 (no forcing): 28/80 (35%) — anchor forcing = **+9 SHA**
-- Previous L2 (no mycelium): 4/44 (9%) — mycelium + forcing = +1 SHA
-- Post-processing offline: 925 cubes, 8 languages, blank 42%, join 60%
+### Results — progression on server.go L1 (80 cubes, Sonnet)
+| Run | SHA | % | What changed |
+|-----|-----|---|---|
+| Baseline (single pass) | 28/80 | 35% | First SHA match ever |
+| + Anchor forcing | 37/80 | 46% | +9 SHA |
+| + 5 fixes + constant bug fix | 48/80 | 60% | +11 SHA |
+| + **CRITICAL: anchor normalization fix** | **54/80** | **67.5%** | +6 SHA |
+
+**Final L1: 54/80 SHA (67.5%)** on server.go, Sonnet, 1 call/cube + die-and-retry (11 attempts)
+
+26 cubes remaining without SHA:
+- 6 quasi-SHA (NCD < 0.1): formatting diffs, blank lines, line wrapping
+- 15 close (NCD 0.1-0.2): 1-2 lines wrong in complex logic
+- 5 far (NCD > 0.2): many gaps, complex expressions
+
+### Critical bug fix (2026-04-21)
+**extract_ast_hints used RAW content lines but anchors are compared against
+NORMALIZED content.** Cubes with blank lines at start/end had ALL anchors
+offset by 1-2 positions — forcing WRONG lines into the reconstruction.
+
+Example: cube 3 (struct User) had 0 real gaps but NCD=0.457 because
+anchor at raw index 2 (ID field) was placed at normalized index 2
+(Email field). Every anchor mismatched.
+
+Fix: extract_ast_hints now uses normalize_content() for line extraction.
+Impact: immediate +6 SHA, cube 3 went from NCD=0.457 to SHA match.
+
+### Constant forcing bug fix (2026-04-21)
+Constant lines had alignment spaces in raw content but normalize_content
+collapsed them. Comparison failed → constants never forced.
+Fix: normalize spaces on both sides before comparing.
 
 ### 5 targeted fixes (2026-04-21)
 Audit of all 43 failed cubes → 6 categories of problems → 5 fixes:
