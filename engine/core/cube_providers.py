@@ -633,6 +633,23 @@ class FIMReconstructor:
                                 if var_name in (final_lines_check[idx] if idx < len(final_lines_check) else ''):
                                     anchor_map[idx] = const_line
 
+            # Force struct field lines — they contain JSON tags, types, names
+            # that are DATA (omitempty, field order, tag format)
+            try:
+                from cube import normalize_content as _nc_sf
+            except ImportError:
+                try:
+                    from engine.core.cube import normalize_content as _nc_sf
+                except ImportError:
+                    _nc_sf = lambda t: t.strip()
+            orig_lines_sf = _nc_sf(cube.content).split('\n')
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    line = orig_lines_sf[idx]
+                    # Struct field: has backtick tag OR type signature pattern
+                    if '`' in line and ('json:' in line or 'xml:' in line or 'yaml:' in line or 'db:' in line):
+                        anchor_map[idx] = line
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
