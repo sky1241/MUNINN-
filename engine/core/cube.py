@@ -347,10 +347,58 @@ def normalize_content(text: str) -> str:
     return '\n'.join(normalized)
 
 
-def sha256_hash(text: str) -> str:
-    """B5: SHA-256 hash of normalized content."""
-    normalized = normalize_content(text)
-    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+def format_code(text: str, file_path: str = '') -> str:
+    """Format code using the language's standard formatter.
+
+    gofmt (Go), black (Python), rustfmt (Rust), prettier (JS/TS).
+    Falls back to normalize_content if formatter not available.
+    Both original and reconstruction get the same treatment → SHA match.
+    """
+    import subprocess, tempfile, os
+
+    ext = os.path.splitext(file_path)[1].lower() if file_path else ''
+
+    formatters = {
+        '.go': ['gofmt'],
+        '.py': ['python', '-m', 'black', '--quiet', '-'],
+        '.rs': ['rustfmt'],
+        '.js': ['prettier', '--parser', 'babel', '--stdin-filepath', 'x.js'],
+        '.jsx': ['prettier', '--parser', 'babel', '--stdin-filepath', 'x.jsx'],
+        '.ts': ['prettier', '--parser', 'typescript', '--stdin-filepath', 'x.ts'],
+        '.tsx': ['prettier', '--parser', 'typescript', '--stdin-filepath', 'x.tsx'],
+    }
+
+    cmd = formatters.get(ext)
+    if cmd:
+        try:
+            # For gofmt/rustfmt: write to temp file, format in place
+            if ext in ('.go', '.rs'):
+                tmp = tempfile.NamedTemporaryFile(mode='w', suffix=ext,
+                                                   delete=False, encoding='utf-8')
+                tmp.write(text)
+                tmp.close()
+                subprocess.run(cmd + [tmp.name], capture_output=True, timeout=10)
+                with open(tmp.name, 'r', encoding='utf-8') as f:
+                    formatted = f.read()
+                os.unlink(tmp.name)
+                return normalize_content(formatted)
+            else:
+                # For black/prettier: pipe via stdin
+                result = subprocess.run(cmd, input=text, capture_output=True,
+                                         text=True, timeout=10)
+                if result.returncode == 0 and result.stdout:
+                    return normalize_content(result.stdout)
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass  # formatter not installed, fall through
+
+    # Fallback: our own normalization
+    return normalize_content(text)
+
+
+def sha256_hash(text: str, file_path: str = '') -> str:
+    """B5: SHA-256 hash of formatted + normalized content."""
+    formatted = format_code(text, file_path)
+    return hashlib.sha256(formatted.encode('utf-8')).hexdigest()
 
 
 # ─── B4: Subdivision engine ───────────────────────────────────────────
