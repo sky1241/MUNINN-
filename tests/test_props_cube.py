@@ -66,6 +66,26 @@ def test_extract_ast_hints_no_crash(cube):
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
+@given(full_content=st.text(max_size=100))
+@settings(max_examples=50)
+def test_deduce_imports_from_file_no_crash(full_content):
+    """Smoke: deduce_imports_from_file() does not crash on arbitrary input"""
+    # from engine.core.cube import deduce_imports_from_file
+    try:
+        deduce_imports_from_file(full_content)
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+        pass  # Expected rejections are OK
+
+@given(hints=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10), full_content=st.text(max_size=100), all_cubes=st.lists(st.integers(), max_size=20))
+@settings(max_examples=50)
+def test_enrich_hints_with_file_context_no_crash(hints, full_content, all_cubes):
+    """Smoke: enrich_hints_with_file_context() does not crash on arbitrary input"""
+    # from engine.core.cube import enrich_hints_with_file_context
+    try:
+        enrich_hints_with_file_context(hints, full_content, all_cubes)
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+        pass  # Expected rejections are OK
+
 @given(cubes=st.text(max_size=50))
 @settings(max_examples=50)
 def test_extract_all_ast_hints_no_crash(cubes):

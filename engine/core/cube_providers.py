@@ -536,6 +536,15 @@ class FIMReconstructor:
             if ast_hints.get('type_sigs'):
                 prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
 
+            # Deduced imports (from scanning the full file)
+            if ast_hints.get('deduced_imports'):
+                prompt_parts.append(f"Packages used in file: {', '.join(ast_hints['deduced_imports'][:20])}")
+
+            # Constant lines (exact values that can't be guessed)
+            if ast_hints.get('constant_lines'):
+                for cl in ast_hints['constant_lines'][:5]:
+                    prompt_parts.append(f"Constant: {cl.strip()}")
+
             # Mycelium-discovered related concepts (from previous reconstructions)
             if ast_hints.get('mycelium_related'):
                 prompt_parts.append(f"Related (from prior reconstructions): {', '.join(ast_hints['mycelium_related'])}")
@@ -899,6 +908,11 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
                     hint_parts.append(f"types: {'; '.join(ast_hints['type_sigs'][:5])}")
                 if ast_hints.get('mycelium_related'):
                     hint_parts.append(f"related: {', '.join(ast_hints['mycelium_related'][:5])}")
+                if ast_hints.get('deduced_imports'):
+                    hint_parts.append(f"pkgs: {', '.join(ast_hints['deduced_imports'][:10])}")
+                if ast_hints.get('constant_lines'):
+                    for cl in ast_hints['constant_lines'][:3]:
+                        hint_parts.append(f"const: {cl.strip()}")
             if hint_parts:
                 prompt += "\n" + " | ".join(hint_parts)
 

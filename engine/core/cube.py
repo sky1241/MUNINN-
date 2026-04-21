@@ -1049,6 +1049,91 @@ def extract_ast_hints(cube: Cube) -> dict:
     return hints
 
 
+def deduce_imports_from_file(full_content: str) -> list[str]:
+    """Deduce which imports/packages are used in a file by scanning for usage.
+
+    Language-agnostic: detects `pkg.Symbol` patterns (Go, Python, Java, etc.)
+    and returns the package prefixes found.
+
+    Used to reconstruct import blocks that can't be guessed from context alone.
+    """
+    import re
+    # Find all `word.Word` patterns (package.Symbol usage)
+    # Go: fmt.Sprintf, time.Now, http.Handler
+    # Python: os.path, json.loads
+    # Java: System.out, Arrays.sort
+    usages = re.findall(r'\b([a-z][a-zA-Z0-9_]*)\.[A-Z]\w*', full_content)
+
+    # Count frequency — real packages appear multiple times
+    from collections import Counter
+    counts = Counter(usages)
+
+    # Also scan for explicit import statements to confirm packages
+    # Go: import "fmt" / import ( "fmt" )
+    # Python: import os / from os import path
+    explicit = set()
+    for m in re.finditer(r'import\s+"([^"]+)"', full_content):
+        pkg = m.group(1).split('/')[-1]  # "crypto/tls" -> "tls"
+        explicit.add(pkg)
+    for m in re.finditer(r'^\s*"([^"]+)"\s*$', full_content, re.MULTILINE):
+        pkg = m.group(1).split('/')[-1]
+        explicit.add(pkg)
+    for m in re.finditer(r'^(?:import|from)\s+(\w+)', full_content, re.MULTILINE):
+        explicit.add(m.group(1))
+
+    # If we found explicit imports, use those (reliable)
+    # Otherwise fall back to usage-based detection (less reliable)
+    if explicit:
+        # Confirm with usage: only keep packages actually used
+        packages = sorted(pkg for pkg in explicit if counts.get(pkg, 0) >= 1)
+        if packages:
+            return packages
+
+    # Fallback: usage-based, strict filter
+    _VAR_NAMES = {'err', 'ctx', 'req', 'res', 'conn', 'db', 'tx', 'rw',
+                  'mu', 'wg', 'ch', 'buf', 'msg', 'cfg', 'srv', 'mux',
+                  'r', 'w', 's', 'p', 'n', 'i', 'j', 'k', 'v', 'e', 'f'}
+    packages = sorted(
+        pkg for pkg, count in counts.items()
+        if count >= 3 and pkg not in _VAR_NAMES and len(pkg) >= 3
+    )
+
+    return packages
+
+
+def enrich_hints_with_file_context(hints: dict, full_content: str,
+                                     all_cubes: list = None) -> dict:
+    """Enrich cube hints with file-level context.
+
+    Adds:
+    - deduced_imports: packages used in the file (for import block reconstruction)
+    - constant_lines: assignment lines with literal values (for constant blocks)
+
+    Called AFTER extract_ast_hints, adds cross-cube intelligence.
+    """
+    import re
+    hints = dict(hints)  # copy
+
+    # Deduce imports from full file
+    hints['deduced_imports'] = deduce_imports_from_file(full_content)
+
+    # Detect constant/config lines in THIS cube's content
+    # Lines with `= <number>` or `= <number> * <expr>` or `= <number> << <number>`
+    const_lines = []
+    content = hints.get('_raw_content', '')
+    if not content and all_cubes:
+        content = ''  # fallback
+    for line in content.split('\n') if content else []:
+        stripped = line.strip()
+        if re.match(r'[A-Za-z_]\w*\s*=\s*\d', stripped):
+            const_lines.append(line)
+        elif re.match(r'[A-Za-z_]\w*\s*=\s*"', stripped):
+            const_lines.append(line)
+    hints['constant_lines'] = const_lines
+
+    return hints
+
+
 def extract_all_ast_hints(cubes: list[Cube]) -> dict[str, dict]:
     """Extract AST hints for all cubes. Returns {cube_id: hints}."""
     return {cube.id: extract_ast_hints(cube) for cube in cubes}
