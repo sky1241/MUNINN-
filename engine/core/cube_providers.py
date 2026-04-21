@@ -617,6 +617,22 @@ class FIMReconstructor:
                     if 0 <= idx < n_lines:
                         anchor_map[idx] = line_text
 
+            # Force constant lines — they're DATA, not deducible
+            if ast_hints.get('constant_lines'):
+                final_lines_check = cleaned.split('\n')
+                for const_line in ast_hints['constant_lines']:
+                    const_stripped = const_line.strip()
+                    # Find which line index this constant belongs to
+                    for idx in range(min(len(final_lines_check), n_lines)):
+                        if idx not in anchor_map:
+                            # Check if this gap line SHOULD be this constant
+                            # by matching the variable name
+                            var_match = re.match(r'\s*(\w+)\s*=', const_stripped)
+                            if var_match:
+                                var_name = var_match.group(1)
+                                if var_name in (final_lines_check[idx] if idx < len(final_lines_check) else ''):
+                                    anchor_map[idx] = const_line
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
