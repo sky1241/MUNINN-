@@ -1214,18 +1214,28 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
     best_ncd = 1.0
     best_reconstruction = ""
     total_attempts = 0
-    missing_feedback = None  # targeted feedback: "you forgot these words"
+    missing_feedback = None   # "Add: defer, bool"
+    extra_feedback = None     # "Remove: wrongFunc"
+    lines_feedback = None     # "16 lines -> need 14"
+    ncd_feedback = None       # "93% correct, small fix"
 
     for wave in range(1, max_waves + 1):
         for attempt in range(1, n + 1):
             total_attempts += 1
             temp = schedule[attempt - 1] if attempt <= len(schedule) else temperature
 
-            # Targeted feedback: not "here's your wrong code" but
-            # "you forgot these specific words". Language-agnostic.
-            feedback = None
+            # Targeted feedback: tell model exactly what's wrong.
+            # Not "here's your wrong code" but specific actionable fixes.
+            feedback_parts = []
             if missing_feedback:
-                feedback = [f"Missing from your output: {', '.join(missing_feedback)}"]
+                feedback_parts.append(f"Add: {', '.join(missing_feedback)}")
+            if extra_feedback:
+                feedback_parts.append(f"Remove: {', '.join(extra_feedback)}")
+            if lines_feedback:
+                feedback_parts.append(lines_feedback)
+            if ncd_feedback:
+                feedback_parts.append(ncd_feedback)
+            feedback = [' | '.join(feedback_parts)] if feedback_parts else None
 
             try:
                 result = reconstruct_cube(
@@ -1255,13 +1265,50 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                         best_reconstruction=result.reconstruction,
                     )
 
-                # Targeted feedback: find identifiers missing from output
+                # Targeted feedback: 3 specific signals
+                output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b',
+                                               result.reconstruction))
+
+                # 1. Missing identifiers
                 if ast_hints and ast_hints.get('identifiers'):
-                    output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b',
-                                                   result.reconstruction))
                     expected = set(ast_hints['identifiers'])
                     missing = sorted(expected - output_words)
                     missing_feedback = missing[:10] if missing else None
+
+                    # 2. Extra identifiers (hallucinated words)
+                    extra = sorted(output_words - expected - {
+                        'if','else','for','while','return','break','continue',
+                        'true','false','null','nil','none','self','this',
+                    })
+                    # Only flag extras that are suspiciously wrong (not in neighbors)
+                    neighbor_words = set()
+                    for nb in neighbors:
+                        nb_text = nb.content if hasattr(nb, 'content') else ''
+                        neighbor_words.update(re.findall(r'\b([a-zA-Z_]\w{1,})\b', nb_text))
+                    real_extra = sorted(extra - neighbor_words)
+                    extra_feedback = real_extra[:5] if real_extra else None
+
+                # 3. Line count
+                try:
+                    from cube import normalize_content as _nc3
+                except ImportError:
+                    try:
+                        from engine.core.cube import normalize_content as _nc3
+                    except ImportError:
+                        _nc3 = lambda t: t.strip()
+                expected_lines = len(_nc3(cube.content).split('\n'))
+                actual_lines = len(result.reconstruction.split('\n'))
+                if actual_lines != expected_lines:
+                    lines_feedback = f"{actual_lines} lines, need {expected_lines}"
+                else:
+                    lines_feedback = None
+
+                # 4. NCD proximity
+                pct = int((1 - result.ncd_score) * 100)
+                if pct >= 80:
+                    ncd_feedback = f"{pct}% match, small fix needed"
+                else:
+                    ncd_feedback = None
 
             except Exception:
                 if on_attempt:
