@@ -822,6 +822,16 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
     orig_lines = _nc(cube.content).split('\n')
     n_lines = len(orig_lines)
 
+    # Enrich hints with mycelium (same as reconstruct_cube)
+    if mycelium is not None and ast_hints and ast_hints.get('identifiers'):
+        myc_hints = _query_mycelium(mycelium, ast_hints['identifiers'])
+        if myc_hints:
+            existing = set(ast_hints.get('identifiers', []))
+            new_ids = [h for h in myc_hints if h not in existing]
+            if new_ids:
+                ast_hints = dict(ast_hints)
+                ast_hints['mycelium_related'] = new_ids[:10]
+
     # Build anchor map
     anchor_map = {}
     if ast_hints:
@@ -874,12 +884,23 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
         for retry in range(max_retries):
             temp = gap_schedule[retry]
 
-            # Build prompt
+            # Build prompt — include ALL hints (identifiers + strings + types)
             prompt = f"{line_before}\n<FILL 1 line>\n{line_after}\n"
             prompt += "Write the 1 missing line. Output ONLY code, no fences."
 
-            if ast_hints and ast_hints.get('identifiers'):
-                prompt += f"\nUse: {', '.join(ast_hints['identifiers'][:15])}"
+            # All hints compact
+            hint_parts = []
+            if ast_hints:
+                if ast_hints.get('identifiers'):
+                    hint_parts.append(f"ids: {', '.join(ast_hints['identifiers'][:15])}")
+                if ast_hints.get('strings'):
+                    hint_parts.append(f"str: {', '.join(repr(s) for s in ast_hints['strings'][:5])}")
+                if ast_hints.get('type_sigs'):
+                    hint_parts.append(f"types: {'; '.join(ast_hints['type_sigs'][:5])}")
+                if ast_hints.get('mycelium_related'):
+                    hint_parts.append(f"related: {', '.join(ast_hints['mycelium_related'][:5])}")
+            if hint_parts:
+                prompt += "\n" + " | ".join(hint_parts)
 
             if feedback:
                 prompt += f"\n{feedback}"
