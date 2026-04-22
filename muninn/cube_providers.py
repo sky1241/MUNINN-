@@ -1727,6 +1727,163 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
     )
 
 
+# ─── B43: Adaptive reconstruction — auto x1→x2→x3, 3 passes per level ──
+
+def reconstruct_adaptive(file_path: str, content: str,
+                         provider: LLMProvider,
+                         base_tokens: int = 112,
+                         max_passes: int = 3,
+                         max_level: int = 3,
+                         attempts_per_pass: int = 11,
+                         mycelium=None,
+                         on_cube: callable = None) -> dict:
+    """Adaptive multi-level reconstruction.
+
+    For each cube level (x1=112, x2=224, x3=336...):
+      - Run up to max_passes passes of attempts_per_pass attempts each
+      - After each pass, feed SHA cubes to mycelium (vocabulary grows)
+      - If still failing after max_passes, promote to next level
+      - SHA cubes at any level are final (atom validated)
+
+    The program decides when to escalate — no human intervention.
+
+    Returns:
+        {
+            'total_cubes': int,
+            'sha_count': int,
+            'sha_pct': float,
+            'per_level': {1: {'cubes': N, 'sha': N, 'fails': [ids]}, ...},
+            'critical_cubes': [cube_ids],  # fails at max level = critical code
+        }
+    """
+    try:
+        from cube import subdivide_file, CubeStore, assign_neighbors, \
+            extract_ast_hints, normalize_content, enrich_hints_with_file_context
+    except ImportError:
+        from engine.core.cube import subdivide_file, CubeStore, assign_neighbors, \
+            extract_ast_hints, normalize_content, enrich_hints_with_file_context
+
+    import tempfile
+
+    results = {
+        'total_cubes': 0,
+        'sha_count': 0,
+        'sha_pct': 0.0,
+        'per_level': {},
+        'critical_cubes': [],
+    }
+
+    # Track which line ranges have been SHA-validated at any level
+    sha_ranges = set()  # (line_start, line_end) tuples
+
+    for level in range(1, max_level + 1):
+        tokens = base_tokens * level
+        cubes = subdivide_file(content=content, file_path=file_path,
+                               target_tokens=tokens)
+
+        if level == 1:
+            results['total_cubes'] = len(cubes)
+
+        # Setup store + neighbors
+        tmp = tempfile.mkdtemp()
+        store = CubeStore(os.path.join(tmp, f'cubes_x{level}.db'))
+        for c in cubes:
+            store.save_cube(c)
+        assign_neighbors(cubes, [], store, max_neighbors=9)
+
+        # Determine which cubes need testing at this level
+        to_test = []
+        for i, c in enumerate(cubes):
+            # Skip cubes whose line range is fully covered by SHA at lower level
+            cube_range = (c.line_start, c.line_end)
+            if cube_range in sha_ranges:
+                continue
+            # For x2+: check if ALL sub-ranges are SHA
+            if level > 1:
+                fully_covered = True
+                nc = normalize_content(c.content)
+                # Simple check: if the whole range was covered by x1 SHA, skip
+                for start, end in sha_ranges:
+                    if start <= c.line_start and end >= c.line_end:
+                        fully_covered = True
+                        break
+                else:
+                    fully_covered = False
+                if fully_covered:
+                    continue
+            to_test.append(i)
+
+        if not to_test:
+            store.close()
+            break
+
+        level_sha = 0
+        level_fails = []
+
+        # Multi-pass at this level
+        for pass_num in range(1, max_passes + 1):
+            still_failing = []
+
+            for i in to_test:
+                c = cubes[i]
+                ne = store.get_neighbors(c.id)
+                nc = [store.get_cube(nid) for nid, _, _ in ne
+                      if store.get_cube(nid)]
+                hints = extract_ast_hints(c)
+                hints['_raw_content'] = c.content
+                hints = enrich_hints_with_file_context(hints, content)
+
+                wr = reconstruct_cube_waves(
+                    c, nc, provider,
+                    attempts_per_wave=attempts_per_pass,
+                    max_waves=1,
+                    ast_hints=hints,
+                    mycelium=mycelium,
+                )
+
+                if wr.sha_matched:
+                    level_sha += 1
+                    sha_ranges.add((c.line_start, c.line_end))
+                    if mycelium:
+                        mycelium.observe_text(wr.best_reconstruction)
+                    if on_cube:
+                        on_cube(level, pass_num, i, 'SHA',
+                                wr.attempt_in_wave, 0.0)
+                else:
+                    still_failing.append(i)
+                    if on_cube:
+                        on_cube(level, pass_num, i, 'FAIL',
+                                wr.total_attempts, wr.best_ncd)
+
+            # Update to_test for next pass — only cubes that still fail
+            to_test = still_failing
+
+            if not to_test:
+                break  # all SHA at this level
+
+        level_fails = to_test  # cubes still failing after max_passes
+        results['per_level'][level] = {
+            'cubes': len(cubes),
+            'tokens': tokens,
+            'sha': level_sha,
+            'fails': level_fails,
+        }
+        results['sha_count'] += level_sha
+
+        store.close()
+
+        if not level_fails:
+            break  # all done
+
+    # Cubes still failing at max level = critical code points
+    results['critical_cubes'] = results['per_level'].get(
+        max_level, {}).get('fails', [])
+    if results['total_cubes'] > 0:
+        results['sha_pct'] = 100 * results['sha_count'] / results['total_cubes']
+
+    return results
+
+
 # ─── B41: Progressive levels with mycelium accumulation ────────────────
 
 def run_progressive_levels(file_path: str, content: str,
