@@ -717,6 +717,44 @@ class FIMReconstructor:
                         if field_name in known_idents:
                             anchor_map[idx] = orig_lines_sf[idx]
 
+            # Fix 11: Force Lock/RLock calls — same logic as defer Unlock.
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    stripped = orig_lines_sf[idx].strip()
+                    if ('.Lock()' in stripped or '.RLock()' in stripped or
+                            '.RUnlock()' in stripped):
+                        anchor_map[idx] = orig_lines_sf[idx]
+
+            # Fix 12: Force return stmts where ALL tokens are known idents.
+            # "return session, nil" — session is in idents, nil is keyword.
+            _RETURN_KEYWORDS = {'nil', 'err', 'true', 'false', 'ok', 'none',
+                                'None', 'null', 'undefined'}
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    stripped = orig_lines_sf[idx].strip()
+                    if stripped.startswith('return '):
+                        tokens = re.findall(r'[a-zA-Z_]\w*', stripped[7:])
+                        if tokens and all(
+                            t in known_idents or t in _RETURN_KEYWORDS
+                            for t in tokens
+                        ):
+                            anchor_map[idx] = orig_lines_sf[idx]
+
+            # Fix 13: Force lines where ALL identifiers are in known_idents.
+            # Catches idiomatic Go patterns: next.ServeHTTP(w, r),
+            # rw.ResponseWriter.WriteHeader(code), conn.Close(), etc.
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    stripped = orig_lines_sf[idx].strip()
+                    if not stripped or stripped in ('{', '}'):
+                        continue
+                    tokens = re.findall(r'[a-zA-Z_]\w+', stripped)
+                    if len(tokens) >= 2 and all(
+                        t in known_idents or t in _RETURN_KEYWORDS
+                        for t in tokens
+                    ):
+                        anchor_map[idx] = orig_lines_sf[idx]
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
