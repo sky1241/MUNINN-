@@ -755,6 +755,110 @@ class FIMReconstructor:
                     ):
                         anchor_map[idx] = orig_lines_sf[idx]
 
+            # ── Language-specific anchor forcing ──────────────────────
+            ext = os.path.splitext(cube.file_origin or '')[1].lower()
+
+            # Fix 14: Python block-end keywords as anchors.
+            # Python has no }, so else:, elif, except:, finally:, pass,
+            # break, continue are the structural block markers.
+            if ext == '.py':
+                _PY_BLOCK_ENDS = {
+                    'else:', 'elif', 'except:', 'except', 'finally:',
+                    'pass', 'break', 'continue', 'raise',
+                }
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        # Exact match or starts with keyword
+                        first_word = stripped.split()[0] if stripped.split() else ''
+                        if first_word.rstrip(':') in {
+                            'else', 'elif', 'except', 'finally',
+                            'pass', 'break', 'continue', 'raise',
+                        } or stripped in _PY_BLOCK_ENDS:
+                            anchor_map[idx] = orig_lines_sf[idx]
+                # Python decorators are DATA (@app.route, @staticmethod)
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        if stripped.startswith('@'):
+                            anchor_map[idx] = orig_lines_sf[idx]
+                # Python def/class declarations
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        if (stripped.startswith('def ') or
+                                stripped.startswith('class ')) and ':' in stripped:
+                            anchor_map[idx] = orig_lines_sf[idx]
+
+            # Fix 15: Rust lifetimes, macros, attributes as anchors.
+            if ext == '.rs':
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        # Rust attributes: #[derive(...)], #[cfg(...)], #![...]
+                        if stripped.startswith('#[') or stripped.startswith('#!['):
+                            anchor_map[idx] = orig_lines_sf[idx]
+                        # Rust macro invocations: println!, vec!, format!
+                        elif re.search(r'\w+!\s*[\(\[\{]', stripped):
+                            anchor_map[idx] = orig_lines_sf[idx]
+                        # Lines with lifetime annotations: 'a, &'a, <'a>
+                        elif re.search(r"'[a-z]", stripped):
+                            anchor_map[idx] = orig_lines_sf[idx]
+
+            # Fix 16: JSX/TSX — HTML tags and attributes are DATA.
+            if ext in ('.jsx', '.tsx'):
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        # JSX tags: <Component, </Component>, <div, />
+                        if (stripped.startswith('<') and
+                                not stripped.startswith('<=') and
+                                not stripped.startswith('<<')):
+                            anchor_map[idx] = orig_lines_sf[idx]
+                        # JSX attributes: className=, onClick=, style=
+                        elif re.match(r'\w+={', stripped) or re.match(r'\w+="', stripped):
+                            anchor_map[idx] = orig_lines_sf[idx]
+                        # Closing tags standalone: />  )  </div>
+                        elif stripped in ('/>', ')', ');'):
+                            anchor_map[idx] = orig_lines_sf[idx]
+
+            # Fix 17: C/C++ preprocessor directives are DATA.
+            if ext in ('.c', '.h', '.cpp', '.hpp', '.cc'):
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        # #include, #define, #ifdef, #ifndef, #endif, #pragma
+                        if stripped.startswith('#'):
+                            anchor_map[idx] = orig_lines_sf[idx]
+
+            # Fix 18: COBOL — division/section headers, paragraph names,
+            # and END-* keywords are structural.
+            if ext in ('.cob', '.cbl', '.cobol'):
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        upper = stripped.upper()
+                        if ('DIVISION' in upper or 'SECTION' in upper or
+                                upper.startswith('END-') or
+                                upper.startswith('PERFORM ') or
+                                upper.endswith('.')):
+                            anchor_map[idx] = orig_lines_sf[idx]
+
+            # TypeScript/JS — type annotations, interface fields
+            if ext in ('.ts', '.js'):
+                for idx in range(min(len(orig_lines_sf), n_lines)):
+                    if idx not in anchor_map:
+                        stripped = orig_lines_sf[idx].strip()
+                        # Type declarations: interface, type, enum
+                        if (stripped.startswith('interface ') or
+                                stripped.startswith('type ') or
+                                stripped.startswith('enum ')):
+                            anchor_map[idx] = orig_lines_sf[idx]
+                        # Import/export statements are DATA
+                        elif (stripped.startswith('import ') or
+                              stripped.startswith('export ')):
+                            anchor_map[idx] = orig_lines_sf[idx]
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():

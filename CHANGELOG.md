@@ -101,6 +101,22 @@ Total: **175 -> 20 gaps (-89%)**. 14 cubes at 0 gaps, 10 at 1, 5 at 2, 0 at 3+.
 - 4 close (0.1-0.2): 32, 38, 52, 68
 - 1 far: 61 (0.224)
 
+### Fixes 14-18: Language-specific anchor forcing (2026-04-22)
+All fixes are language-agnostic by default; these add per-language rules
+triggered by file extension.
+
+| Fix | Language | What | Anchor coverage |
+|-----|----------|------|----------------|
+| Fix 14 | Python | else/elif/except/finally/pass/raise + decorators + def/class | 84% |
+| Fix 15 | Rust | #[attributes], macro! invocations, lifetime 'a annotations | 85% |
+| Fix 16 | JSX/TSX | HTML tags `<Component>`, JSX attributes, `/>` closers | 92% |
+| Fix 17 | C/C++ | Preprocessor directives (#include, #define, #ifdef, #endif) | 90% |
+| Fix 18 | COBOL | DIVISION/SECTION headers, END-* keywords, paragraph dots | 98% |
+| — | TypeScript | interface/type/enum/import/export declarations | 88% |
+
+Tested on 8-language corpus (940 cubes total):
+COBOL 98%, Go 96%, JSX 92%, Kotlin 91%, C 90%, TS 88%, Rust 85%, Python 84%
+
 ### Critical bug fix (2026-04-21)
 **extract_ast_hints used RAW content lines but anchors are compared against
 NORMALIZED content.** Cubes with blank lines at start/end had ALL anchors

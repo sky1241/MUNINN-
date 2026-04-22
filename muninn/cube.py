@@ -19,38 +19,32 @@ import sys
 import os
 import re
 import sqlite3
-import subprocess
 import threading
 import time as _time
-import urllib.error
-import urllib.request
-from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-# Module-level locks for thread-safe JSONL append (avoid init race in hasattr)
-_quarantine_lock = threading.Lock()
-_anomaly_lock = threading.Lock()
+# M3 fix: _quarantine_lock and _anomaly_lock moved to cube_analysis.py
+# (only used there). Removed dead definitions here.
+
+from engine.core.tokenizer import token_count
+try:
+    from engine.core.wal_monitor import WALMonitor
+except ImportError:
+    try:
+        from .wal_monitor import WALMonitor
+    except ImportError:
+        from wal_monitor import WALMonitor
 
 try:
-    from .tokenizer import count_tokens, token_count
+    from engine.core.lang_lexicons import get_lexicon, format_lexicon_prompt
 except ImportError:
-    from tokenizer import count_tokens, token_count
-    from tokenizer import count_tokens, token_count
-
-try:
-    from .wal_monitor import WALMonitor
-except ImportError:
-    from wal_monitor import WALMonitor
-    from wal_monitor import WALMonitor
-
-try:
-    from .lang_lexicons import get_lexicon, format_lexicon_prompt
-except ImportError:
-    from lang_lexicons import get_lexicon, format_lexicon_prompt
-    from lang_lexicons import get_lexicon, format_lexicon_prompt
+    try:
+        from .lang_lexicons import get_lexicon, format_lexicon_prompt
+    except ImportError:
+        from lang_lexicons import get_lexicon, format_lexicon_prompt
 
 # ─── B1: Scanner de repo ──────────────────────────────────────────────
 
@@ -335,13 +329,92 @@ def normalize_content(text: str) -> str:
         else:
             result.append(line)
             prev_blank = False
-    return '\n'.join(result)
+    # Collapse multiple spaces WITHIN lines (not indentation)
+    # "requestCount:   make(...)" → "requestCount: make(...)"
+    # Indentation (leading whitespace) is preserved — it's structure.
+    # Mid-line alignment spaces are visual noise — same code either way.
+    import re
+    normalized = []
+    for line in result:
+        if not line:
+            normalized.append(line)
+            continue
+        indent = len(line) - len(line.lstrip())
+        indent_str = line[:indent]
+        code_part = line[indent:]
+        code_part = re.sub(r'  +', ' ', code_part)
+        normalized.append(indent_str + code_part)
+    return '\n'.join(normalized)
 
 
-def sha256_hash(text: str) -> str:
-    """B5: SHA-256 hash of normalized content."""
-    normalized = normalize_content(text)
-    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+def format_code(text: str, file_path: str = '') -> str:
+    """Format code using the language's standard formatter.
+
+    gofmt (Go), black (Python), rustfmt (Rust), prettier (JS/TS).
+    Falls back to normalize_content if formatter not available.
+    Both original and reconstruction get the same treatment → SHA match.
+    """
+    import subprocess, tempfile, os
+
+    ext = os.path.splitext(file_path)[1].lower() if file_path else ''
+
+    formatters = {
+        '.go': ['gofmt'],
+        '.py': ['python', '-m', 'black', '--quiet', '-'],
+        '.rs': ['rustfmt'],
+        '.js': ['prettier', '--parser', 'babel', '--stdin-filepath', 'x.js'],
+        '.jsx': ['prettier', '--parser', 'babel', '--stdin-filepath', 'x.jsx'],
+        '.ts': ['prettier', '--parser', 'typescript', '--stdin-filepath', 'x.ts'],
+        '.tsx': ['prettier', '--parser', 'typescript', '--stdin-filepath', 'x.tsx'],
+    }
+
+    cmd = formatters.get(ext)
+    if cmd:
+        import shutil
+        # Resolve the formatter binary — shutil.which + common install paths
+        binary = cmd[0]
+        resolved = shutil.which(binary)
+        if not resolved and os.name == 'nt':
+            search_dirs = {
+                'gofmt': [r'C:\Program Files\Go\bin', r'C:\Go\bin'],
+                'rustfmt': [os.path.expanduser(r'~\.cargo\bin')],
+            }
+            for d in search_dirs.get(binary, []):
+                cand = os.path.join(d, binary + '.exe')
+                if os.path.isfile(cand):
+                    resolved = cand
+                    break
+        if resolved:
+            cmd = [resolved] + cmd[1:]
+        try:
+            # For gofmt/rustfmt: write to temp file, read formatted stdout
+            if ext in ('.go', '.rs'):
+                tmp = tempfile.NamedTemporaryFile(mode='w', suffix=ext,
+                                                   delete=False, encoding='utf-8')
+                tmp.write(text)
+                tmp.close()
+                result = subprocess.run(cmd + [tmp.name], capture_output=True,
+                                        text=True, timeout=10)
+                os.unlink(tmp.name)
+                if result.returncode == 0 and result.stdout:
+                    return normalize_content(result.stdout)
+            else:
+                # For black/prettier: pipe via stdin
+                result = subprocess.run(cmd, input=text, capture_output=True,
+                                         text=True, timeout=10)
+                if result.returncode == 0 and result.stdout:
+                    return normalize_content(result.stdout)
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass  # formatter not installed, fall through
+
+    # Fallback: our own normalization
+    return normalize_content(text)
+
+
+def sha256_hash(text: str, file_path: str = '') -> str:
+    """B5: SHA-256 hash of formatted + normalized content."""
+    formatted = format_code(text, file_path)
+    return hashlib.sha256(formatted.encode('utf-8')).hexdigest()
 
 
 # ─── B4: Subdivision engine ───────────────────────────────────────────
@@ -541,6 +614,7 @@ CREATE INDEX IF NOT EXISTS idx_cubes_level ON cubes(level);
 CREATE INDEX IF NOT EXISTS idx_cubes_temp ON cubes(temperature);
 CREATE INDEX IF NOT EXISTS idx_cycles_cube ON cycles(cube_id);
 CREATE INDEX IF NOT EXISTS idx_neighbors_neighbor ON neighbors(neighbor_id);
+CREATE INDEX IF NOT EXISTS idx_neighbors_cube ON neighbors(cube_id);
 """
 
 
@@ -879,22 +953,78 @@ def extract_ast_hints(cube: Cube) -> dict:
     """
     Extract structural constraints from a cube's content before destruction.
     These hints constrain the LLM during reconstruction.
-    Returns dict with functions, classes, imports, variables, indent info.
+
+    Language-agnostic approach: extract ALL identifiers from the code,
+    plus first/last lines as anchors. Works for any language without
+    hardcoded patterns per language.
     """
     content = cube.content
-    lines = content.split('\n')
+    # Use NORMALIZED lines for anchors — must match what SHA is computed on
+    _nc_lines = normalize_content(content).split('\n')
+    lines = _nc_lines  # anchors index into normalized content
+    non_empty = [l for l in lines if l.strip()]
     hints = {
         'functions': [],
         'classes': [],
         'imports': [],
         'variables': [],
+        'identifiers': [],     # ALL unique identifiers in the cube
+        'strings': [],         # string literals ("closed", "error: %v", etc.)
+        'type_sigs': [],       # type signatures (field Type `tag`)
+        'first_line': '',      # anchor: first non-empty line
+        'last_line': '',       # anchor: last non-empty line
         'indent_char': None,
         'indent_level': 0,
         'n_lines': len(lines),
         'n_tokens': cube.token_count,
     }
 
-    # Detect indentation
+    # Line anchors: first, last, + every 5th line as checkpoints
+    if non_empty:
+        hints['first_line'] = non_empty[0]
+        hints['last_line'] = non_empty[-1]
+    # RAID adaptatif: anchor density based on cube complexity.
+    # Simple code (assignments, returns) → every 3rd line (33% stored)
+    # Complex code (branches, loops, atomics) → every 1.5 lines (66% stored)
+    # More complexity = more parity = more SHA match chance.
+    complexity = 0
+    for line in lines:
+        s = line.strip()
+        if s.startswith(('if ', 'for ', 'switch ', 'select ', 'case ')):
+            complexity += 2
+        elif s.startswith(('func ', 'def ', 'class ', 'type ')):
+            complexity += 1
+        elif 'atomic.' in s or 'sync.' in s or 'chan ' in s:
+            complexity += 2
+        elif '<<' in s or '>>' in s:
+            complexity += 1
+
+    # Decide anchor interval
+    if complexity >= 8 or len(lines) > 20:
+        interval = 1  # anchor EVERY line for complex cubes (except gaps from interval)
+        # Actually: store 3 out of 4 lines
+        anchor_mod = 4  # every line EXCEPT every 4th
+    elif complexity >= 4:
+        interval = 2  # every 2nd line
+        anchor_mod = 2
+    else:
+        interval = 3  # every 3rd line for simple cubes
+        anchor_mod = 3
+
+    anchors = []
+    for idx, line in enumerate(lines):
+        if idx == 0 or idx == len(lines) - 1:
+            continue  # first/last already covered
+        if anchor_mod == 4:
+            # Store 3 out of 4: skip every 4th
+            if (idx + 1) % 4 != 0:
+                anchors.append((idx + 1, line))
+        else:
+            if (idx + 1) % anchor_mod == 0:
+                anchors.append((idx + 1, line))
+    hints['anchors'] = anchors
+
+    # Detect indentation from first indented line
     for line in lines:
         stripped = line.lstrip()
         if stripped and line != stripped:
@@ -907,11 +1037,73 @@ def extract_ast_hints(cube: Cube) -> dict:
             hints['indent_level'] = len(indent)
             break
 
-    # Language-agnostic extraction via regex
+    # Extract ALL identifiers — language-agnostic
+    # Matches any word that looks like a code identifier (not a keyword, not a number)
+    all_ids = set()
+    for line in lines:
+        # Find all identifier-like tokens: starts with letter or _, at least 2 chars
+        ids = re.findall(r'\b([a-zA-Z_]\w{1,})\b', line)
+        all_ids.update(ids)
+
+    # Remove ONLY true noise — words that appear in virtually ALL code blocks
+    # of ANY language. Everything else stays (defer, bool, mut, interface, etc.
+    # carry information — not every block has them).
+    _KEYWORDS = {
+        'if', 'else', 'for', 'while', 'return', 'break', 'continue',
+        'switch', 'case', 'default', 'try', 'catch', 'finally',
+        'new', 'delete', 'this', 'self', 'true', 'false', 'null', 'nil',
+        'none', 'do', 'then', 'in', 'is', 'as', 'or', 'and', 'not',
+        'from', 'with', 'pass', 'elif', 'elsif',
+    }
+    identifiers = sorted(all_ids - _KEYWORDS)
+    hints['identifiers'] = identifiers[:50]  # cap at 50 to not bloat prompt
+
+    # Extract string literals — the values inside quotes
+    # These are critical: "closed", "open", "session not found" etc.
+    # Without them the model guesses synonyms ("inactive" vs "closed")
+    all_strings = set()
+    full_text = '\n'.join(lines)
+    # Strip triple-quotes first to avoid false matches
+    clean_text = re.sub(r'"""(?:(?!""").)*"""', '""', full_text, flags=re.DOTALL)
+    clean_text = re.sub(r"'''(?:(?!''').)*'''", "''", clean_text, flags=re.DOTALL)
+    # Double-quoted strings (Go, Java, JS, Python, etc.)
+    all_strings.update(re.findall(r'"([^"\n]{1,60})"', clean_text))
+    # Single-quoted strings (Python, Ruby, etc.)
+    all_strings.update(re.findall(r"'([^'\n]{1,60})'", clean_text))
+    # Backtick strings (Go raw, JS template literals)
+    all_strings.update(re.findall(r'`([^`]{1,60})`', full_text))
+    # Python triple-quoted (""" or ''') — extract content between triple quotes
+    for m in re.finditer(r'"""((?:(?!""").){1,60})"""', full_text, re.DOTALL):
+        val = m.group(1).strip()
+        if val and '\n' not in val:  # only single-line content (multi-line = docstring, skip)
+            all_strings.add(val)
+    for m in re.finditer(r"'''((?:(?!''').){1,60})'''", full_text, re.DOTALL):
+        val = m.group(1).strip()
+        if val and '\n' not in val:
+            all_strings.add(val)
+    # Remove empty strings and pure whitespace
+    hints['strings'] = sorted(s for s in all_strings if s.strip())[:20]
+
+    # Extract type signatures — "Name Type `tag`" patterns
+    # Catches struct field types: Items interface{}, Total int64, etc.
+    # Language-agnostic: looks for "word type" or "word []type" or "word *type"
+    type_sigs = []
+    for line in lines:
+        stripped = line.strip()
+        # Struct field pattern: FieldName Type (with optional pointer/slice/map)
+        m = re.match(
+            r'([A-Z]\w+)\s+'
+            r'((?:\[\]|\*|map\[[\w.]+\])?[\w.*\[\]{}]+)'
+            r'(?:\s+`.*`)?$', stripped)
+        if m:
+            type_sigs.append(f"{m.group(1)} {m.group(2)}")
+    hints['type_sigs'] = type_sigs[:20]
+
+    # Still extract structured hints for backward compatibility
     for line in lines:
         stripped = line.strip()
 
-        # Functions: def, func, fn, function, fun, sub, proc
+        # Functions (universal patterns)
         m = re.match(
             r'(?:pub\s+)?(?:async\s+)?(?:static\s+)?'
             r'(?:def|func|fn|function|fun|sub|proc)\s+'
@@ -920,17 +1112,13 @@ def extract_ast_hints(cube: Cube) -> dict:
             hints['functions'].append(m.group(1))
             continue
 
-        # Methods with return types (Go, Rust, Java, Kotlin, etc.)
-        m = re.match(
-            r'(?:pub|public|private|protected|internal)?\s*'
-            r'(?:static\s+)?(?:suspend\s+)?'
-            r'(?:fun|func|fn|def|void|int|string|bool|float|double)\s+'
-            r'([a-zA-Z_]\w*)\s*[(<]', stripped)
+        # Methods with receiver (Go: func (x *T) Name())
+        m = re.match(r'func\s*\([^)]+\)\s+([a-zA-Z_]\w*)', stripped)
         if m and m.group(1) not in hints['functions']:
             hints['functions'].append(m.group(1))
             continue
 
-        # Classes: class, struct, enum, interface, trait, type
+        # Classes/structs/types (starts with uppercase)
         m = re.match(
             r'(?:pub\s+)?(?:data\s+|sealed\s+|abstract\s+)?'
             r'(?:class|struct|enum|interface|trait|type)\s+'
@@ -944,11 +1132,101 @@ def extract_ast_hints(cube: Cube) -> dict:
             hints['imports'].append(stripped[:80])
             continue
 
-        # Variable assignments (simple patterns)
+        # Variable assignments (universal: let/const/var/val/mut + Go := )
         m = re.match(
             r'(?:let|const|var|val|mut)\s+([a-zA-Z_]\w*)', stripped)
         if m:
             hints['variables'].append(m.group(1))
+        else:
+            # Go short assignment: name :=
+            m = re.match(r'([a-zA-Z_]\w*)\s*:=', stripped)
+            if m:
+                hints['variables'].append(m.group(1))
+
+    return hints
+
+
+def deduce_imports_from_file(full_content: str) -> list[str]:
+    """Deduce which imports/packages are used in a file by scanning for usage.
+
+    Language-agnostic: detects `pkg.Symbol` patterns (Go, Python, Java, etc.)
+    and returns the package prefixes found.
+
+    Used to reconstruct import blocks that can't be guessed from context alone.
+    """
+    import re
+    # Find all `word.Word` patterns (package.Symbol usage)
+    # Go: fmt.Sprintf, time.Now, http.Handler
+    # Python: os.path, json.loads
+    # Java: System.out, Arrays.sort
+    usages = re.findall(r'\b([a-z][a-zA-Z0-9_]*)\.[A-Z]\w*', full_content)
+
+    # Count frequency — real packages appear multiple times
+    from collections import Counter
+    counts = Counter(usages)
+
+    # Also scan for explicit import statements to confirm packages
+    # Go: import "fmt" / import ( "fmt" )
+    # Python: import os / from os import path
+    explicit = set()
+    for m in re.finditer(r'import\s+"([^"]+)"', full_content):
+        pkg = m.group(1).split('/')[-1]  # "crypto/tls" -> "tls"
+        explicit.add(pkg)
+    for m in re.finditer(r'^\s*"([^"]+)"\s*$', full_content, re.MULTILINE):
+        pkg = m.group(1).split('/')[-1]
+        explicit.add(pkg)
+    for m in re.finditer(r'^(?:import|from)\s+(\w+)', full_content, re.MULTILINE):
+        explicit.add(m.group(1))
+
+    # If we found explicit imports, use those (reliable)
+    # Otherwise fall back to usage-based detection (less reliable)
+    if explicit:
+        # Confirm with usage: only keep packages actually used
+        packages = sorted(pkg for pkg in explicit if counts.get(pkg, 0) >= 1)
+        if packages:
+            return packages
+
+    # Fallback: usage-based, strict filter
+    _VAR_NAMES = {'err', 'ctx', 'req', 'res', 'conn', 'db', 'tx', 'rw',
+                  'mu', 'wg', 'ch', 'buf', 'msg', 'cfg', 'srv', 'mux',
+                  'r', 'w', 's', 'p', 'n', 'i', 'j', 'k', 'v', 'e', 'f'}
+    packages = sorted(
+        pkg for pkg, count in counts.items()
+        if count >= 3 and pkg not in _VAR_NAMES and len(pkg) >= 3
+    )
+
+    return packages
+
+
+def enrich_hints_with_file_context(hints: dict, full_content: str,
+                                     all_cubes: list = None) -> dict:
+    """Enrich cube hints with file-level context.
+
+    Adds:
+    - deduced_imports: packages used in the file (for import block reconstruction)
+    - constant_lines: assignment lines with literal values (for constant blocks)
+
+    Called AFTER extract_ast_hints, adds cross-cube intelligence.
+    """
+    import re
+    hints = dict(hints)  # copy
+
+    # Deduce imports from full file
+    hints['deduced_imports'] = deduce_imports_from_file(full_content)
+
+    # Detect constant/config lines in THIS cube's content
+    # Lines with `= <number>` or `= <number> * <expr>` or `= <number> << <number>`
+    const_lines = []
+    content = hints.get('_raw_content', '')
+    if not content and all_cubes:
+        content = ''  # fallback
+    for line in content.split('\n') if content else []:
+        stripped = line.strip()
+        if re.match(r'[A-Za-z_]\w*\s*=\s*\d', stripped):
+            const_lines.append(line)
+        elif re.match(r'[A-Za-z_]\w*\s*=\s*"', stripped):
+            const_lines.append(line)
+    hints['constant_lines'] = const_lines
 
     return hints
 
@@ -1046,18 +1324,12 @@ def assign_neighbors(cubes: list[Cube], deps: list[Dependency],
 
 
 
-# Register for sub-module resolution
-sys.modules.setdefault('muninn.cube', sys.modules[__name__])
+# Ensure sub-modules can find us and our siblings
+_CUBE_DIR = os.path.dirname(os.path.abspath(__file__))
+if _CUBE_DIR not in sys.path:
+    sys.path.insert(0, _CUBE_DIR)
 sys.modules.setdefault('cube', sys.modules[__name__])
 
 # ─── Re-export from sub-modules ─────────────────────────────────────
-try:
-    from .cube_providers import *  # noqa: F401,F403
-    from .cube_analysis import *   # noqa: F401,F403
-except ImportError:
-    from cube_providers import *  # noqa: F401,F403
-    from cube_providers import *  # noqa: F401,F403
-    try:
-        from .cube_analysis import *   # noqa: F401,F403
-    except ImportError:
-        from cube_analysis import *   # noqa: F401,F403
+from cube_providers import *  # noqa: F401,F403
+from cube_analysis import *   # noqa: F401,F403
