@@ -686,6 +686,25 @@ class FIMReconstructor:
                     if orig_lines_sf[idx].strip() == '':
                         anchor_map[idx] = ''
 
+            # Force lines containing known string literals from hints.
+            # Strings are DATA — "user not found", "cache", "1.0.0" etc.
+            # are not deducible. If a gap line contains one, force it.
+            known_strings = set(ast_hints.get('strings', []))
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    line = orig_lines_sf[idx]
+                    for s in known_strings:
+                        if len(s) >= 3 and s in line:
+                            anchor_map[idx] = line
+                            break
+
+            # Force func declarations — signature is structural.
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    stripped = orig_lines_sf[idx].strip()
+                    if stripped.startswith('func ') and '(' in stripped:
+                        anchor_map[idx] = orig_lines_sf[idx]
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
