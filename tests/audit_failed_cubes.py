@@ -10,8 +10,8 @@ with open(f, "r") as fh:
     content = fh.read()
 cubes = subdivide_file(content=content, file_path=f, target_tokens=112)
 
-already_sha = {2,4,5,9,10,12,14,15,16,18,19,21,23,25,27,28,34,35,36,37,
-               40,41,42,46,47,49,50,53,55,56,64,66,69,71,73,75,79}
+already_sha = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,21,24,28,29,30,
+               33,35,36,37,39,40,43,46,49,50,51,53,55,62,63,64,67,71,72,75,78,79}
 failed = sorted(set(range(len(cubes))) - already_sha)
 
 print(f"=== 43 CUBES SANS SHA — AUDIT ===\n")

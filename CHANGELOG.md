@@ -63,12 +63,24 @@ destroyed Go code byte-for-byte from neighbors + extracted metadata.
 | + 5 fixes + constant bug fix | 48/80 | 60% | +11 SHA |
 | + **CRITICAL: anchor normalization fix** | **54/80** | **67.5%** | +6 SHA |
 
-**Final L1: 54/80 SHA (67.5%)** on server.go, Sonnet, 1 call/cube + die-and-retry (11 attempts)
+Actual verified count from transcript: **47/80 SHA (59%)**.
 
-26 cubes remaining without SHA:
-- 6 quasi-SHA (NCD < 0.1): formatting diffs, blank lines, line wrapping
-- 15 close (NCD 0.1-0.2): 1-2 lines wrong in complex logic
-- 5 far (NCD > 0.2): many gaps, complex expressions
+### Anchor forcing improvements (2026-04-22) — 4 fixes, 109 gaps eliminated
+Systematic audit of all 29 failed cubes revealed 175 gap lines. 4 new anchor
+forcing rules eliminate 109 gaps (62% reduction), leaving only 66 gaps.
+
+| Fix | What | Gaps eliminated | Cumulative |
+|-----|------|----------------|-----------|
+| Fix 6 | Closing braces (}, }), };) + defer patterns | -35 | 140 |
+| Fix 7 | Blank lines at original positions | -28 | 112 |
+| Fix 9 | Lines with known string literals + func decls | -30 | 82 |
+| Fix 10 | Struct field assignments (FieldName: value,) | -16 | 66 |
+
+29 cubes remaining without SHA:
+- 2 at 0 gaps (should auto-SHA): cubes 45, 54
+- 5 at 1 gap (SHA ~90%): cubes 20, 32, 47, 58, 66
+- 12 at 2 gaps (SHA ~81%): cubes 22, 26, 34, 42, 44, 52, 56, 57, 59, 65, 68, 70
+- 10 at 3+ gaps: cubes 23, 25, 27, 31, 38, 41, 48, 60, 61, 69
 
 ### Critical bug fix (2026-04-21)
 **extract_ast_hints used RAW content lines but anchors are compared against
