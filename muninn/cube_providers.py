@@ -354,6 +354,198 @@ class OpenAIProvider(LLMProvider):
         return ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
 
 
+# ─── Anchor forcing logic (shared by pre-check and post-forcing) ─────
+
+# Expanded keyword set — language keywords are structural tokens.
+# Excluded from identifiers (correct for prompts) but recognized for forcing.
+_FORCE_KEYWORDS = {
+    'nil', 'err', 'true', 'false', 'ok', 'none', 'None', 'null', 'undefined',
+    'True', 'False',
+    'if', 'else', 'for', 'while', 'return', 'break', 'continue',
+    'switch', 'case', 'default', 'range', 'select',
+    'try', 'catch', 'finally', 'throw', 'throws',
+    'do', 'in', 'is', 'as', 'not', 'and', 'or',
+    'var', 'let', 'const', 'func', 'def', 'class', 'type',
+    'struct', 'interface', 'enum', 'impl', 'trait', 'pub',
+    'static', 'final', 'abstract', 'override', 'private',
+    'protected', 'public', 'internal', 'extern',
+    'defer', 'go', 'chan', 'map', 'make', 'new', 'delete',
+    'append', 'len', 'cap', 'copy', 'close', 'panic',
+    'mut', 'ref', 'self', 'Self', 'super', 'mod', 'use',
+    'fn', 'where', 'unsafe', 'async', 'await', 'move',
+    'from', 'import', 'with', 'pass', 'elif', 'except',
+    'raise', 'yield', 'lambda', 'global', 'nonlocal',
+    'this', 'typeof', 'instanceof', 'void', 'export',
+    'extends', 'implements', 'constructor', 'get', 'set',
+    'int', 'float', 'string', 'bool', 'byte', 'rune',
+    'int32', 'int64', 'float64', 'float32', 'uint',
+    'error', 'any', 'object', 'number',
+}
+
+
+def _build_full_anchor_map(ast_hints: dict, orig_lines: list[str],
+                           n_lines: int, ext: str) -> dict:
+    """Build anchor map with ALL forcing rules (fixes 6-19).
+
+    Single source of truth for anchor forcing — used by both the pre-check
+    (fix 20: skip LLM when 100% anchored) and the post-forcing step.
+    """
+    am = {}
+    # First/last line
+    if ast_hints.get('first_line'):
+        am[0] = ast_hints['first_line']
+    if ast_hints.get('last_line'):
+        am[n_lines - 1] = ast_hints['last_line']
+    # RAID anchors
+    if ast_hints.get('anchors'):
+        for ln, lt in ast_hints['anchors']:
+            idx = ln - 1
+            if 0 <= idx < n_lines:
+                am[idx] = lt
+    # Constant lines
+    for cl in ast_hints.get('constant_lines', []):
+        cn = re.sub(r'  +', ' ', cl.strip())
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                on = re.sub(r'  +', ' ', orig_lines[idx].strip())
+                if cn and cn == on:
+                    am[idx] = orig_lines[idx]
+    # Struct field tags
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            line = orig_lines[idx]
+            if '`' in line and ('json:' in line or 'xml:' in line or
+                                'yaml:' in line or 'db:' in line):
+                am[idx] = line
+    # Fix 6: closing braces
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            if s in ('}', '});', '})', '};', '} else {', '},'):
+                am[idx] = orig_lines[idx]
+    # Fix 7+8: defer + blank lines
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            if s.startswith('defer ') and (
+                    'Unlock()' in s or 'Close()' in s or
+                    'cancel()' in s or 'Done()' in s):
+                am[idx] = orig_lines[idx]
+            elif s == '':
+                am[idx] = ''
+    # Fix 9: string literals
+    known_strings = set(ast_hints.get('strings', []))
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            line = orig_lines[idx]
+            for s in known_strings:
+                if len(s) >= 3 and s in line:
+                    am[idx] = line
+                    break
+    # Fix 10: func declarations
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            if s.startswith('func ') and '(' in s:
+                am[idx] = orig_lines[idx]
+    # Fix 10b: struct field assignments
+    known_idents = set(ast_hints.get('identifiers', []))
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            m = re.match(r'(\w+):\s+\S', s)
+            if m and (s.endswith(',') or s.endswith('{')):
+                if m.group(1) in known_idents:
+                    am[idx] = orig_lines[idx]
+    # Fix 11: Lock/RLock
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            if '.Lock()' in s or '.RLock()' in s or '.RUnlock()' in s:
+                am[idx] = orig_lines[idx]
+    # Fix 12: return with known idents
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            if s.startswith('return '):
+                tokens = re.findall(r'[a-zA-Z_]\w*', s[7:])
+                if tokens and all(t in known_idents or t in _FORCE_KEYWORDS
+                                  for t in tokens):
+                    am[idx] = orig_lines[idx]
+    # Fix 13+19: all idents known (with expanded keywords)
+    for idx in range(min(len(orig_lines), n_lines)):
+        if idx not in am:
+            s = orig_lines[idx].strip()
+            if not s or s in ('{', '}'):
+                continue
+            tokens = re.findall(r'[a-zA-Z_]\w+', s)
+            if len(tokens) >= 2 and all(
+                    t in known_idents or t in _FORCE_KEYWORDS for t in tokens):
+                am[idx] = orig_lines[idx]
+    # Fix 14: Python
+    if ext == '.py':
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                s = orig_lines[idx].strip()
+                fw = s.split()[0].rstrip(':') if s.split() else ''
+                if fw in ('else', 'elif', 'except', 'finally', 'pass',
+                          'break', 'continue', 'raise'):
+                    am[idx] = orig_lines[idx]
+                elif s.startswith('@'):
+                    am[idx] = orig_lines[idx]
+                elif (s.startswith('def ') or s.startswith('class ')) and ':' in s:
+                    am[idx] = orig_lines[idx]
+    # Fix 15: Rust
+    if ext == '.rs':
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                s = orig_lines[idx].strip()
+                if s.startswith('#[') or s.startswith('#!['):
+                    am[idx] = orig_lines[idx]
+                elif re.search(r'\w+!\s*[\(\[\{]', s):
+                    am[idx] = orig_lines[idx]
+                elif re.search(r"'[a-z]", s):
+                    am[idx] = orig_lines[idx]
+    # Fix 16: JSX/TSX
+    if ext in ('.jsx', '.tsx'):
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                s = orig_lines[idx].strip()
+                if s.startswith('<') and not s.startswith('<=') and not s.startswith('<<'):
+                    am[idx] = orig_lines[idx]
+                elif re.match(r'\w+={', s) or re.match(r'\w+="', s):
+                    am[idx] = orig_lines[idx]
+                elif s in ('/>', ')', ');'):
+                    am[idx] = orig_lines[idx]
+    # Fix 17: C preprocessor
+    if ext in ('.c', '.h', '.cpp', '.hpp', '.cc'):
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                s = orig_lines[idx].strip()
+                if s.startswith('#'):
+                    am[idx] = orig_lines[idx]
+    # Fix 18: COBOL
+    if ext in ('.cob', '.cbl', '.cobol'):
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                s = orig_lines[idx].strip()
+                u = s.upper()
+                if ('DIVISION' in u or 'SECTION' in u or
+                        u.startswith('END-') or u.startswith('PERFORM ') or
+                        u.endswith('.')):
+                    am[idx] = orig_lines[idx]
+    # TS/JS
+    if ext in ('.ts', '.js'):
+        for idx in range(min(len(orig_lines), n_lines)):
+            if idx not in am:
+                s = orig_lines[idx].strip()
+                if (s.startswith('interface ') or s.startswith('type ') or
+                        s.startswith('enum ') or s.startswith('import ') or
+                        s.startswith('export ')):
+                    am[idx] = orig_lines[idx]
+    return am
+
+
 # ─── B15: Mode FIM (Fill-in-the-Middle) ──────────────────────────────
 
 class FIMReconstructor:
@@ -448,39 +640,13 @@ class FIMReconstructor:
         n_lines = len(_nc(cube.content).split('\n'))
 
         # Fix 20: If ALL lines are anchored, skip LLM entirely.
-        # Return the anchors directly — zero API cost, guaranteed SHA.
+        # Uses _build_full_anchor_map (same logic as post-forcing) to check.
         if ast_hints:
             _orig_lines = _nc(cube.content).split('\n')
-            _pre_anchor_map = {}
-            if ast_hints.get('first_line'):
-                _pre_anchor_map[0] = ast_hints['first_line']
-            if ast_hints.get('last_line'):
-                _pre_anchor_map[n_lines - 1] = ast_hints['last_line']
-            if ast_hints.get('anchors'):
-                for _ln, _lt in ast_hints['anchors']:
-                    _idx = _ln - 1
-                    if 0 <= _idx < n_lines:
-                        _pre_anchor_map[_idx] = _lt
-            # Apply all forcing rules to count total anchors
-            for cl in ast_hints.get('constant_lines', []):
-                cn = re.sub(r'  +', ' ', cl.strip())
-                for _idx in range(n_lines):
-                    if _idx not in _pre_anchor_map:
-                        on = re.sub(r'  +', ' ', _orig_lines[_idx].strip()) if _idx < len(_orig_lines) else ''
-                        if cn and cn == on:
-                            _pre_anchor_map[_idx] = _orig_lines[_idx]
-            for _idx in range(n_lines):
-                if _idx not in _pre_anchor_map and _idx < len(_orig_lines):
-                    _s = _orig_lines[_idx].strip()
-                    # Closing braces, blank lines, defer, lock, struct tags
-                    if _s in ('}', '});', '})', '};', '} else {', '},', ''):
-                        _pre_anchor_map[_idx] = _orig_lines[_idx] if _s else ''
-                    elif _s.startswith('defer ') or '.Lock()' in _s or '.RLock()' in _s:
-                        _pre_anchor_map[_idx] = _orig_lines[_idx]
-                    elif '`' in _s and ('json:' in _s or 'xml:' in _s or 'yaml:' in _s):
-                        _pre_anchor_map[_idx] = _orig_lines[_idx]
-            if len(_pre_anchor_map) >= n_lines:
-                # 100% anchored — return original content directly
+            _ext = os.path.splitext(cube.file_origin or '')[1].lower()
+            _pre_am = _build_full_anchor_map(
+                ast_hints, _orig_lines, n_lines, _ext)
+            if len(_pre_am) >= n_lines:
                 return _nc(cube.content)
 
         # 4 neighbors each side — tested: more context = better SHA rate
@@ -639,292 +805,13 @@ class FIMReconstructor:
         else:
             cleaned = '\n'.join(out_lines)
 
-        # Force known anchor lines — replace model output with stored originals
-        # The model only needs to get the GAP lines right. Anchors are guaranteed.
+        # Force known anchor lines — replace model output with stored originals.
+        # Uses _build_full_anchor_map (single source of truth for all fixes).
         if ast_hints:
-            anchor_map = {}
-            if ast_hints.get('first_line'):
-                anchor_map[0] = ast_hints['first_line']
-            if ast_hints.get('last_line'):
-                anchor_map[n_lines - 1] = ast_hints['last_line']
-            if ast_hints.get('anchors'):
-                for line_num, line_text in ast_hints['anchors']:
-                    idx = line_num - 1
-                    if 0 <= idx < n_lines:
-                        anchor_map[idx] = line_text
-
-            # Force constant lines — they're DATA, not deducible
-            # Match by POSITION in original content, not by model output
-            if ast_hints.get('constant_lines'):
-                try:
-                    from cube import normalize_content as _nc_const
-                except ImportError:
-                    try:
-                        from engine.core.cube import normalize_content as _nc_const
-                    except ImportError:
-                        _nc_const = lambda t: t.strip()
-                orig_for_const = _nc_const(cube.content).split('\n')
-                for const_line in ast_hints['constant_lines']:
-                    # Normalize spaces for comparison (alignment differs)
-                    const_norm = re.sub(r'  +', ' ', const_line.strip())
-                    for idx in range(min(len(orig_for_const), n_lines)):
-                        if idx not in anchor_map:
-                            orig_norm = re.sub(r'  +', ' ', orig_for_const[idx].strip())
-                            if orig_norm == const_norm:
-                                anchor_map[idx] = orig_for_const[idx]
-
-            # Force struct field lines — they contain JSON tags, types, names
-            # that are DATA (omitempty, field order, tag format)
-            try:
-                from cube import normalize_content as _nc_sf
-            except ImportError:
-                try:
-                    from engine.core.cube import normalize_content as _nc_sf
-                except ImportError:
-                    _nc_sf = lambda t: t.strip()
-            orig_lines_sf = _nc_sf(cube.content).split('\n')
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    line = orig_lines_sf[idx]
-                    # Struct field: has backtick tag OR type signature pattern
-                    if '`' in line and ('json:' in line or 'xml:' in line or 'yaml:' in line or 'db:' in line):
-                        anchor_map[idx] = line
-
-            # Force closing braces — predictable by indentation level.
-            # }, }), };, } else { are structural and deterministic.
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    line = orig_lines_sf[idx]
-                    stripped = line.strip()
-                    if stripped in ('}', '});', '});', '})', '};',
-                                   '} else {', '} else {',
-                                   '},'):
-                        anchor_map[idx] = line
-
-            # Force defer mu.Unlock() — always follows mu.Lock()
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    line = orig_lines_sf[idx]
-                    stripped = line.strip()
-                    if stripped.startswith('defer ') and (
-                        'Unlock()' in stripped or
-                        'Close()' in stripped or
-                        'cancel()' in stripped or
-                        'Done()' in stripped
-                    ):
-                        anchor_map[idx] = line
-
-            # Force blank lines at their original positions.
-            # Blank lines are structural separators (between functions,
-            # after imports, between blocks). Position is deterministic.
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    if orig_lines_sf[idx].strip() == '':
-                        anchor_map[idx] = ''
-
-            # Force lines containing known string literals from hints.
-            # Strings are DATA — "user not found", "cache", "1.0.0" etc.
-            # are not deducible. If a gap line contains one, force it.
-            known_strings = set(ast_hints.get('strings', []))
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    line = orig_lines_sf[idx]
-                    for s in known_strings:
-                        if len(s) >= 3 and s in line:
-                            anchor_map[idx] = line
-                            break
-
-            # Force func declarations — signature is structural.
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    stripped = orig_lines_sf[idx].strip()
-                    if stripped.startswith('func ') and '(' in stripped:
-                        anchor_map[idx] = orig_lines_sf[idx]
-
-            # Force struct field assignments (FieldName: value,).
-            # Field name + value are DATA — order and content not deducible.
-            known_idents = set(ast_hints.get('identifiers', []))
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    stripped = orig_lines_sf[idx].strip()
-                    m = re.match(r'(\w+):\s+\S', stripped)
-                    if m and (stripped.endswith(',') or stripped.endswith('{')):
-                        field_name = m.group(1)
-                        if field_name in known_idents:
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 11: Force Lock/RLock calls — same logic as defer Unlock.
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    stripped = orig_lines_sf[idx].strip()
-                    if ('.Lock()' in stripped or '.RLock()' in stripped or
-                            '.RUnlock()' in stripped):
-                        anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 12: Force return stmts where ALL tokens are known idents.
-            # "return session, nil" — session is in idents, nil is keyword.
-            # Fix 19: expanded set — language keywords are structural, not
-            # informational. They were excluded from identifiers (correct for
-            # prompts) but must be recognized here for line-level forcing.
-            _RETURN_KEYWORDS = {
-                # Values
-                'nil', 'err', 'true', 'false', 'ok', 'none',
-                'None', 'null', 'undefined', 'True', 'False',
-                # Control flow (structural, appear in forceable lines)
-                'if', 'else', 'for', 'while', 'return', 'break', 'continue',
-                'switch', 'case', 'default', 'range', 'select',
-                'try', 'catch', 'finally', 'throw', 'throws',
-                'do', 'in', 'is', 'as', 'not', 'and', 'or',
-                # Declarations
-                'var', 'let', 'const', 'func', 'def', 'class', 'type',
-                'struct', 'interface', 'enum', 'impl', 'trait', 'pub',
-                'static', 'final', 'abstract', 'override', 'private',
-                'protected', 'public', 'internal', 'extern',
-                # Go/Rust specific
-                'defer', 'go', 'chan', 'map', 'make', 'new', 'delete',
-                'append', 'len', 'cap', 'copy', 'close', 'panic',
-                'mut', 'ref', 'self', 'Self', 'super', 'mod', 'use',
-                'fn', 'where', 'unsafe', 'async', 'await', 'move',
-                # Python specific
-                'from', 'import', 'with', 'pass', 'elif', 'except',
-                'raise', 'yield', 'lambda', 'global', 'nonlocal',
-                # JS/TS specific
-                'this', 'typeof', 'instanceof', 'void', 'export',
-                'extends', 'implements', 'constructor', 'get', 'set',
-                # Common builtins treated as keywords
-                'int', 'float', 'string', 'bool', 'byte', 'rune',
-                'int32', 'int64', 'float64', 'float32', 'uint',
-                'error', 'any', 'object', 'number',
-            }
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    stripped = orig_lines_sf[idx].strip()
-                    if stripped.startswith('return '):
-                        tokens = re.findall(r'[a-zA-Z_]\w*', stripped[7:])
-                        if tokens and all(
-                            t in known_idents or t in _RETURN_KEYWORDS
-                            for t in tokens
-                        ):
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 13: Force lines where ALL identifiers are in known_idents.
-            # Catches idiomatic Go patterns: next.ServeHTTP(w, r),
-            # rw.ResponseWriter.WriteHeader(code), conn.Close(), etc.
-            for idx in range(min(len(orig_lines_sf), n_lines)):
-                if idx not in anchor_map:
-                    stripped = orig_lines_sf[idx].strip()
-                    if not stripped or stripped in ('{', '}'):
-                        continue
-                    tokens = re.findall(r'[a-zA-Z_]\w+', stripped)
-                    if len(tokens) >= 2 and all(
-                        t in known_idents or t in _RETURN_KEYWORDS
-                        for t in tokens
-                    ):
-                        anchor_map[idx] = orig_lines_sf[idx]
-
-            # ── Language-specific anchor forcing ──────────────────────
-            ext = os.path.splitext(cube.file_origin or '')[1].lower()
-
-            # Fix 14: Python block-end keywords as anchors.
-            # Python has no }, so else:, elif, except:, finally:, pass,
-            # break, continue are the structural block markers.
-            if ext == '.py':
-                _PY_BLOCK_ENDS = {
-                    'else:', 'elif', 'except:', 'except', 'finally:',
-                    'pass', 'break', 'continue', 'raise',
-                }
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        # Exact match or starts with keyword
-                        first_word = stripped.split()[0] if stripped.split() else ''
-                        if first_word.rstrip(':') in {
-                            'else', 'elif', 'except', 'finally',
-                            'pass', 'break', 'continue', 'raise',
-                        } or stripped in _PY_BLOCK_ENDS:
-                            anchor_map[idx] = orig_lines_sf[idx]
-                # Python decorators are DATA (@app.route, @staticmethod)
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        if stripped.startswith('@'):
-                            anchor_map[idx] = orig_lines_sf[idx]
-                # Python def/class declarations
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        if (stripped.startswith('def ') or
-                                stripped.startswith('class ')) and ':' in stripped:
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 15: Rust lifetimes, macros, attributes as anchors.
-            if ext == '.rs':
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        # Rust attributes: #[derive(...)], #[cfg(...)], #![...]
-                        if stripped.startswith('#[') or stripped.startswith('#!['):
-                            anchor_map[idx] = orig_lines_sf[idx]
-                        # Rust macro invocations: println!, vec!, format!
-                        elif re.search(r'\w+!\s*[\(\[\{]', stripped):
-                            anchor_map[idx] = orig_lines_sf[idx]
-                        # Lines with lifetime annotations: 'a, &'a, <'a>
-                        elif re.search(r"'[a-z]", stripped):
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 16: JSX/TSX — HTML tags and attributes are DATA.
-            if ext in ('.jsx', '.tsx'):
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        # JSX tags: <Component, </Component>, <div, />
-                        if (stripped.startswith('<') and
-                                not stripped.startswith('<=') and
-                                not stripped.startswith('<<')):
-                            anchor_map[idx] = orig_lines_sf[idx]
-                        # JSX attributes: className=, onClick=, style=
-                        elif re.match(r'\w+={', stripped) or re.match(r'\w+="', stripped):
-                            anchor_map[idx] = orig_lines_sf[idx]
-                        # Closing tags standalone: />  )  </div>
-                        elif stripped in ('/>', ')', ');'):
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 17: C/C++ preprocessor directives are DATA.
-            if ext in ('.c', '.h', '.cpp', '.hpp', '.cc'):
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        # #include, #define, #ifdef, #ifndef, #endif, #pragma
-                        if stripped.startswith('#'):
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # Fix 18: COBOL — division/section headers, paragraph names,
-            # and END-* keywords are structural.
-            if ext in ('.cob', '.cbl', '.cobol'):
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        upper = stripped.upper()
-                        if ('DIVISION' in upper or 'SECTION' in upper or
-                                upper.startswith('END-') or
-                                upper.startswith('PERFORM ') or
-                                upper.endswith('.')):
-                            anchor_map[idx] = orig_lines_sf[idx]
-
-            # TypeScript/JS — type annotations, interface fields
-            if ext in ('.ts', '.js'):
-                for idx in range(min(len(orig_lines_sf), n_lines)):
-                    if idx not in anchor_map:
-                        stripped = orig_lines_sf[idx].strip()
-                        # Type declarations: interface, type, enum
-                        if (stripped.startswith('interface ') or
-                                stripped.startswith('type ') or
-                                stripped.startswith('enum ')):
-                            anchor_map[idx] = orig_lines_sf[idx]
-                        # Import/export statements are DATA
-                        elif (stripped.startswith('import ') or
-                              stripped.startswith('export ')):
-                            anchor_map[idx] = orig_lines_sf[idx]
+            _orig_lines = _nc(cube.content).split('\n')
+            _ext = os.path.splitext(cube.file_origin or '')[1].lower()
+            anchor_map = _build_full_anchor_map(
+                ast_hints, _orig_lines, n_lines, _ext)
 
             if anchor_map:
                 final_lines = cleaned.split('\n')
