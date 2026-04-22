@@ -358,14 +358,15 @@ def format_code(text: str, file_path: str = '') -> str:
 
     ext = os.path.splitext(file_path)[1].lower() if file_path else ''
 
+    import sys as _sys
     formatters = {
         '.go': ['gofmt'],
-        '.py': ['python', '-m', 'black', '--quiet', '-'],
+        '.py': [_sys.executable, '-m', 'black', '--quiet', '-'],
         '.rs': ['rustfmt'],
-        '.js': ['prettier', '--parser', 'babel', '--stdin-filepath', 'x.js'],
-        '.jsx': ['prettier', '--parser', 'babel', '--stdin-filepath', 'x.jsx'],
-        '.ts': ['prettier', '--parser', 'typescript', '--stdin-filepath', 'x.ts'],
-        '.tsx': ['prettier', '--parser', 'typescript', '--stdin-filepath', 'x.tsx'],
+        '.js': ['npx', 'prettier', '--parser', 'babel', '--stdin-filepath', 'x.js'],
+        '.jsx': ['npx', 'prettier', '--parser', 'babel', '--stdin-filepath', 'x.jsx'],
+        '.ts': ['npx', 'prettier', '--parser', 'typescript', '--stdin-filepath', 'x.ts'],
+        '.tsx': ['npx', 'prettier', '--parser', 'typescript', '--stdin-filepath', 'x.tsx'],
     }
 
     cmd = formatters.get(ext)
@@ -387,7 +388,7 @@ def format_code(text: str, file_path: str = '') -> str:
         if resolved:
             cmd = [resolved] + cmd[1:]
         try:
-            # For gofmt/rustfmt: write to temp file, read formatted stdout
+            # gofmt: writes to stdout. rustfmt: writes in-place.
             if ext in ('.go', '.rs'):
                 tmp = tempfile.NamedTemporaryFile(mode='w', suffix=ext,
                                                    delete=False, encoding='utf-8')
@@ -395,9 +396,16 @@ def format_code(text: str, file_path: str = '') -> str:
                 tmp.close()
                 result = subprocess.run(cmd + [tmp.name], capture_output=True,
                                         text=True, timeout=10)
+                if result.returncode == 0:
+                    # gofmt outputs to stdout; rustfmt modifies in-place
+                    if result.stdout:
+                        formatted = result.stdout
+                    else:
+                        with open(tmp.name, 'r', encoding='utf-8') as f:
+                            formatted = f.read()
+                    os.unlink(tmp.name)
+                    return normalize_content(formatted)
                 os.unlink(tmp.name)
-                if result.returncode == 0 and result.stdout:
-                    return normalize_content(result.stdout)
             else:
                 # For black/prettier: pipe via stdin
                 result = subprocess.run(cmd, input=text, capture_output=True,
