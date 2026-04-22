@@ -678,6 +678,14 @@ class FIMReconstructor:
                     ):
                         anchor_map[idx] = line
 
+            # Force blank lines at their original positions.
+            # Blank lines are structural separators (between functions,
+            # after imports, between blocks). Position is deterministic.
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    if orig_lines_sf[idx].strip() == '':
+                        anchor_map[idx] = ''
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
