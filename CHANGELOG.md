@@ -130,10 +130,16 @@ Proves the anchor forcing rules generalize beyond the test corpus.
 | server.go (HTTP server) | 893 | 80 | **80/80** | **100%** |
 | btree_google.go (B-Tree algo) | 893 | 61 | **53/61** | **86.9%** |
 
-8 failed cubes on btree.go (NCD 0.108-0.254): complex generic type
-manipulation, copy-on-write context switching, iterator state machines.
-These are the hardest patterns for LLM reconstruction — pure logic with
-no structural anchors left.
+### Pass 2 — mycelium-assisted retry (2026-04-22)
+Re-ran 8 failed btree cubes AFTER feeding 53 SHA cubes to mycelium.
+Result: **54/61 SHA (88.5%)** — cube 58 resolved at attempt 7.
+7 remaining fails: NCD 0.108-0.304 (complex generics, copy-on-write).
+Mycelium vocabulary alone is not sufficient — these need x2 context.
+
+| Pass | SHA | % | What helped |
+|------|-----|---|-------------|
+| Pass 1 (cold mycelium) | 53/61 | 86.9% | Anchors + LLM |
+| Pass 2 (53 cubes learned) | **54/61** | **88.5%** | +1 from mycelium context |
 
 ### Fixes 14-18: Language-specific anchor forcing (2026-04-22)
 All fixes are language-agnostic by default; these add per-language rules
