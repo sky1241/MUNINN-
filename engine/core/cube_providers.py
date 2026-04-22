@@ -654,6 +654,30 @@ class FIMReconstructor:
                     if '`' in line and ('json:' in line or 'xml:' in line or 'yaml:' in line or 'db:' in line):
                         anchor_map[idx] = line
 
+            # Force closing braces — predictable by indentation level.
+            # }, }), };, } else { are structural and deterministic.
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    line = orig_lines_sf[idx]
+                    stripped = line.strip()
+                    if stripped in ('}', '});', '});', '})', '};',
+                                   '} else {', '} else {',
+                                   '},'):
+                        anchor_map[idx] = line
+
+            # Force defer mu.Unlock() — always follows mu.Lock()
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    line = orig_lines_sf[idx]
+                    stripped = line.strip()
+                    if stripped.startswith('defer ') and (
+                        'Unlock()' in stripped or
+                        'Close()' in stripped or
+                        'cancel()' in stripped or
+                        'Done()' in stripped
+                    ):
+                        anchor_map[idx] = line
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():

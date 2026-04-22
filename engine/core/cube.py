@@ -370,18 +370,34 @@ def format_code(text: str, file_path: str = '') -> str:
 
     cmd = formatters.get(ext)
     if cmd:
+        import shutil
+        # Resolve the formatter binary — shutil.which + common install paths
+        binary = cmd[0]
+        resolved = shutil.which(binary)
+        if not resolved and os.name == 'nt':
+            search_dirs = {
+                'gofmt': [r'C:\Program Files\Go\bin', r'C:\Go\bin'],
+                'rustfmt': [os.path.expanduser(r'~\.cargo\bin')],
+            }
+            for d in search_dirs.get(binary, []):
+                cand = os.path.join(d, binary + '.exe')
+                if os.path.isfile(cand):
+                    resolved = cand
+                    break
+        if resolved:
+            cmd = [resolved] + cmd[1:]
         try:
-            # For gofmt/rustfmt: write to temp file, format in place
+            # For gofmt/rustfmt: write to temp file, read formatted stdout
             if ext in ('.go', '.rs'):
                 tmp = tempfile.NamedTemporaryFile(mode='w', suffix=ext,
                                                    delete=False, encoding='utf-8')
                 tmp.write(text)
                 tmp.close()
-                subprocess.run(cmd + [tmp.name], capture_output=True, timeout=10)
-                with open(tmp.name, 'r', encoding='utf-8') as f:
-                    formatted = f.read()
+                result = subprocess.run(cmd + [tmp.name], capture_output=True,
+                                        text=True, timeout=10)
                 os.unlink(tmp.name)
-                return normalize_content(formatted)
+                if result.returncode == 0 and result.stdout:
+                    return normalize_content(result.stdout)
             else:
                 # For black/prettier: pipe via stdin
                 result = subprocess.run(cmd, input=text, capture_output=True,
