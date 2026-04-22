@@ -2,8 +2,9 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-04-19 (brick 30). Engine: ~20K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**. Brick 30: SHA-256 exact match on reconstructed code (2/10 cubes Sonnet). FIM prompt v3, smart hints, annealing, progressive levels. 7 langages testes offline.
-> Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers).
+> Mis a jour: 2026-04-22. Engine: ~22K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
+> **Cube L1: 71/80 SHA (88.8%) verified, 79-80/80 predicted (99-100%).** 20 fixes total (fixes 1-20). 175 -> 0 gap lines (100% anchor coverage). 8-language support (Go/Python/Rust/JSX/C/TS/COBOL/Kotlin). Smart formatter detection + auto-install (doctor --fix).
+> Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers: cube.py 1553L, cube_providers.py 1952L, cube_analysis.py 1759L).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
 >
@@ -72,8 +73,8 @@
       |
    [vault.py + sync_tls.py 601L]           -1 Sous-sol — securite + reseau
       |
-   cube.py 1056L (core)                    -2 Fondations — resilience
-     cube_providers.py 1244L (LLM+reconstruction+waves)
+   cube.py 1553L (core+formatters+check)    -2 Fondations — resilience
+     cube_providers.py 1952L (LLM+reconstruction+20 fixes)
      cube_analysis.py 1759L (analyse+CLI)
       |
    [wal_monitor 109L + tokenizer 43L]      -3 Racines — infrastructure
@@ -401,84 +402,103 @@ Ingestion transcripts, compression, hooks PreCompact/SessionEnd.
 
 ---
 
-## cube.py — Cube Core (1056 lignes)
+## cube.py — Cube Core (1553 lignes)
 
-Scanner, dataclasses, subdivision, CubeStore, dependencies, neighbors.
+Scanner, dataclasses, subdivision, CubeStore, dependencies, neighbors,
+format_code (4 formatters), check_formatters, install_formatters.
 
-### Scanner B1 (133-262)
+### Scanner B1 (128-257)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| ScannedFile (class) | 133-153 | Resultat scan fichier |
-| scan_repo | 196-262 | Scan recursif fichiers source |
+| ScannedFile (class) | 128-148 | Resultat scan fichier |
+| scan_repo | 191-257 | Scan recursif fichiers source |
 
-### Cube & Subdivision B3-B5 (263-545)
+### Cube & Subdivision B3-B5 (258-838)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| Cube (class) | 263-301 | id, content, sha256, file_origin, level, neighbors, temp |
-| normalize_content | 302-339 | Normalise contenu pour hash |
-| sha256_hash | 340-352 | SHA-256 sur contenu normalise |
-| subdivide_file | 403-479 | B4: split fichier en cubes ~112 tokens |
-| subdivide_recursive | 480-545 | B4: split recursif /8 par niveau |
+| Cube (class) | 258-296 | id, content, sha256, file_origin, level, neighbors, temp |
+| normalize_content | 297-348 | Normalise contenu pour hash (rstrip, collapse blanks) |
+| format_code | 350-419 | Appelle gofmt/black/rustfmt/prettier avant SHA. shutil.which + fallback paths. gofmt=stdout, rustfmt=in-place |
+| _EXT_TO_FORMATTER | 425-429 | Mapping extension -> formateur |
+| _FORMATTER_INFO | 431-480 | Per-formatter: binary, fallback paths, install cmds per OS |
+| _resolve_formatter | 482-494 | Trouve un binaire formateur (which + fallback) |
+| check_formatters | 496-565 | Detecte quels formateurs sont necessaires vs installes |
+| install_formatters | 567-630 | Auto-installe les formateurs manquants (black via pip, etc) |
+| sha256_hash | 632-634 | SHA-256 sur format_code + normalize |
+| subdivide_file | 695-771 | B4: split fichier en cubes ~112 tokens |
+| subdivide_recursive | 772-838 | B4: split recursif /8 par niveau |
 
-### CubeStore B6 (546-749)
-| CubeStore (class) | 546-749 | SQLite WAL, tables cubes/neighbors/cycles |
+### CubeStore B6 (839-1042)
+| CubeStore (class) | 839-1042 | SQLite WAL, tables cubes/neighbors/cycles |
 
-### Dependencies & Neighbors B7-B8 (750-1056)
+### Dependencies & Neighbors B7-B8 (1043-1553)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| parse_dependencies | 855-876 | B7: AST Python + regex JS/TS/Go/Java |
-| extract_ast_hints | 877-954 | B7b: pre-destruction functions/classes/imports |
-| assign_neighbors | 1025-1056 | B8: adjacence + deps, max 9 voisins |
+| parse_dependencies | 1148-1168 | B7: AST Python + regex JS/TS/Go/Java |
+| extract_ast_hints | 1170-1366 | B7b: pre-destruction hints. RAID adaptatif, identifiers (36-word filter), strings, type_sigs, anchors, first/last line. Uses normalize_content for line indexing |
+| deduce_imports_from_file | 1367-1417 | Scan pkg.Symbol usage across full file |
+| enrich_hints_with_file_context | 1419-1450 | Adds deduced_imports + constant_lines to hints |
+| assign_neighbors | 1522-1553 | B8: adjacence + deps, max 9 voisins |
 
 ---
 
-## cube_providers.py — LLM Providers + Reconstruction (1244 lignes)
+## cube_providers.py — LLM Providers + Reconstruction (1952 lignes)
 
-Providers, FIM reconstruction, validation, NCD, die-and-retry waves, progressive levels.
+Providers, FIM reconstruction, anchor forcing (fixes 6-20), validation,
+NCD, die-and-retry waves, progressive levels. Language-specific forcing
+for Python, Rust, JSX, C, COBOL, TypeScript.
 
-### Providers B11-B14 (35-283)
+### Providers B11-B14 (38-357)
 | Classe | Lignes | Role |
 |--------|--------|------|
-| LLMProvider (ABC) | 35-76 | Interface abstraite |
-| OllamaProvider | 77-171 | B12: Ollama local |
-| ClaudeProvider | 172-229 | B13: Claude API |
-| OpenAIProvider | 230-283 | B14: OpenAI compatible |
+| LLMProvider (ABC) | 38-86 | Interface abstraite |
+| OllamaProvider | 88-209 | B12: Ollama local |
+| ClaudeProvider | 211-283 | B13: Claude API |
+| OpenAIProvider | 285-357 | B14: OpenAI compatible |
 
-### FIM Reconstruction B15 (284-580)
+### FIM Reconstruction B15 (359-939)
 | Classe/Fonction | Lignes | Role |
 |--------|--------|------|
-| FIMReconstructor | 284-580 | B15: FIM prompt + smart hints + post-processing |
-| reconstruct_with_neighbors | 403-580 | Core: code-with-hole prompt, anchors, identifiers, strings, types |
-| _adjust_line_count | 843-895 | Smart join: score-based continuation detection |
-| _insert_missing_blanks | 897-990 | 3-tier blank insertion (anchors > block-end > statements) |
-| _is_continuation | 803-842 | Line wrap scoring (0.0-1.0, language-agnostic) |
-| _annealing_schedule | 775-801 | Cold-hot-cold temperature curve (Kirkpatrick 1983) |
+| FIMReconstructor | 359-939 | B15: FIM prompt + smart hints + post-processing |
+| reconstruct_with_neighbors | 404-939 | Core: FIM prompt, 20 anchor forcing rules, language-specific |
+| Fix 20: skip LLM | 450-480 | If 100% anchored, return original (zero API) |
+| Anchor forcing block | 606-860 | Fixes 6-13, 14-18 (language), 19 (keywords) |
+| _RETURN_KEYWORDS | 750-780 | Expanded keyword set (Go/Python/Rust/JS/TS/COBOL) |
 
-### Mock & Results (562-625)
+### Post-processing (1436-1662)
+| Fonction | Lignes | Role |
+|----------|--------|------|
+| _is_continuation | 1436-1490 | Line wrap scoring (0.0-1.0, COBOL col7 check first) |
+| _adjust_line_count | 1492-1548 | Smart join: score-based continuation detection |
+| _insert_missing_blanks | 1550-1662 | 3-tier blank insertion (anchors > block-end > statements) |
+| _annealing_schedule | 1396-1434 | Cold-hot-cold temperature curve (Kirkpatrick 1983) |
+
+### Mock & Results (941-995)
 | Classe | Lignes | Role |
 |--------|--------|------|
-| MockLLMProvider | 562-610 | Mock pour tests |
-| ReconstructionResult | 612-625 | Resultat reconstruction |
+| MockLLMProvider | 941-983 | Mock pour tests |
+| ReconstructionResult | 985-995 | Resultat reconstruction |
 
-### Reconstruction B16-B19 (626-720)
+### Reconstruction B16-B19 (997-1117)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| reconstruct_cube | 626-670 | B16: orchestre B15+B17+B18+B19 |
-| validate_reconstruction | 672-682 | B17: SHA-256 compare |
-| compute_hotness | 684-700 | B18: perplexite voisins |
-| compute_ncd | 702-720 | B19: NCD zlib (seuil 0.3) |
+| reconstruct_cube | 997-1060 | B16: orchestre B15+B17+B18+B19 |
+| validate_reconstruction | 1062-1071 | B17: SHA-256 compare |
+| compute_hotness | 1073-1088 | B18: perplexite voisins |
+| compute_ncd | 1090-1117 | B19: NCD zlib (seuil 0.3) |
 
-### Die-and-retry B40 (722-770)
+### Die-and-retry B40 (1303-1834)
 | Element | Lignes | Role |
 |---------|--------|------|
-| WaveResult | 722-735 | Resultat d'une wave |
-| LevelResult | 737-748 | Resultat d'un level progressif |
-| reconstruct_cube_waves | 750-770 | B40: Best-of-N + annealing, ncd_give_up |
+| WaveResult | 1303-1313 | Resultat d'une wave |
+| LevelResult | 1315-1326 | Resultat d'un level progressif |
+| _query_mycelium | 1328-1352 | Spreading activation on cube identifiers |
+| reconstruct_cube_waves | 1690-1834 | B40: Best-of-N + annealing + targeted feedback |
 
-### Progressive levels B41 (1050-1120)
+### Progressive levels B41 (1837-1952)
 | Fonction | Lignes | Role |
 |----------|--------|------|
-| run_progressive_levels | 1050-1120 | B41: x1->x2->...->x11, mycelium accumulation |
+| run_progressive_levels | 1837-1952 | B41: x1->x2->...->x11, mycelium accumulation |
 
 ---
 
