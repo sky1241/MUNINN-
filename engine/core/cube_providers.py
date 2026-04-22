@@ -380,6 +380,10 @@ _FORCE_KEYWORDS = {
     'int', 'float', 'string', 'bool', 'byte', 'rune',
     'int32', 'int64', 'float64', 'float32', 'uint',
     'error', 'any', 'object', 'number',
+    # Single-letter vars common across languages (Go: w,r,i,h,v,k,n,b,s,e,f)
+    # Too short for identifier extraction but structural in context
+    'w', 'r', 'i', 'j', 'k', 'v', 'n', 'b', 's', 'e', 'f', 'h',
+    'x', 'y', 'z', 't', 'p', 'c', 'd', 'l', 'm', 'o', 'a', 'q', 'u',
 }
 
 
@@ -463,22 +467,26 @@ def _build_full_anchor_map(ast_hints: dict, orig_lines: list[str],
             s = orig_lines[idx].strip()
             if '.Lock()' in s or '.RLock()' in s or '.RUnlock()' in s:
                 am[idx] = orig_lines[idx]
-    # Fix 12: return with known idents
+    # Fix 12: return with known idents + bare return
     for idx in range(min(len(orig_lines), n_lines)):
         if idx not in am:
             s = orig_lines[idx].strip()
-            if s.startswith('return '):
+            if s == 'return':
+                # Bare return (no value) — structural, always forceable
+                am[idx] = orig_lines[idx]
+            elif s.startswith('return '):
                 tokens = re.findall(r'[a-zA-Z_]\w*', s[7:])
                 if tokens and all(t in known_idents or t in _FORCE_KEYWORDS
                                   for t in tokens):
                     am[idx] = orig_lines[idx]
     # Fix 13+19: all idents known (with expanded keywords)
+    # \w* not \w+ : single-letter vars (h, i, k, v) must be recognized
     for idx in range(min(len(orig_lines), n_lines)):
         if idx not in am:
             s = orig_lines[idx].strip()
             if not s or s in ('{', '}'):
                 continue
-            tokens = re.findall(r'[a-zA-Z_]\w+', s)
+            tokens = re.findall(r'[a-zA-Z_]\w*', s)
             if len(tokens) >= 2 and all(
                     t in known_idents or t in _FORCE_KEYWORDS for t in tokens):
                 am[idx] = orig_lines[idx]
