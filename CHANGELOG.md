@@ -151,6 +151,43 @@ heatmap should show in red.
 Optimal pipeline: 3 passes x 11 attempts = 33 API calls max per cube.
 After 3 passes, remaining fails → x2 context (molecule level).
 
+### reconstruct_adaptive() full run — btree_google.go (2026-04-22)
+First run of the full x1→x2→x3 pipeline (3 passes x 11 attempts per level).
+
+| Level | Cubes | SHA | Fails | Pass 1 SHA | Pass 2-3 SHA |
+|-------|-------|-----|-------|-----------|-------------|
+| x1 (112 tok) | 61 | 55 | 7 | 55 | +0 |
+| x2 (224 tok) | 32 | 23 | 11 | 23 | +0 |
+| x3 (336 tok) | 21 | 12 | 9 | 12 | +0 |
+
+**Key finding: Pass 2 and 3 produce ZERO new SHA at every level.**
+Pass 1 does all the work. Passes 2-3 waste 66% of API credits.
+$5 spent, $0.55 would have been enough with 1-pass-per-level.
+
+9 cubes irreducible at x3 (NCD 0.036-0.327): cubes 1,2,9,10,12,13,14,15,20.
+Cube 12 at NCD=0.036 — closest to SHA without matching.
+
+### The debate: yo-yo descent vs restart x1 (2026-04-22)
+Two competing approaches for the 9 irreducible cubes. TO BE TESTED.
+
+**Approach A — Yo-yo descent (Claude's intuition):**
+Mount x1→x2→x3 (1 pass each), then DESCEND x3→x2→x1 (1 pass each).
+Rationale: descending gives intermediate levels more context from above.
+Cost: ~$0.17 for 9 cubes.
+
+**Approach B — Restart x1 (Sky's intuition):**
+Mount x1→x2→x3 (1 pass each), then restart from x1→x2→x3 (1 pass each).
+Rationale: re-seeing the same atomic cubes with richer mycelium.
+Long-term: repeat cycles until completion or plateau.
+Cost: ~$0.17 for 9 cubes.
+
+**Sky's deeper insight:** the number of levels = log2(lines / 112).
+11 attempts per cube is the hard constant (God's Number equivalent).
+1 pass per level, not 3. Mount fast, learn fast.
+
+Both to be tested empirically. See docs/CUBE_UX_HEATMAP_PLAN.md and
+memory files project_sky_yoyo_intuition.md + project_yoyo_spec.md.
+
 ### Fixes 14-18: Language-specific anchor forcing (2026-04-22)
 All fixes are language-agnostic by default; these add per-language rules
 triggered by file extension.
