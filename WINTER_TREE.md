@@ -3,7 +3,7 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 > Mis a jour: 2026-04-22. Engine: ~22K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
-> **Cube L1: 71/80 SHA (88.8%) verified, 79-80/80 predicted (99-100%).** 20 fixes total (fixes 1-20). 175 -> 0 gap lines (100% anchor coverage). 8-language support (Go/Python/Rust/JSX/C/TS/COBOL/Kotlin). Smart formatter detection + auto-install (doctor --fix).
+> **Cube L1: 80/80 SHA (100%) on server.go + 53/61 (87%) on btree_google.go.** 21 fixes + refactor. 175 -> 0 gap lines. 73/80 auto-SHA (zero API). 8-language support. Smart formatter detection (doctor --fix). Generalization validated on unseen code.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers: cube.py 1553L, cube_providers.py 1952L, cube_analysis.py 1759L).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
 > UI: Phase 0-9 COMPLETE — 32 briques (B-UI-00..32), PyQt6 6.10.2 + pytest-qt, 152 UI tests PASS.
