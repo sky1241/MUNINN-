@@ -76,11 +76,30 @@ forcing rules eliminate 109 gaps (62% reduction), leaving only 66 gaps.
 | Fix 9 | Lines with known string literals + func decls | -30 | 82 |
 | Fix 10 | Struct field assignments (FieldName: value,) | -16 | 66 |
 
-29 cubes remaining without SHA:
-- 2 at 0 gaps (should auto-SHA): cubes 45, 54
-- 5 at 1 gap (SHA ~90%): cubes 20, 32, 47, 58, 66
-- 12 at 2 gaps (SHA ~81%): cubes 22, 26, 34, 42, 44, 52, 56, 57, 59, 65, 68, 70
-- 10 at 3+ gaps: cubes 23, 25, 27, 31, 38, 41, 48, 60, 61, 69
+### Fixes 11-13 (2026-04-22) — all-idents forcing, 46 more gaps eliminated
+| Fix | What | Gaps eliminated | Cumulative |
+|-----|------|----------------|-----------|
+| Fix 11 | Lock()/RLock()/RUnlock() as anchors | -3 | 63 |
+| Fix 12 | Return stmts with all-known identifiers | -8 | 55 |
+| Fix 13 | Any line where ALL idents (2+) are known | -35 | 20 |
+
+Total: **175 -> 20 gaps (-89%)**. 14 cubes at 0 gaps, 10 at 1, 5 at 2, 0 at 3+.
+
+### Final results — server.go L1 (80 cubes, Sonnet, 2026-04-22)
+**71/80 SHA (88.8%)** — all 18 new SHA matched on attempt 1.
+
+| Run | SHA | % | What changed |
+|-----|-----|---|---|
+| Baseline | 28/80 | 35% | First SHA ever |
+| + Anchor forcing | 37/80 | 46% | +9 |
+| + Fixes 1-5 | 47/80 | 59% | +10 |
+| + Fixes 6-10 | 53/80 | 66% | +6 |
+| + **Fixes 11-13** | **71/80** | **88.8%** | **+18** |
+
+9 cubes remaining (NCD range 0.051-0.224):
+- 4 quasi-SHA (<0.1): 45, 54, 59, 74
+- 4 close (0.1-0.2): 32, 38, 52, 68
+- 1 far: 61 (0.224)
 
 ### Critical bug fix (2026-04-21)
 **extract_ast_hints used RAW content lines but anchors are compared against
