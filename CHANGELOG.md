@@ -139,7 +139,17 @@ Mycelium vocabulary alone is not sufficient — these need x2 context.
 | Pass | SHA | % | What helped |
 |------|-----|---|-------------|
 | Pass 1 (cold mycelium) | 53/61 | 86.9% | Anchors + LLM |
-| Pass 2 (53 cubes learned) | **54/61** | **88.5%** | +1 from mycelium context |
+| Pass 2 (53 cubes learned) | 54/61 | 88.5% | +1 from mycelium context |
+| Pass 3 (54 cubes learned) | **54/61** | **88.5%** | +0 — **plateau confirmed** |
+
+**3 passes is the limit.** After pass 3, NCD barely moves (0.108-0.307).
+The 7 remaining cubes are irreducible at x1 — pure logic, not vocabulary.
+These are the **critical points** of the codebase: copy-on-write context,
+generic type manipulation, iterator state machines. Exactly what the
+heatmap should show in red.
+
+Optimal pipeline: 3 passes x 11 attempts = 33 API calls max per cube.
+After 3 passes, remaining fails → x2 context (molecule level).
 
 ### Fixes 14-18: Language-specific anchor forcing (2026-04-22)
 All fixes are language-agnostic by default; these add per-language rules
