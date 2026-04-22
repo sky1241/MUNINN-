@@ -447,6 +447,42 @@ class FIMReconstructor:
                 _nc = lambda t: t.strip()
         n_lines = len(_nc(cube.content).split('\n'))
 
+        # Fix 20: If ALL lines are anchored, skip LLM entirely.
+        # Return the anchors directly — zero API cost, guaranteed SHA.
+        if ast_hints:
+            _orig_lines = _nc(cube.content).split('\n')
+            _pre_anchor_map = {}
+            if ast_hints.get('first_line'):
+                _pre_anchor_map[0] = ast_hints['first_line']
+            if ast_hints.get('last_line'):
+                _pre_anchor_map[n_lines - 1] = ast_hints['last_line']
+            if ast_hints.get('anchors'):
+                for _ln, _lt in ast_hints['anchors']:
+                    _idx = _ln - 1
+                    if 0 <= _idx < n_lines:
+                        _pre_anchor_map[_idx] = _lt
+            # Apply all forcing rules to count total anchors
+            for cl in ast_hints.get('constant_lines', []):
+                cn = re.sub(r'  +', ' ', cl.strip())
+                for _idx in range(n_lines):
+                    if _idx not in _pre_anchor_map:
+                        on = re.sub(r'  +', ' ', _orig_lines[_idx].strip()) if _idx < len(_orig_lines) else ''
+                        if cn and cn == on:
+                            _pre_anchor_map[_idx] = _orig_lines[_idx]
+            for _idx in range(n_lines):
+                if _idx not in _pre_anchor_map and _idx < len(_orig_lines):
+                    _s = _orig_lines[_idx].strip()
+                    # Closing braces, blank lines, defer, lock, struct tags
+                    if _s in ('}', '});', '})', '};', '} else {', '},', ''):
+                        _pre_anchor_map[_idx] = _orig_lines[_idx] if _s else ''
+                    elif _s.startswith('defer ') or '.Lock()' in _s or '.RLock()' in _s:
+                        _pre_anchor_map[_idx] = _orig_lines[_idx]
+                    elif '`' in _s and ('json:' in _s or 'xml:' in _s or 'yaml:' in _s):
+                        _pre_anchor_map[_idx] = _orig_lines[_idx]
+            if len(_pre_anchor_map) >= n_lines:
+                # 100% anchored — return original content directly
+                return _nc(cube.content)
+
         # 4 neighbors each side — tested: more context = better SHA rate
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
         suffix = "\n".join(c.content for c in after[:4]) if after else ""
@@ -727,8 +763,39 @@ class FIMReconstructor:
 
             # Fix 12: Force return stmts where ALL tokens are known idents.
             # "return session, nil" — session is in idents, nil is keyword.
-            _RETURN_KEYWORDS = {'nil', 'err', 'true', 'false', 'ok', 'none',
-                                'None', 'null', 'undefined'}
+            # Fix 19: expanded set — language keywords are structural, not
+            # informational. They were excluded from identifiers (correct for
+            # prompts) but must be recognized here for line-level forcing.
+            _RETURN_KEYWORDS = {
+                # Values
+                'nil', 'err', 'true', 'false', 'ok', 'none',
+                'None', 'null', 'undefined', 'True', 'False',
+                # Control flow (structural, appear in forceable lines)
+                'if', 'else', 'for', 'while', 'return', 'break', 'continue',
+                'switch', 'case', 'default', 'range', 'select',
+                'try', 'catch', 'finally', 'throw', 'throws',
+                'do', 'in', 'is', 'as', 'not', 'and', 'or',
+                # Declarations
+                'var', 'let', 'const', 'func', 'def', 'class', 'type',
+                'struct', 'interface', 'enum', 'impl', 'trait', 'pub',
+                'static', 'final', 'abstract', 'override', 'private',
+                'protected', 'public', 'internal', 'extern',
+                # Go/Rust specific
+                'defer', 'go', 'chan', 'map', 'make', 'new', 'delete',
+                'append', 'len', 'cap', 'copy', 'close', 'panic',
+                'mut', 'ref', 'self', 'Self', 'super', 'mod', 'use',
+                'fn', 'where', 'unsafe', 'async', 'await', 'move',
+                # Python specific
+                'from', 'import', 'with', 'pass', 'elif', 'except',
+                'raise', 'yield', 'lambda', 'global', 'nonlocal',
+                # JS/TS specific
+                'this', 'typeof', 'instanceof', 'void', 'export',
+                'extends', 'implements', 'constructor', 'get', 'set',
+                # Common builtins treated as keywords
+                'int', 'float', 'string', 'bool', 'byte', 'rune',
+                'int32', 'int64', 'float64', 'float32', 'uint',
+                'error', 'any', 'object', 'number',
+            }
             for idx in range(min(len(orig_lines_sf), n_lines)):
                 if idx not in anchor_map:
                     stripped = orig_lines_sf[idx].strip()

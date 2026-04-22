@@ -12,16 +12,24 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from tokenizer import token_count
-from _secrets import redact_secrets_text as _redact_secrets_text
+try:
+    from .tokenizer import count_tokens, token_count
+except ImportError:
+    from tokenizer import count_tokens, token_count
+try:
+    from ._secrets import redact_secrets_text as _redact_secrets_text
+except ImportError:
+    from _secrets import redact_secrets_text as _redact_secrets_text
 
 
 class _ModRef:
-    """Lazy reference to muninn module — avoids circular import."""
+    """Lazy reference to muninn engine — avoids circular import."""
     def __getattr__(self, name):
-        return getattr(sys.modules['muninn'], name)
+        mod = sys.modules.get('muninn._engine') or sys.modules['muninn']
+        return getattr(mod, name)
     def __setattr__(self, name, value):
-        setattr(sys.modules['muninn'], name, value)
+        mod = sys.modules.get('muninn._engine') or sys.modules['muninn']
+        setattr(mod, name, value)
 
 _m = _ModRef()
 
@@ -46,10 +54,7 @@ def adaptive_boot_budget(context_size: int = None) -> int:
     If context_size not given, uses MUNINN_CONTEXT_SIZE env var or 200K default.
     """
     if context_size is None:
-        try:
-            context_size = int(os.environ.get("MUNINN_CONTEXT_SIZE", 200_000))
-        except (ValueError, TypeError):
-            context_size = 200_000
+        context_size = int(os.environ.get("MUNINN_CONTEXT_SIZE", 200_000))
     budget = int(context_size * 0.15)
     return max(15_000, min(budget, 100_000))
 
@@ -152,10 +157,11 @@ def init_tree():
         },
     }
 
-    _atomic_json_write(_m.TREE_META, tree)
+    with open(_m.TREE_META, "w", encoding="utf-8") as f:
+        json.dump(tree, f, ensure_ascii=False, indent=2)
 
-    _atomic_text_write(_m.TREE_DIR / "root.mn",
-        "# MUNINN|codebook=v0.1\n"
+    (_m.TREE_DIR / "root.mn").write_text(
+        "# MUNINN|codebook=v0.1\n", encoding="utf-8"
     )
 
     print(f"  Tree initialized: {_m._safe_path(_m.TREE_DIR)}")
@@ -171,8 +177,6 @@ def _tree_lock(path: Path, timeout: float = 5.0):
     lock_path = path.with_suffix(".lock")
     try:
         lock_f = open(lock_path, "w", encoding="utf-8")
-        lock_f.write("L")  # Write 1 byte — msvcrt.locking needs non-empty file
-        lock_f.flush()
         if sys.platform == "win32":
             import msvcrt
             for _ in range(int(timeout * 20)):
@@ -193,10 +197,6 @@ def _tree_lock(path: Path, timeout: float = 5.0):
         lock_f.close()
         return None, False
     except Exception:
-        try:
-            lock_f.close()
-        except Exception:
-            pass
         return None, False
 
 
@@ -222,17 +222,15 @@ def _tree_unlock(lock_f):
 def load_tree():
     if not _m.TREE_META.exists():
         return init_tree()
-    lock_f, acquired = _tree_lock(_m.TREE_META)
-    if not acquired:
-        print("WARNING: tree lock timeout on load_tree, proceeding anyway", file=sys.stderr)
+    lock_f, _ = _tree_lock(_m.TREE_META)
     try:
         with open(_m.TREE_META, encoding="utf-8") as f:
             tree = json.load(f)
         # Validate all node file paths to prevent path traversal
-        tree_dir_resolved = os.path.normcase(str(_m.TREE_DIR.resolve()))
+        tree_dir_resolved = str(_m.TREE_DIR.resolve())
         for name, node in tree.get("nodes", {}).items():
             if "file" in node:
-                resolved = os.path.normcase(str((_m.TREE_DIR / node["file"]).resolve()))
+                resolved = str((_m.TREE_DIR / node["file"]).resolve())
                 if not resolved.startswith(tree_dir_resolved + os.sep) and resolved != tree_dir_resolved:
                     print(f"WARNING: path traversal in tree node '{name}': {node['file']}, sanitized", file=sys.stderr)
                     node["file"] = f"{name}.mn"
@@ -256,9 +254,7 @@ def save_tree(tree):
     import tempfile, os
     tree["updated"] = time.strftime("%Y-%m-%d")
     _m.TREE_DIR.mkdir(parents=True, exist_ok=True)
-    lock_f, acquired = _tree_lock(_m.TREE_META)
-    if not acquired:
-        print("WARNING: tree lock timeout on save_tree, proceeding anyway", file=sys.stderr)
+    lock_f, _ = _tree_lock(_m.TREE_META)
     try:
         fd, tmp_path = tempfile.mkstemp(
             dir=str(_m.TREE_DIR), suffix=".tmp", prefix="tree_"
@@ -291,35 +287,7 @@ def _atomic_json_write(path: Path, data, indent: int = 2):
     try:
         with open(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=indent)
-        for _attempt in range(3):
-            try:
-                os.replace(tmp_path, str(path))
-                break
-            except PermissionError:
-                time.sleep(0.05)
-        else:
-            os.replace(tmp_path, str(path))
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
-
-
-def _atomic_text_write(path: Path, text: str):
-    """Atomic text write via tempfile + os.replace. For .mn branch/root files."""
-    import tempfile
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
-    try:
-        with open(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-        for _attempt in range(3):
-            try:
-                os.replace(tmp_path, str(path))
-                return
-            except PermissionError:
-                time.sleep(0.05)
-        os.replace(tmp_path, str(path))  # Final try
+        os.replace(tmp_path, str(path))
     except Exception:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -448,8 +416,7 @@ def _actr_activation(node: dict, _d: float = 0.5) -> float:
 def _days_since(date_str: str) -> int:
     """Days since a YYYY-MM-DD date string. Returns 90 on parse error."""
     try:
-        from datetime import timezone
-        return max(0, (datetime.now(timezone.utc) - datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)).days)
+        return max(0, (datetime.now() - datetime.strptime(date_str, "%Y-%m-%d")).days)
     except ValueError:
         return 90
 
@@ -545,7 +512,7 @@ def read_node(name: str, _tree: dict | None = None) -> str:
             reconsolidated = _m._extract_rules(reconsolidated)
             # B1.1: only save if it got smaller (never inflate)
             if len(reconsolidated) < original_len:
-                _atomic_text_write(filepath, reconsolidated)
+                filepath.write_text(reconsolidated, encoding="utf-8")
                 node["hash"] = compute_hash(filepath)
                 node["lines"] = reconsolidated.count("\n") + 1
                 text = reconsolidated
@@ -627,8 +594,7 @@ def _tfidf_relevance(query: str, documents: dict) -> dict:
 def build_tree(filepath):
     """R3: compress BEFORE split. R2: split if over budget.
 
-    BUG-108 fix (brick 18): wrap input with Path() so callers can pass str.
-    Also raise ValueError instead of crashing on empty / nonexistent input.
+    BUG-108 fix (brick 18): wrap with Path() and validate.
     """
     if not filepath:
         raise ValueError("build_tree requires a non-empty filepath")
@@ -649,7 +615,7 @@ def build_tree(filepath):
 
     if len(comp_lines) <= BUDGET["root_lines"]:
         root_path = _m.TREE_DIR / "root.mn"
-        _atomic_text_write(root_path, compressed)
+        root_path.write_text(compressed, encoding="utf-8")
         tree["nodes"]["root"]["lines"] = len(comp_lines)
         tree["nodes"]["root"]["last_access"] = time.strftime("%Y-%m-%d")
         save_tree(tree)
@@ -682,7 +648,7 @@ def build_tree(filepath):
             else:
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
-                _atomic_text_write(_m.TREE_DIR / branch_file, section)
+                (_m.TREE_DIR / branch_file).write_text(section, encoding="utf-8")
                 root_lines.append(f"\u2192{branch_name}:{first_line}")
 
                 tree["nodes"][branch_name] = {
@@ -708,7 +674,7 @@ def build_tree(filepath):
                 overflow = root_lines.pop()
                 branch_name = f"b{branch_id:02d}"
                 branch_file = f"{branch_name}.mn"
-                _atomic_text_write(_m.TREE_DIR / branch_file, overflow)
+                (_m.TREE_DIR / branch_file).write_text(overflow, encoding="utf-8")
                 overflow_refs.append(f"\u2192{branch_name}:{overflow[:50]}")
                 tree["nodes"][branch_name] = {
                     "type": "branch", "file": branch_file,
@@ -720,7 +686,7 @@ def build_tree(filepath):
             root_lines.extend(overflow_refs)
 
         root_path = _m.TREE_DIR / "root.mn"
-        _atomic_text_write(root_path, "\n".join(root_lines))
+        root_path.write_text("\n".join(root_lines), encoding="utf-8")
         tree["nodes"]["root"]["lines"] = len(root_lines)
         tree["nodes"]["root"]["children"] = [n for n in tree["nodes"] if n != "root"]
         save_tree(tree)
@@ -837,7 +803,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
                 new_lines = merged_text.split("\n")
                 max_l = node.get("max_lines", 150)
                 if len(new_lines) <= max_l:
-                    _atomic_text_write(filepath, merged_text)
+                    filepath.write_text(merged_text, encoding="utf-8")
                     node["lines"] = len(new_lines)
                     node["tags"] = sorted(set(node.get("tags", [])) | tag_set)[:10]
                     # V6B: Update sentiment (weighted average old + new)
@@ -858,7 +824,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             branch_file = f"{branch_name}.mn"
             branch_path = _m.TREE_DIR / branch_file
             lines = body.split("\n")
-            _atomic_text_write(branch_path, body)
+            branch_path.write_text(body, encoding="utf-8")
 
             new_node = {
                 "type": "branch",
@@ -978,23 +944,6 @@ def extract_tags(text: str) -> list[str]:
         if count >= 2 and ident not in _STOP and ident not in tags and len(tags) < 10:
             tags.add(ident)
 
-    # CHUNK 5: Enrich tags with mycelium concepts if available.
-    # get_related() finds semantically linked concepts that pure regex misses.
-    if tags and _m._REPO_PATH:
-        try:
-            if _m._CORE_DIR not in sys.path:
-                sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
-            m = Mycelium(_m._REPO_PATH)
-            for seed in list(tags)[:3]:  # top 3 tags as seeds
-                related = m.get_related(seed, top_n=3)
-                for concept, _w in related:
-                    if concept not in _STOP and len(concept) >= 4 and len(tags) < 10:
-                        tags.add(concept)
-            m.close()
-        except Exception:
-            pass  # Graceful: tags work without mycelium
-
     return sorted(tags)[:10]
 
 
@@ -1090,7 +1039,7 @@ def _load_virtual_branches(query: str, budget_tokens: int) -> list:
             registry = json.loads(reg_path.read_text(encoding="utf-8"))
             for name in dead_repos:
                 registry.get("repos", {}).pop(name, None)
-            _atomic_json_write(reg_path, registry)
+            reg_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -1172,7 +1121,10 @@ def boot(query: str = "") -> str:
         # P15: Query expansion via mycelium co-occurrences
         try:
             if _m._CORE_DIR not in sys.path: sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
+            try:
+                from .mycelium import Mycelium
+            except ImportError:
+                from mycelium import Mycelium
             m = Mycelium(_m._REPO_PATH or Path("."))
 
             # P20b: Pull relevant cross-repo knowledge from meta-mycelium
@@ -1206,13 +1158,11 @@ def boot(query: str = "") -> str:
         # TF-IDF relevance scores (0-1)
         relevance_scores = _tfidf_relevance(query, branch_contents)
 
-        # B5: Session mode detection (convergent/divergent) — used for weight
-        # adjustment in B6 below, but _sigmoid_k is no longer read by
-        # spread_activation (refactored to min-max normalization).
+        # B5: Adapt sigmoid k based on session mode (convergent/divergent)
         try:
             session_mode = detect_session_mode()
+            m._sigmoid_k = session_mode["suggested_k"]  # type: ignore[possibly-undefined]
         except Exception as e:
-            session_mode = None
             print(f"  [warn] B5 session mode: {e}", file=sys.stderr)
 
         # Spreading Activation (Collins & Loftus 1975) — semantic boost
@@ -1312,12 +1262,6 @@ def boot(query: str = "") -> str:
                                     continue
             except Exception as e:
                 print(f"  [warn] V3B BToM: {e}", file=sys.stderr)
-
-        # Close mycelium — all spreading activation / transitive work is done
-        try:
-            m.close()  # type: ignore[possibly-undefined]
-        except (NameError, AttributeError):
-            pass
 
         # B6: Adjust scoring weights by session type
         w_recall = 0.15
@@ -1621,7 +1565,7 @@ def boot(query: str = "") -> str:
                     history = [history]
             history.append(feedback)
             history = history[-20:]  # keep last 20 boots
-            _atomic_json_write(feedback_path, history, indent=1)
+            feedback_path.write_text(_json.dumps(history, indent=1, ensure_ascii=False), encoding="utf-8")
         except Exception as e:
             print(f"  [warn] boot feedback: {e}", file=sys.stderr)
 
@@ -1742,7 +1686,7 @@ def boot(query: str = "") -> str:
             if _v8b_hint:
                 boot_manifest["v8b_clarify"] = _v8b_hint
             manifest_path = _m._REPO_PATH / ".muninn" / "last_boot.json"
-            _atomic_json_write(manifest_path, boot_manifest)
+            manifest_path.write_text(json.dumps(boot_manifest), encoding="utf-8")
         except OSError:
             pass
 
@@ -1950,7 +1894,10 @@ def bridge(text: str, top_n: int = 10, hops: int = 2,
     try:
         if _m._CORE_DIR not in sys.path:
             sys.path.insert(0, _m._CORE_DIR)
-        from mycelium import Mycelium
+        try:
+            from .mycelium import Mycelium
+        except ImportError:
+            from mycelium import Mycelium
         m = Mycelium(repo)
     except Exception as e:
         return f"BRIDGE: mycelium load failed: {e}"
@@ -2085,7 +2032,10 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
     try:
         if _m._CORE_DIR not in sys.path:
             sys.path.insert(0, _m._CORE_DIR)
-        from mycelium import Mycelium
+        try:
+            from .mycelium import Mycelium
+        except ImportError:
+            from mycelium import Mycelium
         m = Mycelium(repo)
     except Exception:
         return ""
@@ -2116,7 +2066,10 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
     # subcommands into Claude's context. See _secrets.clamp_chained_commands
     # and docs/CLAUDE_CODE_LEAK_INTEL.md section 10.
     try:
-        from _secrets import clamp_chained_commands
+        try:
+            from ._secrets import clamp_chained_commands
+        except (ImportError, ValueError):
+            from _secrets import clamp_chained_commands
         output, _ = clamp_chained_commands(output)
     except Exception:
         pass  # never break the fast-path on a defense failure
@@ -2165,7 +2118,10 @@ def predict_next(current_concepts: list[str] = None, top_n: int = 5,
         else:
             if _m._CORE_DIR not in sys.path:
                 sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
+            try:
+                from .mycelium import Mycelium
+            except ImportError:
+                from mycelium import Mycelium
             m = Mycelium(repo)
         activated = m.spread_activation(current_concepts, hops=2, top_n=50)
     except Exception:
@@ -2460,7 +2416,7 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
         # Write the consolidated file
         merged_file = f"{merged_name}.mn"
         merged_path = _m.TREE_DIR / merged_file
-        _atomic_text_write(merged_path, combined)
+        merged_path.write_text(combined, encoding="utf-8")
 
         # Collect tags from all merged branches
         all_tags = set()
@@ -2878,7 +2834,7 @@ def prune(dry_run: bool = True):
             # Apply L9 (LLM compression) if branch is large enough
             compressed = _m._llm_compress(content, context=f"cold-branch:{name}")
             if compressed != content:
-                _atomic_text_write(filepath, compressed)
+                filepath.write_text(compressed, encoding="utf-8")
                 new_lines = len(compressed.split("\n"))
                 node["lines"] = new_lines
                 recompressed += 1
@@ -2902,7 +2858,10 @@ def prune(dry_run: bool = True):
         # decay() was never called before, causing unbounded growth (14.9M edges, 1.3GB).
         try:
             if _m._CORE_DIR not in sys.path: sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
+            try:
+                from .mycelium import Mycelium
+            except ImportError:
+                from mycelium import Mycelium
             m_decay = Mycelium(_m._REPO_PATH or Path("."))
             dead_edges = m_decay.decay()
             if dead_edges > 0:
@@ -2910,7 +2869,6 @@ def prune(dry_run: bool = True):
                 print(f"  MYCELIUM DECAY: {dead_edges} dead connections removed")
             else:
                 print(f"  MYCELIUM DECAY: 0 dead (all connections healthy)")
-            m_decay.close()
         except Exception as e:
             print(f"  MYCELIUM DECAY skipped: {e}", file=sys.stderr)
 
@@ -2918,7 +2876,10 @@ def prune(dry_run: bool = True):
         # Create dream connections between distant clusters (BARE Wave model)
         try:
             if _m._CORE_DIR not in sys.path: sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
+            try:
+                from .mycelium import Mycelium
+            except ImportError:
+                from mycelium import Mycelium
             m = Mycelium(_m._REPO_PATH or Path("."))
             trip_result = m.trip(intensity=0.5, max_dreams=15)
             if trip_result["created"] > 0:
@@ -2932,7 +2893,6 @@ def prune(dry_run: bool = True):
                 print(f"  H2 DREAM: {len(dream_insights)} insights generated")
                 for ins in dream_insights[:3]:
                     print(f"    [{ins['type']}] {ins['text'][:80]}")
-            m.close()
         except Exception as e:
             print(f"  H1/H2 skipped: {e}", file=sys.stderr)
 
@@ -2945,7 +2905,10 @@ def prune(dry_run: bool = True):
         _regen_tags_total = 0
         try:
             if _m._CORE_DIR not in sys.path: sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
+            try:
+                from .mycelium import Mycelium
+            except ImportError:
+                from mycelium import Mycelium
             m_regen = Mycelium(_m._REPO_PATH or Path("."))
             # H1 fix: compute surviving from CURRENT nodes (after sleep_consolidate)
             dead_set = {n for n, _ in dead}
@@ -3047,7 +3010,7 @@ def prune(dry_run: bool = True):
                                     combined = _m._cue_distill(combined)
                                     combined = _m._extract_rules(combined)
 
-                                _atomic_text_write(survivor_filepath, combined)
+                                survivor_filepath.write_text(combined, encoding="utf-8")
                                 _regen_facts_total += len(new_facts)
                                 # Update hash + line count so boot() P34 integrity check passes
                                 nodes[best_survivor]["hash"] = compute_hash(survivor_filepath)
@@ -3075,7 +3038,6 @@ def prune(dry_run: bool = True):
             if _regen_facts_total > 0 or _regen_tags_total > 0:
                 print(f"  V9A+ REGEN: {_regen_facts_total} facts + "
                       f"{_regen_tags_total} tags diffused to survivors")
-            m_regen.close()
         except Exception as e:
             import traceback
             print(f"  V9A+ regen failed: {e}", file=sys.stderr)
@@ -3297,7 +3259,10 @@ def doctor():
     try:
         if _m._CORE_DIR not in sys.path:
             sys.path.insert(0, _m._CORE_DIR)
-        from sync_backend import sync_doctor
+        try:
+            from .sync_backend import sync_doctor
+        except ImportError:
+            from sync_backend import sync_doctor
         sync_result = sync_doctor()
         for check, info in sync_result.items():
             if info.get("ok"):
@@ -3306,32 +3271,6 @@ def doctor():
                 _fail(f"Sync {check}", info.get("detail", ""))
     except Exception as e:
         _warn(f"Sync check skipped", str(e))
-
-    # 14. Code formatters for Cube reconstruction
-    try:
-        from cube import check_formatters
-    except ImportError:
-        try:
-            from engine.core.cube import check_formatters
-        except ImportError:
-            check_formatters = None
-    if check_formatters:
-        repo = _m._REPO_PATH or Path(".").resolve()
-        fmt_status = check_formatters(repo_path=str(repo))
-        any_missing = False
-        for name, info in fmt_status.items():
-            if info['needed'] and info['installed']:
-                _ok(f"formatter: {name}", info['path'] or 'npx')
-            elif info['needed'] and not info['installed']:
-                if info.get('npx_fallback'):
-                    _ok(f"formatter: {name}", "via npx (no global install)")
-                else:
-                    _warn(f"formatter: {name} NOT installed",
-                           f"needed for {', '.join(info['extensions'])} — "
-                           f"install: {info['install_cmd']}")
-                    any_missing = True
-        if any_missing:
-            _warn("Run 'muninn doctor --fix' to auto-install missing formatters")
 
     # Summary
     print(f"\n{'='*40}")
@@ -3370,7 +3309,10 @@ def diagnose():
     # 2. Mycelium health
     print()
     try:
-        from mycelium import Mycelium
+        try:
+            from .mycelium import Mycelium
+        except ImportError:
+            from mycelium import Mycelium
         m = Mycelium(_m._REPO_PATH or Path(".").resolve())
         if m._db is not None:
             n_conns = m._db.connection_count()
@@ -3555,11 +3497,11 @@ def _append_session_log(repo_path: Path, compressed: str, ratio: float):
         new_text = parts[0] + "\nR:\n" + "\n".join(existing_lines) + "\n"
         if rest:
             new_text += "\n" + rest
-        _atomic_text_write(root_path, new_text)
+        root_path.write_text(new_text, encoding="utf-8")
     else:
         # No R: section yet — append one
         root_text = root_text.rstrip() + f"\n\nR:\n{log_line}\n"
-        _atomic_text_write(root_path, root_text)
+        root_path.write_text(root_text, encoding="utf-8")
 
 
 def _extract_error_fixes(repo_path: Path, compressed: str):
@@ -3694,7 +3636,7 @@ def inject_memory(fact: str, repo_path: Path = None):
 
         # Write branch file to tree directory
         mn_path = tree_dir / nodes[live_name]["file"]
-        _atomic_text_write(mn_path, new_content)
+        mn_path.write_text(new_content, encoding="utf-8")
 
         # Update metadata
         nodes[live_name]["hash"] = compute_hash(mn_path)
@@ -3706,7 +3648,10 @@ def inject_memory(fact: str, repo_path: Path = None):
         try:
             if _m._CORE_DIR not in sys.path:
                 sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
+            try:
+                from .mycelium import Mycelium
+            except ImportError:
+                from mycelium import Mycelium
             m = Mycelium(repo)
             m.observe_text(_redact_secrets_text(fact))
             m.save()
