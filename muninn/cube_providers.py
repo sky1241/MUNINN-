@@ -705,6 +705,18 @@ class FIMReconstructor:
                     if stripped.startswith('func ') and '(' in stripped:
                         anchor_map[idx] = orig_lines_sf[idx]
 
+            # Force struct field assignments (FieldName: value,).
+            # Field name + value are DATA — order and content not deducible.
+            known_idents = set(ast_hints.get('identifiers', []))
+            for idx in range(min(len(orig_lines_sf), n_lines)):
+                if idx not in anchor_map:
+                    stripped = orig_lines_sf[idx].strip()
+                    m = re.match(r'(\w+):\s+\S', stripped)
+                    if m and (stripped.endswith(',') or stripped.endswith('{')):
+                        field_name = m.group(1)
+                        if field_name in known_idents:
+                            anchor_map[idx] = orig_lines_sf[idx]
+
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
