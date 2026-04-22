@@ -419,6 +419,216 @@ def format_code(text: str, file_path: str = '') -> str:
     return normalize_content(text)
 
 
+# ─── Formatter detection and installation ─────────────────────────────
+
+# Extension → formatter name mapping
+_EXT_TO_FORMATTER = {
+    '.go': 'gofmt', '.py': 'black', '.rs': 'rustfmt',
+    '.js': 'prettier', '.jsx': 'prettier', '.ts': 'prettier', '.tsx': 'prettier',
+}
+
+# Formatter → how to find it and how to install it per OS
+_FORMATTER_INFO = {
+    'gofmt': {
+        'which': 'gofmt',
+        'fallback_paths': {
+            'nt': [r'C:\Program Files\Go\bin\gofmt.exe', r'C:\Go\bin\gofmt.exe'],
+            'posix': ['/usr/local/go/bin/gofmt'],
+        },
+        'install': {
+            'nt': 'winget install GoLang.Go',
+            'darwin': 'brew install go',
+            'linux': 'sudo apt install golang-go',
+        },
+        'auto_cmd': None,  # requires system package manager
+    },
+    'black': {
+        'which': 'black',
+        'fallback_paths': {},
+        'install': {
+            'nt': 'pip install black',
+            'darwin': 'pip install black',
+            'linux': 'pip install black',
+        },
+        'auto_cmd': ['{python}', '-m', 'pip', 'install', 'black'],
+    },
+    'rustfmt': {
+        'which': 'rustfmt',
+        'fallback_paths': {
+            'nt': [os.path.expanduser(r'~\.cargo\bin\rustfmt.exe')],
+            'posix': [os.path.expanduser('~/.cargo/bin/rustfmt')],
+        },
+        'install': {
+            'nt': 'rustup component add rustfmt  (or: winget install Rustlang.Rustup)',
+            'darwin': 'rustup component add rustfmt  (or: brew install rustup)',
+            'linux': 'rustup component add rustfmt  (or: curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh)',
+        },
+        'auto_cmd': None,  # rustup may not be installed
+    },
+    'prettier': {
+        'which': 'prettier',
+        'fallback_paths': {},
+        'install': {
+            'nt': 'npm install -g prettier',
+            'darwin': 'npm install -g prettier',
+            'linux': 'npm install -g prettier',
+        },
+        'auto_cmd': ['npm', 'install', '-g', 'prettier'],
+        'npx_fallback': True,  # npx prettier works without global install
+    },
+}
+
+
+def _resolve_formatter(name: str) -> str | None:
+    """Find a formatter binary. Returns full path or None."""
+    import shutil
+    resolved = shutil.which(name)
+    if resolved:
+        return resolved
+    info = _FORMATTER_INFO.get(name, {})
+    os_key = 'nt' if os.name == 'nt' else 'posix'
+    for path in info.get('fallback_paths', {}).get(os_key, []):
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def check_formatters(file_paths: list[str] = None,
+                     repo_path: str = None) -> dict:
+    """Check which formatters are needed and which are installed.
+
+    Args:
+        file_paths: list of file paths to check extensions for.
+        repo_path: if given, scan the repo for all code file extensions.
+
+    Returns:
+        dict: {formatter_name: {installed: bool, path: str|None,
+               needed: bool, extensions: list, install_cmd: str}}
+    """
+    import shutil
+    # Determine which extensions are present
+    extensions = set()
+    if file_paths:
+        for fp in file_paths:
+            ext = os.path.splitext(fp)[1].lower()
+            if ext:
+                extensions.add(ext)
+    if repo_path:
+        for root, _dirs, files in os.walk(repo_path):
+            # Skip hidden dirs and common non-code dirs
+            if any(p.startswith('.') for p in root.replace('\\', '/').split('/')):
+                continue
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in _EXT_TO_FORMATTER:
+                    extensions.add(ext)
+
+    # Map extensions to needed formatters
+    needed_formatters = {}
+    for ext in extensions:
+        fmt = _EXT_TO_FORMATTER.get(ext)
+        if fmt:
+            if fmt not in needed_formatters:
+                needed_formatters[fmt] = []
+            needed_formatters[fmt].append(ext)
+
+    # Check each formatter
+    import platform
+    if os.name == 'nt':
+        os_key = 'nt'
+    elif platform.system() == 'Darwin':
+        os_key = 'darwin'
+    else:
+        os_key = 'linux'
+
+    result = {}
+    for fmt_name, info in _FORMATTER_INFO.items():
+        resolved = _resolve_formatter(fmt_name)
+        # Special case: prettier has npx fallback
+        npx_ok = False
+        if fmt_name == 'prettier' and not resolved:
+            npx = shutil.which('npx')
+            if npx:
+                npx_ok = True
+                resolved = 'npx'
+        needed = fmt_name in needed_formatters
+        result[fmt_name] = {
+            'installed': resolved is not None,
+            'path': resolved,
+            'needed': needed,
+            'extensions': needed_formatters.get(fmt_name, []),
+            'install_cmd': info['install'].get(os_key, ''),
+            'npx_fallback': npx_ok,
+        }
+
+    return result
+
+
+def install_formatters(formatters: list[str] = None, auto: bool = False,
+                       file_paths: list[str] = None,
+                       repo_path: str = None) -> dict:
+    """Install missing formatters needed for the given files/repo.
+
+    Args:
+        formatters: specific formatter names to install. If None, auto-detect.
+        auto: if True, install without confirmation. If False, print and return.
+        file_paths: passed to check_formatters if formatters is None.
+        repo_path: passed to check_formatters if formatters is None.
+
+    Returns:
+        dict: {formatter: 'installed' | 'skipped' | 'failed' | 'already'}
+    """
+    import subprocess, sys, shutil
+
+    status = check_formatters(file_paths=file_paths, repo_path=repo_path)
+
+    to_install = []
+    for name, info in status.items():
+        if formatters and name not in formatters:
+            continue
+        if not info['installed'] and info['needed']:
+            # prettier with npx is fine
+            if name == 'prettier' and info.get('npx_fallback'):
+                continue
+            to_install.append(name)
+
+    if not to_install:
+        return {name: 'already' for name in status if status[name]['installed']}
+
+    results = {}
+
+    for name in to_install:
+        info = _FORMATTER_INFO[name]
+        auto_cmd = info.get('auto_cmd')
+
+        if auto_cmd:
+            # Replace {python} with sys.executable
+            cmd = [sys.executable if t == '{python}' else t for t in auto_cmd]
+
+            if not auto:
+                print(f"  [MISSING] {name} — run: {' '.join(cmd)}")
+                results[name] = 'skipped'
+                continue
+
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if r.returncode == 0:
+                    results[name] = 'installed'
+                else:
+                    results[name] = 'failed'
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                results[name] = 'failed'
+        else:
+            # Can't auto-install (system package manager needed)
+            install_cmd = info['install'].get(
+                'nt' if os.name == 'nt' else 'linux', '')
+            if not auto:
+                print(f"  [MISSING] {name} — install manually: {install_cmd}")
+            results[name] = 'skipped'
+
+    return results
+
+
 def sha256_hash(text: str, file_path: str = '') -> str:
     """B5: SHA-256 hash of formatted + normalized content."""
     formatted = format_code(text, file_path)

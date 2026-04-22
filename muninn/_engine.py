@@ -21,7 +21,6 @@ Usage:
 __version__ = "0.9.1"
 
 import argparse
-import hashlib
 import io
 import json
 import os
@@ -29,39 +28,20 @@ import re
 import sys
 import time
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-MUNINN_ROOT = Path(__file__).resolve().parent.parent
-
+MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
+from tokenizer import count_tokens, token_count
+from _secrets import redact_secrets_text as _redact_secrets_text
 try:
-    from .tokenizer import count_tokens, token_count
-except ImportError:
-    sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
-    try:
-        from .tokenizer import count_tokens, token_count
-    except ImportError:
-        from tokenizer import count_tokens, token_count
-
-try:
-    from ._secrets import redact_secrets_text as _redact_secrets_text
-except ImportError:
-    from _secrets import redact_secrets_text as _redact_secrets_text
-    from _secrets import redact_secrets_text as _redact_secrets_text
-
-try:
-    from .sentiment import score_sentiment, score_session
+    from sentiment import score_sentiment, score_session
     _HAS_SENTIMENT = True
 except ImportError:
-    try:
-        from sentiment import score_sentiment, score_session
-        from sentiment import score_sentiment, score_session
-        _HAS_SENTIMENT = True
-    except ImportError:
-        _HAS_SENTIMENT = False
+    _HAS_SENTIMENT = False
 
 # Lazy-loaded global
 _CB = None
@@ -70,78 +50,36 @@ _REPO_PATH = None
 _SKIP_L9 = False
 _CORE_DIR = str(Path(__file__).resolve().parent)
 
-# Secret patterns — applied in compress_file and compress_transcript
-# Tested against 24+ real secret formats. Zero false positives on natural text.
-_SECRET_PATTERNS = [
-    # --- Git/CI ---
-    r'ghp_[A-Za-z0-9]{20,}',       # GitHub PAT classic
-    r'github_pat_[A-Za-z0-9_]{20,}',  # GitHub fine-grained PAT
-    r'gho_[A-Za-z0-9]{20,}',       # GitHub OAuth
-    r'ghu_[A-Za-z0-9]{20,}',       # GitHub user-to-server
-    r'ghs_[A-Za-z0-9]{20,}',       # GitHub server-to-server
-    r'glpat-[A-Za-z0-9\-_]{20,}',  # GitLab PAT
-    # --- Cloud providers ---
-    r'AKIA[A-Z0-9]{16}',           # AWS access keys
-    r'AIzaSy[A-Za-z0-9\-_]{33}',   # Google Cloud API keys
-    r'DefaultEndpointsProtocol=[^\s]+',  # Azure storage connection string
-    # --- AI/SaaS API keys ---
-    r'sk-[A-Za-z0-9\-._]{20,}',    # Anthropic/OpenAI (sk-ant-*, sk-proj-*)
-    r'sk_live_[A-Za-z0-9]{20,}',   # Stripe secret key
-    r'pk_live_[A-Za-z0-9]{20,}',   # Stripe publishable key
-    r'SG\.[A-Za-z0-9\-_.]{20,}',   # SendGrid
-    r'SK[a-f0-9]{32}',             # Twilio
-    r'HRKU-[a-f0-9\-]{36}',        # Heroku
-    # --- Package registries ---
-    r'npm_[A-Za-z0-9]{20,}',       # NPM token
-    r'pypi-[A-Za-z0-9]{20,}',      # PyPI token
-    # --- Chat/Social ---
-    r'xox[bpsar]-[A-Za-z0-9\-]{10,}',  # Slack tokens
-    r'[A-Za-z0-9]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}',  # Discord bot token
-    # --- Database URIs (password embedded) ---
-    r'(?:mongodb(?:\+srv)?|postgresql|mysql|redis|amqp)://[^\s]*:[^\s@]+@[^\s]+',  # DB connection strings
-    # --- Generic ---
-    r'-----BEGIN\s+\w*\s*PRIVATE KEY-----[\s\S]*?-----END',  # PEM private keys
-    r'Bearer\s+[A-Za-z0-9\-._~+/]{20,}=*',  # X12: OAuth Bearer tokens (min 20 chars to avoid false positive prose)
-    r'token[=:]\s*\S{20,}',        # Generic token= or token:
-    r'password[=:]\s*\S+',         # Generic password= or password:
-    r'secret[=:]\s*\S{10,}',       # Generic secret= or secret:
-    r'api[_-]?key[=:]\s*\S{10,}',  # Generic api_key= or apikey:
-    r'(?:cl[eé]|mdp|mot\s+de\s+passe|passwd|passphrase)[=:\s]+\S+',  # FR: clé/mdp/mot de passe
-]
-
-# P10: Compile secret patterns once at module load (not per-call)
-_COMPILED_SECRET_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _SECRET_PATTERNS]
+# M5 fix: single source of truth for secret patterns — import from _secrets.py
+# instead of duplicating the 24+ patterns list here. Prevents silent drift.
+try:
+    from _secrets import _SECRET_PATTERNS, _COMPILED_PATTERNS as _COMPILED_SECRET_PATTERNS
+except ImportError:
+    from engine.core._secrets import _SECRET_PATTERNS, _COMPILED_PATTERNS as _COMPILED_SECRET_PATTERNS
 
 
 # Legacy globals — recomputed by _refresh_tree_paths()
 TREE_DIR = MUNINN_ROOT / "memory"
 TREE_META = TREE_DIR / "tree.json"
 
-# Register this module so sub-modules' _ModRef can find globals
-sys.modules.setdefault('muninn._engine', sys.modules[__name__])
-# Also register as 'muninn' for backward compat (flat import mode)
-sys.modules.setdefault('muninn', sys.modules.get('muninn', sys.modules[__name__]))
+# Ensure sub-modules can find us as 'muninn' even when run as __main__
+sys.modules.setdefault('muninn', sys.modules[__name__])
 
 # ── SUB-MODULE RE-EXPORTS ─────────────────────────────────────
-# Sub-modules access shared globals via _ModRef -> sys.modules['muninn._engine'].
+# Sub-modules access shared globals via `import muninn as _m`.
 # Import order matters: layers first (no deps), tree second, feed third.
-try:
-    from .muninn_layers import *  # noqa: F401,F403
-    from .muninn_tree import *    # noqa: F401,F403
-    from .muninn_feed import *    # noqa: F401,F403
-except ImportError:
-    from muninn_layers import *  # noqa: F401,F403
-    from muninn_tree import *    # noqa: F401,F403
-    from muninn_feed import *    # noqa: F401,F403
+from muninn_layers import *  # noqa: F401,F403
+from muninn_tree import *    # noqa: F401,F403
+from muninn_feed import *    # noqa: F401,F403
 
 
 # ── SCAN — auto-generate local codebook (R5) ────────────────────
 
 def scan_repo(repo_path: Path, output_path: str = None):
-    """Scan a repo to auto-generate its local codebook + neuron map JSON.
+    """Scan a repo to auto-generate its local codebook.
     Finds frequent words, entities, paths, numbers and assigns short codes.
     This is R5: codebook local per node.
-    If output_path is given, writes neuron map JSON for the UI."""
+    CHUNK 9: If output_path given, writes neuron map JSON for UI."""
     repo_path = repo_path.resolve()
     print(f"=== MUNINN SCAN: {repo_path.name} ===")
 
@@ -285,8 +223,16 @@ def scan_repo(repo_path: Path, output_path: str = None):
     }
 
     local_path = muninn_dir / "local.json"
-    with open(local_path, "w", encoding="utf-8") as f:
-        json.dump(local, f, ensure_ascii=False, indent=2)
+    import tempfile as _tmpmod
+    _fd, _tmp = _tmpmod.mkstemp(dir=str(local_path.parent), suffix=".tmp")
+    try:
+        with open(_fd, "w", encoding="utf-8") as f:
+            json.dump(local, f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, str(local_path))
+    except Exception:
+        if os.path.exists(_tmp):
+            os.unlink(_tmp)
+        raise
 
     print(f"  Generated: {len(encode)} local codes")
     print(f"  Saved: {_safe_path(local_path)}")
@@ -298,75 +244,58 @@ def scan_repo(repo_path: Path, output_path: str = None):
         orig = next((c[1] for c in candidates if c[0] == pattern), 0)
         print(f"    '{pattern}' -> '{code}' ({orig}x)")
 
-    # Generate neuron map JSON for UI if output requested
+    # CHUNK 9: Generate neuron map JSON for UI if output requested
     if output_path:
         nodes = []
         connections = []
         node_ids = set()
-
-        # Build nodes from candidates (words, entities, paths, numbers)
         level_map = {"word": "F", "entity": "R", "path": "I", "number": "B"}
+        zone_map = {"word": "Concepts", "entity": "Entites",
+                    "path": "Structure", "number": "Metriques"}
+        max_count = candidates[0][1] if candidates else 1
         for i, (pattern, count, savings, ptype) in enumerate(candidates[:80]):
             nid = re.sub(r'[^a-zA-Z0-9_]', '_', pattern.lower())
             if nid in node_ids:
                 nid = f"{nid}_{i}"
             node_ids.add(nid)
-            # Confidence from relative frequency (0-100)
-            max_count = candidates[0][1] if candidates else 1
             confidence = min(100, int(100 * count / max_count))
-            # CHUNK 3: temperature from relative frequency (0.0-1.0)
             temperature = count / max_count if max_count > 0 else 0.0
-            # Zone from pattern type
-            zone_map = {"word": "Concepts", "entity": "Entites",
-                        "path": "Structure", "number": "Metriques"}
             nodes.append({
-                "id": nid,
-                "label": pattern,
+                "id": nid, "label": pattern,
                 "level": level_map.get(ptype, "F"),
                 "status": "done" if pattern in encode else "todo",
-                "entry": "",
-                "depth": 0 if ptype == "entity" else 1,
+                "entry": "", "depth": 0 if ptype == "entity" else 1,
                 "confidence": confidence,
                 "temperature": round(temperature, 3),
                 "zone": zone_map.get(ptype, ""),
             })
-
-        # Build connections: co-occurrence within same file
-        file_concepts = {}  # file_idx -> list of node indices
-        for fi, text in enumerate(all_text):
-            text_lower = text.lower()
-            present = []
-            for ni, (pattern, count, savings, ptype) in enumerate(candidates[:80]):
-                if pattern.lower() in text_lower:
-                    present.append(ni)
-            if len(present) >= 2:
-                file_concepts[fi] = present
-
-        # Create edges from co-occurrence (limit to avoid clutter)
-        edge_set = set()
-        for fi, present in file_concepts.items():
-            for a in present:
-                for b in present:
-                    if a < b:
-                        edge_set.add((a, b))
-        node_list = list(node_ids)
-        for a, b in list(edge_set)[:200]:  # cap edges
-            if a < len(nodes) and b < len(nodes):
-                connections.append({
-                    "from": nodes[a]["id"],
-                    "to": nodes[b]["id"],
-                })
-
-        neuron_data = {
-            "name": repo_path.name,
-            "family": "feuillu",
-            "nodes": nodes,
-            "connections": connections,
-        }
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(neuron_data, f, ensure_ascii=False, indent=2)
-        print(f"  Neuron map: {len(nodes)} nodes, {len(connections)} edges -> {output_path}")
+        # Co-occurrence connections
+        file_concepts = {}
+        for f in repo_path.rglob("*"):
+            if f.is_file() and f.suffix in {".py", ".md", ".txt", ".rs", ".ts", ".js"}:
+                try:
+                    text = f.read_text(encoding="utf-8", errors="ignore")[:10000]
+                    present = [n["id"] for n in nodes if n["label"].lower() in text.lower()]
+                    for a in present:
+                        for b in present:
+                            if a < b:
+                                connections.append({"from": a, "to": b})
+                except (PermissionError, OSError):
+                    pass
+        # Dedup connections
+        seen = set()
+        deduped = []
+        for c in connections:
+            key = (c["from"], c["to"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(c)
+        scan_data = {"nodes": nodes, "connections": deduped[:500]}
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(scan_data, f, ensure_ascii=False, indent=2)
+        print(f"\n  Neuron map: {len(nodes)} nodes, {len(deduped)} connections -> {output_path}")
 
 
 def analyze_file(filepath: Path) -> dict:
@@ -406,10 +335,7 @@ def bootstrap_mycelium(repo_path: Path):
     print(f"=== MUNINN BOOTSTRAP: {repo_path.name} ===")
 
     if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-    try:
-        from .mycelium import Mycelium
-    except ImportError:
-        from mycelium import Mycelium
+    from mycelium import Mycelium
 
     m = Mycelium(repo_path)
     m.start_session()
@@ -624,16 +550,22 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
     TREE_DIR.mkdir(parents=True, exist_ok=True)
     tree = load_tree()
     root_path = TREE_DIR / "root.mn"
-    root_path.write_text(content, encoding="utf-8")
+    import tempfile as _tmpmod
+    _fd, _tmp = _tmpmod.mkstemp(dir=str(root_path.parent), suffix=".tmp")
+    try:
+        with open(_fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(_tmp, str(root_path))
+    except Exception:
+        if os.path.exists(_tmp):
+            os.unlink(_tmp)
+        raise
     tree["nodes"]["root"]["lines"] = len(lines)
     tree["nodes"]["root"]["last_access"] = time.strftime("%Y-%m-%d")
     tree["nodes"]["root"]["tags"] = top_concepts[:7]
     save_tree(tree)
 
-    try:
-        from .tokenizer import token_count
-    except ImportError:
-        from tokenizer import token_count
+    from tokenizer import token_count
     tok = token_count(content)
     print(f"\n  root.mn generated: {len(lines)} lines, {tok} tokens")
     print(f"  Format: SOL.mn (machine-optimal)")
@@ -856,7 +788,7 @@ def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
         hook_input = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError, Exception):
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError):
         sys.exit(0)
 
     # Audit 2026-04-10: type-check before .get() to never crash on bad input
@@ -892,10 +824,10 @@ def main():
                 from _secrets import clamp_chained_commands
                 result, _ = clamp_chained_commands(result)
             except Exception:
-                pass
+                pass  # never block hook execution on a defense failure
             print(result)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[MUNINN BRIDGE ERROR] {{type(e).__name__}}: {{e}}", file=sys.stderr)
 
     sys.exit(0)
 
@@ -1095,7 +1027,7 @@ def _emit_empty():
 
 def _truncate_with_marker(text, max_chars):
     # BUG-101 fix (audit 2026-04-10): clamp negative slice and account for
-    # marker length.
+    # marker length, otherwise small max_chars produces oversized output.
     if max_chars <= 0:
         return ""
     if len(text) <= max_chars:
@@ -1219,7 +1151,13 @@ if __name__ == "__main__":
 
 
 def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
-    """Copy the 3 PreToolUse enforcement hooks from Muninn source to target."""
+    """Copy the 3 PreToolUse enforcement hooks from Muninn source to target.
+
+    Chunk 12 of leak intel battle plan: enforces RULES 1, 2, 3 in code
+    rather than relying on CLAUDE.md text suggestions.
+
+    Returns dict mapping hook script name -> destination Path.
+    """
     return _copy_hooks_from_source(repo_path, [
         "pre_tool_use_bash_destructive.py",
         "pre_tool_use_bash_secrets.py",
@@ -1228,10 +1166,17 @@ def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
 
 
 def _install_scaling_hooks(repo_path: Path) -> dict:
-    """Copy scaling/enterprise hooks (chunk 15) - NOT registered automatically.
+    """Copy the 3 scaling/enterprise hooks from Muninn source to target.
 
-    Sky activates them manually via settings.local.json when a customer
-    needs compliance/audit/drift detection. See docs/SCALING_NOTES.md.
+    Chunk 15 of leak intel battle plan: scaffolding for Phase 3 enterprise
+    pitch (compliance, audit, drift detection). These hooks are COPIED to
+    the target's .claude/hooks/ but NOT registered in settings.local.json.
+    Sky/admin activates them manually when a customer needs them by editing
+    settings.local.json.
+
+    See docs/SCALING_NOTES.md for details.
+
+    Returns dict mapping hook script name -> destination Path.
     """
     return _copy_hooks_from_source(repo_path, [
         "notification_audit_hook.py",
@@ -1241,13 +1186,18 @@ def _install_scaling_hooks(repo_path: Path) -> dict:
 
 
 def _copy_hooks_from_source(repo_path: Path, hook_names: list) -> dict:
-    """Generic helper: copy hook scripts from this Muninn source to target."""
+    """Generic helper: copy hook scripts from this Muninn source to target.
+
+    Source is .claude/hooks/ in the Muninn repo this code lives in.
+    Target is .claude/hooks/ in repo_path.
+    Skips silently if source script doesn't exist.
+    """
     import shutil
 
     hooks_dir = repo_path / ".claude" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
-    muninn_root = Path(__file__).resolve().parent.parent
+    muninn_root = Path(__file__).resolve().parent.parent.parent
     source_dir = muninn_root / ".claude" / "hooks"
 
     installed = {}
@@ -1292,10 +1242,14 @@ def install_hooks(repo_path: Path):
     # (chunk 5 of leak intel battle plan)
     sas_path = _generate_subagent_start_hook(repo_path, engine_core_dir)
 
-    # Copy PreToolUse enforcement hooks (chunk 12)
+    # Copy PreToolUse enforcement hooks (chunk 12 of leak intel battle plan)
+    # These enforce CLAUDE.md RULES 1, 2, 3 in code rather than text suggestion.
     ptu_hooks = _install_pre_tool_use_hooks(repo_path)
 
-    # Copy scaling hooks (chunk 15) - placed in target but not auto-registered
+    # Copy scaling/enterprise hooks (chunk 15) - scripts are placed in
+    # target .claude/hooks/ but NOT registered in settings.local.json. Sky
+    # activates them manually when a customer needs compliance/audit features.
+    # See docs/SCALING_NOTES.md.
     _install_scaling_hooks(repo_path)
 
     feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
@@ -1313,6 +1267,8 @@ def install_hooks(repo_path: Path):
         "SubagentStart": [{"type": "command", "command": sas_cmd, "timeout": 10}],
     }
 
+    # PreToolUse hooks use a different format with matchers
+    # See https://code.claude.com/docs/en/hooks
     pre_tool_entries = []
     if "pre_tool_use_bash_destructive.py" in ptu_hooks:
         pre_tool_entries.append({
@@ -1356,6 +1312,9 @@ def install_hooks(repo_path: Path):
     installed = []
 
     def _extract_commands(entries):
+        """Extract command strings from a hook entries list, supporting both
+        the simple format ({type, command}) and the matcher format
+        ({matcher, hooks: [{type, command}]}) used by PreToolUse."""
         cmds = []
         for e in entries or []:
             if not isinstance(e, dict):
@@ -1374,8 +1333,11 @@ def install_hooks(repo_path: Path):
             existing_hooks[hook_name] = hook_entries
             installed.append(hook_name)
         else:
+            # Check if existing hook points to a stale muninn.py or bridge path
             existing_cmds = _extract_commands(existing_hooks[hook_name])
             new_cmds = _extract_commands(hook_entries)
+            # If any existing cmd mentions muninn AND any new cmd is missing,
+            # treat as needing update
             if any("muninn" in c.lower() or "pre_tool_use" in c.lower() or "bridge_hook" in c.lower()
                    for c in existing_cmds):
                 missing_in_existing = [nc for nc in new_cmds if nc not in existing_cmds]
@@ -1504,10 +1466,7 @@ def purge_secrets_db(repo_path: Path = None):
     Removes any concept whose name matches a secret pattern, along with
     all its edges, fusions, and edge_zones.
     """
-    try:
-        from .mycelium_db import MyceliumDB
-    except ImportError:
-        from mycelium_db import MyceliumDB
+    from mycelium_db import MyceliumDB
 
     total = 0
 
@@ -1568,8 +1527,8 @@ def main():
     parser.add_argument("--no-l9", action="store_true", help="Skip L9 (LLM API) — use only free layers")
     parser.add_argument("--trigger", choices=["hook", "stop"], default="hook",
                         help="Hook trigger type (hook=PreCompact/SessionEnd, stop=Stop)")
-    parser.add_argument("--output", help="Output file path (e.g., scan JSON for UI)")
     parser.add_argument("--force", action="store_true", help="Force operation (e.g., prune without dry-run)")
+    parser.add_argument("--output", help="Output path for scan neuron map JSON (CHUNK 9)")
     parser.add_argument("--password", help="Password for vault lock/unlock (AES-256)")
 
     args = parser.parse_args()
@@ -1630,6 +1589,20 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         doctor()
+        # --fix: auto-install missing formatters
+        if getattr(args, 'fix', False) or (
+                hasattr(args, 'file') and args.file == '--fix'):
+            try:
+                from cube import install_formatters
+            except ImportError:
+                from engine.core.cube import install_formatters
+            repo = _REPO_PATH or Path(".").resolve()
+            results = install_formatters(repo_path=str(repo), auto=True)
+            for name, status in results.items():
+                if status == 'installed':
+                    print(f"  [INSTALLED] {name}")
+                elif status == 'failed':
+                    print(f"  [FAILED] {name}")
         return
 
     if args.command in ("lock", "unlock", "rekey"):
@@ -1640,7 +1613,6 @@ def main():
                 _refresh_tree_paths()
         repo = _REPO_PATH or Path(".").resolve()
         try:
-            from vault import Vault
             from vault import Vault
         except ImportError:
             print("ERROR: vault module not found")
@@ -1690,10 +1662,7 @@ def main():
                 _refresh_tree_paths()
         repo = _REPO_PATH or Path(".")
         if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-        try:
-            from .mycelium import Mycelium
-        except ImportError:
-            from mycelium import Mycelium
+        from mycelium import Mycelium
         m = Mycelium(repo)
         intensity = 0.7 if args.force else 0.5
         result = m.trip(intensity=intensity, max_dreams=20)
@@ -1707,7 +1676,11 @@ def main():
         if result.get("reason"):
             print(f"  Note: {result['reason']}")
         for d in result["dreams"][:10]:
-            print(f"    {d['from']} <-> {d['to']} (zones: {d['zones'][0][:20]}|{d['zones'][1][:20]})")
+            zones = d.get('zones', [])
+            if len(zones) >= 2:
+                print(f"    {d['from']} <-> {d['to']} (zones: {zones[0][:20]}|{zones[1][:20]})")
+            else:
+                print(f"    {d['from']} <-> {d['to']}")
         if result["created"] > 10:
             print(f"    ... and {result['created'] - 10} more")
         return
@@ -1733,7 +1706,7 @@ def main():
         if not args.file:
             print("ERROR: repo path required. Usage: muninn.py scan <repo-path>")
             sys.exit(1)
-        scan_repo(Path(args.file), output_path=args.output)
+        scan_repo(Path(args.file), output_path=getattr(args, 'output', None))
         return
 
     if args.command == "bootstrap":
@@ -1783,10 +1756,7 @@ def main():
             save_tree(tree)
             try:
                 if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-                try:
-                    from .mycelium import Mycelium
-                except ImportError:
-                    from mycelium import Mycelium
+                from mycelium import Mycelium
                 m = Mycelium(repo)
                 pushed = m.sync_to_meta()
                 print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
@@ -1927,10 +1897,7 @@ def main():
                 _refresh_tree_paths()
         if _CORE_DIR not in sys.path:
             sys.path.insert(0, _CORE_DIR)
-        try:
-            from .sync_backend import get_sync_backend, save_sync_config, _load_sync_config
-        except ImportError:
-            from sync_backend import get_sync_backend, save_sync_config, _load_sync_config
+        from sync_backend import get_sync_backend, save_sync_config, _load_sync_config
         sub = args.file or "status"  # Default sub-action
 
         if sub == "status":
@@ -1955,10 +1922,7 @@ def main():
             print(f"Backend switched to: {new_backend}")
         elif sub == "migrate":
             # I2: Migration — backend-to-backend
-            try:
-                from .sync_backend import migrate_backend
-            except ImportError:
-                from sync_backend import migrate_backend
+            from sync_backend import migrate_backend
             config = _load_sync_config()
             src_type = config.get("backend", "shared_file")
             # Migrate to the "other" backend
@@ -1972,10 +1936,7 @@ def main():
                 print(f"  Verification: SKIP (no verification possible)")
         elif sub == "export":
             # I5: Export meta to JSON
-            try:
-                from .sync_backend import export_meta_json
-            except ImportError:
-                from sync_backend import export_meta_json
+            from sync_backend import export_meta_json
             out_path = Path(args.repo) if args.repo else Path("muninn_export.json")
             result = export_meta_json(out_path)
             print(f"Exported: {result['edges']} edges, {result['fusions']} fusions -> {out_path}")
@@ -1984,18 +1945,12 @@ def main():
             if not args.repo:
                 print("ERROR: usage: muninn sync import --repo <json-file>")
                 sys.exit(1)
-            try:
-                from .sync_backend import import_meta_json
-            except ImportError:
-                from sync_backend import import_meta_json
+            from sync_backend import import_meta_json
             result = import_meta_json(Path(args.repo))
             print(f"Imported: {result['edges']} edges, {result['fusions']} fusions")
         elif sub == "verify-hooks":
             # I3: Verify hook integration
-            try:
-                from .sync_backend import verify_hooks
-            except ImportError:
-                from sync_backend import verify_hooks
+            from sync_backend import verify_hooks
             result = verify_hooks()
             print("=== MUNINN SYNC HOOK VERIFY ===")
             for site, status in result.items():
@@ -2003,10 +1958,7 @@ def main():
                 print(f"  {mark} {site}")
         elif sub == "doctor":
             # I4: Sync health check
-            try:
-                from .sync_backend import sync_doctor
-            except ImportError:
-                from sync_backend import sync_doctor
+            from sync_backend import sync_doctor
             result = sync_doctor()
             print("=== MUNINN SYNC DOCTOR ===")
             for check, info in result.items():

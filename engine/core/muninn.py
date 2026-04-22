@@ -1589,6 +1589,20 @@ def main():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
         doctor()
+        # --fix: auto-install missing formatters
+        if getattr(args, 'fix', False) or (
+                hasattr(args, 'file') and args.file == '--fix'):
+            try:
+                from cube import install_formatters
+            except ImportError:
+                from engine.core.cube import install_formatters
+            repo = _REPO_PATH or Path(".").resolve()
+            results = install_formatters(repo_path=str(repo), auto=True)
+            for name, status in results.items():
+                if status == 'installed':
+                    print(f"  [INSTALLED] {name}")
+                elif status == 'failed':
+                    print(f"  [FAILED] {name}")
         return
 
     if args.command in ("lock", "unlock", "rekey"):

@@ -3307,6 +3307,32 @@ def doctor():
     except Exception as e:
         _warn(f"Sync check skipped", str(e))
 
+    # 14. Code formatters for Cube reconstruction
+    try:
+        from cube import check_formatters
+    except ImportError:
+        try:
+            from engine.core.cube import check_formatters
+        except ImportError:
+            check_formatters = None
+    if check_formatters:
+        repo = _m._REPO_PATH or Path(".").resolve()
+        fmt_status = check_formatters(repo_path=str(repo))
+        any_missing = False
+        for name, info in fmt_status.items():
+            if info['needed'] and info['installed']:
+                _ok(f"formatter: {name}", info['path'] or 'npx')
+            elif info['needed'] and not info['installed']:
+                if info.get('npx_fallback'):
+                    _ok(f"formatter: {name}", "via npx (no global install)")
+                else:
+                    _warn(f"formatter: {name} NOT installed",
+                           f"needed for {', '.join(info['extensions'])} — "
+                           f"install: {info['install_cmd']}")
+                    any_missing = True
+        if any_missing:
+            _warn("Run 'muninn doctor --fix' to auto-install missing formatters")
+
     # Summary
     print(f"\n{'='*40}")
     if fail_count == 0:
