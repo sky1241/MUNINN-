@@ -110,7 +110,7 @@
     "b0002": {
       "type": "branch",
       "file": "b0002.mn",
-      "lines": 3,
+      "lines": 29,
       "max_lines": 150,
       "children": [],
       "parent": "root",
