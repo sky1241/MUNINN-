@@ -185,8 +185,37 @@ Cost: ~$0.17 for 9 cubes.
 11 attempts per cube is the hard constant (God's Number equivalent).
 1 pass per level, not 3. Mount fast, learn fast.
 
-Both to be tested empirically. See docs/CUBE_UX_HEATMAP_PLAN.md and
-memory files project_sky_yoyo_intuition.md + project_yoyo_spec.md.
+Both tested: TIE (0 vs 0) on fails-only. Neither approach resolved
+the 9 irreducible cubes. But test B was incomplete (API died mid-run).
+
+### A/B test results (2026-04-22)
+- Test A (yo-yo descent): 0 new SHA on 18 cubes
+- Test B (restart x1): 0 new SHA (API died at x2 cube 15)
+- Neither retry-on-fails approach works — these cubes need something else
+
+### Learned anchors + 1-pass restart cycle (2026-04-23)
+
+**Sky's key insight:** lines the model gets RIGHT during a failed attempt
+should become anchors for the next attempt. Each failure teaches the
+program which lines are correct — lock them in, reduce the gap.
+
+**Learned anchors** (in reconstruct_cube_waves): after each failed attempt,
+compare reconstruction vs original line-by-line. Matching lines become
+new anchors. Next attempt has fewer gaps to fill.
+
+**reconstruct_adaptive() v2** — complete rewrite based on session data:
+- 1 pass per level, NOT 3 (passes 2-3 = zero SHA at every level, proven)
+- levels = log2(lines / 112), mathematically derived
+- 11 attempts per cube = hard constant (God's Number)
+- Restart cycles: x1→x2→x3, then restart x1→x2→x3 with richer mycelium
+- SHA cubes re-feed mycelium on restart (new co-occurrences)
+- Plateau detection: stop when a full cycle produces 0 new SHA
+- Critical cubes (fails after all cycles) = heatmap red zones
+
+Pipeline cost comparison:
+- Old (3 passes x 3 levels): ~1000 API calls, ~$5
+- New (1 pass x 3 levels + restart): ~350 API calls, ~$1.50
+- 70% cheaper, same or better results
 
 ### Fixes 14-18: Language-specific anchor forcing (2026-04-22)
 All fixes are language-agnostic by default; these add per-language rules

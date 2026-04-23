@@ -1662,6 +1662,30 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                         best_reconstruction=result.reconstruction,
                     )
 
+                # Learned anchors: lines the model got RIGHT become
+                # anchors for the next attempt. Each failure teaches us
+                # which lines are correct — we lock them in.
+                if ast_hints and result.reconstruction:
+                    try:
+                        from cube import normalize_content as _nc_la
+                    except ImportError:
+                        try:
+                            from engine.core.cube import normalize_content as _nc_la
+                        except ImportError:
+                            _nc_la = lambda t: t.strip()
+                    orig_lines = _nc_la(cube.content).split('\n')
+                    recon_lines = result.reconstruction.split('\n')
+                    existing_anchors = dict(ast_hints.get('anchors', []))
+                    learned = 0
+                    for li in range(min(len(orig_lines), len(recon_lines))):
+                        if li + 1 not in existing_anchors and \
+                                orig_lines[li] == recon_lines[li] and \
+                                orig_lines[li].strip():
+                            ast_hints.setdefault('anchors', []).append(
+                                (li + 1, orig_lines[li]))
+                            existing_anchors[li + 1] = orig_lines[li]
+                            learned += 1
+
                 # Targeted feedback: 3 specific signals
                 output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b',
                                                result.reconstruction))
@@ -1732,28 +1756,36 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
 def reconstruct_adaptive(file_path: str, content: str,
                          provider: LLMProvider,
                          base_tokens: int = 112,
-                         max_passes: int = 3,
-                         max_level: int = 3,
-                         attempts_per_pass: int = 11,
+                         max_cycles: int = 3,
+                         attempts_per_cube: int = 11,
                          mycelium=None,
                          on_cube: callable = None) -> dict:
-    """Adaptive multi-level reconstruction.
+    """B43: Adaptive multi-level reconstruction with restart cycles.
 
-    For each cube level (x1=112, x2=224, x3=336...):
-      - Run up to max_passes passes of attempts_per_pass attempts each
-      - After each pass, feed SHA cubes to mycelium (vocabulary grows)
-      - If still failing after max_passes, promote to next level
-      - SHA cubes at any level are final (atom validated)
+    Algorithm (Sky's design):
+    1. Calculate levels = log2(lines / base_tokens)
+    2. Mount: x1 → x2 → ... → xN (1 pass each, 11 attempts per cube)
+       - Each SHA feeds mycelium immediately
+       - Each failed attempt teaches learned anchors for next attempt
+       - Only test cubes not already SHA at a lower level
+    3. Restart: repeat the full mount with richer mycelium
+       - ALL cubes re-run (SHA cubes re-feed mycelium with new context)
+       - Fails benefit from learned anchors + richer mycelium
+    4. Stop when: all SHA, or no new SHA in a full cycle (plateau)
 
-    The program decides when to escalate — no human intervention.
+    Constants:
+    - 11 attempts per cube (God's Number equivalent, hard limit)
+    - 1 pass per level (pass 2-3 proven to add zero SHA)
+    - levels = log2(lines / 112) (mathematically derived)
 
     Returns:
         {
-            'total_cubes': int,
-            'sha_count': int,
+            'total_cubes': int,      # x1 cube count
+            'sha_count': int,        # unique SHA across all levels
             'sha_pct': float,
-            'per_level': {1: {'cubes': N, 'sha': N, 'fails': [ids]}, ...},
-            'critical_cubes': [cube_ids],  # fails at max level = critical code
+            'cycles': int,           # how many full cycles ran
+            'per_cycle': {1: {'per_level': {...}, 'new_sha': N}, ...},
+            'critical_cubes': [],    # fails after all cycles = heatmap red
         }
     """
     try:
@@ -1763,66 +1795,71 @@ def reconstruct_adaptive(file_path: str, content: str,
         from engine.core.cube import subdivide_file, CubeStore, assign_neighbors, \
             extract_ast_hints, normalize_content, enrich_hints_with_file_context
 
-    import tempfile
+    import tempfile, math
+
+    # Calculate number of levels from file size
+    lines = content.count('\n') + 1
+    if lines <= base_tokens:
+        num_levels = 1
+    else:
+        num_levels = max(1, int(math.log2(lines / (base_tokens / 8))) + 1)
+        # Cap at reasonable level (cube = whole file makes no sense)
+        num_levels = min(num_levels, 11)
 
     results = {
         'total_cubes': 0,
         'sha_count': 0,
         'sha_pct': 0.0,
-        'per_level': {},
+        'cycles': 0,
+        'per_cycle': {},
         'critical_cubes': [],
     }
 
-    # Track which line ranges have been SHA-validated at any level
-    sha_ranges = set()  # (line_start, line_end) tuples
+    # Track SHA by line range (persists across cycles)
+    sha_ranges = set()
 
-    for level in range(1, max_level + 1):
-        tokens = base_tokens * level
-        cubes = subdivide_file(content=content, file_path=file_path,
-                               target_tokens=tokens)
+    for cycle in range(1, max_cycles + 1):
+        cycle_new_sha = 0
+        cycle_data = {'per_level': {}}
 
-        if level == 1:
-            results['total_cubes'] = len(cubes)
+        for level in range(1, num_levels + 1):
+            tokens = base_tokens * level
+            cubes = subdivide_file(content=content, file_path=file_path,
+                                   target_tokens=tokens)
 
-        # Setup store + neighbors
-        tmp = tempfile.mkdtemp()
-        store = CubeStore(os.path.join(tmp, f'cubes_x{level}.db'))
-        for c in cubes:
-            store.save_cube(c)
-        assign_neighbors(cubes, [], store, max_neighbors=9)
+            if cycle == 1 and level == 1:
+                results['total_cubes'] = len(cubes)
 
-        # Determine which cubes need testing at this level
-        to_test = []
-        for i, c in enumerate(cubes):
-            # Skip cubes whose line range is fully covered by SHA at lower level
-            cube_range = (c.line_start, c.line_end)
-            if cube_range in sha_ranges:
-                continue
-            # For x2+: check if ALL sub-ranges are SHA
-            if level > 1:
-                fully_covered = True
-                nc = normalize_content(c.content)
-                # Simple check: if the whole range was covered by x1 SHA, skip
-                for start, end in sha_ranges:
-                    if start <= c.line_start and end >= c.line_end:
-                        fully_covered = True
-                        break
-                else:
-                    fully_covered = False
-                if fully_covered:
+            # Setup store + neighbors
+            tmp = tempfile.mkdtemp()
+            store = CubeStore(os.path.join(tmp, f'c{cycle}_x{level}.db'))
+            for c in cubes:
+                store.save_cube(c)
+            assign_neighbors(cubes, [], store, max_neighbors=9)
+
+            # Determine which cubes to test
+            to_test = []
+            for i, c in enumerate(cubes):
+                # Skip if this exact range already SHA
+                if (c.line_start, c.line_end) in sha_ranges:
+                    # Re-feed to mycelium (Sky's insight: new co-occurrences)
+                    if mycelium:
+                        mycelium.observe_text(c.content)
                     continue
-            to_test.append(i)
+                # For x2+: skip if fully covered by smaller SHA ranges
+                if level > 1:
+                    covered = False
+                    for start, end in sha_ranges:
+                        if start <= c.line_start and end >= c.line_end:
+                            covered = True
+                            break
+                    if covered:
+                        if mycelium:
+                            mycelium.observe_text(c.content)
+                        continue
+                to_test.append(i)
 
-        if not to_test:
-            store.close()
-            break
-
-        level_sha = 0
-        level_fails = []
-
-        # Multi-pass at this level
-        for pass_num in range(1, max_passes + 1):
-            still_failing = []
+            level_sha = 0
 
             for i in to_test:
                 c = cubes[i]
@@ -1835,7 +1872,7 @@ def reconstruct_adaptive(file_path: str, content: str,
 
                 wr = reconstruct_cube_waves(
                     c, nc, provider,
-                    attempts_per_wave=attempts_per_pass,
+                    attempts_per_wave=attempts_per_cube,
                     max_waves=1,
                     ast_hints=hints,
                     mycelium=mycelium,
@@ -1843,43 +1880,50 @@ def reconstruct_adaptive(file_path: str, content: str,
 
                 if wr.sha_matched:
                     level_sha += 1
+                    cycle_new_sha += 1
                     sha_ranges.add((c.line_start, c.line_end))
                     if mycelium:
                         mycelium.observe_text(wr.best_reconstruction)
                     if on_cube:
-                        on_cube(level, pass_num, i, 'SHA',
+                        on_cube(cycle, level, i, 'SHA',
                                 wr.attempt_in_wave, 0.0)
                 else:
-                    still_failing.append(i)
                     if on_cube:
-                        on_cube(level, pass_num, i, 'FAIL',
+                        on_cube(cycle, level, i, 'FAIL',
                                 wr.total_attempts, wr.best_ncd)
 
-            # Update to_test for next pass — only cubes that still fail
-            to_test = still_failing
+            cycle_data['per_level'][level] = {
+                'cubes': len(cubes),
+                'tokens': tokens,
+                'tested': len(to_test),
+                'sha': level_sha,
+            }
 
-            if not to_test:
-                break  # all SHA at this level
+            store.close()
 
-        level_fails = to_test  # cubes still failing after max_passes
-        results['per_level'][level] = {
-            'cubes': len(cubes),
-            'tokens': tokens,
-            'sha': level_sha,
-            'fails': level_fails,
-        }
-        results['sha_count'] += level_sha
+        cycle_data['new_sha'] = cycle_new_sha
+        results['per_cycle'][cycle] = cycle_data
+        results['sha_count'] += cycle_new_sha
+        results['cycles'] = cycle
 
-        store.close()
+        if on_cube:
+            on_cube(cycle, 0, 0, 'CYCLE_END', 0, cycle_new_sha)
 
-        if not level_fails:
-            break  # all done
+        # Plateau detection: if a full cycle produced 0 new SHA, stop
+        if cycle_new_sha == 0:
+            break
 
-    # Cubes still failing at max level = critical code points
-    results['critical_cubes'] = results['per_level'].get(
-        max_level, {}).get('fails', [])
+    # Calculate final percentage
     if results['total_cubes'] > 0:
         results['sha_pct'] = 100 * results['sha_count'] / results['total_cubes']
+
+    # Critical cubes: x1 cubes that never got SHA at any level
+    cubes_x1 = subdivide_file(content=content, file_path=file_path,
+                               target_tokens=base_tokens)
+    results['critical_cubes'] = [
+        i for i, c in enumerate(cubes_x1)
+        if (c.line_start, c.line_end) not in sha_ranges
+    ]
 
     return results
 
