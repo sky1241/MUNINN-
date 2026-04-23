@@ -1802,7 +1802,7 @@ def reconstruct_adaptive(file_path: str, content: str,
     if lines <= base_tokens:
         num_levels = 1
     else:
-        num_levels = max(1, int(math.log2(lines / (base_tokens / 8))) + 1)
+        num_levels = max(1, int(math.log2(lines / base_tokens)) + 1)
         # Cap at reasonable level (cube = whole file makes no sense)
         num_levels = min(num_levels, 11)
 

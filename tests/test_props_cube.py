@@ -13,16 +13,19 @@ from engine.core.cube import *
 # To test them, write isolated tests by hand using tmp_path.
 #   - scan_repo  (name matches /^scan_/)
 #   - normalize_content  (calls .replace())
+#   - format_code  (calls .run())
+#   - check_formatters  (calls .system())
+#   - install_formatters  (name matches /^install_/)
 #   - assign_neighbors  (name matches /^assign_/)
 
 
-@given(text=st.text(max_size=100))
+@given(text=st.text(max_size=100), file_path=st.text(max_size=100))
 @settings(max_examples=50)
-def test_sha256_hash_no_crash(text):
+def test_sha256_hash_no_crash(text, file_path):
     """Smoke: sha256_hash() does not crash on arbitrary input"""
     # from engine.core.cube import sha256_hash
     try:
-        sha256_hash(text)
+        sha256_hash(text, file_path)
     except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 

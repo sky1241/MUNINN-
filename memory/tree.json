@@ -14,48 +14,49 @@
     "root": {
       "type": "root",
       "file": "root.mn",
-      "lines": 28,
+      "lines": 1,
       "max_lines": 100,
       "children": [
         "b00",
         "b01",
         "b03",
-        "b04"
+        "b04",
+        "b05"
       ],
-      "last_access": "2026-03-28",
-      "access_count": 51,
+      "last_access": "2026-04-11",
+      "access_count": 52,
       "tags": [
-        "muninn",
-        "compression",
-        "mycelium",
-        "codebook",
-        "json",
-        "tree",
-        "scan"
+        "observations",
+        "matter",
+        "dispersion",
+        "galaxy",
+        "dark",
+        "velocity",
+        "simulations"
       ],
-      "hash": "b2f2c13d",
-      "temperature": 0.82,
+      "hash": "9803987a",
+      "temperature": 0.8,
       "access_history": [
         "2026-03-12",
         "2026-03-12",
         "2026-03-12",
         "2026-03-12",
         "2026-03-12",
-        "2026-03-12",
         "2026-03-28",
         "2026-03-28",
         "2026-03-28",
-        "2026-03-28"
+        "2026-03-28",
+        "2026-04-10"
       ]
     },
     "b00": {
       "type": "branch",
       "file": "b00.mn",
-      "lines": 43,
+      "lines": 44,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-28",
-      "access_count": 4,
+      "last_access": "2026-04-10",
+      "access_count": 5,
       "tags": [
         "bloc",
         "blocs",
@@ -69,22 +70,23 @@
         "pypi"
       ],
       "hash": "46bbd04a",
-      "temperature": 0.82,
+      "temperature": 0.77,
       "access_history": [
         "2026-03-28",
         "2026-03-28",
         "2026-03-28",
-        "2026-03-28"
+        "2026-03-28",
+        "2026-04-10"
       ]
     },
     "b01": {
       "type": "branch",
       "file": "b01.mn",
-      "lines": 4,
+      "lines": 5,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-28",
-      "access_count": 4,
+      "last_access": "2026-04-10",
+      "access_count": 5,
       "tags": [
         "aussi",
         "comment",
@@ -96,18 +98,19 @@
         "stripe"
       ],
       "hash": "26ea5cb4",
-      "temperature": 0.8,
+      "temperature": 0.76,
       "access_history": [
         "2026-03-28",
         "2026-03-28",
         "2026-03-28",
-        "2026-03-28"
+        "2026-03-28",
+        "2026-04-10"
       ]
     },
     "b0002": {
       "type": "branch",
       "file": "b0002.mn",
-      "lines": 29,
+      "lines": 3,
       "max_lines": 150,
       "children": [],
       "parent": "root",
@@ -118,7 +121,7 @@
       "access_count": 5,
       "last_access": "2026-03-28",
       "usefulness": 1.0,
-      "temperature": 0.8,
+      "temperature": 0.79,
       "hash": "a441f8d6",
       "access_history": [
         "2026-03-28",
@@ -130,35 +133,66 @@
     "b03": {
       "type": "branch",
       "file": "b03.mn",
-      "lines": 5,
+      "lines": 6,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-28",
-      "access_count": 0,
+      "last_access": "2026-04-10",
+      "access_count": 1,
       "tags": [
         "debug",
         "recovery"
       ],
       "hash": "c92f1802",
-      "temperature": 0.8,
+      "temperature": 0.48,
       "valence": -0.3,
       "arousal": 0.6,
-      "danger_score": 0.42
+      "danger_score": 0.42,
+      "access_history": [
+        "2026-04-10"
+      ]
     },
     "b04": {
       "type": "branch",
       "file": "b04.mn",
-      "lines": 11,
+      "lines": 12,
       "max_lines": 150,
       "children": [],
-      "last_access": "2026-03-28",
-      "access_count": 0,
+      "last_access": "2026-04-10",
+      "access_count": 1,
       "tags": [
         "implementation"
       ],
       "hash": "e3b2fc3c",
-      "temperature": 0.8
+      "temperature": 0.33,
+      "access_history": [
+        "2026-04-10"
+      ]
+    },
+    "b05": {
+      "type": "branch",
+      "file": "b05.mn",
+      "lines": 9,
+      "max_lines": 150,
+      "children": [],
+      "last_access": "2026-04-10",
+      "access_count": 1,
+      "tags": [
+        "auto",
+        "bootstrap",
+        "date",
+        "fichiers",
+        "genere",
+        "muninn",
+        "preamble",
+        "structure",
+        "type"
+      ],
+      "hash": "6107a69c",
+      "temperature": 0.8,
+      "access_history": [
+        "2026-04-10"
+      ]
     }
   },
-  "updated": "2026-03-29"
+  "updated": "2026-04-21"
 }

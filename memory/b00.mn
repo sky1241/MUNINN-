@@ -10,20 +10,20 @@ D>3. L'audit du code montre implémenté, testé, et actif réponse définitive 
 F>| P21 PyPI — publier package | 30 min |
 F>  ok va se faire gros morceau alors truc tao code number en 3x3x3 auto régénration par apprentisage de destrucion regarde meta mycelium si sa peut t aider j ai mis du temps réunir bric pauser concepte
 F>a 20 token
-F>import tiktoken
-F>  Voila chiffres réels, mesurés sur muninn.py : #Moyenne : ~12 tokens par ligne de code | Mesure | Valeur |
+[REDACTED] tiktoken
+[REDACTED]  Voila chiffres réels, mesurés sur muninn.py : #Moyenne : ~12 tokens par ligne de code | Mesure | Valeur |
 F>| 70% lignes | entre 1 et 15 tokens |
 F>Il | Python | Ton | 7 tokens | 3 tokens | total 10 ou
 B>  2. Pas besoin de réfléchir 10 ans : 1. GN(2) = 11, prouvé. GN(3) = 20, aussi prouvé. 11 < 20 = moins de retries avant restart = convergence rapide 2. 8 blocs par niveau, pas 27. Retirer 1 bloc sur 8 = tu perds 12.5% du contexte. Retirer 1 sur 27 = tu perds 3.7%. test DUR 2x2x2 — et test dur = meilleur apprentissage 3. de niveaux de récursion. Log base 8 donne de couches log base 27 20 tokens. de couches = de granularité = mycelium apprend à d'échelles 4. simple à coder et débugger. 8 blocs c' trivial à indexer. 27 c' du bordel rien 5. code linéaire. fichier c' séquence de lignes, pas vrai cube 3D. Découper en 8 c' déjà forcer structure — en 27 c' encore artificiel 3x3x3 c'était beau l'analogie Rubik briefing. CODE tourne, c' 2x2x2 bon choix. attaque ?
 F>probleme 11 token
-F>  T'as raison. 11 c' pas nombre de tokens par bloc — c' nombre max de tentatives avant de déclarer fausse route. bloc fait toujours 20 tokens. ton point tient quand même : cube 2x2x2, chaque niveau divise par 8. Donc : Niveau 0 : code (ex: 68000 tokens muninn.py)
+[REDACTED]  T'as raison. 11 c' pas nombre de tokens par bloc — c' nombre max de tentatives avant de déclarer fausse route. bloc fait toujours 20 tokens. ton point tient quand même : cube 2x2x2, chaque niveau divise par 8. Donc : Niveau 0 : code (ex: 68000 tokens muninn.py)
 F>Niveau 1 : 68000 / 8 = 8500 tokens par bloc ... 3x3x3 : Niveau 0 : 68000 tokens
 F>Niveau 2 : 2519 / 27 = 93 tokens par bloc
 F>Niveau 3 : 93 / 27 = 3.4 tokens ← TROP PETIT, même pas 1 ligne Ah merde. 27 t'arrives à 3 tokens au niveau 3 — c' inutilisable. Tu peux pas reconstruire 3 tokens de contexte. 8 tu arrives à 17 tokens au niveau 4 — c' ~1.5 lignes, c' viable. Donc le 2x2x2 gagne aussi sur scaling. 3x3x3 descend trop vite à blocs trop petits porter du sens. 2x2x2 naturellement sur ~20 tokens en 4 niveaux fichier de taille Muninn. part sur 2x2x2, blocs atomiques ~20 tokens, GN=11 tentatives max. code ?
 F>11 token
-F>11 | Tokens | Ce
+[REDACTED] | Tokens | Ce
 F>de 2 gn | c 11 donc | 11 token
-F>  Oui. C' propre : Cube 2x2x2 = 8 blocs
+[REDACTED]  Oui. C' propre : Cube 2x2x2 = 8 blocs
 F>Bloc atomique = 11 tokens = 1 instruction
 F>Échec après 11 = fausse route, restart GN du cube taille du bloc ET limite de retry. C' même nombre partout. C' pas coïncidence choisie — c' structure du 2x2x2 deux. Et si jour passe en 3x3x3 :
 F>Bloc = 20 tokens = ~2 lignes
@@ -40,5 +40,5 @@ F>Muninn scanne code, nourrit mycelium. Ça existe déjà (bootstrap / feed). É
 F>Si | Cible | Ce | 6. Si | 11 fails | 100%
 F>Tao | 11 tokens | chose 11 tokens | 3. lignes
 # Created Sky, March 2026
-F>uuid = "a8f3b2c1" Ces 11 tokens n'existent nulle part 7 voisins. Pas de variable utilisée ailleurs, pas de pattern. C' de l'information pure, non-déductible. Ta boucle tourne 11 fois et. Et t'as dit : jamais de skip. Donc le système bloque. 4. cube plat. code c' séquence 1D (ligne après ligne). Tes 8 blocs c' juste 8 morceaux consécutifs. bloc 1 et bloc 8 sont "voisins" cube séparés par 66 tokens fichier. topologie 3D du cube n'existe pas code — c' juste " reste du fichier contexte". C' pas faux, mot "cube" ajoute rien par rapport à "split en 8". 5. coût si LLM.
+F>uuid = "a8f3b2c1" Ces 11 tokens n'existent nulle part 7 voisins. Pas de variable utilisée ailleurs, pas de pattern. C' de l'information pure, non-déductible. Ta bou[REDACTED] 11 fois et. Et t'as dit : jamais de skip. Donc le système bloque. 4. cube plat. code c' séquence 1D (ligne après ligne). Tes 8 blocs c' juste 8 morceaux consécutifs. bloc 1 et bloc 8 sont "voisins" cube séparés par 66 tokens fichier. topologie 3D du cube n'existe pas code — c' juste " reste du fichier contexte". C' pas faux, mot "cube" ajoute rien par rapport à "split en 8". 5. coût si LLM.
 F>4096 blocs (niveau 4) × jusqu'à 11 tentatives = 45000 appels LLM au pire. Même Haiku c' $50-100. Et c' fichier. 6. "100% ou rien" + "jamais de skip" = système DOIT avoir plan B.
