@@ -932,11 +932,17 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
     # B19: NCD fallback
     ncd = compute_ncd(cube.content, reconstruction)
 
-    # B18: Perplexity scoring
-    perplexity = provider.get_perplexity(
-        "\n".join(n.content for n in neighbors[:3]),
-        cube.content
-    )
+    # B18: Perplexity scoring — skip if SHA match (no need to call LLM)
+    if exact_match:
+        perplexity = 0.0
+    else:
+        try:
+            perplexity = provider.get_perplexity(
+                "\n".join(n.content for n in neighbors[:3]),
+                cube.content
+            )
+        except (AttributeError, Exception):
+            perplexity = 0.0
 
     success = exact_match or ncd < ncd_threshold
 
