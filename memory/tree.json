@@ -110,7 +110,7 @@
     "b0002": {
       "type": "branch",
       "file": "b0002.mn",
-      "lines": 3,
+      "lines": 29,
       "max_lines": 150,
       "children": [],
       "parent": "root",
@@ -122,7 +122,7 @@
       "last_access": "2026-03-28",
       "usefulness": 1.0,
       "temperature": 0.79,
-      "hash": "811235f3",
+      "hash": "a441f8d6",
       "access_history": [
         "2026-03-28",
         "2026-03-28",
