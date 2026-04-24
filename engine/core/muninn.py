@@ -712,9 +712,6 @@ def _generate_bridge_hook(repo_path: Path, engine_core_dir: Path) -> Path:
     hooks_dir.mkdir(parents=True, exist_ok=True)
     bridge_path = hooks_dir / "bridge_hook.py"
 
-    # Use forward slashes — Python handles them on all platforms
-    engine_core_str = str(engine_core_dir).replace("\\", "/")
-
     bridge_code = f'''#!/usr/bin/env python3
 """P42 UserPromptSubmit hook — Live Mycelium Bridge + Secret Sentinel.
 
@@ -807,9 +804,11 @@ def main():
 
     repo_path = hook_input.get("cwd", os.getcwd())
 
-    engine_core = "{engine_core_str}"
-    if engine_core not in sys.path:
-        sys.path.insert(0, engine_core)
+    # Source-tree fallback: add engine/core to sys.path if present.
+    # Pip-installed mode: import muninn resolves via site-packages.
+    engine_core = Path(__file__).resolve().parent.parent.parent / "engine" / "core"
+    if engine_core.exists() and str(engine_core) not in sys.path:
+        sys.path.insert(0, str(engine_core))
 
     try:
         import muninn
@@ -1252,11 +1251,26 @@ def install_hooks(repo_path: Path):
     # See docs/SCALING_NOTES.md.
     _install_scaling_hooks(repo_path)
 
-    feed_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}"'
-    stop_cmd = f'python "{muninn_engine}" feed --repo "{repo_path}" --trigger stop'
-    bridge_cmd = f'python "{bridge_path}"'
-    ptf_cmd = f'python "{ptf_path}"'
-    sas_cmd = f'python "{sas_path}"'
+    # Portable command strings: use ${CLAUDE_PROJECT_DIR} (Claude Code substitutes
+    # this env var at hook execution time). Two install modes:
+    #   source-tree: muninn.py lives inside repo_path -> relative path under the var
+    #   pip-installed: muninn is in site-packages -> use `python -m muninn`
+    CPD = '${CLAUDE_PROJECT_DIR}'
+    try:
+        muninn_rel = muninn_engine.relative_to(repo_path).as_posix()
+        feed_cmd = f'python "{CPD}/{muninn_rel}" feed --repo "{CPD}"'
+        stop_cmd = f'python "{CPD}/{muninn_rel}" feed --repo "{CPD}" --trigger stop'
+    except ValueError:
+        feed_cmd = f'python -m muninn feed --repo "{CPD}"'
+        stop_cmd = f'python -m muninn feed --repo "{CPD}" --trigger stop'
+
+    # bridge/ptf/sas scripts are always generated under repo_path/.claude/hooks/
+    bridge_rel = bridge_path.relative_to(repo_path).as_posix()
+    ptf_rel = ptf_path.relative_to(repo_path).as_posix()
+    sas_rel = sas_path.relative_to(repo_path).as_posix()
+    bridge_cmd = f'python "{CPD}/{bridge_rel}"'
+    ptf_cmd = f'python "{CPD}/{ptf_rel}"'
+    sas_cmd = f'python "{CPD}/{sas_rel}"'
 
     required_hooks = {
         "UserPromptSubmit": [{"type": "command", "command": bridge_cmd, "timeout": 5}],
@@ -1267,6 +1281,10 @@ def install_hooks(repo_path: Path):
         "SubagentStart": [{"type": "command", "command": sas_cmd, "timeout": 10}],
     }
 
+    def _ptu_cmd(name: str) -> str:
+        rel = Path(ptu_hooks[name]).relative_to(repo_path).as_posix()
+        return f'python "{CPD}/{rel}"'
+
     # PreToolUse hooks use a different format with matchers
     # See https://code.claude.com/docs/en/hooks
     pre_tool_entries = []
@@ -1275,7 +1293,7 @@ def install_hooks(repo_path: Path):
             "matcher": "Bash",
             "hooks": [{
                 "type": "command",
-                "command": f'python "{ptu_hooks["pre_tool_use_bash_destructive.py"]}"',
+                "command": _ptu_cmd("pre_tool_use_bash_destructive.py"),
                 "timeout": 5,
             }],
         })
@@ -1284,7 +1302,7 @@ def install_hooks(repo_path: Path):
             "matcher": "Bash",
             "hooks": [{
                 "type": "command",
-                "command": f'python "{ptu_hooks["pre_tool_use_bash_secrets.py"]}"',
+                "command": _ptu_cmd("pre_tool_use_bash_secrets.py"),
                 "timeout": 5,
             }],
         })
@@ -1293,7 +1311,7 @@ def install_hooks(repo_path: Path):
             "matcher": "Edit|Write",
             "hooks": [{
                 "type": "command",
-                "command": f'python "{ptu_hooks["pre_tool_use_edit_hardcode.py"]}"',
+                "command": _ptu_cmd("pre_tool_use_edit_hardcode.py"),
                 "timeout": 5,
             }],
         })

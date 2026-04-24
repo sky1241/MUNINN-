@@ -5,6 +5,52 @@ Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 
 ---
 
+## 2026-04-24 — Linux migration: portable hook installation
+
+### Summary
+`install_hooks()` and `_generate_bridge_hook()` now write hook configs
+using `${CLAUDE_PROJECT_DIR}` instead of baking absolute paths at install
+time. Makes `pip install muninn` + `muninn upgrade-hooks` produce a portable
+`.claude/settings.local.json` that survives repo moves, cross-machine
+copies, and venv changes. Fulfills CLAUDE.md RULE 1 for the install path.
+
+### What changed
+- `engine/core/muninn.py` + `muninn/_engine.py` (mirrored, see BUG-091):
+  - `install_hooks()`: detects source-tree vs pip-installed mode. Source-tree
+    emits `python "${CLAUDE_PROJECT_DIR}/engine/core/muninn.py" feed --repo
+    "${CLAUDE_PROJECT_DIR}"`; pip-installed emits `python -m muninn feed
+    --repo "${CLAUDE_PROJECT_DIR}"`.
+  - All hook script paths (`bridge_hook.py`, `post_tool_failure_hook.py`,
+    `subagent_start_hook.py`, `pre_tool_use_*.py`) written as
+    `python "${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.py"`.
+  - `_generate_bridge_hook()` template: `engine_core` now resolved at
+    runtime via `Path(__file__).resolve().parent.parent.parent / "engine"
+    / "core"` with `.exists()` guard, falling through to `import muninn`
+    for pip-installed users.
+- `.claude/rules/python.md`: Encoding section updated from Windows 11
+  (`cp1252` codec workaround) to Linux Debian 6.1 (`print(text)` is safe
+  with `PYTHONIOENCODING=utf-8`).
+- `.claude/settings.json` locally rewired from Windows hardcoded paths
+  (`C:\Users\ludov\MUNINN-\...`) to `${CLAUDE_PROJECT_DIR}` form (file is
+  `.gitignore`d — see 2026-04-24 prior commit for test fixture update).
+- `CLAUDE.md` Conventions: Windows 11 -> Linux (Debian 6.1) / pyenv 3.13.
+
+### Validation
+- Dry-run `upgrade-hooks` in a fresh `mktemp -d` repo -> generated
+  `settings.local.json` contains zero hardcoded paths, all `${CLAUDE_PROJECT_DIR}`.
+  Pip-install mode auto-detected (muninn source outside repo) -> emits
+  `python -m muninn`.
+- Generated `bridge_hook.py` line 95: `engine_core = Path(__file__).resolve()
+  .parent.parent.parent / "engine" / "core"` (runtime, portable).
+- Tests: 2065/2079 pass (same 14 pre-existing failures as before the fix,
+  none caused by install_hooks changes); hook-specific chunks 1/4/5/12
+  = 116/116 pass.
+- Forge `--gen-props engine/core/muninn.py` = "No public functions"
+  (expected — `install_hooks` etc. are BUG-102 destructive/side-effect
+  functions, skipped by design).
+
+---
+
 ## Brick 30 (2026-04-15 to 2026-04-20) — SHA-256 Exact Reconstruction
 
 ### Summary

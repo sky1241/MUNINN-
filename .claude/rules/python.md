@@ -87,14 +87,13 @@ do. If you must touch them, mirror immediately, don't promise to do it
 - A test must NOT modify the real `.claude/settings.local.json` of the
   repo it lives in. Use `tmp_path` fixtures.
 
-## Encoding on Windows
+## Encoding
 
-Sky is on Windows 11 with `PYTHONIOENCODING=utf-8` set. When you write
-Python that prints French text to stdout, prefer:
-```python
-sys.stdout.buffer.write(text.encode("utf-8", errors="replace"))
-```
-over `print(text)` for diagnostic scripts that may hit `cp1252` codec.
+Sky est sur Linux (Debian 6.1, pyenv 3.13) avec `PYTHONIOENCODING=utf-8`.
+Le locale UTF-8 par défaut rend `print(text)` sûr pour le français — pas
+besoin de passer par `sys.stdout.buffer.write(...)` comme c'était nécessaire
+sur Windows avec le codec `cp1252`. Garde la variable d'env activée dans
+les scripts shell pour éviter les surprises en CI ou dans un conteneur.
 
 ## Secrets in Python code
 
