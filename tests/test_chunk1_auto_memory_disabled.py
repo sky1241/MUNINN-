@@ -18,19 +18,28 @@ import os
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SETTINGS_PATH = os.path.join(REPO_ROOT, ".claude", "settings.local.json")
+SETTINGS_TRACKED = os.path.join(REPO_ROOT, ".claude", "settings.json")
+SETTINGS_LOCAL = os.path.join(REPO_ROOT, ".claude", "settings.local.json")
 
 
 @pytest.fixture(scope="module")
 def settings():
-    if not os.path.exists(SETTINGS_PATH):
-        pytest.skip(
-            f"settings.local.json absent (gitignored par design). "
-            f"Ce test verifie la config locale Muninn — voir CHANGELOG CHUNK 1 "
-            f"pour reproduire la config sur ta machine."
-        )
-    with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """Merged view of tracked settings.json + local settings.local.json.
+
+    Depuis le switch Linux (2026-04-24) les hooks Muninn sont dans le tracked
+    settings.json (portable via ${CLAUDE_PROJECT_DIR}), et autoMemoryEnabled
+    reste dans settings.local.json. Le test les merge comme Claude Code
+    (local override tracked)."""
+    merged = {}
+    if os.path.exists(SETTINGS_TRACKED):
+        with open(SETTINGS_TRACKED, "r", encoding="utf-8") as f:
+            merged.update(json.load(f))
+    if os.path.exists(SETTINGS_LOCAL):
+        with open(SETTINGS_LOCAL, "r", encoding="utf-8") as f:
+            merged.update(json.load(f))
+    if not merged:
+        pytest.skip("No .claude/settings*.json files present")
+    return merged
 
 
 def test_settings_is_valid_json(settings):

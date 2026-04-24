@@ -207,8 +207,8 @@ muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
 
 ## Conventions
 - Sky parle francais, informel, va vite
-- Python: `python` (or full path on Windows if needed)
-- Windows 11, bash shell, PYTHONIOENCODING=utf-8
+- Python: `python` (3.13 via pyenv sur Linux)
+- Linux (Debian 6.1), bash shell, PYTHONIOENCODING=utf-8
 - Pas d'emojis sauf demande explicite
 - Tout doit etre UNIVERSEL — zero hardcode de repo specifique (RULE 1)
 
