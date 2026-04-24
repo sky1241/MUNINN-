@@ -68,7 +68,7 @@ class LLMWorker(QObject):
                 self.finished.emit()
                 return
 
-            system = self._context or "You are Muninn, a memory compression assistant. Answer concisely in the user's language."
+            system = self._context or "You are Muninn, a memory compression assistant. Tu réponds en français par défaut (sauf si l'utilisateur écrit dans une autre langue). Be concise."
 
             # Emit route info for smart router
             if hasattr(self._provider, 'last_route'):
@@ -341,6 +341,10 @@ class TerminalWidget(QWidget):
         idx = self._model_combo.findText(current)
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
+        elif self._model_combo.count() > 0 and provider not in ("off", "ollama-smart"):
+            # Stored model not in live list (e.g. default llama3.1 not pulled)
+            # -> persist what's actually shown so LLM calls use a real model.
+            set_active_model(provider, self._model_combo.itemText(0))
 
         self._model_combo.setVisible(provider not in ("off", "ollama-smart"))
         self._model_combo.blockSignals(False)
@@ -623,7 +627,8 @@ class TerminalWidget(QWidget):
         cursor = self._output.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         fmt = QTextCharFormat()
-        fmt.setForeground(QColor(TEXT_PRIMARY))
+        # QColor ne parse pas "rgba(r,g,b,a)" -> invalid (noir). RGB int direct.
+        fmt.setForeground(QColor(230, 230, 230))
         cursor.insertText(text, fmt)
         self._output.setTextCursor(cursor)
         self._output.ensureCursorVisible()
