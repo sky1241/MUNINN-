@@ -106,6 +106,9 @@ class TerminalWidget(QWidget):
     """
 
     command_entered = pyqtSignal(str)  # Raw command text
+    # Cube reconstruction signals (bubbled up to MainWindow for heatmap wiring)
+    cubes_ready = pyqtSignal(list)              # list[dict] of cube descriptors
+    cube_progress = pyqtSignal(int, float, bool)  # idx, ncd, sha_match
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -429,6 +432,8 @@ class TerminalWidget(QWidget):
                 "  /key <provider> <k> — Set API key\n"
                 "  /boost              — Toggle mycelium boost\n"
                 "  /ai                 — Show AI config\n"
+                "  /reconstruct <file> — Reconstruct a file cube-by-cube (heatmap)\n"
+                "  /stop               — Stop the running reconstruction\n"
                 "  (text)              — Ask the AI",
                 color=TEXT_SECONDARY,
             )
@@ -446,6 +451,10 @@ class TerminalWidget(QWidget):
             self._cmd_boost()
         elif base == "/ai":
             self._cmd_ai_status()
+        elif base == "/reconstruct":
+            self._cmd_reconstruct(parts)
+        elif base == "/stop":
+            self._cmd_stop_reco()
         else:
             self._append_text(f"Unknown command: {cmd}. /help for list.", color="#EF4444")
 
@@ -528,6 +537,82 @@ class TerminalWidget(QWidget):
         if provider == "ollama-smart":
             lines.append("Router   : code->deepseek-coder, general->mistral")
         self._append_text("\n".join(lines), color=TEXT_SECONDARY)
+
+    # --- Cube reconstruction (heatmap live) ---
+
+    def _cmd_reconstruct(self, parts: list):
+        """Launch a cube-by-cube reconstruction on a source file.
+
+        Usage: /reconstruct <file>[ <lines_per_cube>][ <max_cubes>]
+        """
+        from pathlib import Path
+        if len(parts) < 2:
+            self._append_text(
+                "Usage: /reconstruct <file> [lines_per_cube=20] [max_cubes=40]\n"
+                "Example: /reconstruct tests/cube_corpus/btree_google.go",
+                color=TEXT_SECONDARY,
+            )
+            return
+        args = parts[1].split() if len(parts) == 2 else [parts[1]] + parts[2].split()
+        file_path = Path(args[0])
+        if not file_path.is_absolute():
+            # Resolve relative to repo root (3 levels up from this file)
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            file_path = (repo_root / file_path).resolve()
+        if not file_path.exists():
+            self._append_text(f"File not found: {file_path}", color="#EF4444")
+            return
+        lines_per_cube = int(args[1]) if len(args) >= 2 else 20
+        max_cubes = int(args[2]) if len(args) >= 3 else 40
+
+        # Cancel any previous reconstruction
+        self._cmd_stop_reco(silent=True)
+
+        # Use the currently selected Ollama model from the dropdown
+        model = get_active_model() or "qwen2.5-coder:7b"
+
+        self._append_text(
+            f"[reco] {file_path.name} — model={model}, "
+            f"lines/cube={lines_per_cube}, max={max_cubes}",
+            color=ACCENT_CYAN_HEX,
+        )
+
+        from muninn.ui.cube_live import ReconstructionWorker
+        self._reco_thread = QThread()
+        self._reco_worker = ReconstructionWorker(
+            str(file_path), model=model,
+            lines_per_cube=lines_per_cube, max_cubes=max_cubes,
+        )
+        self._reco_worker.moveToThread(self._reco_thread)
+
+        self._reco_worker.cubes_ready.connect(self.cubes_ready)           # bubble up
+        self._reco_worker.cube_done.connect(self.cube_progress)           # bubble up
+        self._reco_worker.token.connect(self._on_chunk)                   # stream tokens
+        self._reco_worker.status.connect(
+            lambda msg, col: self._append_text(msg, color=col)
+        )
+        self._reco_worker.error.connect(
+            lambda e: self._append_text(f"\n[reco] ERROR: {e}", color="#EF4444")
+        )
+        self._reco_worker.finished.connect(
+            lambda: self._append_text("\n[reco] done.", color=ACCENT_CYAN_HEX)
+        )
+        self._reco_worker.finished.connect(self._reco_thread.quit)
+        self._reco_worker.error.connect(self._reco_thread.quit)
+        self._reco_thread.started.connect(self._reco_worker.run)
+        self._reco_thread.start()
+
+    def _cmd_stop_reco(self, silent: bool = False):
+        """Stop the running reconstruction, if any."""
+        if getattr(self, "_reco_worker", None) is not None:
+            self._reco_worker.stop()
+        if getattr(self, "_reco_thread", None) is not None and self._reco_thread.isRunning():
+            self._reco_thread.quit()
+            self._reco_thread.wait(2000)
+        self._reco_worker = None
+        self._reco_thread = None
+        if not silent:
+            self._append_text("[reco] stopped.", color=TEXT_SECONDARY)
 
     def _run_scan(self):
         """Run muninn scan in background thread (non-blocking UI)."""

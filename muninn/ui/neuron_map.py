@@ -1040,3 +1040,79 @@ class NeuronMapWidget(QWidget):
     @property
     def is_computing_layout(self) -> bool:
         return self._layout_computing
+
+    # --- Reconstruction mode (cube heatmap) ---
+    #
+    # Companion to docs/CUBE_UX_HEATMAP_PLAN.md Phase 1: brancher le NCD
+    # d'une reconstruction Cube sur la carte, en live. Each cube becomes a
+    # Neuron laid out in a grid, coloured by NCD (green = perfect match,
+    # yellow/orange = partial, red = fail).
+
+    def set_reconstruction_cubes(self, cubes: list):
+        """Populate the map with cubes from a reconstruction run.
+
+        Each cube is a dict with keys: idx, start, end, original, sha.
+        Layout: simple grid (sqrt(n) columns), one neuron per cube.
+        """
+        import math
+        self._neurons = []
+        self._edges = []
+        self._neighbor_cache = {}
+        self._selected = set()
+
+        n = len(cubes)
+        if n == 0:
+            self._empty = True
+            self.update()
+            return
+
+        # Normalise the degree gradient to [0..10] so NCD maps cleanly onto
+        # the 10-step DEGREE_GRADIENT. Pending cubes start at 5 = mid-grey
+        # so the user can distinguish "not yet processed" from "processed and red".
+        self._max_degree = 10
+        self._empty = False  # trigger the neuron painter instead of the empty-state banner
+
+        # World coordinates are in [-1, +1] (cube wireframe is at +/-0.85).
+        # Spread the grid across [-0.7, +0.7] so cubes sit comfortably inside.
+        cols = max(1, int(math.ceil(math.sqrt(n))))
+        rows = max(1, int(math.ceil(n / cols)))
+        extent = 1.4   # total span, so positions land in [-0.7, +0.7]
+        dx = extent / max(cols, 1) if cols > 1 else 0.0
+        dy = extent / max(rows, 1) if rows > 1 else 0.0
+        for cube in cubes:
+            idx = cube["idx"]
+            row = idx // cols
+            col = idx % cols
+            x = -extent / 2 + (col + 0.5) * (dx if cols > 1 else 0.0)
+            y = -extent / 2 + (row + 0.5) * (dy if rows > 1 else 0.0)
+            self._neurons.append(Neuron(
+                id=f"cube_{idx}",
+                label=f"L{cube['start']}-{cube['end']}",
+                level="cube",
+                status="todo",      # pending reconstruction
+                temperature=0.5,    # neutral until reconstructed
+                zone="reconstruction",
+                x=x, y=y, z=0.0,
+                degree=5,           # mid-yellow until the cube is processed
+            ))
+
+        # Auto-fit view to show the whole grid
+        if hasattr(self, "_zoom_to_fit_animated"):
+            self._zoom_to_fit_animated()
+        else:
+            self.update()
+
+    def update_cube_ncd(self, idx: int, ncd: float, sha_match: bool):
+        """Update the colour of cube `idx` after reconstruction completes.
+
+        Painting uses `n.degree` mapped onto DEGREE_GRADIENT (green->red),
+        so we store NCD*10 into degree. SHA match forces degree=0 (greenest).
+        """
+        if idx < 0 or idx >= len(self._neurons):
+            return
+        n = self._neurons[idx]
+        clamped = max(0.0, min(1.0, float(ncd)))
+        n.temperature = clamped
+        n.degree = 0 if sha_match else int(round(clamped * 10))
+        n.status = "done" if sha_match else ("wip" if clamped < 0.3 else "todo")
+        self.update()

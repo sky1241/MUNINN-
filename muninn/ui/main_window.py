@@ -140,6 +140,10 @@ class MainWindow(QMainWindow):
         )
         self.neuron_panel.layout_finished.connect(self._update_status)
 
+        # Cube reconstruction -> heatmap live (docs/CUBE_UX_HEATMAP_PLAN.md Phase 1)
+        self.terminal_panel.cubes_ready.connect(self.neuron_panel.set_reconstruction_cubes)
+        self.terminal_panel.cube_progress.connect(self.neuron_panel.update_cube_ncd)
+
     def _install_extras(self):
         """Install shortcuts, context menus, drag-drop, system tray (Phase 6-9)."""
         from muninn.ui.shortcuts import install_shortcuts
