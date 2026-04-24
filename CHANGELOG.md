@@ -5,6 +5,109 @@ Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 
 ---
 
+## 2026-04-24 — Ollama Vulkan backend + anti-freeze system config (session forensic)
+
+### Summary
+Root-caused the PC freeze ("points verts" / green artifacts) that happened
+when the previous session tried to run Qwen 2.5 Coder 7B for Cube
+reconstruction. **The crash was not caused by the model being too large.**
+Cause was `ROCm` backend hanging silently on RX 5700 XT: AMD dropped
+official Navi10 (gfx1010) support from ROCm 5.0+, so the previous session
+used the `HSA_OVERRIDE_GFX_VERSION=10.3.0` hack to force ROCm to see the
+card as RDNA2 (gfx1030). The hack loads the model weights into VRAM
+successfully but then hangs during JIT kernel compilation — RDNA2 ISA
+instructions not fully compatible with RDNA1 hardware, display server
+loses the GPU → green dots on screen → full freeze.
+
+Fix: switched Ollama to **Vulkan backend** (Mesa RADV driver, native
+Navi10 support, no hack). Qwen 2.5 Coder 7B now runs at **~49 tokens/sec
+on 100% GPU with 4.7 GiB VRAM, zero hang**. Also posted multiple safety
+nets at the OS level to prevent future freezes even if a model
+misbehaves.
+
+### What changed
+
+**System (outside repo — documented here for next session)**:
+- `/etc/systemd/system/ollama.service.d/override.conf` (ROCm hack)
+  -> renamed to `override.conf.rocm-disabled`.
+- `/etc/systemd/system/ollama.service.d/10-vulkan.conf` (new):
+  `OLLAMA_VULKAN=1`, `ROCR_VISIBLE_DEVICES=""`, `HIP_VISIBLE_DEVICES=""`.
+- `/etc/systemd/system/ollama.service.d/99-safe-limits.conf` (new):
+  `OLLAMA_CONTEXT_LENGTH=8192` (down from default 32K = smaller KV cache),
+  `OLLAMA_MAX_LOADED_MODELS=1` (never two models in VRAM at once),
+  `OLLAMA_GPU_OVERHEAD=536870912` (reserve 512 MiB for driver/compositor).
+- `/swapfile` (new): 8 GiB, `/etc/fstab` updated — total swap now 9 GiB
+  (up from 977 MiB partition-only). `/etc/sysctl.d/99-muninn-swappiness.conf`:
+  `vm.swappiness=10` (down from 60). Filet de sécurité anti-freeze
+  if a model overshoots RAM.
+- `mining-*.service` (user-level systemd): stopped for the session.
+  **Not disabled** (user keeps them for later). Full list:
+  `mining-srbminer-gpu`, `mining-manager`, `mining-dashboard`,
+  `mining-idle-booster`, `mining-xmr-converter`, `mining-gpu-power-cap`.
+  All under `~/.config/systemd/user/`.
+
+**Repo (this commit)**:
+- `tests/run_sanity_btree.py` (new, 102 lines): sanity script for the
+  Linux-native Ollama reconstruction pipeline. Runs `reconstruct_adaptive`
+  on `tests/cube_corpus/btree_google.go` with 1 cycle via
+  `OllamaProvider(deepseek-coder:6.7b)`. Written by previous session,
+  not committed before the freeze. Added as-is — does not run in CI
+  (requires local Ollama + model pulled).
+
+### Validation (fresh command outputs, not paraphrased — RULE 4)
+
+```
+# Backend actif (Vulkan, vrai nom de la carte, pas de hack gfx1030)
+$ sudo journalctl -u ollama | grep "inference compute" | tail -1
+msg="inference compute" library=Vulkan name=Vulkan0
+description="AMD Radeon RX 5700 XT 50th Anniversary (RADV NAVI10)"
+total="8.0 GiB" available="7.7 GiB"
+
+# Qwen 7B répond (avant la session il timeout à 90s sans output)
+$ curl -s http://127.0.0.1:11434/api/generate -d '{"model":"qwen2.5-coder:7b","prompt":"Write a Python function that sums two numbers. Just the code, no explanation.","stream":false}'
+{"response":"```python\ndef sum_two_numbers(a, b):\n    return a + b\n```",
+ "load_duration":10718503373, "eval_count":19, "eval_duration":388327644}
+# -> 19 tokens / 0.388s = 49 tokens/sec, 100% GPU
+
+$ ollama ps
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL
+qwen2.5-coder:7b    dae161e27b0e    5.1 GB    100% GPU     8192       2 minutes from now
+
+# Swap 977 MiB -> 9 GiB
+$ swapon --show
+NAME           TYPE      SIZE USED PRIO
+/dev/nvme0n1p3 partition 977M   0B   -2
+/swapfile      file        8G   0B   -3
+
+$ cat /proc/sys/vm/swappiness
+10
+```
+
+### Pourquoi ca marche maintenant (explication pour la session suivante)
+- **ROCm** = toolchain d'AMD, ne supporte Navi10 que jusqu'a ROCm 4.5.
+  Post-5.0, il faut le hack HSA_OVERRIDE qui est fragile.
+- **Vulkan** = standard Khronos, implemente par Mesa RADV, supporte
+  nativement Navi10 via le pilote `amdgpu` du kernel. Pas de hack,
+  kernels compiles pour gfx1010 directement.
+- Trade-off: Vulkan ~10-15% plus lent que ROCm sur RDNA3, mais sur
+  Navi10 *non-supporte* il est **stable** vs ROCm qui *hang*.
+- Si plus tard l'user veut revenir sur ROCm (par ex. upgrade GPU vers
+  RDNA2+ officiellement supporte) : renommer
+  `override.conf.rocm-disabled` -> `override.conf`, supprimer
+  `10-vulkan.conf`, `systemctl restart ollama`.
+
+### Ce qui reste a faire (priorites pour la prochaine session)
+1. Valider la chaine Muninn -> Ollama via `tests/run_sanity_btree.py`
+   sur 1 cube (reconstruction bout-en-bout avec Qwen ou deepseek).
+2. Brancher le stream LLM sur le terminal integre
+   [muninn/ui/terminal.py](muninn/ui/terminal.py) pour voir le modele
+   "bosser" en temps reel pendant une reconstruction.
+3. Phase 1 du plan [docs/CUBE_UX_HEATMAP_PLAN.md](docs/CUBE_UX_HEATMAP_PLAN.md)
+   : brancher le NCD des cubes sur `NeuronMapWidget`
+   (vert = reconstruit parfait, rouge = echec).
+
+---
+
 ## 2026-04-24 — Linux migration: portable hook installation
 
 ### Summary
