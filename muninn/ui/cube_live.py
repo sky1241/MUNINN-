@@ -1,162 +1,75 @@
 """Muninn UI — Cube reconstruction live worker.
 
-Worker thread (QObject) that reconstructs a source file cube-by-cube via
-a local LLM, streaming tokens to the terminal and updating the heatmap
-in real time.
+QThread worker that runs the real Muninn reconstruction pipeline
+(`engine.core.cube_providers.reconstruct_adaptive`) on a source file,
+then feeds the heatmap and the terminal with progress events.
 
-MVP scope:
-- No CubeEngine / no mycelium / no learned anchors — just a straight
-  "reconstruct this block" prompt per slice of N lines.
-- Uses OllamaProvider.stream() to get tokens live.
-- Compares SHA-256 of the reconstructed text vs the original (after
-  trimming/normalising trailing whitespace).
-- Reports per-cube NCD via zlib (normalised compression distance).
+Unlike the first MVP (which used a naïve "reconstruct between BEFORE/AFTER"
+prompt), this worker uses:
+- `engine.core.cube.subdivide_file` for token-accurate cube boundaries,
+- `engine.core.cube_providers.reconstruct_adaptive` for the real
+  x1->x2->x3 cycles with mycelium + learned anchors + FIM.
 
-This is the visual demo. A future version can swap the inner loop for
-engine.core.cube_providers.reconstruct_adaptive() to get the full Muninn
-pipeline (mycelium, learned anchors, FIM, x1/x2/x3 cycles).
+Signals:
+- cubes_ready(list): list of {idx, start, end, original, sha} dicts.
+- status(str, str): (message, hex_color) text lines for the terminal.
+- token(str): reserved for future streaming (not emitted by adaptive).
+- cube_done(int, float, bool): (idx, ncd, sha_match).
+- finished(): all cycles done.
+- error(str): fatal error.
 """
 
-import hashlib
-import zlib
+import sys
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
 
-DEFAULT_CUBE_LINES = 20     # ~100-150 tokens per cube, keeps prompts small
-DEFAULT_MAX_CUBES = 40      # safety cap for very long files
-DEFAULT_MAX_TOKENS = 400    # per cube reconstruction
-
-
-def _sha256(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()
-
-
-def _ncd(a: str, b: str) -> float:
-    """Normalised Compression Distance (Cilibrasi 2005).
-
-    0.0 = identical, 1.0 = no similarity at all. zlib-based.
+def _ensure_engine_path():
+    """Put the repo root and engine/core/ on sys.path so the real
+    engine package can be imported with its sibling imports intact.
+    Matches the pattern in tests/run_sanity_btree.py.
     """
-    if not a and not b:
-        return 0.0
-    ca = len(zlib.compress(a.encode("utf-8", errors="replace")))
-    cb = len(zlib.compress(b.encode("utf-8", errors="replace")))
-    cab = len(zlib.compress((a + b).encode("utf-8", errors="replace")))
-    denom = max(ca, cb)
-    if denom == 0:
-        return 0.0
-    return max(0.0, min(1.0, (cab - min(ca, cb)) / denom))
-
-
-def _normalise(text: str) -> str:
-    """Strip trailing whitespace per line and trailing blank lines —
-    SHA comparison is otherwise brittle on LLM output."""
-    lines = [ln.rstrip() for ln in text.splitlines()]
-    while lines and not lines[-1]:
-        lines.pop()
-    return "\n".join(lines)
-
-
-def _slice_file(path: Path, lines_per_cube: int, max_cubes: int) -> list[dict]:
-    """Split file content into cubes of N lines.
-
-    Returns a list of dicts: {idx, start, end, original_text, sha, neighbors_prefix, neighbors_suffix}
-    """
-    content = path.read_text(encoding="utf-8", errors="replace")
-    lines = content.splitlines()
-    total = len(lines)
-    cubes = []
-    idx = 0
-    for start in range(0, total, lines_per_cube):
-        if idx >= max_cubes:
-            break
-        end = min(start + lines_per_cube, total)
-        body_lines = lines[start:end]
-        body = "\n".join(body_lines)
-        # Context: ~5 lines before and after (neighbors)
-        prefix = "\n".join(lines[max(0, start - 5):start])
-        suffix = "\n".join(lines[end:min(total, end + 5)])
-        cubes.append({
-            "idx": idx,
-            "start": start,
-            "end": end,
-            "original": body,
-            "sha": _sha256(_normalise(body)),
-            "prefix": prefix,
-            "suffix": suffix,
-        })
-        idx += 1
-    return cubes
-
-
-def _build_prompt(cube: dict, lang_hint: str) -> str:
-    return (
-        f"You are reconstructing a missing block of {lang_hint} source code.\n"
-        f"Given the surrounding context, output ONLY the block that goes "
-        f"between [BEFORE] and [AFTER]. No explanation, no markdown fence, "
-        f"no comments added. Keep the exact indentation.\n\n"
-        f"[BEFORE]\n{cube['prefix']}\n[END BEFORE]\n\n"
-        f"[AFTER]\n{cube['suffix']}\n[END AFTER]\n\n"
-        f"The missing block is {cube['end'] - cube['start']} lines. "
-        f"Output the block now:"
-    )
-
-
-def _guess_lang(path: Path) -> str:
-    ext = path.suffix.lower()
-    return {
-        ".go": "Go",
-        ".py": "Python",
-        ".js": "JavaScript",
-        ".ts": "TypeScript",
-        ".rs": "Rust",
-        ".c": "C",
-        ".cpp": "C++",
-        ".java": "Java",
-    }.get(ext, "source")
-
-
-def _clean_llm_output(text: str) -> str:
-    """Remove common markdown fence wrapping the LLM may add despite instructions."""
-    t = text.strip()
-    if t.startswith("```"):
-        # strip first fence line
-        nl = t.find("\n")
-        if nl >= 0:
-            t = t[nl + 1:]
-        if t.rstrip().endswith("```"):
-            t = t.rstrip()[:-3].rstrip()
-    return t
+    # muninn/ui/cube_live.py  ->  repo_root = parents[2]
+    repo_root = Path(__file__).resolve().parents[2]
+    engine_core = repo_root / "engine" / "core"
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    if engine_core.exists() and str(engine_core) not in sys.path:
+        sys.path.insert(0, str(engine_core))
+    return repo_root, engine_core
 
 
 class ReconstructionWorker(QObject):
-    """Reconstructs a source file cube-by-cube via Ollama streaming.
-
-    Signals (thread-safe, delivered on the main Qt event loop):
-    - cubes_ready(list): sent once after slicing; each dict has idx/start/end/original.
-    - status(str, str): informational messages: (text, hex_color).
-    - token(str): a single token/chunk from the LLM stream (for the terminal).
-    - cube_done(int, float, bool): idx, ncd (0..1), sha_match (True = exact).
-    - finished(): all cubes processed.
-    - error(str): fatal error, stops the worker.
-    """
+    """Runs engine.core.cube_providers.reconstruct_adaptive in a QThread."""
 
     cubes_ready = pyqtSignal(list)
     status = pyqtSignal(str, str)
-    token = pyqtSignal(str)
+    token = pyqtSignal(str)               # reserved (reconstruct_adaptive uses generate, not stream)
     cube_done = pyqtSignal(int, float, bool)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
+    # UX-facing colour palette (hex for _append_text)
+    _COL_INFO = "#00CFFF"
+    _COL_SHA = "#32CD32"
+    _COL_PARTIAL = "#F59E0B"
+    _COL_FAIL = "#EF4444"
+    _COL_DIM = "rgba(255,255,255,0.60)"    # not parsed by QColor, only used by _append_text strings
+
     def __init__(self, file_path: str, model: str = "qwen2.5-coder:7b",
-                 lines_per_cube: int = DEFAULT_CUBE_LINES,
-                 max_cubes: int = DEFAULT_MAX_CUBES):
+                 lines_per_cube: int = 20,      # kept for signature compat, unused (engine uses tokens)
+                 max_cubes: int = 40,           # cap cubes to keep UI readable
+                 base_tokens: int = 112,
+                 max_cycles: int = 3,
+                 attempts_per_cube: int = 3):
         super().__init__()
         self._file = Path(file_path)
         self._model = model
-        self._lines_per_cube = lines_per_cube
         self._max_cubes = max_cubes
+        self._base_tokens = base_tokens
+        self._max_cycles = max_cycles
+        self._attempts = attempts_per_cube
         self._stop = False
 
     def stop(self):
@@ -168,68 +81,109 @@ class ReconstructionWorker(QObject):
                 self.error.emit(f"File not found: {self._file}")
                 return
 
-            self.status.emit(f"[reco] Slicing {self._file.name}...", "#00CFFF")
-            cubes = _slice_file(self._file, self._lines_per_cube, self._max_cubes)
-            if not cubes:
-                self.error.emit("No cubes to reconstruct (empty file?)")
+            _ensure_engine_path()
+
+            # Lazy import so that importing cube_live.py at UI boot does
+            # not drag engine/core into the UI process.
+            try:
+                from engine.core.cube import subdivide_file
+                from engine.core.cube_providers import (
+                    reconstruct_adaptive, OllamaProvider,
+                )
+            except ImportError as e:
+                self.error.emit(f"Cannot import engine: {e}")
                 return
+
+            content = self._file.read_text(encoding="utf-8", errors="replace")
+            cubes = subdivide_file(
+                str(self._file), content,
+                target_tokens=self._base_tokens, level=0,
+            )
+            if not cubes:
+                self.error.emit("subdivide_file returned 0 cubes")
+                return
+
+            total = len(cubes)
+            if self._max_cubes and total > self._max_cubes:
+                self.status.emit(
+                    f"[reco] file has {total} cubes, capping to first {self._max_cubes} for the heatmap",
+                    self._COL_INFO,
+                )
+                cubes = cubes[: self._max_cubes]
 
             self.status.emit(
-                f"[reco] {len(cubes)} cubes, model={self._model}, "
-                f"lines/cube={self._lines_per_cube}",
-                "#00CFFF",
+                f"[reco] {self._file.name} — {len(cubes)} cubes @ {self._base_tokens} tokens, "
+                f"model={self._model}, max_cycles={self._max_cycles}, "
+                f"attempts/cube={self._attempts}",
+                self._COL_INFO,
             )
-            self.cubes_ready.emit(cubes)
 
-            # Use the lightweight _OllamaLite already shipped with the UI
-            # (same one the terminal chat uses). Avoids the circular import
-            # chain in engine/core (cube_providers <-> cube_analysis).
-            try:
-                from muninn.ui.ai_config import _OllamaLite
-            except ImportError as e:
-                self.error.emit(f"Cannot import _OllamaLite: {e}")
-                return
-            OllamaProvider = _OllamaLite
+            # Expose cube descriptors to the heatmap. UX only needs idx, lines, sha.
+            cubes_payload = [
+                {
+                    "idx": i,
+                    "start": c.line_start,
+                    "end": c.line_end,
+                    "original": c.content,
+                    "sha": c.sha256,
+                }
+                for i, c in enumerate(cubes)
+            ]
+            self.cubes_ready.emit(cubes_payload)
 
             provider = OllamaProvider(model=self._model)
-            lang = _guess_lang(self._file)
 
-            for cube in cubes:
+            # Callback fired by reconstruct_adaptive for each cube event.
+            # See tests/run_sanity_btree.py for the status vocabulary.
+            def on_cube(cycle, level, cube_idx, status, attempts, ncd):
                 if self._stop:
-                    self.status.emit("[reco] Stopped by user.", "#F59E0B")
-                    break
-
-                self.status.emit(
-                    f"\n[cube {cube['idx']}] lines {cube['start']}-{cube['end']} "
-                    f"(original sha={cube['sha'][:8]})",
-                    "#00CFFF",
-                )
-
-                prompt = _build_prompt(cube, lang)
-                generated = []
-                try:
-                    for chunk in provider.stream(
-                        prompt, max_tokens=DEFAULT_MAX_TOKENS, temperature=0.1,
-                    ):
-                        if self._stop:
-                            break
-                        generated.append(chunk)
-                        self.token.emit(chunk)
-                except ConnectionError as e:
-                    self.error.emit(f"Ollama error on cube {cube['idx']}: {e}")
                     return
+                if cube_idx is None or cube_idx < 0 or cube_idx >= len(cubes):
+                    # Cycle-level events (CYCLE_END etc.) — report as text only.
+                    if status == "CYCLE_END":
+                        self.status.emit(
+                            f"\n[cycle {cycle}] end — {int(ncd)} new SHA this cycle",
+                            self._COL_INFO,
+                        )
+                    return
+                if status == "SHA":
+                    tag = "AUTO-SHA" if attempts == 0 else f"SHA (attempt {attempts})"
+                    self.status.emit(
+                        f"  c{cycle} x{level} cube {cube_idx:>2}: {tag}",
+                        self._COL_SHA,
+                    )
+                    self.cube_done.emit(cube_idx, 0.0, True)
+                else:
+                    col = self._COL_PARTIAL if ncd < 0.3 else self._COL_FAIL
+                    self.status.emit(
+                        f"  c{cycle} x{level} cube {cube_idx:>2}: NCD={ncd:.3f} ({attempts}a)",
+                        col,
+                    )
+                    self.cube_done.emit(cube_idx, float(ncd), False)
 
-                produced = _clean_llm_output("".join(generated))
-                produced_sha = _sha256(_normalise(produced))
-                sha_match = produced_sha == cube["sha"]
-                ncd = _ncd(_normalise(cube["original"]), _normalise(produced))
+            # Cap cubes to what we showed the user (the engine will still
+            # receive the full file, but it keeps the event/result stream
+            # aligned with the heatmap indices).
+            try:
+                reconstruct_adaptive(
+                    str(self._file), content, provider,
+                    base_tokens=self._base_tokens,
+                    max_cycles=self._max_cycles,
+                    attempts_per_cube=self._attempts,
+                    mycelium=None,
+                    on_cube=on_cube,
+                )
+            except ConnectionError as e:
+                self.error.emit(f"Ollama connection error: {e}")
+                return
+            except Exception as e:  # noqa: BLE001
+                self.error.emit(f"reconstruct_adaptive crash: {type(e).__name__}: {e}")
+                return
 
-                tag = "SHA MATCH" if sha_match else f"NCD={ncd:.3f}"
-                color = "#32CD32" if sha_match else ("#F59E0B" if ncd < 0.3 else "#EF4444")
-                self.status.emit(f"\n[cube {cube['idx']}] {tag}", color)
-
-                self.cube_done.emit(cube["idx"], ncd, sha_match)
-
+            if self._stop:
+                self.status.emit("[reco] stopped by user.", self._COL_PARTIAL)
+            else:
+                self.status.emit("[reco] all cycles done.", self._COL_INFO)
             self.finished.emit()
 
         except Exception as e:  # noqa: BLE001

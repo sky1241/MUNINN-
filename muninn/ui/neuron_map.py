@@ -67,6 +67,7 @@ LEVEL_SHAPES = {
     "F": SHAPE_DIAMOND,
     "I": SHAPE_TRIANGLE,
     "B": SHAPE_SQUARE,
+    "cube": SHAPE_SQUARE,  # reconstruction-mode cubes render as squares
 }
 
 STATUS_COLORS = {
@@ -1060,6 +1061,14 @@ class NeuronMapWidget(QWidget):
         self._neighbor_cache = {}
         self._selected = set()
 
+        # Stop the idle cube rotation and pin to a clean isometric angle.
+        # In reconstruction mode the user is reading code positions — a
+        # spinning cube fights that. ~pi/5 around Y gives a nice 3D feel
+        # without distorting the grid.
+        if hasattr(self, "_cube_timer") and self._cube_timer.isActive():
+            self._cube_timer.stop()
+        self._cube_angle = math.pi / 5  # ~36° — isometric-ish, fixed
+
         n = len(cubes)
         if n == 0:
             self._empty = True
@@ -1072,13 +1081,14 @@ class NeuronMapWidget(QWidget):
         self._max_degree = 10
         self._empty = False  # trigger the neuron painter instead of the empty-state banner
 
-        # World coordinates are in [-1, +1] (cube wireframe is at +/-0.85).
-        # Spread the grid across [-0.7, +0.7] so cubes sit comfortably inside.
+        # Starting positions: small grid inside the cube wireframe
+        # (world coords in [-1, +1], wireframe at +/-0.85). The Laplacian
+        # worker will then relax the layout using the chain edges below.
         cols = max(1, int(math.ceil(math.sqrt(n))))
         rows = max(1, int(math.ceil(n / cols)))
-        extent = 1.4   # total span, so positions land in [-0.7, +0.7]
-        dx = extent / max(cols, 1) if cols > 1 else 0.0
-        dy = extent / max(rows, 1) if rows > 1 else 0.0
+        extent = 1.2
+        dx = extent / cols if cols > 1 else 0.0
+        dy = extent / rows if rows > 1 else 0.0
         for cube in cubes:
             idx = cube["idx"]
             row = idx // cols
@@ -1094,13 +1104,26 @@ class NeuronMapWidget(QWidget):
                 zone="reconstruction",
                 x=x, y=y, z=0.0,
                 degree=5,           # mid-yellow until the cube is processed
+                category=SHAPE_SQUARE,  # render as squares (cubes of code)
             ))
 
-        # Auto-fit view to show the whole grid
-        if hasattr(self, "_zoom_to_fit_animated"):
-            self._zoom_to_fit_animated()
-        else:
-            self.update()
+        # Chain-graph edges: each cube is connected to the next. This feeds
+        # the Laplacian spectral layout so the positions reflect the
+        # sequential structure of the file.
+        self._edges = [(i, i + 1, 1.0) for i in range(n - 1)]
+        self._neighbor_cache = {
+            i: {i - 1 for _ in [0] if i > 0} | {i + 1 for _ in [0] if i < n - 1}
+            for i in range(n)
+        }
+
+        # Relax with the Laplacian worker if the graph is big enough
+        # (the worker needs >=3 nodes). Fallback: keep the grid.
+        if n >= 3 and hasattr(self, "_start_laplacian"):
+            try:
+                self._start_laplacian()
+            except Exception:
+                pass
+        self.update()
 
     def update_cube_ncd(self, idx: int, ncd: float, sha_match: bool):
         """Update the colour of cube `idx` after reconstruction completes.
