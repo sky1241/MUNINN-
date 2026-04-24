@@ -109,6 +109,8 @@ class TerminalWidget(QWidget):
     # Cube reconstruction signals (bubbled up to MainWindow for heatmap wiring)
     cubes_ready = pyqtSignal(list)              # list[dict] of cube descriptors
     cube_progress = pyqtSignal(int, float, bool)  # idx, ncd, sha_match
+    reconstruction_started = pyqtSignal()        # Navi hide during /reconstruct
+    reconstruction_ended = pyqtSignal()          # Navi show again
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -597,9 +599,14 @@ class TerminalWidget(QWidget):
         self._reco_worker.finished.connect(
             lambda: self._append_text("\n[reco] done.", color=ACCENT_CYAN_HEX)
         )
+        # Hide Navi during reconstruction — she steals the main thread
+        # with her 30fps orb paint which makes the heatmap lag behind.
+        self._reco_worker.finished.connect(self.reconstruction_ended)
+        self._reco_worker.error.connect(self.reconstruction_ended)
         self._reco_worker.finished.connect(self._reco_thread.quit)
         self._reco_worker.error.connect(self._reco_thread.quit)
         self._reco_thread.started.connect(self._reco_worker.run)
+        self.reconstruction_started.emit()
         self._reco_thread.start()
 
     def _cmd_stop_reco(self, silent: bool = False):
