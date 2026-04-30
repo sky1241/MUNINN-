@@ -59,10 +59,10 @@ class ReconstructionWorker(QObject):
 
     def __init__(self, file_path: str, model: str = "qwen2.5-coder:7b",
                  lines_per_cube: int = 20,      # kept for signature compat, unused (engine uses tokens)
-                 max_cubes: int = 40,           # cap cubes to keep UI readable
+                 max_cubes: int = 0,            # 0 = no cap, process whole file
                  base_tokens: int = 112,
                  max_cycles: int = 3,
-                 attempts_per_cube: int = 3):
+                 attempts_per_cube: int = 11):
         super().__init__()
         self._file = Path(file_path)
         self._model = model
@@ -90,9 +90,18 @@ class ReconstructionWorker(QObject):
                 from engine.core.cube_providers import (
                     reconstruct_adaptive, OllamaProvider,
                 )
+                from engine.core.mycelium import Mycelium
             except ImportError as e:
                 self.error.emit(f"Cannot import engine: {e}")
                 return
+
+            # CHUNK 2 fix: Mycelium expects a repo_path (folder), not a DB file.
+            # Internally it builds <repo>/.muninn/mycelium.db. Passing a DB path
+            # here would create <path>/.muninn/mycelium.db which is empty.
+            # Using repo_root binds the UX to the real .muninn/mycelium.db
+            # of the project (847 MB / 5.9M edges accumulated across sessions).
+            repo_root = Path(__file__).resolve().parents[2]
+            mycelium = Mycelium(repo_root)
 
             content = self._file.read_text(encoding="utf-8", errors="replace")
             cubes = subdivide_file(
@@ -170,7 +179,7 @@ class ReconstructionWorker(QObject):
                     base_tokens=self._base_tokens,
                     max_cycles=self._max_cycles,
                     attempts_per_cube=self._attempts,
-                    mycelium=None,
+                    mycelium=mycelium,
                     on_cube=on_cube,
                 )
             except ConnectionError as e:
@@ -179,6 +188,11 @@ class ReconstructionWorker(QObject):
             except Exception as e:  # noqa: BLE001
                 self.error.emit(f"reconstruct_adaptive crash: {type(e).__name__}: {e}")
                 return
+            finally:
+                try:
+                    mycelium.close()
+                except Exception:
+                    pass
 
             if self._stop:
                 self.status.emit("[reco] stopped by user.", self._COL_PARTIAL)
