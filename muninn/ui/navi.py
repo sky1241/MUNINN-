@@ -370,6 +370,19 @@ class NaviWidget(QWidget):
         self._hide_float_btn()
         self.update()
 
+    def mousePressEvent(self, event):
+        """Click anywhere on the bubble area dismisses tutorial + bubble.
+        CHUNK 3: when the tutorial bubble covers the 'Scanner un repo' button,
+        the user can't click the button. This handler lets a click on the
+        Navi widget itself dismiss both the bubble and (if active) the
+        guided tutorial — freeing the underlying button for click."""
+        if self._bubble_visible:
+            self._tutorial_active = False
+            self.hide_bubble()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def show_context_help(self, context: str):
         """Show contextual help for a given context (B-UI-15)."""
         if self._tutorial_active:
