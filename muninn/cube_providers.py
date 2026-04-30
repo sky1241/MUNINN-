@@ -119,12 +119,21 @@ class OllamaProvider(LLMProvider):
         except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError) as e:
             raise ConnectionError(f"Cannot connect to Ollama at {self.base_url}: {e}")
 
+    # CHUNK 9: load 16K context (default Ollama is 8K). Allows x3 cubes
+    # (894 lines / ~7168 tokens) to fit prompt + neighbors + completion.
+    # VRAM cost on a 7B Q4 model ~5.5/8 GB, OK on RX 5700 XT.
+    NUM_CTX = 16384
+
     def generate(self, prompt: str, max_tokens: int = 256,
                  temperature: float = 0.0) -> str:
         resp = self._request('/api/generate', {
             'model': self.model,
             'prompt': prompt,
-            'options': {'num_predict': max_tokens, 'temperature': temperature},
+            'options': {
+                'num_predict': max_tokens,
+                'temperature': temperature,
+                'num_ctx': self.NUM_CTX,
+            },
             'stream': False,
         })
         return resp.get('response', '')
@@ -159,7 +168,11 @@ class OllamaProvider(LLMProvider):
         payload = {
             'model': self.model,
             'prompt': prompt,
-            'options': {'num_predict': max_tokens, 'temperature': temperature},
+            'options': {
+                'num_predict': max_tokens,
+                'temperature': temperature,
+                'num_ctx': self.NUM_CTX,
+            },
             'stream': True,
         }
         if system:
@@ -200,7 +213,11 @@ class OllamaProvider(LLMProvider):
             'model': self.model,
             'prompt': prompt,
             'raw': True,
-            'options': {'num_predict': max_tokens, 'temperature': 0.0},
+            'options': {
+                'num_predict': max_tokens,
+                'temperature': 0.0,
+                'num_ctx': self.NUM_CTX,
+            },
             'stream': False,
         })
         return resp.get('response', '')
