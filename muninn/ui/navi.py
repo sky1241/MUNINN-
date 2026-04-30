@@ -370,22 +370,14 @@ class NaviWidget(QWidget):
         self._hide_float_btn()
         self.update()
 
-    def mousePressEvent(self, event):
-        """Click on the bubble area dismisses the tutorial — but ONLY if no
-        scan button is currently visible. The scan button (`_float_btn`) lives
-        inside the bubble area; intercepting clicks here would swallow the
-        click destined for the button and break the scan flow.
-        CHUNK 3 v2: dismiss ONLY when no button is offered (e.g. step 'idle'
-        or 'scan_done' / 'explore_cube' which auto-advance after N seconds)."""
-        if self._bubble_visible:
-            btn_visible = (self._float_btn is not None
-                           and self._float_btn.isVisible())
-            if not btn_visible:
-                self._tutorial_active = False
-                self.hide_bubble()
-                event.accept()
-                return
-        super().mousePressEvent(event)
+    # CHUNK 3 reverted (commit 521d4e7 v2 also broke scan flow per Sky).
+    # The mousePressEvent we added intercepted events even when guarded by
+    # _float_btn.isVisible() — Qt routing put NaviWidget in the click path
+    # on top of the floating scan button. Reverting to default Qt routing
+    # so the scan button receives clicks normally. The "tutorial covers
+    # the scan button" UX issue needs a different approach (e.g. shrink
+    # Navi.geometry() so it doesn't overlap the button rect, or set
+    # Qt.WA_TransparentForMouseEvents on the bubble area only).
 
     def show_context_help(self, context: str):
         """Show contextual help for a given context (B-UI-15)."""
