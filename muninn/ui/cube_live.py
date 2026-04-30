@@ -119,6 +119,12 @@ class ReconstructionWorker(QObject):
                     self._COL_INFO,
                 )
                 cubes = cubes[: self._max_cubes]
+                # CHUNK 7: also truncate `content` so the engine doesn't waste
+                # GPU on cubes the UX won't show. Without this, reconstruct_adaptive
+                # processes ALL cubes from the original content even if UX caps
+                # to N — engine ate 51 useless LLM calls when UX was capping at 10.
+                last_line = cubes[-1].line_end
+                content = "\n".join(content.split("\n")[:last_line])
 
             self.status.emit(
                 f"[reco] {self._file.name} — {len(cubes)} cubes @ {self._base_tokens} tokens, "
