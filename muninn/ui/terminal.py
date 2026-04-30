@@ -564,6 +564,20 @@ class TerminalWidget(QWidget):
         if not file_path.exists():
             self._append_text(f"File not found: {file_path}", color="#EF4444")
             return
+        # CHUNK 4: require a prior /scan so the tree + mycelium are loaded.
+        # Without these, the reconstruction has no cross-file neighbors and no
+        # mycelium vocabulary -> hints are empty and SHA score collapses.
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        tree_path = repo_root / "memory" / "tree.json"
+        mycelium_db = repo_root / ".muninn" / "mycelium.db"
+        if not tree_path.exists() or not mycelium_db.exists():
+            self._append_text(
+                "[reco] No scan detected — type /scan <repo> first to build "
+                "the tree + mycelium. Reconstruction needs neighbors and "
+                "vocabulary to work correctly.",
+                color="#EF4444",
+            )
+            return
         lines_per_cube = int(args[1]) if len(args) >= 2 else 20
         max_cubes = int(args[2]) if len(args) >= 3 else 40
 
