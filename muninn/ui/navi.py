@@ -371,16 +371,20 @@ class NaviWidget(QWidget):
         self.update()
 
     def mousePressEvent(self, event):
-        """Click anywhere on the bubble area dismisses tutorial + bubble.
-        CHUNK 3: when the tutorial bubble covers the 'Scanner un repo' button,
-        the user can't click the button. This handler lets a click on the
-        Navi widget itself dismiss both the bubble and (if active) the
-        guided tutorial — freeing the underlying button for click."""
+        """Click on the bubble area dismisses the tutorial — but ONLY if no
+        scan button is currently visible. The scan button (`_float_btn`) lives
+        inside the bubble area; intercepting clicks here would swallow the
+        click destined for the button and break the scan flow.
+        CHUNK 3 v2: dismiss ONLY when no button is offered (e.g. step 'idle'
+        or 'scan_done' / 'explore_cube' which auto-advance after N seconds)."""
         if self._bubble_visible:
-            self._tutorial_active = False
-            self.hide_bubble()
-            event.accept()
-            return
+            btn_visible = (self._float_btn is not None
+                           and self._float_btn.isVisible())
+            if not btn_visible:
+                self._tutorial_active = False
+                self.hide_bubble()
+                event.accept()
+                return
         super().mousePressEvent(event)
 
     def show_context_help(self, context: str):
