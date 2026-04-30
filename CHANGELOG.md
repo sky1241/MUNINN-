@@ -5,6 +5,91 @@ Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 
 ---
 
+## 2026-04-30 — Cube reconstruction local LLM unblock (CHUNK 1-9 batch)
+
+Session intensive d'audit + fix du pipeline cube reconstruction côté UX.
+qwen2.5-coder:7b local sur RX 5700 XT Vulkan. SHA score sur btree_google.go
+(893 lignes, Google B-Tree, Apache 2.0):
+
+- **Avant session**: 1/10 (10%) sur l'UX live (CHUNK 1 + path Mycelium absents)
+- **Après CHUNK 1** (Fix 20 avant FIM): **39/61 (64%)** cycle 1 x1 mesuré
+
+Score Sonnet API référence: 53/61 (87%). Avec qwen 7B local on est désormais
+à 5 points d'écart de Sonnet sans aucun coût API.
+
+### Bug central (CHUNK 1) — Fix 20 bypassé par le wrap FIM
+
+`FIMReconstructor.reconstruct_with_neighbors` testait la branche FIM AVANT
+Fix 20 (l'auto-SHA via anchor map). Pour les providers FIM-capable
+(qwen2.5-coder, deepseek-coder, codellama), la branche FIM retournait
+immédiatement → Fix 20 jamais évalué → 0 auto-SHA gratuit alors que le
+fichier en avait 38 (62%) à offrir.
+
+- Sonnet (no-FIM) atteignait Fix 20 → 38/61 auto-SHA gratuits
+- qwen (FIM) sautait Fix 20 → 0 auto-SHA, tout passait par LLM
+- Fix: déplacer Fix 20 AVANT le test FIM. Engine + mirror muninn/.
+
+### Bugs UX corrigés (CHUNK 2, 3, 4, 7)
+
+- **CHUNK 2**: `cube_live.py` passait `Mycelium('cube_mycelium.db')` au lieu
+  de `Mycelium(repo_root)`. Mycelium effectif vide entre cycles (cycle 2
+  reproduisait cycle 1 byte-for-byte). Fix branche le vrai mycelium 807 MB
+  / 127 364 concepts / 2 079 756 edges accumulés sur des mois de sessions.
+- **CHUNK 3**: `NaviWidget.mousePressEvent` dismiss tutorial + bulle quand
+  on clique dessus. Avant le tutorial cachait le bouton "Scanner un repo"
+  et bloquait l'utilisateur.
+- **CHUNK 4**: `_cmd_reconstruct` require maintenant que `memory/tree.json`
+  et `.muninn/mycelium.db` existent. Plus de silent-bad-pipeline sur fresh
+  clone.
+- **CHUNK 7**: tronquer `content` selon `max_cubes` avant l'appel
+  `reconstruct_adaptive`. Évite 51 LLM calls gaspillés quand l'UX cappe à 10.
+
+### Engine (CHUNK 9) — num_ctx 8K → 16K
+
+OllamaProvider chargeait les modèles avec le default Ollama `num_ctx=8192`,
+trop juste pour les cubes x3 (894 lignes / ~7168 tokens). Set `NUM_CTX =
+16384` sur les 3 call sites. VRAM impact RX 5700 XT: 5.5/8 GB, dans la
+marge. Forge + mirror appliqués.
+
+### Recherche externe (cousin Yggdrasil)
+
+- `docs/YGG_RESEARCH_2026-04-25.md` — pass 1 web (FIM, LRC, Voronoï)
+- `docs/YGG_DISK_RESEARCH_2026-04-26.md` — scan WT3 833K + concept_index 2.78M
+- `docs/YGG_FULL_REPORT_2026-04-26.md` — rapport unifié + plan 5 phases
+- `docs/HANDOFF_BATTLE_PLAN_2026-04-27.md` — plan 8 chunks + diff exact
+
+### Tests + tooling
+
+- `tests/bench_n_tokens.py` — sweep N ∈ {80,88,96,112,128} avec FIM correct
+- `tests/test_forge_real_algos.py` — +10 tests pour `_is_destructive_function`
+  (BUG-102 detector). 38/38 tests forge real algos passent.
+
+### Diagnostics ouverts (à traiter plus tard)
+
+- **CHUNK 8** — `read_node` ([muninn_tree.py:540-553](engine/core/muninn_tree.py#L540))
+  reconsolide les nodes froids et compresse `b0002.mn` 29 lignes → 3 lignes
+  à chaque session. Fix proposé (garde `>= 10 lignes` minimum) à valider.
+- **Learned anchors pas injectées dans le wrap FIM** — sur qwen FIM +
+  déterministe, les 11 attempts produisent des outputs identiques. Future
+  CHUNK: injecter les hints en commentaires dans le prefix avant
+  `<|fim_prefix|>`.
+- **BUG-091** — 11/17 fichiers `engine/core/` vs `muninn/` divergent encore.
+
+### Commits
+
+| Hash | Description |
+|------|-------------|
+| `1000cec` | CHUNK 1 — Fix 20 anchor-skip BEFORE FIM |
+| `8fcbd4c` | CHUNK 2 — Mycelium(repo_root) binds UX to real 847 MB DB |
+| `f11a63a` | CHUNK 3 — clicking Navi bubble dismisses tutorial |
+| `80b6619` | CHUNK 4 — /reconstruct requires /scan |
+| `6e9b501` | CHUNK 9 — OllamaProvider num_ctx=16384 |
+| `877c43a` | CHUNK 5 — bench_n_tokens.py sweep |
+| `e7d8cb5` | CHUNK 7 — truncate content when max_cubes caps the heatmap |
+| `a3c0085` | test(forge) — +10 tests pin _is_destructive_function |
+
+---
+
 ## 2026-04-24 — Ollama Vulkan backend + anti-freeze system config (session forensic)
 
 ### Summary
