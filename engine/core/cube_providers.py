@@ -629,15 +629,7 @@ class FIMReconstructor:
         after = sorted([n for n in same_file if n.line_start >= cube.line_end],
                        key=lambda c: c.line_start)
 
-        # Try native FIM first if provider supports it
-        if self.provider.supports_fim and before and after:
-            ext_prefix = "\n".join(c.content for c in before)
-            ext_suffix = "\n".join(c.content for c in after)
-            return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
-
-        # ─── FIM prompt: code with hole + constraints ────────────────
-        # Use normalized line count (not raw line_start/end which may include
-        # trailing blanks that normalize_content strips)
+        # Normalize content + line count (needed for Fix 20 + FIM fallback)
         try:
             from cube import normalize_content as _nc
         except ImportError:
@@ -647,8 +639,12 @@ class FIMReconstructor:
                 _nc = lambda t: t.strip()
         n_lines = len(_nc(cube.content).split('\n'))
 
-        # Fix 20: If ALL lines are anchored, skip LLM entirely.
-        # Uses _build_full_anchor_map (same logic as post-forcing) to check.
+        # Fix 20 FIRST: if ALL lines are anchored, skip LLM entirely.
+        # Model-agnostic auto-SHA. Must run BEFORE the FIM branch — otherwise
+        # FIM-capable providers (qwen2.5-coder, deepseek, codellama) bypass
+        # the free auto-SHA path and waste a LLM call on cubes that are
+        # already 100% anchored. Sonnet (no-FIM) reaches this and gets
+        # 38/61 auto-SHA on btree_google.go; qwen used to skip it -> 0.
         if ast_hints:
             _orig_lines = _nc(cube.content).split('\n')
             _ext = os.path.splitext(cube.file_origin or '')[1].lower()
@@ -656,6 +652,14 @@ class FIMReconstructor:
                 ast_hints, _orig_lines, n_lines, _ext)
             if len(_pre_am) >= n_lines:
                 return _nc(cube.content)
+
+        # Then native FIM if provider supports it (qwen, deepseek, etc.)
+        if self.provider.supports_fim and before and after:
+            ext_prefix = "\n".join(c.content for c in before)
+            ext_suffix = "\n".join(c.content for c in after)
+            return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
+
+        # ─── FIM prompt fallback: code with hole + constraints ────────
 
         # 4 neighbors each side — tested: more context = better SHA rate
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
