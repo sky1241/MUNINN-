@@ -5,6 +5,102 @@ Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 
 ---
 
+## 2026-05-01 — UX polish + Wayland fixes + learned anchors → FIM (CHUNK 10-14)
+
+Suite de la session 2026-04-30. Tests interactifs Sky en live + fixes
+qui sortent au fur et à mesure des bugs UX rencontrés. Pipeline E2E
+validé sur calculator.py (2/3 SHA = 67%) puis queue.go (test en cours).
+
+### Bugs UX corrigés en live
+
+- **CHUNK 10** — `QFileDialog` Wayland fix : sur GNOME Wayland le file
+  picker natif (xdg-portal) s'ouvrait en thumbnail cassé en bas de
+  l'écran. Force `Option.DontUseNativeDialog` pour utiliser le widget
+  Qt qui marche cross-DE.
+- **CHUNK 11** — `/scan <path>` accepte un argument. Avant : toujours
+  cwd (= repo Muninn). Après : `/scan /home/sky/Bureau/MUNINN_demo_scan`
+  scanne le dossier ciblé. Timeout subprocess remonté à 120s pour les
+  gros corpus.
+- **CHUNK 14** — Slash command `/pick` : ouvre un file picker (pas
+  juste folder picker comme le bouton "Scanner un repo") et prefill
+  l'input avec `/reconstruct <fichier> 112 0`. Sky avait essayé de
+  sélectionner queue.go via le bouton scan — bouton "Choose" grisé
+  parce que QFileDialog.getExistingDirectory rejette les fichiers.
+
+### CHUNK 3 reverté
+
+- Le `mousePressEvent` ajouté dans NaviWidget (commits f11a63a + 521d4e7)
+  bloquait le clic destiné au bouton flottant "Scanner un repo" même
+  avec le guard `_float_btn.isVisible()`. Reverté en `1ac114b`. Le UX
+  problème "tutorial cache le bouton" reste ouvert — solution future
+  via `WA_TransparentForMouseEvents` ou shrink de `Navi.geometry()`.
+
+### Streaming LLM output (CHUNK 12)
+
+Wrap `provider.fim_generate` + `provider.generate` dans
+`ReconstructionWorker.run()` pour intercepter chaque appel et émettre
+le texte généré au terminal de l'UX. Format multi-ligne avec préfixe
+`│ ` et séparateurs horizontaux. Sky peut maintenant **VOIR** chaque
+attempt qwen au lieu d'avoir juste le verdict NCD/SHA final. Couleur
+bleu doux `#7AA0FF` pour distinguer du metadata pipeline.
+
+Tradeoff assumé: 22 cubes × 11 attempts = ~240 dumps de code par
+btree_google.go. Sky a explicitement demandé.
+
+### Trou architectural learned anchors → FIM bouché (CHUNK 13)
+
+**Cause racine identifiée par observation live** : pendant le run
+calculator.py, qwen oscillait entre les EXACTEMENT mêmes 2 outputs
+sur les 11 attempts d'un cube. Diagnostic: le wrap natif
+`<|fim_prefix|>...<|fim_suffix|>...<|fim_middle|>` est hint-blind —
+il accepte uniquement le code brut. Les `learned_anchors` que
+`reconstruct_cube_waves` accumule dans `ast_hints['anchors']` après
+chaque attempt raté étaient ignorées par la branche FIM.
+
+Fix: à l'appel `reconstruct_fim` dans `FIMReconstructor.reconstruct_with_neighbors`,
+on injecte à la **fin du prefix** des commentaires language-aware
+contenant:
+  - les 5 dernières learned anchors (lignes correctes des attempts précédents)
+  - les `mycelium_related` identifiers (vocabulaire 847 MB)
+  - jusqu'à 2 `previous_attempts` feedback strings
+
+Comment style: `#` pour Python/Ruby/shell/YAML/TOML/R, `//` pour le
+reste. Mirror dans `muninn/cube_providers.py` (BUG-091, hash identique
+ed4f45c0).
+
+### Test interactif live UX
+
+- Bouton "Scanner un repo" → dialog Qt OK (CHUNK 10)
+- Scan `tests/cube_corpus/` → 80 neurons en arbre 3D coloré par degree
+- `/scan <path>` → 30s sur cube_corpus (avant timeout 30s, désormais 120s)
+- `/reconstruct calculator.py 112 0` → 2/3 SHA, cube 0 NCD=0.079 (92%
+  byte-identique, 1 ligne `OPS = {` manquante)
+- LLM output streamé en multi-ligne dans le terminal UX (CHUNK 12)
+
+### Commits
+
+| Hash | CHUNK | Description |
+|------|-------|-------------|
+| `1ac114b` | 3 (revert) | Revert mousePressEvent (cassait scan button) |
+| `35131b5` | 10 | DontUseNativeDialog sur QFileDialog (fix Wayland) |
+| `039d6d0` | 11 | /scan accepts optional path argument |
+| `b407ac5` | 12 v1 | Stream LLM single-line truncated |
+| `552c60c` | 12 v2 | Stream LLM full multi-line output |
+| `21f9d5b` | 13 | Inject learned anchors into FIM prefix |
+| `2acf0e1` | 14 | /pick slash command opens file picker |
+
+### Diagnostics ouverts (toujours)
+
+- **CHUNK 8** — `read_node` reconsolidate compresse `b0002.mn` 29→3
+  lignes à chaque session. Fix proposé (garde `>= 10 lignes`) à valider.
+- **CHUNK 3** — Tutorial Navi cache toujours le bouton scan en mode
+  visuel ; le revert garde le bouton fonctionnel mais le UX issue
+  reste. Approche future: `WA_TransparentForMouseEvents`.
+- **`c1 x0 cube 0: NCD=2.000 (0a)`** observé dans le log calculator.py
+  — bug d'affichage / calcul NCD sur cubes parents x0. À investiguer.
+
+---
+
 ## 2026-04-30 — Cube reconstruction local LLM unblock (CHUNK 1-9 batch)
 
 Session intensive d'audit + fix du pipeline cube reconstruction côté UX.
