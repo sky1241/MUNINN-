@@ -148,6 +148,33 @@ class ReconstructionWorker(QObject):
 
             provider = OllamaProvider(model=self._model)
 
+            # CHUNK 12: stream the LLM's actual output to the terminal so the
+            # user can SEE qwen trying to reconstruct the code (not just the
+            # final NCD/SHA verdict). Wrap fim_generate + generate so each
+            # call emits a status line with the first ~120 chars of output.
+            _COL_LLM = "#7AA0FF"  # subtle blue for raw LLM lines
+            _orig_fim = provider.fim_generate
+            _orig_gen = provider.generate
+
+            def _emit_llm(tag: str, output: str):
+                snippet = output.replace("\n", " ⏎ ").strip()
+                if len(snippet) > 140:
+                    snippet = snippet[:137] + "..."
+                self.status.emit(f"      {tag} » {snippet}", _COL_LLM)
+
+            def _wrap_fim(prefix, suffix, max_tokens=256):
+                out = _orig_fim(prefix, suffix, max_tokens)
+                _emit_llm("FIM", out)
+                return out
+
+            def _wrap_gen(prompt, max_tokens=256, temperature=0.0):
+                out = _orig_gen(prompt, max_tokens, temperature)
+                _emit_llm("LLM", out)
+                return out
+
+            provider.fim_generate = _wrap_fim
+            provider.generate = _wrap_gen
+
             # Callback fired by reconstruct_adaptive for each cube event.
             # See tests/run_sanity_btree.py for the status vocabulary.
             def on_cube(cycle, level, cube_idx, status, attempts, ncd):
