@@ -427,7 +427,8 @@ class TerminalWidget(QWidget):
                 "Commands:\n"
                 "  /clear              — Clear terminal\n"
                 "  /help               — Show this help\n"
-                "  /scan               — Scan current repo\n"
+                "  /scan [path]        — Scan a folder (default: current repo)\n"
+                "  /pick               — Open file picker, prefill /reconstruct\n"
                 "  /status             — Show Muninn status\n"
                 "  /provider <name>    — Switch AI (claude/openai/ollama/off)\n"
                 "  /model <name>       — Switch model\n"
@@ -441,6 +442,8 @@ class TerminalWidget(QWidget):
             )
         elif base == "/scan":
             self._run_scan(parts)
+        elif base == "/pick":
+            self._cmd_pick_file()
         elif base == "/status":
             self._run_status()
         elif base == "/provider":
@@ -634,6 +637,26 @@ class TerminalWidget(QWidget):
         self._reco_thread = None
         if not silent:
             self._append_text("[reco] stopped.", color=TEXT_SECONDARY)
+
+    def _cmd_pick_file(self):
+        """CHUNK 14: open Qt file picker (any file) and prefill /reconstruct.
+        The 'Scanner un repo' button only accepts folders. /pick gives the
+        user a way to select a single file to reconstruct without typing
+        the full path."""
+        from PyQt6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Pick a file to reconstruct",
+            "",
+            "All files (*.*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        # Prefill the input with the /reconstruct command — user just
+        # presses Enter to launch (or edits N tokens / max cubes first).
+        self._input.setText(f"/reconstruct {path} 112 0")
+        self._input.setFocus()
 
     def _run_scan(self, parts: list = None):
         """Run muninn scan in background thread (non-blocking UI).
