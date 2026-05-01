@@ -284,9 +284,18 @@ class MainWindow(QMainWindow):
             self.neuron_panel.update()
 
     def _scan_folder_dialog(self):
-        """Open folder dialog to scan a repo."""
+        """Open folder dialog to scan a repo.
+        CHUNK 10: force Qt's own dialog (DontUseNativeDialog) — on Wayland
+        the native xdg-portal/GNOME file picker sometimes opens as a tiny
+        broken thumbnail in the bottom-left corner instead of a real modal
+        dialog. Qt's built-in dialog is more reliable cross-DE."""
         from PyQt6.QtWidgets import QFileDialog
-        folder = QFileDialog.getExistingDirectory(self, "Select repo folder")
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select repo folder",
+            "",
+            QFileDialog.Option.DontUseNativeDialog,
+        )
         if folder:
             self._scan_folder(folder)
 
