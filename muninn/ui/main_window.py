@@ -284,20 +284,55 @@ class MainWindow(QMainWindow):
             self.neuron_panel.update()
 
     def _scan_folder_dialog(self):
-        """Open folder dialog to scan a repo.
-        CHUNK 10: force Qt's own dialog (DontUseNativeDialog) — on Wayland
-        the native xdg-portal/GNOME file picker sometimes opens as a tiny
-        broken thumbnail in the bottom-left corner instead of a real modal
-        dialog. Qt's built-in dialog is more reliable cross-DE."""
-        from PyQt6.QtWidgets import QFileDialog
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Select repo folder",
-            "",
-            QFileDialog.Option.DontUseNativeDialog,
+        """Open a unified picker: scan a folder OR reconstruct a file.
+        CHUNK 10: DontUseNativeDialog (Wayland fix).
+        CHUNK 15: ask user up-front what they want to do, then open the
+        right Qt picker. Scan-only or file-only dialogs alone confused
+        users (Sky tried picking queue.go in the folder dialog and got
+        a greyed-out 'Choose' button — not clear that's by design)."""
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        from pathlib import Path
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Muninn")
+        msg.setText("Que veux-tu faire ?")
+        msg.setIcon(QMessageBox.Icon.Question)
+        btn_scan = msg.addButton(
+            "📁 Scan un dossier (cartographier le repo)",
+            QMessageBox.ButtonRole.AcceptRole,
         )
-        if folder:
-            self._scan_folder(folder)
+        btn_pick = msg.addButton(
+            "📄 Reconstruct un fichier",
+            QMessageBox.ButtonRole.AcceptRole,
+        )
+        msg.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
+        msg.exec()
+        clicked = msg.clickedButton()
+
+        if clicked is btn_scan:
+            folder = QFileDialog.getExistingDirectory(
+                self,
+                "Select folder to scan",
+                "",
+                QFileDialog.Option.DontUseNativeDialog,
+            )
+            if folder:
+                self._scan_folder(folder)
+        elif clicked is btn_pick:
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Pick a file to reconstruct",
+                "",
+                "All files (*.*)",
+                options=QFileDialog.Option.DontUseNativeDialog,
+            )
+            if path:
+                # Prefill the terminal input with /reconstruct so the user
+                # only has to press Enter (or tweak tokens / max_cubes).
+                self.terminal_panel._input.setText(
+                    f"/reconstruct {path} 112 0"
+                )
+                self.terminal_panel._input.setFocus()
 
     def _scan_folder(self, path: str):
         """Scan a folder and load results (B-UI-22)."""
