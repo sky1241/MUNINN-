@@ -148,19 +148,25 @@ class ReconstructionWorker(QObject):
 
             provider = OllamaProvider(model=self._model)
 
-            # CHUNK 12: stream the LLM's actual output to the terminal so the
-            # user can SEE qwen trying to reconstruct the code (not just the
-            # final NCD/SHA verdict). Wrap fim_generate + generate so each
-            # call emits a status line with the first ~120 chars of output.
+            # CHUNK 12 v2: stream the LLM's full output to the terminal so the
+            # user can SEE every line qwen produces while reconstructing each
+            # cube. No truncation, no flattened newlines. Each LLM call dumps
+            # its full text between two separator lines so the user can read
+            # the actual code being attempted.
             _COL_LLM = "#7AA0FF"  # subtle blue for raw LLM lines
+            _SEP = "      " + "─" * 60
             _orig_fim = provider.fim_generate
             _orig_gen = provider.generate
 
             def _emit_llm(tag: str, output: str):
-                snippet = output.replace("\n", " ⏎ ").strip()
-                if len(snippet) > 140:
-                    snippet = snippet[:137] + "..."
-                self.status.emit(f"      {tag} » {snippet}", _COL_LLM)
+                # Indent each line so the user knows it's LLM output and not
+                # pipeline metadata.
+                lines = output.rstrip().split("\n")
+                indented = "\n".join(f"      │ {ln}" for ln in lines)
+                self.status.emit(
+                    f"{_SEP}\n      ▼ {tag} attempt\n{indented}\n{_SEP}",
+                    _COL_LLM,
+                )
 
             def _wrap_fim(prefix, suffix, max_tokens=256):
                 out = _orig_fim(prefix, suffix, max_tokens)
