@@ -674,6 +674,36 @@ class FIMReconstructor:
         if self.provider.supports_fim and before and after:
             ext_prefix = "\n".join(c.content for c in before)
             ext_suffix = "\n".join(c.content for c in after)
+
+            # CHUNK 13: inject learned anchors + previous_attempts feedback
+            # as language-specific comment lines at the END of the prefix.
+            # The wrap <|fim_prefix|>...<|fim_suffix|>...<|fim_middle|> is
+            # hint-blind; without this enrichment qwen oscillates between
+            # the same 1-2 outputs across all 11 attempts (we observed it).
+            # Adding hints lets each attempt diverge productively.
+            ext = os.path.splitext(cube.file_origin or '')[1].lower()
+            cmt = '#' if ext in ('.py', '.rb', '.sh', '.bash', '.zsh',
+                                  '.r', '.yml', '.yaml', '.toml') else '//'
+            hint_lines = []
+            if ast_hints:
+                anchors_list = ast_hints.get('anchors') or []
+                # last 5 learned anchors — lines we know are correct
+                for ln_no, ln_text in anchors_list[-5:]:
+                    snippet = ln_text.strip()[:80]
+                    if snippet:
+                        hint_lines.append(f"{cmt} anchor L{ln_no}: {snippet}")
+                # mycelium-related identifiers (semantic context)
+                myc_rel = ast_hints.get('mycelium_related') or []
+                if myc_rel:
+                    hint_lines.append(
+                        f"{cmt} related: {', '.join(myc_rel[:8])}")
+            if previous_attempts:
+                # Targeted corrective feedback from past attempts
+                for fb in previous_attempts[:2]:
+                    if fb:
+                        hint_lines.append(f"{cmt} feedback: {str(fb)[:120]}")
+            if hint_lines:
+                ext_prefix = ext_prefix + "\n" + "\n".join(hint_lines)
             return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
 
         # ─── FIM prompt fallback: code with hole + constraints ────────
