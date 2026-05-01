@@ -440,7 +440,7 @@ class TerminalWidget(QWidget):
                 color=TEXT_SECONDARY,
             )
         elif base == "/scan":
-            self._run_scan()
+            self._run_scan(parts)
         elif base == "/status":
             self._run_status()
         elif base == "/provider":
@@ -635,12 +635,26 @@ class TerminalWidget(QWidget):
         if not silent:
             self._append_text("[reco] stopped.", color=TEXT_SECONDARY)
 
-    def _run_scan(self):
-        """Run muninn scan in background thread (non-blocking UI)."""
+    def _run_scan(self, parts: list = None):
+        """Run muninn scan in background thread (non-blocking UI).
+        CHUNK 11: accept optional path argument so user can scan a specific
+        folder via slash command (no dialog roundtrip needed)."""
         import sys
-        self._append_text("Scanning repo...", color=TEXT_SECONDARY)
+        from pathlib import Path
+        target = "."
+        if parts and len(parts) >= 2:
+            args = parts[1].split() if len(parts) == 2 else [parts[1]] + parts[2:]
+            if args and args[0]:
+                target = str(Path(args[0]).expanduser())
+                if not Path(target).is_dir():
+                    self._append_text(
+                        f"[scan] Path not found or not a folder: {target}",
+                        color="#EF4444",
+                    )
+                    return
+        self._append_text(f"Scanning {target}...", color=TEXT_SECONDARY)
         self._run_subprocess_bg(
-            [sys.executable, "-m", "muninn", "scan", "."], timeout=30,
+            [sys.executable, "-m", "muninn", "scan", target], timeout=120,
         )
 
     def _run_status(self):
