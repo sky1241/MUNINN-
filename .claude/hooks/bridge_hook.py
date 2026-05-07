@@ -12,7 +12,29 @@ import math
 import re
 import sys
 import os
+import traceback
+from datetime import datetime
 from pathlib import Path
+
+
+def _log_hook_error(context: str, exc: BaseException) -> None:
+    """Append a swallowed exception to ~/.muninn/hook_errors.log.
+
+    Hooks must always exit 0 to avoid breaking Claude Code, so we cannot
+    raise. But silent swallow makes bugs invisible — instead we keep an
+    audit trail. If the logging itself fails, we swallow that too (the
+    hook must never crash the user's session).
+    """
+    try:
+        log_path = Path.home() / ".muninn" / "hook_errors.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} [bridge_hook:{context}] "
+                    f"{type(exc).__name__}: {exc}\n")
+            f.write(traceback.format_exc())
+            f.write("---\n")
+    except Exception:
+        pass
 
 def _shannon_entropy(s):
     """Shannon entropy of a string. High entropy = likely a secret."""
@@ -71,7 +93,11 @@ def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
         hook_input = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError, Exception):
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        _log_hook_error("stdin_parse", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_hook_error("stdin_unexpected", e)
         sys.exit(0)
 
     # Audit 2026-04-10: payload could be a list/str/None when stdin is
@@ -107,11 +133,11 @@ def main():
             try:
                 from _secrets import clamp_chained_commands
                 result, _ = clamp_chained_commands(result)
-            except Exception:
-                pass  # never block hook execution on a defense failure
+            except Exception as e:
+                _log_hook_error("clamp_chained_commands", e)
             print(result)
-    except Exception:
-        pass
+    except Exception as e:
+        _log_hook_error("bridge_fast", e)
 
     sys.exit(0)
 

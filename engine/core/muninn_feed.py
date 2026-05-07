@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -1096,6 +1097,25 @@ def _hook_log(repo_path: Path, message: str):
         pass
 
 
+def _log_sync_error(context: str, exc: BaseException) -> None:
+    """Append a swallowed exception with traceback to ~/.muninn/hook_errors.log.
+
+    Hooks must always exit 0 to avoid breaking Claude Code, so we cannot
+    raise. Silent swallow makes bugs invisible — instead we keep an audit
+    trail. If logging itself fails, we swallow that too.
+    """
+    try:
+        log_path = Path.home() / ".muninn" / "hook_errors.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} [muninn_feed:{context}] "
+                    f"{type(exc).__name__}: {exc}\n")
+            f.write(traceback.format_exc())
+            f.write("---\n")
+    except Exception:
+        pass
+
+
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
     hook_event = "PreCompact/SessionEnd"
@@ -1203,6 +1223,7 @@ def feed_from_hook(repo_path: Path):
             m.close()
         except Exception as e:
             print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+            _log_sync_error("feed_from_hook.sync_to_meta", e)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -1312,6 +1333,7 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
                 _hook_log(repo_path, f"STOP sync: {pushed} -> meta")
         except Exception as e:
             print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+            _log_sync_error("feed_from_stop_hook.sync_to_meta", e)
 
     # 6. Update dedup — keep only last 20 sessions
     dedup[session_id] = msg_count
