@@ -41,3 +41,6 @@ build/
 # Phase B brick 11 (2026-04-10): runtime locks + auto-backups
 memory/*.lock
 .claude/settings.local.json.backup-*
+
+# Claude Code runtime locks
+.claude/*.lock
