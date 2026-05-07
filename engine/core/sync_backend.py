@@ -24,6 +24,11 @@ def check_disk_space(path: Path, min_mb: int = 10) -> bool:
     """H9: Check if at least min_mb of disk space is available.
 
     Returns True if enough space, False otherwise.
+
+    BATTLE_PLAN_MYCELIUM_2026-05-05.md P2: on probe failure (OSError,
+    AttributeError, e.g. NAS offline / permission denied), refuse the
+    sync rather than assuming OK — protects the meta DB from corruption
+    on a saturated disk.
     """
     import shutil
     try:
@@ -31,7 +36,7 @@ def check_disk_space(path: Path, min_mb: int = 10) -> bool:
         free_mb = usage.free / (1024 * 1024)
         return free_mb >= min_mb
     except (OSError, AttributeError):
-        return True  # Can't check = assume OK
+        return False  # Can't check = refuse (was: True, fixed P2)
 
 
 # ── F1: SyncPayload dataclass ────────────────────────────────────
