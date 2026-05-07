@@ -18,6 +18,8 @@ def test_short_path_shows_name():
     assert result == "file.txt"
 
 
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="_safe_path only normalizes Windows paths on Windows")
 def test_windows_path():
     """Windows absolute paths are truncated correctly."""
     result = _safe_path("C:\\Users\\ludov\\MUNINN-\\engine\\core\\muninn.py")

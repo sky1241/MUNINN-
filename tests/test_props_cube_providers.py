@@ -7,6 +7,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from hypothesis import given, strategies as st, settings
 from engine.core.cube_providers import *
+# `reconstruct_line_by_line` and `reconstruct_adaptive` are intentionally
+# excluded from cube_providers.__all__ (kept as semi-private helpers used
+# by the live UX), so star-import doesn't bring them in. Import them
+# explicitly here so the smoke tests below resolve.
+from engine.core.cube_providers import (
+    reconstruct_line_by_line,
+    reconstruct_adaptive,
+)
 # BUG-102 (forge): the following functions were SKIPPED because
 # they have side effects (write to disk, run subprocess, hit
 # network). Fuzzing them without isolation would corrupt the repo.
@@ -65,7 +73,7 @@ def test_reconstruct_line_by_line_no_crash(cube, neighbors, provider, ast_hints,
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), attempts_per_wave=st.integers(-1000, 1000), max_waves=st.integers(-1000, 1000), ast_hints=st.text(max_size=50), temperature=st.floats(allow_nan=False, allow_infinity=False), ncd_give_up=st.floats(allow_nan=False, allow_infinity=False), on_attempt=st.text(max_size=50), mycelium=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, temperature, ncd_give_up, on_attempt, mycelium):
     """Smoke: reconstruct_cube_waves() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_cube_waves

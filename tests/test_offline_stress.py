@@ -137,8 +137,17 @@ def test_extract_hints_go():
     with open(path, "r") as f:
         content = f.read()
     cubes = subdivide_file(content=content, file_path=path, target_tokens=112)
-    # Cube 5 = PaginatedResponse struct
-    hints = extract_ast_hints(cubes[5])
+    # Find the cube containing PaginatedResponse — index drifted with the
+    # subdivide_file heuristic over time, so we discover it dynamically
+    # rather than hard-coding cubes[5].
+    target_cube = next(
+        (c for c in cubes if "PaginatedResponse" in c.content),
+        None,
+    )
+    assert target_cube is not None, (
+        "no cube contains 'PaginatedResponse' — corpus drift?"
+    )
+    hints = extract_ast_hints(target_cube)
     assert "PaginatedResponse" in hints["identifiers"]
     assert any("items" in s for s in hints["strings"])
     assert any("Items" in t for t in hints["type_sigs"])

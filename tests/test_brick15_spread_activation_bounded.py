@@ -105,12 +105,21 @@ def test_subgraph_fanout_cap_respected(myc):
 def test_spread_activation_under_60s_on_real_db(myc):
     """The contract test_lazy_real::test_real_spread_activation expects
     spread_activation to complete in < 60s. BRICK 15 fix made this
-    achievable on Sky's 15.5M-edge DB."""
+    achievable on Sky's 15.5M-edge DB.
+
+    The "activated > 0" assertion only holds on a graph dense enough that
+    the top-connection seeds reach >= 1 neighbor at hops=2. CI shrinks
+    the project DB regularly, so we skip when the graph is too small to
+    meaningfully test propagation rather than emit a false regression.
+    """
     if myc._db is None:
         pytest.skip("no DB backend")
     top = myc._db.top_connections(1)
     if not top:
         pytest.skip("empty DB")
+    n_edges = myc._db._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+    if n_edges < 100_000:
+        pytest.skip(f"DB too small for spread propagation test ({n_edges} edges)")
     seeds = top[0][0].split("|")
     t0 = time.time()
     activated = myc.spread_activation(seeds, hops=2, decay=0.5)

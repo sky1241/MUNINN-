@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ENGINE_CORE = REPO_ROOT / "engine" / "core"
 
 
-# These 11 functions are public APIs of engine/core/ that are tested
+# These 13 functions are public APIs of engine/core/ that are tested
 # in tests/ but not called from inside engine/core/ itself. They are
 # the expected "in-tree dead candidates" — adding to this set requires
 # either a justification or a deletion.
@@ -34,6 +34,12 @@ DOCUMENTED_IN_TREE_DEAD_CANDIDATES = frozenset({
     "influence_minimization",
     "to_markdown",
     "sync_metrics",
+    # Cube reconstruction helpers consumed by the live UX
+    # (muninn/ui/cube_live.py) but not used inside engine/core/. Kept
+    # public so the UX can import them by name without going through
+    # __all__ — the latter is the curated star-import surface.
+    "reconstruct_line_by_line",
+    "reconstruct_adaptive",
 })
 
 

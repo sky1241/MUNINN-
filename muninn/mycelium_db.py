@@ -49,7 +49,11 @@ def days_to_date(days) -> str:
             days = int(days)
         except (ValueError, TypeError):
             return datetime.now(timezone.utc).date().strftime("%Y-%m-%d")
-    dt = _EPOCH_REF + timedelta(days=int(days))
+    try:
+        dt = _EPOCH_REF + timedelta(days=int(days))
+    except OverflowError as e:
+        # date.max is 9999-12-31; reject inputs that push past it.
+        raise ValueError(f"days={days} out of range for date arithmetic") from e
     return dt.strftime("%Y-%m-%d")
 
 

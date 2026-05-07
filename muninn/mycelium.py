@@ -2362,12 +2362,23 @@ class Mycelium:
 
     @staticmethod
     def _load_meta_dir() -> Path:
-        """Load meta-mycelium directory from config, defaulting to ~/.muninn/.
+        """Load meta-mycelium directory.
 
-        Config file: ~/.muninn/config.json  ->  {"meta_path": "/path/to/shared/dir"}
+        Resolution order:
+          1. env MUNINN_META_PATH — used by tests to point at tmp_path,
+             and by BRICK 22 guards that explicitly check it
+          2. ~/.muninn/config.json {"meta_path": "..."} — user override
+          3. ~/.muninn/ — default
+
         Supports: local path, NAS (//server/share), OneDrive, any mounted folder.
         Team use: point all devs to the same meta_path for shared collective brain.
         """
+        import os as _os
+        env_path = _os.environ.get("MUNINN_META_PATH")
+        if env_path:
+            p = Path(env_path).resolve()
+            p.mkdir(parents=True, exist_ok=True)
+            return p
         config_path = Path.home() / ".muninn" / "config.json"
         if config_path.exists():
             try:

@@ -1854,6 +1854,9 @@ def reconstruct_adaptive(file_path: str, content: str,
 
     import tempfile, math
 
+    if base_tokens <= 0:
+        raise ValueError(f"base_tokens must be > 0, got {base_tokens}")
+
     # Calculate number of levels from file size
     lines = content.count('\n') + 1
     if lines <= base_tokens:
