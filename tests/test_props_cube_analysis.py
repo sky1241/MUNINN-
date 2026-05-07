@@ -3,10 +3,10 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine\\core'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
+import pytest
 from hypothesis import given, strategies as st, settings
-from engine.core.cube_analysis import *
 # BUG-102 (forge): the following functions were SKIPPED because
 # they have side effects (write to disk, run subprocess, hit
 # network). Fuzzing them without isolation would corrupt the repo.
@@ -26,6 +26,21 @@ from engine.core.cube_analysis import *
 #   - feedback_loop_check  (name matches /^feed/)
 #   - feed_anomalies_to_mycelium  (name matches /^feed/)
 
+from engine.core.cube_analysis import *
+
+
+# BUG-102 cwd guard (added 2026-05-07): the destructive detector
+# catches direct mkdir/write/open calls in fuzzed function bodies,
+# but it does not follow indirect calls (e.g. extract_tags() ->
+# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
+# with a random string like '0' or '\xfeQ', the indirect mkdir
+# resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into a tmp_path before each test,
+# so any indirect file-system mutation lands in a sandbox that
+# pytest cleans up automatically.
+@pytest.fixture(autouse=True)
+def _forge_isolate_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
 @given(cube=st.text(max_size=50), store=st.text(max_size=50))
 @settings(max_examples=50)

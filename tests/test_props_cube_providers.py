@@ -5,22 +5,37 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
+import pytest
 from hypothesis import given, strategies as st, settings
-from engine.core.cube_providers import *
-# `reconstruct_line_by_line` and `reconstruct_adaptive` are intentionally
-# excluded from cube_providers.__all__ (kept as semi-private helpers used
-# by the live UX), so star-import doesn't bring them in. Import them
-# explicitly here so the smoke tests below resolve.
-from engine.core.cube_providers import (
-    reconstruct_line_by_line,
-    reconstruct_adaptive,
-)
 # BUG-102 (forge): the following functions were SKIPPED because
 # they have side effects (write to disk, run subprocess, hit
 # network). Fuzzing them without isolation would corrupt the repo.
 # To test them, write isolated tests by hand using tmp_path.
 #   - run_progressive_levels  (name matches /^run_/)
 
+from engine.core.cube_providers import *
+# `reconstruct_line_by_line` and `reconstruct_adaptive` are intentionally
+# excluded from cube_providers.__all__ (kept as semi-private helpers used
+# by the live UX), so star-import doesn't bring them in. Import them
+# explicitly so the smoke tests below resolve.
+from engine.core.cube_providers import (
+    reconstruct_line_by_line,
+    reconstruct_adaptive,
+)
+
+
+# BUG-102 cwd guard (added 2026-05-07): the destructive detector
+# catches direct mkdir/write/open calls in fuzzed function bodies,
+# but it does not follow indirect calls (e.g. extract_tags() ->
+# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
+# with a random string like '0' or '\xfeQ', the indirect mkdir
+# resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into a tmp_path before each test,
+# so any indirect file-system mutation lands in a sandbox that
+# pytest cleans up automatically.
+@pytest.fixture(autouse=True)
+def _forge_isolate_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), ncd_threshold=st.floats(allow_nan=False, allow_infinity=False), ast_hints=st.text(max_size=50), previous_attempts=st.text(max_size=50), temperature=st.floats(allow_nan=False, allow_infinity=False), mycelium=st.text(max_size=50))
 @settings(max_examples=50)
