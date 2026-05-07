@@ -12,6 +12,7 @@ if str(_engine_core) not in sys.path:
     sys.path.insert(0, str(_engine_core))
 
 from muninn_layers import *  # noqa: F401,F403
+from muninn_layers import __all__  # propagate __all__ so privates listed there flow through `from .muninn_layers import *` in muninn/_engine.py
 from muninn_layers import (  # explicit re-export
     load_codebook,
     get_codebook,

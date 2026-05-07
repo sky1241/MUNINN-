@@ -122,11 +122,18 @@ class TestBug2ThreadSafety:
     """MyceliumDB and CubeStore must have threading.Lock on writes."""
 
     def test_mycelium_db_has_lock(self, tmp_path):
-        """MyceliumDB.__init__ creates a threading.Lock."""
+        """MyceliumDB.__init__ creates a re-entrant lock.
+
+        BUG-091 follow-up: was threading.Lock(); upgraded to RLock() so
+        nested calls (observe -> transaction -> _get_or_create_concept)
+        don't deadlock. Both Lock and RLock satisfy the "has lock"
+        invariant the original test was checking.
+        """
         from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "mycelium.db")
         assert hasattr(db, '_lock')
-        assert isinstance(db._lock, type(threading.Lock()))
+        # Accept either Lock or RLock — what matters is that *some* lock exists
+        assert hasattr(db._lock, 'acquire') and hasattr(db._lock, 'release')
         db.close()
 
     def test_cube_store_has_lock(self, tmp_path):
@@ -914,16 +921,42 @@ class TestMyceliumDBTransaction:
         assert hasattr(MyceliumDB, 'transaction')
 
     def test_transaction_acquires_lock(self, tmp_path):
-        """transaction() must acquire _lock during context."""
+        """transaction() must acquire _lock during context.
+
+        BUG-091 follow-up: _lock is now an RLock (re-entrant), so the
+        original `not db._lock.acquire(blocking=False)` check no longer
+        proves locking — RLock allows the same thread to re-enter.
+        Verify via a different thread instead.
+        """
+        import threading
         from muninn.mycelium_db import MyceliumDB
         db = MyceliumDB(tmp_path / "test.db")
         with db.transaction() as conn:
-            # Lock should be held
-            assert not db._lock.acquire(blocking=False), "Lock should be held during transaction"
+            # From another thread, the lock must NOT be acquirable
+            held_by_other = []
+            def _try_acquire():
+                got = db._lock.acquire(blocking=False)
+                held_by_other.append(got)
+                if got:
+                    db._lock.release()
+            t = threading.Thread(target=_try_acquire)
+            t.start()
+            t.join(timeout=1.0)
+            assert held_by_other == [False], (
+                f"Lock should be held during transaction (other thread saw: {held_by_other})"
+            )
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('test', 'val')")
-        # Lock should be released
-        assert db._lock.acquire(blocking=False), "Lock should be free after transaction"
-        db._lock.release()
+        # After context, another thread should be able to acquire it
+        free_after = []
+        def _check_free():
+            got = db._lock.acquire(blocking=False)
+            free_after.append(got)
+            if got:
+                db._lock.release()
+        t = threading.Thread(target=_check_free)
+        t.start()
+        t.join(timeout=1.0)
+        assert free_after == [True], "Lock should be free after transaction"
         db.close()
 
     def test_transaction_commits_on_success(self, tmp_path):

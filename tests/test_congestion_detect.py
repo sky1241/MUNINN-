@@ -59,9 +59,16 @@ class TestCongestionDetect:
         assert m._congestion_checked is True
 
     def test_congestion_code_exists(self):
-        """Verify the congestion detection code is in mycelium.py."""
+        """Verify the congestion detection code is in engine/core/mycelium.py.
+
+        BUG-091 follow-up (2026-05-07): muninn/mycelium.py is a shim now;
+        the actual source lives in engine/core/mycelium.py.
+        """
+        from pathlib import Path
         import muninn.mycelium as mycelium
-        source = open(mycelium.__file__, encoding="utf-8").read()
+        # Resolve to engine/core/ canonical source
+        canonical = Path(mycelium.__file__).resolve().parent.parent / "engine" / "core" / "mycelium.py"
+        source = canonical.read_text(encoding="utf-8")
         assert "CONGESTION" in source
         assert "emergency decay" in source
         assert "_congestion_checked" in source

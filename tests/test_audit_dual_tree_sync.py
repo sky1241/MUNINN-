@@ -57,9 +57,20 @@ SYNC_MARKERS = [
 
 @pytest.mark.parametrize("marker,files", SYNC_MARKERS)
 def test_marker_present_in_both_trees(marker, files):
-    """Each chunk's modifs must be mirrored in engine/core/ AND muninn/."""
+    """Each chunk's modifs must be present in engine/core/ (canonical).
+
+    BUG-091 follow-up (2026-05-07): muninn/ files have been replaced
+    with thin shims that re-export from engine/core/. The original
+    test required the marker to appear in BOTH trees, but with shims
+    the muninn/ side intentionally no longer contains the source code.
+    Now we only require engine/core/ to carry the marker; the shim
+    structure itself prevents drift.
+    """
     missing = []
     for rel_path in files:
+        # Skip muninn/ paths — those are shims now
+        if rel_path.startswith("muninn/"):
+            continue
         full = REPO_ROOT / rel_path
         if not full.exists():
             missing.append(f"{rel_path} (file does not exist)")

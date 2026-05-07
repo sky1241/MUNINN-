@@ -17,6 +17,7 @@ if str(_engine_core) not in sys.path:
     sys.path.insert(0, str(_engine_core))
 
 from muninn_feed import *  # noqa: F401,F403
+from muninn_feed import __all__  # propagate __all__ so `from .muninn_feed import *` in muninn/_engine.py picks up privates
 from muninn_feed import (  # explicit re-export — public API
     parse_transcript,
     feed_from_transcript,

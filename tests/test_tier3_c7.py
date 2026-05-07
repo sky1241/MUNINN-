@@ -51,8 +51,8 @@ def test_c7_4_headers_protected():
 
 def test_c7_5_wired_in_reconsolidation():
     """_resolve_contradictions should be called in B1 reconsolidation."""
-    _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    _mdir = Path(muninn.__file__).parent.parent / "engine" / "core"  # BUG-091 shim
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     # Find reconsolidation section in read_node
     reconsolidation_start = src.find("B1: Reconsolidation")
     assert reconsolidation_start != -1, "C7.5 FAIL: B1 reconsolidation not found in source"
