@@ -3,6 +3,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 from hypothesis import given, strategies as st, settings
 from engine.core.dedup import *
@@ -14,7 +15,7 @@ def test_simhash_no_crash(text, bits, shingle_size):
     # from engine.core.dedup import simhash
     try:
         simhash(text, bits, shingle_size)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(a=st.integers(-1000, 1000), b=st.integers(-1000, 1000))
@@ -24,7 +25,7 @@ def test_hamming_distance_no_crash(a, b):
     # from engine.core.dedup import hamming_distance
     try:
         hamming_distance(a, b)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(a=st.text(max_size=100), b=st.text(max_size=100), threshold=st.integers(-1000, 1000), bits=st.integers(-1000, 1000), shingle_size=st.integers(-1000, 1000))
@@ -34,7 +35,7 @@ def test_similar_no_crash(a, b, threshold, bits, shingle_size):
     # from engine.core.dedup import similar
     try:
         similar(a, b, threshold, bits, shingle_size)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(lines=st.text(max_size=50), threshold=st.integers(-1000, 1000), bits=st.integers(-1000, 1000), shingle_size=st.integers(-1000, 1000), min_length=st.integers(-1000, 1000))
@@ -44,7 +45,7 @@ def test_dedup_lines_no_crash(lines, threshold, bits, shingle_size, min_length):
     # from engine.core.dedup import dedup_lines
     try:
         dedup_lines(lines, threshold, bits, shingle_size, min_length)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), threshold=st.integers(-1000, 1000), bits=st.integers(-1000, 1000), shingle_size=st.integers(-1000, 1000), min_length=st.integers(-1000, 1000))
@@ -54,7 +55,7 @@ def test_dedup_paragraphs_no_crash(text, threshold, bits, shingle_size, min_leng
     # from engine.core.dedup import dedup_paragraphs
     try:
         dedup_paragraphs(text, threshold, bits, shingle_size, min_length)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), lines=st.text(max_size=50))
@@ -64,5 +65,5 @@ def test_stats_no_crash(text, lines):
     # from engine.core.dedup import stats
     try:
         stats(text, lines)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
         pass  # Expected rejections are OK

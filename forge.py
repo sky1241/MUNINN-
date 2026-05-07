@@ -105,7 +105,9 @@ def _haar_wavelet(signal):
 
 def _scalar_kalman(observations, Q=None, R=None):
     """Scalar Kalman filter — returns smoothed estimates.
-    Missile guidance algo from 1960, applied to bug risk estimation."""
+    Missile guidance algo from 1960, applied to bug risk estimation.
+    Q = process noise (how fast the underlying state can change).
+    R = measurement noise (how noisy the observations are)."""
     Q = Q or CARMACK_KALMAN_Q
     R = R or CARMACK_KALMAN_R
     if not observations:
@@ -123,20 +125,112 @@ def _scalar_kalman(observations, Q=None, R=None):
     return estimates
 
 
-def _kaplan_meier(intervals):
-    """Kaplan-Meier survival estimator (medicine/actuariat).
-    Given inter-event intervals, returns survival curve [(time, probability)]."""
-    if not intervals:
-        return [(0, 1.0)]
-    sorted_t = sorted(intervals)
-    n = len(sorted_t)
+def _adaptive_kalman(observations, n_iter=10):
+    """Kalman filter with Q,R estimated from data via EM-style iteration.
+    Useful when default Q,R don't match the true noise structure of the signal.
+
+    Returns (estimates, Q_hat, R_hat).
+    """
+    if not observations or len(observations) < 3:
+        return _scalar_kalman(observations), CARMACK_KALMAN_Q, CARMACK_KALMAN_R
+    obs = list(observations)
+    n = len(obs)
+    # Initialize Q,R from sample variance of first differences and residuals
+    diffs = [obs[i + 1] - obs[i] for i in range(n - 1)]
+    mean_d = sum(diffs) / len(diffs)
+    Q = max(sum((d - mean_d) ** 2 for d in diffs) / max(len(diffs), 1), 1e-6)
+    R = max(Q, 1e-6)
+
+    for _ in range(n_iter):
+        # Forward pass
+        x = obs[0]
+        P = R  # init covariance ~ measurement noise
+        x_post = []
+        P_post = []
+        innovations = []
+        innov_var = []
+        for z in obs:
+            x_pred = x
+            P_pred = P + Q
+            K = P_pred / (P_pred + R)
+            innov = z - x_pred
+            innovations.append(innov)
+            innov_var.append(P_pred + R)
+            x = x_pred + K * innov
+            P = (1 - K) * P_pred
+            x_post.append(x)
+            P_post.append(P)
+        # M-step: re-estimate R from innovation residuals,
+        # and Q from state-step variance
+        new_R = max(sum(i * i for i in innovations) / max(len(innovations), 1), 1e-6)
+        if len(x_post) >= 2:
+            steps = [x_post[k + 1] - x_post[k] for k in range(len(x_post) - 1)]
+            new_Q = max(sum(s * s for s in steps) / max(len(steps), 1), 1e-6)
+        else:
+            new_Q = Q
+        if abs(new_Q - Q) / max(Q, 1e-9) < 1e-3 and abs(new_R - R) / max(R, 1e-9) < 1e-3:
+            Q, R = new_Q, new_R
+            break
+        Q, R = new_Q, new_R
+
+    return x_post, Q, R
+
+
+def _kaplan_meier(observations):
+    """Kaplan-Meier survival estimator with censoring (Kaplan & Meier 1958).
+
+    `observations` is a list of (time, event_observed) where:
+      - time is a float (days since baseline)
+      - event_observed = True  -> failure happened at `time`
+      - event_observed = False -> right-censored at `time` (no event yet)
+
+    Returns survival curve [(t, S(t))] sorted by t. S(t) = P(no event by t).
+
+    Backwards-compat: if `observations` is a flat list of floats (legacy code
+    passing intervals), assume every observation is an uncensored event.
+    """
+    if not observations:
+        return [(0.0, 1.0)]
+    # Legacy shape: list of floats -> treat as all-events
+    if observations and not isinstance(observations[0], tuple):
+        observations = [(t, True) for t in observations]
+
+    # Sort by time, with events processed before censorings at same t
+    obs = sorted(observations, key=lambda x: (x[0], 0 if x[1] else 1))
+    n_at_risk = len(obs)
     survival = 1.0
-    curve = [(0, 1.0)]
-    for i, t in enumerate(sorted_t):
-        at_risk = n - i
-        survival *= (at_risk - 1) / at_risk
-        curve.append((t, survival))
+    curve = [(0.0, 1.0)]
+
+    i = 0
+    while i < len(obs):
+        t = obs[i][0]
+        # Count events and censorings at this exact time t (handle ties)
+        d = 0  # events at t
+        c = 0  # censored at t
+        j = i
+        while j < len(obs) and obs[j][0] == t:
+            if obs[j][1]:
+                d += 1
+            else:
+                c += 1
+            j += 1
+        if d > 0:
+            survival *= (n_at_risk - d) / n_at_risk
+            curve.append((t, survival))
+        n_at_risk -= (d + c)
+        i = j
     return curve
+
+
+def _km_survival_at(curve, horizon):
+    """Read S(horizon) from a KM curve. Step function (last value <= horizon)."""
+    s = 1.0
+    for t, val in curve:
+        if t <= horizon:
+            s = val
+        else:
+            break
+    return s
 
 
 def _dtw_distance(seq_a, seq_b):
@@ -203,24 +297,135 @@ def _build_import_graph(root):
     return graph
 
 
-def _newman_modularity(graph):
-    """Newman's Q modularity (biology/network science).
-    Returns per-file coupling score (0=isolated, 1=hub)."""
+def _modularity_q(adj, partition, two_m):
+    """Newman-Girvan Q for an undirected graph.
+    Q = (1/2m) * Σ_ij [A_ij - k_i*k_j/(2m)] * δ(c_i, c_j)
+    adj      : {node: {neighbor: weight}}, undirected (symmetric)
+    partition: {node: community_id}
+    two_m    : sum of all edge weights * 2 (precomputed)
+    """
+    if two_m == 0:
+        return 0.0
+    degree = {n: sum(adj[n].values()) for n in adj}
+    q = 0.0
+    for i in adj:
+        ci = partition[i]
+        for j, w_ij in adj[i].items():
+            if partition[j] != ci:
+                continue
+            q += w_ij - (degree[i] * degree[j]) / two_m
+    return q / two_m
+
+
+def _louvain_clustering(adj, max_iter=20, tol=1e-7):
+    """Louvain community detection (Blondel et al. 2008).
+    Greedy local optimization of Newman Q.
+    adj : {node: {neighbor: weight}}, undirected, symmetric.
+    Returns (partition, q) where partition = {node: community_id}.
+    """
+    nodes = list(adj.keys())
+    if not nodes:
+        return {}, 0.0
+    partition = {n: i for i, n in enumerate(nodes)}
+    two_m = sum(sum(neigh.values()) for neigh in adj.values())
+    if two_m == 0:
+        return partition, 0.0
+    degree = {n: sum(adj[n].values()) for n in adj}
+    # community total degree, used in delta-Q
+    comm_deg = {c: degree[n] for n, c in partition.items()}
+
+    improved = True
+    it = 0
+    while improved and it < max_iter:
+        improved = False
+        it += 1
+        for n in nodes:
+            ci = partition[n]
+            k_n = degree[n]
+            # Sum of weights from n to each community (excluding self-loops)
+            weights_to_comm = {}
+            for m, w in adj[n].items():
+                if m == n:
+                    continue
+                cm = partition[m]
+                weights_to_comm[cm] = weights_to_comm.get(cm, 0.0) + w
+            # Remove n from its community for the delta-Q calc
+            comm_deg[ci] -= k_n
+            best_delta = 0.0
+            best_c = ci
+            k_in_ci = weights_to_comm.get(ci, 0.0)
+            for cand, k_in_c in weights_to_comm.items():
+                # ΔQ for moving n from current empty-of-n state into cand:
+                # ΔQ ∝ (k_in_c - comm_deg[cand] * k_n / two_m)
+                delta = k_in_c - comm_deg.get(cand, 0.0) * k_n / two_m
+                # Compare to staying out (== joining ci with k_in_ci)
+                delta_stay = k_in_ci - comm_deg[ci] * k_n / two_m
+                if delta - delta_stay > best_delta + tol:
+                    best_delta = delta - delta_stay
+                    best_c = cand
+            comm_deg[best_c] = comm_deg.get(best_c, 0.0) + k_n
+            if best_c != ci:
+                partition[n] = best_c
+                improved = True
+
+    # Renumber communities 0..k-1
+    seen = {}
+    clean = {}
+    for n, c in partition.items():
+        if c not in seen:
+            seen[c] = len(seen)
+        clean[n] = seen[c]
+    q = _modularity_q(adj, clean, two_m)
+    return clean, q
+
+
+def _modularity_contribution(graph):
+    """Per-file score = how much each file contributes to its community's Q.
+    Files that strongly bind their cluster get high scores; bridge files (between
+    clusters) get low scores. This is the *real* Newman-style coupling signal,
+    via Louvain clustering + per-node Q decomposition.
+
+    Returns: {file: score in [0, 1]} normalized by max contribution.
+    """
     if not graph:
         return {}
-    edges = set()
+    # Build undirected weighted adjacency
+    adj = {f: {} for f in graph}
     for src, targets in graph.items():
         for tgt in targets:
-            edge = tuple(sorted([src, tgt]))
-            edges.add(edge)
-    if not edges:
+            if tgt not in adj:
+                adj[tgt] = {}
+            adj[src][tgt] = adj[src].get(tgt, 0.0) + 1.0
+            adj[tgt][src] = adj[tgt].get(src, 0.0) + 1.0
+    if all(not v for v in adj.values()):
         return {f: 0.0 for f in graph}
-    degree = {f: 0 for f in graph}
-    for a, b in edges:
-        degree[a] = degree.get(a, 0) + 1
-        degree[b] = degree.get(b, 0) + 1
-    max_deg = max(degree.values()) if degree else 1
-    return {f: degree.get(f, 0) / max_deg if max_deg > 0 else 0.0 for f in graph}
+
+    partition, _q_total = _louvain_clustering(adj)
+    two_m = sum(sum(neigh.values()) for neigh in adj.values())
+    if two_m == 0:
+        return {f: 0.0 for f in graph}
+    degree = {n: sum(adj[n].values()) for n in adj}
+
+    contrib = {}
+    for n in adj:
+        ci = partition[n]
+        s = 0.0
+        for m, w in adj[n].items():
+            if partition[m] == ci:
+                s += w - (degree[n] * degree[m]) / two_m
+        contrib[n] = s / two_m if two_m > 0 else 0.0
+
+    # Normalize to [0, 1] by max absolute contribution.
+    # Negative contribs (bridge files) → 0; high-contribs (binders) → 1.
+    max_abs = max((c for c in contrib.values()), default=0.0)
+    if max_abs <= 0:
+        return {f: 0.0 for f in graph}
+    return {f: max(contrib.get(f, 0.0), 0.0) / max_abs for f in graph}
+
+
+# Back-compat alias — old name kept so older callers don't break,
+# but it now points at the real Louvain-based contribution score.
+_newman_modularity = _modularity_contribution
 
 
 def _check_dep(name, pip_name=None):
@@ -1912,10 +2117,26 @@ def predict_carmack(root, weeks=8):
                         s["bugfixes"] += 1
                         s["bugfix_dates"].append(current_date)
 
-    # CARMACK 1: Import Graph Modularity (Newman)
-    print("  [CARMACK] Building import graph...")
+    # CARMACK 1: Real Newman Q via Louvain clustering on the import graph.
+    # Score = how much the file binds its own cluster (0=bridge, 1=core binder).
+    print("  [CARMACK] Louvain clustering on import graph...")
     graph = _build_import_graph(root)
-    coupling = _newman_modularity(graph)
+    coupling = _modularity_contribution(graph)
+
+    # Build a baseline date for KM censoring: oldest commit in window.
+    all_dates = []
+    for s in file_stats.values():
+        all_dates.extend(s["dates"])
+    try:
+        baseline_ts = min(
+            datetime.fromisoformat(d.replace("Z", "+00:00")).timestamp()
+            for d in all_dates
+        ) if all_dates else 0.0
+        now_ts = datetime.now(datetime.fromisoformat(
+            all_dates[0].replace("Z", "+00:00")).tzinfo).timestamp() if all_dates else 0.0
+    except (ValueError, TypeError):
+        baseline_ts = 0.0
+        now_ts = 0.0
 
     results = []
     for f, s in file_stats.items():
@@ -1925,60 +2146,68 @@ def predict_carmack(root, weeks=8):
         churn_rel = (s["added"] + s["deleted"]) / s["loc"]
         freq = len(s["commits"])
 
-        # CARMACK 2: Haar Wavelet on daily churn
+        # CARMACK 2: Haar wavelet — total high-freq energy across all detail
+        # bands (multi-resolution), not just the first level.
         hf_energy = 0.0
         if s["daily_churn"]:
             days_sorted = sorted(s["daily_churn"].keys())
             churn_signal = [s["daily_churn"][d] for d in days_sorted]
             _, details = _haar_wavelet(churn_signal)
-            if details:
-                hf_energy = sum(d * d for d in details[0]) / max(len(details[0]), 1)
+            for level in details:
+                if level:
+                    hf_energy += sum(d * d for d in level) / len(level)
 
-        # CARMACK 3: Scalar Kalman on bugfix signal
-        bugfix_signal = []
-        bf_set = set(s.get("bugfix_dates", []))
-        for date in s["dates"]:
-            bugfix_signal.append(1.0 if date in bf_set else 0.0)
+        # CARMACK 3: Adaptive Kalman on weekly bug-rate (continuous signal,
+        # Q,R estimated by EM). Last smoothed value = current risk.
         kalman_risk = 0.0
-        if bugfix_signal:
-            kalman_est = _scalar_kalman(bugfix_signal)
-            kalman_risk = kalman_est[-1]
-
-        # CARMACK 4: Kaplan-Meier survival
-        crash_prob = s["bugfixes"] / max(freq, 1)  # fallback
-        if len(s["bugfix_dates"]) >= 2:
+        if s["bugfix_dates"]:
             try:
-                bf_timestamps = sorted([
+                bf_ts = sorted(
                     datetime.fromisoformat(d.replace("Z", "+00:00")).timestamp()
                     for d in s["bugfix_dates"]
-                ])
-                intervals_days = [(bf_timestamps[i + 1] - bf_timestamps[i]) / 86400.0
-                                  for i in range(len(bf_timestamps) - 1)]
-                km_curve = _kaplan_meier(intervals_days)
-                survival_14d = 1.0
-                for t, surv in km_curve:
-                    if t <= 14:
-                        survival_14d = surv
-                    else:
-                        break
-                crash_prob = 1.0 - survival_14d
+                )
+                # Bucket bugfix events into weekly bins from baseline -> now.
+                if now_ts > baseline_ts:
+                    n_weeks = max(int((now_ts - baseline_ts) / (7 * 86400)) + 1, 2)
+                    bins = [0.0] * n_weeks
+                    for t in bf_ts:
+                        wk = min(int((t - baseline_ts) / (7 * 86400)), n_weeks - 1)
+                        if wk >= 0:
+                            bins[wk] += 1.0
+                    smoothed, _q_hat, _r_hat = _adaptive_kalman(bins)
+                    if smoothed:
+                        kalman_risk = smoothed[-1]
             except (ValueError, TypeError):
                 pass
 
-        # CARMACK 5: Coupling from import graph
+        # CARMACK 4: Kaplan-Meier survival, properly censored.
+        # For each *commit* of this file: event = "this commit was a bugfix",
+        # time = days since baseline. Files whose last commit isn't a bugfix
+        # contribute a censored observation at "now".
+        crash_prob = s["bugfixes"] / max(freq, 1)  # fallback if KM fails
+        try:
+            obs = []
+            bf_set = set(s.get("bugfix_dates", []))
+            for d in s["dates"]:
+                t = datetime.fromisoformat(d.replace("Z", "+00:00")).timestamp()
+                days = (t - baseline_ts) / 86400.0
+                obs.append((days, d in bf_set))
+            if obs:
+                # If the most recent observation isn't an event, mark "now" as censored.
+                last_t, last_event = max(obs, key=lambda x: x[0])
+                if not last_event and now_ts > 0:
+                    obs.append(((now_ts - baseline_ts) / 86400.0, False))
+                km_curve = _kaplan_meier(obs)
+                survival_14d = _km_survival_at(km_curve, 14.0)
+                crash_prob = 1.0 - survival_14d
+        except (ValueError, TypeError):
+            pass
+
+        # CARMACK 5: Coupling from real Newman Q via Louvain.
         file_coupling = coupling.get(f, 0.0)
 
-        # Composite Carmack score
-        carmack_score = (
-            0.25 * min(kalman_risk, 1.0) +
-            0.20 * min(hf_energy / 100.0, 1.0) +
-            0.25 * crash_prob +
-            0.15 * file_coupling +
-            0.15 * min(churn_rel / 10.0, 1.0)
-        )
-
         results.append({
-            "file": f, "score": carmack_score,
+            "file": f,
             "kalman": kalman_risk, "wavelet_hf": hf_energy,
             "crash_prob": crash_prob, "coupling": file_coupling,
             "churn": churn_rel, "freq": freq,
@@ -1988,6 +2217,34 @@ def predict_carmack(root, weeks=8):
     if not results:
         print(f"  No commits in the last {weeks} weeks.")
         return
+
+    # Min-max normalize each signal across the active files, then compose.
+    # This way each axis contributes its full weight instead of being clipped
+    # by an arbitrary cap (different signals live on different scales now:
+    # Kalman ~ weekly bug count, wavelet ~ multi-band churn energy, KM ~ [0,1]).
+    def _norm(values):
+        lo = min(values)
+        hi = max(values)
+        rng = hi - lo
+        return [(v - lo) / rng if rng > 0 else 0.0 for v in values]
+
+    kalman_n = _norm([r["kalman"] for r in results])
+    wave_n = _norm([r["wavelet_hf"] for r in results])
+    crash_n = [r["crash_prob"] for r in results]  # already in [0, 1]
+    coupling_n = _norm([r["coupling"] for r in results])
+    churn_n = _norm([r["churn"] for r in results])
+
+    # Composite Carmack score (heuristic weights, sum to 1.0).
+    # NOTE: weights are not validated empirically — they reflect the relative
+    # importance the author assigns to each signal. Tune on your repo if needed.
+    for i, r in enumerate(results):
+        r["score"] = (
+            0.25 * kalman_n[i] +
+            0.20 * wave_n[i] +
+            0.25 * crash_n[i] +
+            0.15 * coupling_n[i] +
+            0.15 * churn_n[i]
+        )
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
