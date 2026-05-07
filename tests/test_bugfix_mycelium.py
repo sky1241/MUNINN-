@@ -52,6 +52,12 @@ class TestBugM1DreamNoOOM:
     def test_dream_returns_list(self, mycelium):
         result = mycelium.dream()
         assert isinstance(result, list)
+        # Each insight, if any, must be a dict with the required schema —
+        # without this the contract is just "any list works", which is
+        # the kind of stub assertion that hides regressions.
+        for insight in result:
+            assert isinstance(insight, dict)
+            assert {"type", "score", "text"}.issubset(insight.keys())
 
     def test_dream_produces_insights_or_empty(self, mycelium):
         result = mycelium.dream()
@@ -69,9 +75,14 @@ class TestBugM1DreamNoOOM:
     def test_dream_strong_pairs_detected(self, mycelium):
         result = mycelium.dream()
         strong = [i for i in result if i["type"] == "strong_pair"]
-        # We fed stopwords 10 times — they should have strong pairs
-        # (or not, depending on threshold — just verify no crash)
         assert isinstance(strong, list)
+        # Strong pairs must come with a score and a textual rendering —
+        # otherwise downstream consumers (compression rules, prompt) crash
+        for sp in strong:
+            assert sp["type"] == "strong_pair"
+            assert isinstance(sp["score"], (int, float))
+            assert sp["score"] > 0
+            assert isinstance(sp["text"], str) and sp["text"]
 
     def test_dream_with_small_graph(self, tmp_path):
         """dream() on graph with <10 connections returns empty list."""
@@ -92,6 +103,14 @@ class TestBugM2TripAndBfsZones:
         degree = mycelium._db.all_degrees()
         zones = mycelium._bfs_zones(degree)
         assert isinstance(zones, dict)
+        # Each zone must be a non-empty list of concept names — empty
+        # zones leak into spreading_activation and bias the budget pick.
+        for zone_name, members in zones.items():
+            assert isinstance(zone_name, str) and zone_name
+            assert isinstance(members, (list, set, tuple))
+            assert len(members) >= 1
+            for c in members:
+                assert isinstance(c, str) and c
 
     def test_bfs_zones_uses_deque(self, mycelium):
         """Verify the fix uses deque (O(1) popleft) not list.pop(0)."""
@@ -148,12 +167,20 @@ class TestBugM4GetRelatedStopwords:
         assert len(overlap) == 0, f"Stopwords in results: {overlap}"
 
     def test_filter_stopwords_false_includes_them(self, mycelium):
-        related = mycelium.get_related("compression", top_n=20,
-                                       filter_stopwords=False)
-        # With filter off, stopwords may appear (if they co-occur)
-        names = {name for name, _ in related}
-        # Just verify it returns something and doesn't crash
-        assert isinstance(related, list)
+        related_off = mycelium.get_related("compression", top_n=20,
+                                           filter_stopwords=False)
+        related_on = mycelium.get_related("compression", top_n=20,
+                                          filter_stopwords=True)
+        assert isinstance(related_off, list)
+        assert isinstance(related_on, list)
+        # The contract is that filter_stopwords=False returns a *superset*
+        # — flipping the flag must remove things, not add them.
+        names_off = {name for name, _ in related_off}
+        names_on = {name for name, _ in related_on}
+        assert names_on.issubset(names_off), (
+            f"filter_stopwords=True should be a subset of False, "
+            f"extra concepts: {names_on - names_off}"
+        )
 
     def test_empty_concept_returns_empty(self, mycelium):
         assert mycelium.get_related("", top_n=5) == []
@@ -216,10 +243,16 @@ class TestBugM7MetaPathStaticmethod:
     def test_meta_path_callable_on_instance(self, mycelium):
         result = mycelium.meta_path()
         assert isinstance(result, Path)
+        # Same contract as the @classmethod: must point at the user's
+        # ~/.muninn/ tree, otherwise federation breaks silently.
+        assert "meta_mycelium" in str(result)
+        assert str(result).startswith(str(Path.home()))
 
     def test_meta_db_path_callable_on_instance(self, mycelium):
         result = mycelium.meta_db_path()
         assert isinstance(result, Path)
+        assert str(result).endswith("meta_mycelium.db")
+        assert str(result).startswith(str(Path.home()))
 
 
 class TestBugM8OrphanCleanupInDecay:
@@ -232,15 +265,40 @@ class TestBugM8OrphanCleanupInDecay:
         assert "cleanup_orphan_concepts" in src
 
     def test_cleanup_orphan_concepts_works(self, mycelium):
-        """cleanup_orphan_concepts returns int count."""
+        """cleanup_orphan_concepts must remove concepts with no edges."""
+        # Inject an orphan: concept exists but no edge references it
+        orphan_id = mycelium._db._get_or_create_concept("orphan_concept_xyz")
+        mycelium._db._conn.execute(
+            "DELETE FROM edges WHERE a=? OR b=?", (orphan_id, orphan_id)
+        )
+        mycelium._db._conn.commit()
+        present_before = mycelium._db._conn.execute(
+            "SELECT 1 FROM concepts WHERE id=?", (orphan_id,)
+        ).fetchone()
+        assert present_before is not None, "orphan must exist before cleanup"
+
         result = mycelium.cleanup_orphan_concepts()
         assert isinstance(result, int)
-        assert result >= 0
+        assert result >= 1, "cleanup should have removed at least the injected orphan"
+
+        present_after = mycelium._db._conn.execute(
+            "SELECT 1 FROM concepts WHERE id=?", (orphan_id,)
+        ).fetchone()
+        assert present_after is None, "orphan should have been deleted"
 
     def test_decay_returns_int(self, mycelium):
         result = mycelium.decay()
         assert isinstance(result, int)
         assert result >= 0
+        # decay() must never *grow* the edge set — only weaken or remove.
+        edges_after_first = mycelium._db._conn.execute(
+            "SELECT COUNT(*) FROM edges"
+        ).fetchone()[0]
+        mycelium.decay()
+        edges_after_second = mycelium._db._conn.execute(
+            "SELECT COUNT(*) FROM edges"
+        ).fetchone()[0]
+        assert edges_after_second <= edges_after_first
 
 
 class TestP3DecayWritesTombstones:
