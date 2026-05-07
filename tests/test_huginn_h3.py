@@ -171,7 +171,8 @@ def test_h3_7_in_cli():
     """'think' should be in CLI choices."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    _engine_core = _mdir.parent / "engine" / "core"
+    src = chr(10).join((_engine_core / f.replace("_engine.py", "muninn.py")).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     assert '"think"' in src, "H3.7 FAIL: think not in CLI choices"
     print("  H3.7 PASS: think in CLI choices")
 
@@ -180,7 +181,8 @@ def test_h3_8_wired_in_boot():
     """Huginn insights should be surfaced in boot()."""
     import muninn
     _mdir = Path(muninn.__file__).parent
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    _engine_core = _mdir.parent / "engine" / "core"
+    src = chr(10).join((_engine_core / f.replace("_engine.py", "muninn.py")).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
     boot_start = src.find("def boot(")
     boot_end = src.find("\ndef ", boot_start + 1)
     boot_body = src[boot_start:boot_end]
