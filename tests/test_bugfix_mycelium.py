@@ -241,3 +241,50 @@ class TestBugM8OrphanCleanupInDecay:
         result = mycelium.decay()
         assert isinstance(result, int)
         assert result >= 0
+
+
+class TestP3DecayWritesTombstones:
+    """BATTLE_PLAN_MYCELIUM_2026-05-05.md P3: decay() must write a row to
+    the tombstones table for every edge it removes (count < 0.01).
+
+    Audit 2026-05-07: code path is wired, but production tombstones table
+    was empty because real edges rarely reach count < 0.01 naturally
+    (~300 days needed at DECAY_HALF_LIFE=30 from count=1). This test
+    forces the death scenario explicitly.
+    """
+
+    def test_decay_creates_tombstone_for_dead_edge(self, mycelium):
+        """An edge with count < 0.01 must be deleted AND tombstoned by decay."""
+        # Seed an edge artificially below the death threshold
+        a_id = mycelium._db._get_or_create_concept("p3_test_a")
+        b_id = mycelium._db._get_or_create_concept("p3_test_b")
+        if a_id > b_id:
+            a_id, b_id = b_id, a_id
+        with mycelium._db.transaction() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO edges (a, b, count, first_seen, last_seen) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (a_id, b_id, 0.001, 1000, 1000)
+            )
+
+        n_tomb_before = len(mycelium._db.get_tombstones())
+        edge_before = mycelium._db._conn.execute(
+            "SELECT 1 FROM edges WHERE a=? AND b=?", (a_id, b_id)
+        ).fetchone()
+        assert edge_before is not None, "seed edge missing"
+
+        mycelium.decay()
+
+        edge_after = mycelium._db._conn.execute(
+            "SELECT 1 FROM edges WHERE a=? AND b=?", (a_id, b_id)
+        ).fetchone()
+        assert edge_after is None, "decay should have deleted the dead edge"
+
+        tomb_row = mycelium._db._conn.execute(
+            "SELECT a, b, deleted_by FROM tombstones WHERE a=? AND b=?", (a_id, b_id)
+        ).fetchone()
+        assert tomb_row is not None, "decay should have written a tombstone"
+        assert tomb_row[2] == "decay", f"deleted_by should be 'decay', got {tomb_row[2]}"
+
+        n_tomb_after = len(mycelium._db.get_tombstones())
+        assert n_tomb_after >= n_tomb_before + 1
