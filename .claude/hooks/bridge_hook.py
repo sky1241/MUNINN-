@@ -90,10 +90,22 @@ def _check_secrets(prompt):
     return None
 
 def main():
+    # Empty stdin (manual run, tty mode, no pipe) is not an error — exit silently.
+    # Without this guard the JSON decoder logged ~40 false-alarm entries per
+    # day of testing into ~/.muninn/hook_errors.log (audit 2026-05-08).
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError as e:
+        _log_hook_error("stdin_decode", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_hook_error("stdin_read", e)
+        sys.exit(0)
+    if not raw.strip():
+        sys.exit(0)
+    try:
         hook_input = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+    except json.JSONDecodeError as e:
         _log_hook_error("stdin_parse", e)
         sys.exit(0)
     except Exception as e:
