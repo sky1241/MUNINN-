@@ -257,6 +257,17 @@ def load_tree():
     try:
         with open(_m.TREE_META, encoding="utf-8") as f:
             tree = json.load(f)
+        # CHUNK C2 (2026-05-08): schema validation. JSON may be syntactically
+        # valid but missing required keys (`version`, `nodes`) or be a
+        # list/str/int payload entirely. Treat that the same as JSONDecodeError
+        # (backup + init_tree) instead of crashing later in the pipeline.
+        if not isinstance(tree, dict):
+            raise ValueError(f"tree.json root is not a dict (got {type(tree).__name__})")
+        missing = [k for k in ("version", "nodes") if k not in tree]
+        if missing:
+            raise ValueError(f"tree.json missing required keys: {missing}")
+        if not isinstance(tree.get("nodes"), dict):
+            raise ValueError("tree.json `nodes` is not a dict")
         # Validate all node file paths to prevent path traversal
         tree_dir_resolved = os.path.normcase(str(_m.TREE_DIR.resolve()))
         for name, node in tree.get("nodes", {}).items():
