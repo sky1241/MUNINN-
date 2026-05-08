@@ -25,14 +25,12 @@ ENGINE_CORE = REPO_ROOT / "engine" / "core"
 DOCUMENTED_IN_TREE_DEAD_CANDIDATES = frozenset({
     "dedup_paragraphs",
     "similar",
-    "analyze_findings",
     "validate_against_code",
     "validate_against_code_with_mn",
     "validate_all",
     "estimate_cost",
     "scan_batch",
     "influence_minimization",
-    "to_markdown",
     "sync_metrics",
     # Cube reconstruction helpers consumed by the live UX
     # (muninn/ui/cube_live.py) but not used inside engine/core/. Kept
@@ -44,7 +42,17 @@ DOCUMENTED_IN_TREE_DEAD_CANDIDATES = frozenset({
 
 
 def _scan_engine_core_dead_code():
-    """AST scan of engine/core/. Returns set of in-tree dead candidates."""
+    """AST scan of engine/core/. Returns set of in-tree dead candidates.
+
+    Two-pass scan to be order-independent w.r.t. rglob():
+      Pass 1 — collect all top-level public defs across every file.
+      Pass 2 — walk every file and collect references against the
+               complete `all_defs`.
+    Pre-fix (single-pass): if file A defined `foo` and file B referenced
+    `foo` via `foo = some_dict["foo"]`, the AST.Name lookup at line "if
+    node.id in all_defs" failed when B was visited before A. Result was
+    different `actual` sets between OSes / Python versions / FS orders.
+    """
     defs_by_file = defaultdict(set)
     all_defs = set()
     called_names = set()
@@ -52,16 +60,36 @@ def _scan_engine_core_dead_code():
     class_methods = set()
     imported_names = set()
 
-    for py_file in ENGINE_CORE.rglob("*.py"):
-        if "__pycache__" in str(py_file):
-            continue
+    py_files = [p for p in ENGINE_CORE.rglob("*.py") if "__pycache__" not in str(p)]
+    parsed = {}
+    for py_file in py_files:
         try:
             text = py_file.read_text(encoding="utf-8", errors="replace")
-            tree = ast.parse(text)
+            parsed[py_file] = ast.parse(text)
         except SyntaxError:
             continue
 
-        # Imports
+    # Pass 1: collect defs / __all__ / class methods (order-independent).
+    for py_file, tree in parsed.items():
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                defs_by_file[str(py_file)].add(node.name)
+                all_defs.add(node.name)
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "__all__":
+                        if isinstance(node.value, ast.List):
+                            for elt in node.value.elts:
+                                if isinstance(elt, ast.Constant):
+                                    exported_names.add(elt.value)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef):
+                        class_methods.add(item.name)
+
+    # Pass 2: collect references against the complete all_defs.
+    for py_file, tree in parsed.items():
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 for alias in (node.names or []):
@@ -71,33 +99,7 @@ def _scan_engine_core_dead_code():
             elif isinstance(node, ast.Import):
                 for alias in (node.names or []):
                     imported_names.add(alias.name)
-
-        # __all__
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "__all__":
-                        if isinstance(node.value, ast.List):
-                            for elt in node.value.elts:
-                                if isinstance(elt, ast.Constant):
-                                    exported_names.add(elt.value)
-
-        # Top-level public functions
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
-                defs_by_file[str(py_file)].add(node.name)
-                all_defs.add(node.name)
-
-        # Class methods
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                for item in node.body:
-                    if isinstance(item, ast.FunctionDef):
-                        class_methods.add(item.name)
-
-        # Calls + references
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
+            elif isinstance(node, ast.Call):
                 func = node.func
                 if isinstance(func, ast.Name):
                     called_names.add(func.id)
@@ -108,6 +110,21 @@ def _scan_engine_core_dead_code():
             elif isinstance(node, ast.Name):
                 if node.id in all_defs:
                     called_names.add(node.id)
+            # Pick up `_dict["fname"]` patterns — string subscripts whose
+            # key matches a known def. Used by scanner/orchestrator.py
+            # to rebind dynamically-imported functions.
+            elif isinstance(node, ast.Subscript):
+                slc = getattr(node, "slice", None)
+                # Python 3.9+: slice is the literal node directly
+                key = None
+                if isinstance(slc, ast.Constant) and isinstance(slc.value, str):
+                    key = slc.value
+                elif isinstance(slc, ast.Index):  # pre-3.9 compat (no-op on 3.13)
+                    inner = getattr(slc, "value", None)
+                    if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                        key = inner.value
+                if key and key in all_defs:
+                    called_names.add(key)
 
     entry_points = {"main", "cli_run"}
     dead = set()
