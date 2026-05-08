@@ -1,0 +1,44 @@
+# CHUNK D6 (2026-05-08): preemptive Git LFS rules for binary assets.
+#
+# Audit observed 12 PNG files (~3.5 MB each, ~40 MB total) in
+# muninn/ui/templates/ committed as regular Git blobs. The repo is
+# manageable today but any further binary growth will bloat clones.
+#
+# This file ROUTES future PNG/JPG/PDF additions through Git LFS once
+# `git lfs install` has been run locally and the repo enabled on
+# GitHub. EXISTING files keep their current storage until someone
+# runs `git lfs migrate import --include="*.png" --everything` (which
+# rewrites history — destructive, requires Sky's confirmation).
+#
+# Order matters in this file: text rules come first to make sure
+# Python/markdown stays diffable, then binary rules.
+#
+# Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §D6
+
+# ---- Text files (default behavior, explicit for clarity) ----
+*.py     text eol=lf
+*.md     text eol=lf
+*.json   text eol=lf
+*.toml   text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.txt    text eol=lf
+*.sha256sum text eol=lf
+.gitignore text eol=lf
+
+# ---- Binary assets that may grow → LFS-eligible ----
+# Once `git lfs install` is run, future commits of these will be
+# stored in LFS. Existing blobs are unaffected until a migration.
+*.png    filter=lfs diff=lfs merge=lfs -text
+*.jpg    filter=lfs diff=lfs merge=lfs -text
+*.jpeg   filter=lfs diff=lfs merge=lfs -text
+*.gif    filter=lfs diff=lfs merge=lfs -text
+*.pdf    filter=lfs diff=lfs merge=lfs -text
+*.zip    filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+*.db     filter=lfs diff=lfs merge=lfs -text
+
+# ---- Generated / cache (text but never diffed) ----
+*.lock   linguist-generated=true
+poetry.lock linguist-generated=true
+constraints.txt linguist-generated=true
