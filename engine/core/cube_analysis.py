@@ -1799,6 +1799,13 @@ def record_anomaly(anomaly_path: str, file: str, metrics: dict,
     with _anomaly_lock:
         with open(anomaly_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry) + '\n')
+        # P0: anomalies.jsonl can leak source-tree paths and cube
+        # fingerprints — restrict to owner-only.
+        try:
+            from _secrets import secure_perms
+            secure_perms(anomaly_path)
+        except ImportError:
+            pass
     return entry
 
 

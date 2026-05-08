@@ -844,6 +844,11 @@ class CubeStore:
         self._lock = threading.Lock()  # Protects all DB writes when check_same_thread=False
         os.makedirs(os.path.dirname(db_path) or '.', exist_ok=True)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            from _secrets import secure_perms
+        except ImportError:
+            from muninn._secrets import secure_perms
+        secure_perms(db_path)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(CUBE_DB_SCHEMA)

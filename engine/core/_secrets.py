@@ -4,7 +4,10 @@ Used by muninn.py, mycelium.py, and cube.py to filter secrets
 BEFORE they enter the mycelium co-occurrence network.
 """
 
+import os
 import re
+import sys
+from pathlib import Path
 
 # Secret patterns — same list as muninn.py _SECRET_PATTERNS
 # Tested against 24+ real secret formats. Zero false positives on natural text.
@@ -131,3 +134,49 @@ def clamp_chained_commands(text: str, max_chains: int = MAX_CHAINED_COMMANDS) ->
         f"commands (max allowed: {max_chains}). Content refused. "
         f"See docs/CLAUDE_CODE_LEAK_INTEL.md section 10."
     ), True
+
+
+# ─── Secure file permissions ─────────────────────────────────────────────
+# P0 (2026-05-08): every Muninn file under .muninn/ holds learned user
+# context (compressed transcripts, mycelium edges, anomalies, hook errors).
+# These are SECRETS in production: a tech-org installing Muninn on a
+# multi-user host must not let the next user `cat ~/.muninn/*.db`.
+#
+# Default umask on most Linux servers is 022 → newly created files get
+# mode 0644 (world-readable). We force 0600 (owner-rw only) for files and
+# 0700 for the parent directory.
+#
+# Windows note: os.chmod has limited effect under POSIX semantics; we still
+# call it (it sets/clears the read-only bit) and swallow OSError silently.
+
+def secure_perms(path, *, mode: int = 0o600, secure_parent: bool = True) -> None:
+    """Force restrictive permissions on a sensitive file.
+
+    Args:
+        path: file path (str or Path). Must exist; no-op if it doesn't.
+        mode: file mode (default 0o600 — owner read/write).
+        secure_parent: also chmod the parent directory to 0o700 if it
+            sits under the user's HOME (avoid touching system dirs).
+
+    Silently ignores OSError (Windows semantics, read-only FS, foreign
+    owner, etc.) — this is a defense-in-depth measure, not a hard
+    contract: callers must not rely on it for security correctness.
+    """
+    p = Path(path)
+    if not p.exists():
+        return
+    try:
+        os.chmod(p, mode)
+    except OSError:
+        pass
+    if not secure_parent:
+        return
+    try:
+        parent = p.parent.resolve()
+        home = Path.home().resolve()
+        # Only restrict directories under the user's home — never touch
+        # system locations like /tmp, /etc, /var.
+        if str(parent).startswith(str(home)) and parent != home:
+            os.chmod(parent, 0o700)
+    except OSError:
+        pass

@@ -74,6 +74,12 @@ class MyceliumDB:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()  # RLock: allows re-entry from same thread (observe->transaction->_get_or_create_concept)
         self._conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
+        # P0: lock perms to owner-only — DB holds learned user context.
+        try:
+            from _secrets import secure_perms
+        except ImportError:
+            from muninn._secrets import secure_perms
+        secure_perms(self.db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")  # M14 fix: enforce FK constraints
         self._conn.execute("PRAGMA synchronous=NORMAL")
@@ -1205,6 +1211,11 @@ class ConceptTranslator:
         try:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             self._db = sqlite3.connect(str(self._db_path), timeout=30)
+            try:
+                from _secrets import secure_perms
+            except ImportError:
+                from muninn._secrets import secure_perms
+            secure_perms(self._db_path)
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("""
                 CREATE TABLE IF NOT EXISTS translations (

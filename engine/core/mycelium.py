@@ -92,6 +92,13 @@ class Mycelium:
 
         # Case 1: SQLite exists — load from it (check migration completeness)
         if self.db_path.exists():
+            # P0: opportunistic re-chmod to 0600 (fixes legacy DBs created
+            # with default umask before this defense was in place).
+            try:
+                from _secrets import secure_perms
+                secure_perms(self.db_path)
+            except ImportError:
+                pass
             # Verify DB is not a partial migration
             try:
                 import sqlite3

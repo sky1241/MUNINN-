@@ -60,6 +60,15 @@ def _build_logger(
         logger.setLevel(logging.WARNING)
         logger.propagate = False
         _LOGGERS[key] = logger
+        # P0: hook log files contain user prompts and stack traces — chmod
+        # to 0600 if the file already exists (RotatingFileHandler defers
+        # creation until the first emit, so this is a best-effort).
+        try:
+            from _secrets import secure_perms
+            if log_path.exists():
+                secure_perms(log_path)
+        except ImportError:
+            pass
         return logger
     except (OSError, ValueError):
         return None

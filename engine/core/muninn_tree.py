@@ -330,6 +330,8 @@ def save_tree(tree):
                     time.sleep(0.05)
             else:
                 os.replace(tmp_path, str(_m.TREE_META))
+            from _secrets import secure_perms
+            secure_perms(_m.TREE_META)
         except Exception:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -341,6 +343,7 @@ def save_tree(tree):
 def _atomic_json_write(path: Path, data, indent: int = 2):
     """Atomic JSON write via tempfile + os.replace. Prevents corruption on concurrent read."""
     import tempfile, os
+    from _secrets import secure_perms
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
@@ -358,11 +361,13 @@ def _atomic_json_write(path: Path, data, indent: int = 2):
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise
+    secure_perms(path)
 
 
 def _atomic_text_write(path: Path, text: str):
     """Atomic text write via tempfile + os.replace. For .mn branch/root files."""
     import tempfile
+    from _secrets import secure_perms
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
@@ -371,10 +376,12 @@ def _atomic_text_write(path: Path, text: str):
         for _attempt in range(3):
             try:
                 os.replace(tmp_path, str(path))
+                secure_perms(path)
                 return
             except PermissionError:
                 time.sleep(0.05)
         os.replace(tmp_path, str(path))  # Final try
+        secure_perms(path)
     except Exception:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
