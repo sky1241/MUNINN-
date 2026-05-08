@@ -132,7 +132,7 @@ def test_watchdog_empty_repos_dict_spawns_no_subprocess(tmp_path, monkeypatch):
     assert captured == []
 
 
-# ── sync_backend.py:450 (load_config) — behavioural asserts ──────────────
+# ── sync_backend.py:450 (_load_sync_config) — behavioural asserts ──────────────
 
 def test_sync_backend_list_returns_default_dict_with_keys(tmp_path, monkeypatch):
     """List payload → returned dict must contain the documented default
@@ -142,14 +142,14 @@ def test_sync_backend_list_returns_default_dict_with_keys(tmp_path, monkeypatch)
     cfg_path = tmp_path / ".muninn" / "config.json"
     cfg_path.parent.mkdir()
     cfg_path.write_text(json.dumps(["wrong", "shape"]))
-    if not hasattr(sb, "load_config"):
-        pytest.skip("load_config not exposed in this build")
-    result = sb.load_config()
+    if not hasattr(sb, "_load_sync_config"):
+        pytest.skip("load_sync_config not exposed in this build")
+    result = sb._load_sync_config()
     assert isinstance(result, dict)
     # "backend" is a documented default key — it MUST be present even
     # though cfg.get failed (defensive default kicked in).
     assert "backend" in result, (
-        f"Default key 'backend' missing from load_config() result on "
+        f"Default key 'backend' missing from _load_sync_config() result on "
         f"poisoned payload — fallback didn't activate. Got: {result}"
     )
 
@@ -160,9 +160,9 @@ def test_sync_backend_string_returns_default_dict_with_keys(tmp_path, monkeypatc
     cfg_path = tmp_path / ".muninn" / "config.json"
     cfg_path.parent.mkdir()
     cfg_path.write_text(json.dumps("wrong"))
-    if not hasattr(sb, "load_config"):
-        pytest.skip("load_config not exposed in this build")
-    result = sb.load_config()
+    if not hasattr(sb, "_load_sync_config"):
+        pytest.skip("load_sync_config not exposed in this build")
+    result = sb._load_sync_config()
     assert isinstance(result, dict)
     assert "backend" in result
 
@@ -170,16 +170,16 @@ def test_sync_backend_string_returns_default_dict_with_keys(tmp_path, monkeypatc
 def test_sync_backend_valid_dict_overrides_defaults(tmp_path, monkeypatch):
     """Sanity: a real dict {"backend": "git"} → result["backend"] == "git".
 
-    Proves load_config() actually MERGES the config into defaults
+    Proves _load_sync_config() actually MERGES the config into defaults
     (not just returns defaults regardless)."""
     sb = _load_module("engine/core/sync_backend.py", "_chunk_c5_sb_ok")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     cfg_path = tmp_path / ".muninn" / "config.json"
     cfg_path.parent.mkdir()
     cfg_path.write_text(json.dumps({"backend": "git"}))
-    if not hasattr(sb, "load_config"):
-        pytest.skip("load_config not exposed in this build")
-    result = sb.load_config()
+    if not hasattr(sb, "_load_sync_config"):
+        pytest.skip("load_sync_config not exposed in this build")
+    result = sb._load_sync_config()
     assert result["backend"] == "git", (
         f"Valid config not merged into defaults. Got: {result}"
     )
