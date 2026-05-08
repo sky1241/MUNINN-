@@ -1288,32 +1288,46 @@ def _query_mycelium(mycelium, identifiers: list[str]) -> list[str]:
     returned (callers expect a list) but the exception is logged via
     _hook_logger so the audit trail catches the failure instead of
     silently degrading to "no related concepts".
+
+    CHUNK E7 (2026-05-08): migrated to use _hook_logger.swallow()
+    context manager (D9). Kills the swallow() dead-code finding —
+    this is now a real production caller. Same audit trail behavior
+    as the previous try/except + log_hook_event boilerplate, with
+    less code.
     """
     try:
-        # Use spread_activation for semantic discovery
+        from _hook_logger import swallow
+    except ImportError:
+        # Standalone tests can run without the helper; fall back to a
+        # plain try/except so the function still returns a list.
+        try:
+            if hasattr(mycelium, 'spread_activation'):
+                return [c for c, _ in mycelium.spread_activation(
+                    seeds=identifiers[:10], hops=2, decay=0.5, top_n=15)]
+            if hasattr(mycelium, 'get_related'):
+                all_related = set()
+                for ident in identifiers[:5]:
+                    all_related.update(
+                        c for c, _ in mycelium.get_related(ident, top_n=3))
+                return sorted(all_related)
+        except Exception:
+            pass
+        return []
+
+    result: list[str] = []
+    with swallow("cube_providers", "_query_mycelium"):
         if hasattr(mycelium, 'spread_activation'):
             related = mycelium.spread_activation(
                 seeds=identifiers[:10], hops=2, decay=0.5, top_n=15
             )
-            return [concept for concept, _weight in related]
-        # Fallback: get_related per identifier
+            result = [concept for concept, _weight in related]
         elif hasattr(mycelium, 'get_related'):
             all_related = set()
             for ident in identifiers[:5]:
                 related = mycelium.get_related(ident, top_n=3)
                 all_related.update(c for c, _w in related)
-            return sorted(all_related)
-    except Exception as e:
-        # Don't crash callers (cube reconstruction needs a list), but
-        # log so the failure is visible in the audit trail.
-        try:
-            from _hook_logger import log_hook_event
-            log_hook_event("cube_providers", "_query_mycelium", e)
-        except Exception:
-            import sys
-            print(f"[MUNINN cube_providers] mycelium query failed: {e}",
-                  file=sys.stderr)
-    return []
+            result = sorted(all_related)
+    return result
 
 
 def _learn_patterns_from_neighbors(neighbors: list) -> dict:

@@ -73,22 +73,29 @@ def test_query_mycelium_logs_on_exception(capsys):
         side_effect=_Boom(SENTINEL)
     )
 
-    log_path = Path.home() / ".muninn" / "hook_errors.log"
-    log_before = log_path.read_text() if log_path.exists() else ""
+    # CHUNK E7 (2026-05-08): _query_mycelium now uses _hook_logger.swallow()
+    # which routes to engine_events.log (DEFAULT_ENGINE_LOG_PATH) instead
+    # of hook_errors.log. Check both paths for backwards compat.
+    hook_log = Path.home() / ".muninn" / "hook_errors.log"
+    engine_log = Path.home() / ".muninn" / "engine_events.log"
+    hook_before = hook_log.read_text() if hook_log.exists() else ""
+    engine_before = engine_log.read_text() if engine_log.exists() else ""
 
     result = cp._query_mycelium(fake_mycelium, ["seed1"])
     assert result == []  # Empty fallback preserved
 
     captured = capsys.readouterr()
-    log_after = log_path.read_text() if log_path.exists() else ""
-    log_added = log_after[len(log_before):]
+    hook_added = (hook_log.read_text() if hook_log.exists() else "")[len(hook_before):]
+    engine_added = (engine_log.read_text() if engine_log.exists() else "")[len(engine_before):]
 
     in_stderr = SENTINEL in captured.err
-    in_log = SENTINEL in log_added
-    assert in_stderr or in_log, (
-        "Mycelium error was silently swallowed: neither stderr nor newly-"
-        "appended log captured the audit trail. "
-        f"stderr={captured.err!r} log_added={log_added[:200]!r}"
+    in_hook = SENTINEL in hook_added
+    in_engine = SENTINEL in engine_added
+    assert in_stderr or in_hook or in_engine, (
+        "Mycelium error was silently swallowed: neither stderr nor "
+        "newly-appended log captured the audit trail. "
+        f"stderr={captured.err!r} "
+        f"hook_added={hook_added[:150]!r} engine_added={engine_added[:150]!r}"
     )
 
 
