@@ -448,12 +448,15 @@ def _load_sync_config() -> dict:
     if config_path.exists():
         try:
             cfg = json.loads(config_path.read_text(encoding="utf-8"))
-            if isinstance(cfg.get("meta_path"), str):
-                p = Path(cfg["meta_path"])
-                # X14: Validate path
-                if ".." not in p.parts:
-                    config["meta_path"] = str(p)
-            config["backend"] = cfg.get("backend", "shared_file")
+            # CHUNK C5 (2026-05-08): refuse non-dict payloads (poisoned
+            # config) so cfg.get() does not raise AttributeError.
+            if isinstance(cfg, dict):
+                if isinstance(cfg.get("meta_path"), str):
+                    p = Path(cfg["meta_path"])
+                    # X14: Validate path
+                    if ".." not in p.parts:
+                        config["meta_path"] = str(p)
+                config["backend"] = cfg.get("backend", "shared_file")
         except (ValueError, OSError):
             pass
 

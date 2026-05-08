@@ -30,7 +30,16 @@ def main():
     except (json.JSONDecodeError, OSError):
         return
 
+    # CHUNK C5 (2026-05-08): poisoned config can deserialize to list/str/int.
+    # Refuse non-dict payloads cleanly instead of crashing on .get().
+    if not isinstance(data, dict):
+        print(f"WATCHDOG: repos.json is not an object (got {type(data).__name__}), skipping",
+              file=sys.stderr)
+        return
+
     repos = data.get("repos", {})
+    if not isinstance(repos, dict):
+        return
     for name, path in repos.items():
         repo = Path(path)
         if not (repo / ".muninn").exists():
