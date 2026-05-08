@@ -192,6 +192,7 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_L12_BUDGET` | Active L12 BudgetMem (chunk selection opt-in) | unset (L12 = identity pass) |
 | `MUNINN_GL_SOFTWARE` | Force Qt OpenGL software (workaround GPU/Vulkan) | unset |
 | `MUNINN_MAX_COMPRESS_BYTES` | Override de la taille max d'un input pour `compress_file` (CHUNK C3) | `52428800` (50 MB) |
+| `MUNINN_SKIP_INTEGRITY` | Bypass le boot integrity_check de mycelium.db (CHUNK E6) | unset (check actif) |
 | `MUNINN_REPO` | Repo cible pour scripts ad-hoc (CLI fallback) | `os.getcwd()` |
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
