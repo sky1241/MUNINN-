@@ -26,7 +26,28 @@
 | **B10** TLS isinstance fix (BUG-091) | `887b082` | 14 |
 | **B11** doctor() extensions | `4369c66` | 4 |
 
-**B6** (_REPO_PATH context manager) et **B9** (forge.gen_props refactor — touche `forge.py` standalone) en pending. **Phase C 0/13 démarre.**
+**B6** (_REPO_PATH context manager) et **B9** (forge.gen_props refactor — touche `forge.py` standalone) en pending.
+
+### Phase C — 12/13 done (C9 marqué N/A — faux positif agent)
+
+| Chunk | Push hash | Tests verts |
+|---|---|---|
+| **C1** constraints.txt (pip lock) | `b3e1bbc` | 4 |
+| **C2** load_tree schema validation | `6d618b8` | 6 |
+| **C3** compress_file size guard 50 MB | `abd5344` | 5 |
+| **C4** retire PowerShell ANTHROPIC_API_KEY fallback | `d0bb210` | 3 |
+| **C5** isinstance(dict) post json.loads | `6178911` | 6 |
+| **C6** .mn magic header + version + CRC32 | `1dcdc7b` | 8 |
+| **C7** scripts/backup_mycelium.py | `f45217f` | 7 |
+| **C8** version single source via importlib.metadata | `6858f5f` | 3 |
+| **C9** *N/A* (cités lignes étaient des f-string templates, pas du code) | — | — |
+| **C10+C11** doc env vars + README drift | `cdc1fee` | 5 |
+| **C12** CI pytest job (proposed; needs `workflow` scope) | `99ecc89` | 2 + 5 skipped |
+| **C13** Dependabot config | `53f2ef5` | 5 |
+
+**Total: 30/32 chunks done (Phase A 8/8 + Phase B 9/11 + Phase C 12/13).**
+Pending: B6, B9 (Sky-pending forge.py).
+Manual merge required: C12 yaml (token sans `workflow` scope).
 
 ---
 
