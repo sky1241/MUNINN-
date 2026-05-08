@@ -853,7 +853,12 @@ class Mycelium:
             n = self._db.connection_count()
             if n < 50:
                 return set()
-            # SQL-native 2-step: find threshold, then filter
+            # CHUNK B8 (2026-05-08): single SQL scan instead of two.
+            # Pre-fix did the same UNION-ALL+GROUP-BY twice (once for
+            # percentile, once for filter). Now we materialize
+            # (concept_id, degree)
+            # rows once, sort in SQL, and apply the percentile cutoff in
+            # Python — same semantics, half the SQL work.
             with self._db._lock:
                 row = self._db._conn.execute(
                     "SELECT COUNT(*) FROM concepts").fetchone()
@@ -862,31 +867,28 @@ class Mycelium:
                     return set()
                 cutoff = max(1, int(n_concepts * pct))
 
-                # Step 1: threshold = degree at the cutoff position
-                row = self._db._conn.execute("""
-                    SELECT degree FROM (
-                        SELECT SUM(cnt) as degree FROM (
-                            SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
-                            UNION ALL
-                            SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
-                        ) GROUP BY concept_id
-                        ORDER BY degree DESC
-                    ) LIMIT 1 OFFSET ?
-                """, (cutoff,)).fetchone()
-                threshold = max(row[0] if row else 20, 20)
+                rows = self._db._conn.execute("""
+                    SELECT concept_id, SUM(cnt) AS degree FROM (
+                        SELECT a AS concept_id, COUNT(*) AS cnt FROM edges GROUP BY a
+                        UNION ALL
+                        SELECT b AS concept_id, COUNT(*) AS cnt FROM edges GROUP BY b
+                    ) GROUP BY concept_id
+                    ORDER BY degree DESC
+                """).fetchall()
 
-                # Step 2: only fetch concepts above threshold (HAVING = fast)
+                if not rows:
+                    return set()
+                # Threshold = degree at cutoff position, floored to 20.
+                idx = min(cutoff - 1, len(rows) - 1)
+                threshold = max(rows[idx][1], 20)
+
                 id_to_name = self._db._id_to_name
                 result = set()
-                for row in self._db._conn.execute("""
-                    SELECT concept_id, SUM(cnt) as degree FROM (
-                        SELECT a as concept_id, COUNT(*) as cnt FROM edges GROUP BY a
-                        UNION ALL
-                        SELECT b as concept_id, COUNT(*) as cnt FROM edges GROUP BY b
-                    ) GROUP BY concept_id
-                    HAVING degree >= ?
-                """, (threshold,)):
-                    name = self._db._id_to_name.get(row[0]) or self._db._concept_name(row[0])
+                for cid, degree in rows:
+                    if degree < threshold:
+                        # rows are sorted DESC; can stop early
+                        break
+                    name = id_to_name.get(cid) or self._db._concept_name(cid)
                     result.add(name)
             return result
         else:
