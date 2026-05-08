@@ -483,13 +483,18 @@ def get_sync_backend(config: dict = None) -> SyncBackend:
         remote = config.get("git_remote")
         return GitBackend(Path(git_path), remote=remote)
     elif backend_type == "tls":
+        # CHUNK B10 (2026-05-08): prefer the bare `sync_tls` path so the
+        # class object matches the one re-exported by muninn/sync_tls.py
+        # (which itself does `from sync_tls import *`). This makes
+        # `isinstance(get_sync_backend(...), muninn.sync_tls.TLSBackend)`
+        # work even when both import flavours are reachable.
         try:
-            from engine.core.sync_tls import TLSBackend
+            from sync_tls import TLSBackend
         except ImportError:
             try:
                 from .sync_tls import TLSBackend
             except ImportError:
-                from sync_tls import TLSBackend
+                from engine.core.sync_tls import TLSBackend
         return TLSBackend(
             host=config.get("tls_host", "localhost"),
             port=config.get("tls_port", 9477),
