@@ -1369,7 +1369,7 @@ def compress_file(filepath: Path) -> str:
     """Top-level compression entry point: read file, run full L0-L11 pipeline.
 
     Pipeline order (Brick 6 wired L12 BudgetMem after secret redaction):
-      1. Read file as UTF-8 (CHUNK C3: refuses files above the cap)
+      1. Read file as UTF-8 (CHUNK C3 audit-fix — refuses files above the cap)
       2. P10 secret redaction
       3. L12 BudgetMem chunk selection (opt-in via MUNINN_L12_BUDGET)
       4. Section split on `##` headers
@@ -1385,7 +1385,7 @@ def compress_file(filepath: Path) -> str:
     filepath = Path(filepath)
     if not filepath.exists():
         return ""
-    # CHUNK C3: refuse files above the cap.
+    # CHUNK C3 audit-fix — refuse files above the cap.
     try:
         size = filepath.stat().st_size
     except OSError:
