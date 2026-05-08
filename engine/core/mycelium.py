@@ -431,7 +431,7 @@ class Mycelium:
             if self._db is not None:
                 # Only check fusions involving observed concepts (not ALL 269K)
                 # H2 fix: build id_to_name ONCE before the loop (was O(N*M) inside)
-                id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                id_to_name = self._db._id_to_name
                 for concept in clean_set:
                     cid = self._db._concept_cache.get(concept)
                     if cid is None:
@@ -624,7 +624,7 @@ class Mycelium:
             else:
                 # Full scan — only on explicit call (save, etc.)
                 with self._db.transaction() as txn:
-                    id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                    id_to_name = self._db._id_to_name
                     if high_degree_concepts:
                         hd_ids = {self._db._concept_cache.get(c) for c in high_degree_concepts}
                         hd_ids.discard(None)
@@ -714,7 +714,7 @@ class Mycelium:
                 self._adj_cache = {}
                 self._adj_cache_max_weight = 0.0
                 return self._adj_cache
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            id_to_name = self._db._id_to_name
             with self._db._lock:
                 rows = self._db._conn.execute("SELECT a, b, count FROM edges").fetchall()
             for row in rows:
@@ -876,7 +876,7 @@ class Mycelium:
                 threshold = max(row[0] if row else 20, 20)
 
                 # Step 2: only fetch concepts above threshold (HAVING = fast)
-                id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+                id_to_name = self._db._id_to_name
                 result = set()
                 for row in self._db._conn.execute("""
                     SELECT concept_id, SUM(cnt) as degree FROM (
@@ -1288,7 +1288,7 @@ class Mycelium:
 
         if self._db is not None:
             # SQL-native: fetch only strong fusions, sorted by strength
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            id_to_name = self._db._id_to_name
             with self._db._lock:
                 rows = self._db._conn.execute(
                     "SELECT a, b, strength FROM fusions "
@@ -1611,7 +1611,7 @@ class Mycelium:
         if self._db is not None:
             # SQL-native: only fetch strong fusions with prefix relationship
             # Filter in SQL: form contains '+', strength >= 8
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            id_to_name = self._db._id_to_name
             with self._db._lock:
                 fusion_rows = self._db._conn.execute(
                     "SELECT a, b FROM fusions WHERE strength >= 8"
@@ -1673,7 +1673,7 @@ class Mycelium:
         rows, cols, vals = [], [], []
 
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            id_to_name = self._db._id_to_name
             # Pre-filter: if too many concepts, keep only top by degree
             top_concepts = None
             total_concepts = len(self._db._concept_cache)
@@ -1854,7 +1854,7 @@ class Mycelium:
         """P20.8: Get inter-zone bridges (connections that span 2+ zones)."""
         bridges = []
         if self._db is not None:
-            id_to_name = {v: k for k, v in self._db._concept_cache.items()}
+            id_to_name = self._db._id_to_name
             bridge_data = []
             for a_id, b_id, nz in self._db.get_multi_zone_edges(min_zones=2):
                 a_name = id_to_name.get(a_id, "")
@@ -2693,7 +2693,7 @@ class Mycelium:
         try:
             pulled = 0
             query_ids = set()  # M9 fix: initialize before if/else to avoid NameError
-            id_to_name = {v: k for k, v in db._concept_cache.items()}
+            id_to_name = db._id_to_name
 
             if query_concepts:
                 query_set = {c.lower().strip() for c in query_concepts}
