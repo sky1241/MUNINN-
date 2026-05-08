@@ -97,13 +97,43 @@ def test_swallow_does_not_swallow_systemexit(tmp_path):
 
 
 def test_swallow_clean_block_no_log(tmp_path):
-    """When no exception is raised, swallow must not write to the log."""
+    """When no exception is raised, swallow must not write to the log.
+
+    CHUNK H2 (2026-05-08): tightened from OR-faible
+    `not log.exists() or log.read_text() == ""` to a strict invariant:
+    after a clean block, the log file MUST NOT contain any entry. If
+    the file exists at all, it must be empty (zero bytes). The handler
+    constructor may have touched the file even without writing a
+    record (RotatingFileHandler opens lazily) — both states accepted.
+    """
     mod = _load_hook_logger()
     log = tmp_path / "clean.log"
+    SENTINEL = "H2-CLEAN-BLOCK-MUST-NOT-LOG-7f4a"
+
     with mod.swallow("test", "clean", log_path=log):
+        # Bind a variable using SENTINEL inside the block so the test
+        # can prove no traceback containing SENTINEL leaked into the log.
+        _local_marker = SENTINEL
         x = 1 + 1
-    # No log file at all (we never opened it), or empty file
-    assert not log.exists() or log.read_text() == ""
+        assert x == 2 and _local_marker == SENTINEL  # prove block ran
+
+    # Strict invariant 1: no SENTINEL anywhere in the log path.
+    if log.exists():
+        content = log.read_text()
+        assert SENTINEL not in content, (
+            f"Clean block leaked the sentinel into the log: "
+            f"{content!r}"
+        )
+        # Strict invariant 2: zero bytes (no record was emitted).
+        assert log.stat().st_size == 0, (
+            f"Log file is non-empty after clean block: "
+            f"size={log.stat().st_size}, content={content!r}"
+        )
+
+    # Strict invariant 3: no .1/.2 backup file created either
+    # (rotation should not trigger on a no-log run).
+    backups = list(tmp_path.glob(f"{log.name}.*"))
+    assert not backups, f"Unexpected rotation backups: {backups}"
 
 
 def test_default_engine_log_path_constant():
