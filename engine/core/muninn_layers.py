@@ -1212,6 +1212,12 @@ def _extract_rules(text: str) -> str:
 
 def _llm_compress_chunk(text: str, client, context: str = "") -> tuple:
     """Compress a single chunk via Claude Haiku API. Returns text unchanged on failure."""
+    # CHUNK A1 (2026-05-08): defense-in-depth — redact before sending to API.
+    # compress_file() redacts at l.1344 but the cold-branch path
+    # (muninn_tree.py:2884-2887) calls _llm_compress directly. Redacting
+    # at the only API entrypoint guards every present and future caller.
+    for cpat in _m._COMPILED_SECRET_PATTERNS:
+        text = cpat.sub('[REDACTED]', text)
     try:
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -1247,6 +1253,12 @@ def _llm_compress(text: str, context: str = "") -> str:
         return text
     if _m._SKIP_L9:
         return text
+    # CHUNK A1 (2026-05-08): redact secrets BEFORE chunking so the
+    # length-ratio compare and the chunk content are computed on the
+    # already-redacted text. _llm_compress_chunk also redacts (defense-
+    # in-depth) — the second pass is idempotent.
+    for cpat in _m._COMPILED_SECRET_PATTERNS:
+        text = cpat.sub('[REDACTED]', text)
     try:
         import os, subprocess as _sp
         api_key = os.environ.get("ANTHROPIC_API_KEY")
