@@ -49,6 +49,33 @@
 Pending: B6, B9 (Sky-pending forge.py).
 Manual merge required: C12 yaml (token sans `workflow` scope).
 
+### Phase D — 10/13 done (parking lot, D4/D5 skip, D8 yaml manual)
+
+| Chunk | Push hash | Tests verts |
+|---|---|---|
+| **D1** 10 hypothesis property tests réels | `701a576` | 10 |
+| **D2** _adj_index_json lazy cache | `1f1255b` | 5 |
+| **D3** cube.scan_repo defense-in-depth | `6e9d5b3` | 4 |
+| **D6** .gitattributes LFS preemptive | `4fa2d27` | 5 |
+| **D7** purge_old_anomalies() helper | `a4b4cc3` | 6 |
+| **D8** CI forge --gen-props matrix (proposed; needs `workflow` scope) | `bd78a22` | 3 + 3 skipped |
+| **D9** _hook_logger.swallow() + log_engine_event() | `a78e796` | 8 |
+| **D10** drift audit _engine.py + version sync | `4068f5f` | 6 |
+| **D11** anti-drift shim test (17 modules) | `481d0ed` | 18 |
+| **D12** muninn_layers.health() | `09a2fba` | 7 |
+| **D4** *SKIP* (watchdog.py — DEMANDER SKY avant suppression) | — | — |
+| **D5** *SKIP* (dépend de B6) | — | — |
+
+**Total cumulé: 40/45 chunks effectifs (excl. C9 N/A + D4/D5 skip).**
+- Phase A 8/8 ✅
+- Phase B 9/11 (B6, B9 pending Sky)
+- Phase C 12/13 (C9 N/A, C12 yaml manual)
+- Phase D 10/13 (D4/D5 skip Sky, D8 yaml manual)
+
+**Manual merges nécessaires (token avec `workflow` scope)**:
+- `docs/CI_PROPOSED_C12.md` → ajouter pytest job à ci.yml
+- `docs/CI_PROPOSED_D8.md` → ajouter forge_smoke job à ci.yml
+
 ---
 
 ## ⚠️ Corrections vs rapports agents
