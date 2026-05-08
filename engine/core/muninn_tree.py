@@ -112,27 +112,48 @@ def cleanup_legacy_tree():
 
 
 def cleanup_tmp_files():
-    """C2: Cleanup orphaned .tmp files in .muninn/ at boot.
+    """C2: Cleanup orphaned .tmp / .lock files at boot.
 
-    Returns number of .tmp files removed.
+    CHUNK B4 (2026-05-08): also clean up stale .lock files. Locks held
+    by live processes are short-lived (<5s in _tree_lock); a .lock
+    older than 1h is unambiguously stale. Searches both .muninn/ and
+    TREE_DIR (which may live outside .muninn/, e.g. memory/ in legacy).
+
+    Returns number of files removed.
     """
     if not _m._REPO_PATH:
         return 0
-    muninn_dir = _m._REPO_PATH / ".muninn"
-    if not muninn_dir.exists():
-        return 0
 
     removed = 0
+    cutoff = time.time() - 3600  # 1 hour
+    search_dirs = []
+    muninn_dir = _m._REPO_PATH / ".muninn"
+    if muninn_dir.exists():
+        search_dirs.append(muninn_dir)
+    # TREE_DIR may be outside .muninn/ (legacy memory/ layout)
+    tree_dir = getattr(_m, "TREE_DIR", None)
+    if tree_dir is not None and tree_dir.exists() and tree_dir not in search_dirs:
+        # Only add if not already covered by .muninn/ scan
+        try:
+            tree_dir.relative_to(muninn_dir)
+        except (ValueError, AttributeError):
+            search_dirs.append(tree_dir)
+
+    patterns = ("*.tmp", "*.lock")
+    seen = set()  # avoid double-count if dirs overlap via globs
     try:
-        # Only clean up .tmp files older than 1 hour
-        cutoff = time.time() - 3600
-        for tmp_file in muninn_dir.rglob("*.tmp"):
-            try:
-                if tmp_file.stat().st_mtime < cutoff:
-                    tmp_file.unlink()
-                    removed += 1
-            except (OSError, PermissionError):
-                pass
+        for base in search_dirs:
+            for pat in patterns:
+                for stale in base.rglob(pat):
+                    if stale in seen:
+                        continue
+                    seen.add(stale)
+                    try:
+                        if stale.stat().st_mtime < cutoff:
+                            stale.unlink()
+                            removed += 1
+                    except (OSError, PermissionError):
+                        pass
     except Exception:
         pass
     return removed
