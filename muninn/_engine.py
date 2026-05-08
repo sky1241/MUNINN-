@@ -113,8 +113,10 @@ _SECRET_PATTERNS = [
 _COMPILED_SECRET_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _SECRET_PATTERNS]
 
 
-# Legacy globals — recomputed by _refresh_tree_paths()
-TREE_DIR = MUNINN_ROOT / "memory"
+# Legacy globals — recomputed by _refresh_tree_paths() once _REPO_PATH is set.
+# BUG-091 follow-up (2026-05-08): default to MUNINN_ROOT/.muninn/tree (runtime,
+# gitignored) instead of MUNINN_ROOT/memory (tracked). Mirrors engine/core/muninn.py.
+TREE_DIR = MUNINN_ROOT / ".muninn" / "tree"
 TREE_META = TREE_DIR / "tree.json"
 
 # Register this module so sub-modules' _ModRef can find globals

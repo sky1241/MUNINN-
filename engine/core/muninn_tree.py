@@ -56,10 +56,18 @@ def adaptive_boot_budget(context_size: int = None) -> int:
 # ── TREE STRUCTURE ────────────────────────────────────────────────
 
 def _get_tree_dir():
-    """Tree lives in target repo's .muninn/tree/, not in Muninn's own memory/."""
+    """Tree lives in target repo's .muninn/tree/, not in Muninn's own memory/.
+
+    BUG-091 follow-up (2026-05-08): the legacy fallback `MUNINN_ROOT / "memory"`
+    was the source of the recurring `tree.json b0002.lines=3` CI breakages.
+    When tests/code call save_tree() without first setting _REPO_PATH, the
+    fallback writes into MUNINN-/memory/tree.json (a tracked git file) and
+    pollutes the working tree. Now we use MUNINN-/.muninn/tree/ as the
+    fallback too — same shape as the runtime path but never tracked by git.
+    """
     if _m._REPO_PATH:
         return _m._REPO_PATH / ".muninn" / "tree"
-    return _m.MUNINN_ROOT / "memory"
+    return _m.MUNINN_ROOT / ".muninn" / "tree"
 
 def _get_tree_meta():
     return _get_tree_dir() / "tree.json"

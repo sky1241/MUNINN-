@@ -58,8 +58,11 @@ except ImportError:
     from engine.core._secrets import _SECRET_PATTERNS, _COMPILED_PATTERNS as _COMPILED_SECRET_PATTERNS
 
 
-# Legacy globals — recomputed by _refresh_tree_paths()
-TREE_DIR = MUNINN_ROOT / "memory"
+# Legacy globals — recomputed by _refresh_tree_paths() once _REPO_PATH is set.
+# BUG-091 follow-up (2026-05-08): default to MUNINN_ROOT/.muninn/tree (runtime,
+# gitignored) instead of MUNINN_ROOT/memory (tracked). Callers that forget to
+# set _REPO_PATH no longer pollute the tracked tree.json with stale data.
+TREE_DIR = MUNINN_ROOT / ".muninn" / "tree"
 TREE_META = TREE_DIR / "tree.json"
 
 # Ensure sub-modules can find us as 'muninn' even when run as __main__
