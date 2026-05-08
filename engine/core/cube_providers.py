@@ -1283,6 +1283,11 @@ def _query_mycelium(mycelium, identifiers: list[str]) -> list[str]:
     Uses spreading activation: seed with cube identifiers, find related
     concepts the mycelium learned from previous reconstructions.
     Returns new identifiers not already in the hints.
+
+    CHUNK B5 (2026-05-08): on backend error, the empty list is still
+    returned (callers expect a list) but the exception is logged via
+    _hook_logger so the audit trail catches the failure instead of
+    silently degrading to "no related concepts".
     """
     try:
         # Use spread_activation for semantic discovery
@@ -1298,8 +1303,16 @@ def _query_mycelium(mycelium, identifiers: list[str]) -> list[str]:
                 related = mycelium.get_related(ident, top_n=3)
                 all_related.update(c for c, _w in related)
             return sorted(all_related)
-    except Exception:
-        pass
+    except Exception as e:
+        # Don't crash callers (cube reconstruction needs a list), but
+        # log so the failure is visible in the audit trail.
+        try:
+            from _hook_logger import log_hook_event
+            log_hook_event("cube_providers", "_query_mycelium", e)
+        except Exception:
+            import sys
+            print(f"[MUNINN cube_providers] mycelium query failed: {e}",
+                  file=sys.stderr)
     return []
 
 
