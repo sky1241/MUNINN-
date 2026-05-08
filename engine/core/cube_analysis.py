@@ -1723,6 +1723,62 @@ def record_quarantine(quarantine_path: str, cube: 'Cube',
 
 # ─── B38: Feedback loop — anomalies → mycelium ────────────────────────
 
+def purge_old_anomalies(anomaly_path: str, max_age_days: int = 7) -> int:
+    """CHUNK D7 (2026-05-08): drop anomalies older than max_age_days.
+
+    Audit found 477 entries in ~/.muninn/anomalies.jsonl, none re-validated,
+    never purged. Stale anomalies' cube_ids no longer reflect the live tree.
+
+    Atomic rewrite via tempfile + os.replace. Malformed JSONL lines are
+    dropped silently (logging them would compete with the audit trail).
+    Returns the count of removed entries (0 if file missing or all fresh).
+    """
+    import tempfile as _tf
+    if not os.path.exists(anomaly_path):
+        return 0
+    cutoff = _time.time() - (max_age_days * 86400)
+    removed = 0
+    kept_lines = []
+    try:
+        with open(anomaly_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    # Drop malformed; the loop must not crash.
+                    removed += 1
+                    continue
+                ts = entry.get("timestamp", 0)
+                if ts >= cutoff:
+                    kept_lines.append(line)
+                else:
+                    removed += 1
+    except OSError:
+        return 0
+
+    if removed == 0:
+        return 0
+
+    # Atomic write: tempfile + os.replace
+    parent = os.path.dirname(anomaly_path) or "."
+    fd, tmp_path = _tf.mkstemp(dir=parent, prefix="anomalies_", suffix=".tmp")
+    try:
+        with open(fd, "w", encoding="utf-8") as out:
+            for ln in kept_lines:
+                out.write(ln + "\n")
+        os.replace(tmp_path, anomaly_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    return removed
+
+
 def record_anomaly(anomaly_path: str, file: str, metrics: dict,
                    cube_ids: list[str], label: str = "predicted_risky"):
     """
