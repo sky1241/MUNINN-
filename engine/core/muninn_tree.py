@@ -737,6 +737,27 @@ def build_tree(filepath):
 
 # ── AUTO-SEGMENTATION (Brique 3) ─────────────────────────────────
 
+def _safe_read_mn(path: Path) -> str | None:
+    """Read a .mn / branch file safely. Returns None if corrupted/unreadable.
+
+    CHUNK A2 (2026-05-08): a process killed mid-write to a .mn leaves the
+    file with truncated UTF-8 sequences. `read_text(encoding="utf-8")`
+    raises UnicodeDecodeError which previously killed the entire ingestion
+    pipeline (grow_branches_from_session, prune cold-branch).
+
+    Callers must handle None (skip / fallback / continue). See
+    docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §A2.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        print(f"WARNING: corrupted .mn {_m._safe_path(path)}: {e}", file=sys.stderr)
+        return None
+    except OSError as e:
+        print(f"WARNING: unreadable .mn {_m._safe_path(path)}: {e}", file=sys.stderr)
+        return None
+
+
 def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
     """Auto-segment a compressed .mn file into tree branches.
 
@@ -748,8 +769,8 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
     if not mn_path.exists():
         return 0
 
-    content = mn_path.read_text(encoding="utf-8")
-    if not content.strip():
+    content = _safe_read_mn(mn_path)
+    if content is None or not content.strip():
         return 0
 
     # Split by ## headers (compress_transcript already creates these)
@@ -809,7 +830,8 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
             existing_file = _m.TREE_DIR / node["file"]
             should_merge = False
             if existing_file.exists():
-                existing_text = existing_file.read_text(encoding="utf-8")
+                # A2: skip NCD if .mn truncated → falls back to tag overlap
+                existing_text = _safe_read_mn(existing_file)
                 if existing_text and body:
                     ncd = _m._ncd(body, existing_text)
                     should_merge = ncd < 0.4
@@ -824,7 +846,11 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
                 if not filepath.exists():
                     print(f"  WARNING: branch file missing: {_m._safe_path(filepath)}, creating new branch", file=sys.stderr)
                     continue  # M5 fix: fall through to create new branch instead of losing data
-                old = filepath.read_text(encoding="utf-8")
+                # A2: skip merge if existing .mn truncated → fall through to create new branch
+                old = _safe_read_mn(filepath)
+                if old is None:
+                    print(f"  WARNING: branch file corrupted: {_m._safe_path(filepath)}, creating new branch", file=sys.stderr)
+                    continue
                 # Combine old + new content
                 merged_text = old + "\n" + header + "\n" + body
                 # Resolve contradictions (last-writer-wins)
@@ -2881,7 +2907,10 @@ def prune(dry_run: bool = True):
             filepath = _m.TREE_DIR / node["file"]
             if not filepath.exists():
                 continue
-            content = filepath.read_text(encoding="utf-8")
+            # A2: skip cold-branch recompression if .mn truncated → no crash
+            content = _safe_read_mn(filepath)
+            if content is None:
+                continue
             original_lines = len(content.split("\n"))
             # Apply L9 (LLM compression) if branch is large enough
             compressed = _m._llm_compress(content, context=f"cold-branch:{name}")
