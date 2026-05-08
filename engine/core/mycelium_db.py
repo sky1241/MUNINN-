@@ -119,6 +119,37 @@ class MyceliumDB:
             except sqlite3.OperationalError:
                 pass
 
+    def check_integrity(self) -> tuple[bool, str]:
+        """CHUNK A3 (2026-05-08): run PRAGMA integrity_check + WAL checkpoint.
+
+        Detects DB corruption (fsync issues, ext4 bugs, kill -9 mid-commit,
+        disk full). Returns (True, "ok") on clean DB, (False, error_message)
+        on corruption. Caller decides whether to raise, warn, or rebuild.
+
+        Cost: ~100-500ms on a 1.2 GB DB. Recommended at boot or via
+        `muninn doctor`. NOT called automatically in __init__ to keep
+        startup fast for tests and CI.
+
+        Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §A3
+        """
+        with self._lock:
+            try:
+                # Force WAL merge first so integrity_check sees the full state.
+                self._conn.execute("PRAGMA wal_checkpoint(RESTART)")
+            except sqlite3.OperationalError:
+                # Some envs forbid checkpoint while readers active — non-fatal
+                pass
+            try:
+                row = self._conn.execute("PRAGMA integrity_check").fetchone()
+            except sqlite3.DatabaseError as e:
+                return False, f"integrity_check raised: {e}"
+            if not row:
+                return False, "integrity_check returned no rows"
+            result = row[0]
+            if result == "ok":
+                return True, "ok"
+            return False, str(result)
+
     def vacuum(self):
         """Run PRAGMA optimize + VACUUM."""
         with self._lock:
