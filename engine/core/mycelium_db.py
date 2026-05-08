@@ -283,22 +283,28 @@ class MyceliumDB:
     SCHEMA_VERSION = 3  # v1=original, v2=composite indexes, v3=sync_log+tombstones
 
     def _migrate_schema(self):
-        """X4: Idempotent schema migration using PRAGMA user_version."""
-        current = self._conn.execute("PRAGMA user_version").fetchone()[0]
-        if current >= self.SCHEMA_VERSION:
-            return  # Already up to date
+        """X4: Idempotent schema migration using PRAGMA user_version.
 
-        # Mark migration start in meta table
-        self._conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('_migration_in_progress', '1')")
-        self._conn.commit()
+        CHUNK A5 (2026-05-08): wrapped under self._lock so two processes
+        opening the same DB simultaneously cannot race on the migration
+        sequence (PRAGMA user_version + INSERT _migration_in_progress).
+        """
+        with self._lock:
+            current = self._conn.execute("PRAGMA user_version").fetchone()[0]
+            if current >= self.SCHEMA_VERSION:
+                return  # Already up to date
 
-        # Future migrations go here as: if current < N: ...
+            # Mark migration start in meta table
+            self._conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('_migration_in_progress', '1')")
+            self._conn.commit()
 
-        # Set version and clear migration flag
-        self._conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
-        self._conn.execute("DELETE FROM meta WHERE key = '_migration_in_progress'")
-        self._conn.commit()
+            # Future migrations go here as: if current < N: ...
+
+            # Set version and clear migration flag
+            self._conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
+            self._conn.execute("DELETE FROM meta WHERE key = '_migration_in_progress'")
+            self._conn.commit()
 
     def _load_concept_cache(self):
         """Load concept name->id and id->name mappings into memory (~100KB for 10K concepts)."""
@@ -356,11 +362,12 @@ class MyceliumDB:
     # ── Meta key-value store ─────────────────────────────────────────
 
     def get_meta(self, key: str, default: str = None) -> str:
-        """Get a metadata value."""
-        row = self._conn.execute(
-            "SELECT value FROM meta WHERE key = ?", (key,)
-        ).fetchone()
-        return row[0] if row else default
+        """Get a metadata value. CHUNK A5: locked read."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM meta WHERE key = ?", (key,)
+            ).fetchone()
+            return row[0] if row else default
 
     def set_meta(self, key: str, value: str):
         """Set a metadata value."""
@@ -375,31 +382,35 @@ class MyceliumDB:
     # ── Connection operations ────────────────────────────────────────
 
     def get_connection(self, concept_a: str, concept_b: str) -> dict | None:
-        """Get a single connection by concept names. Returns dict or None."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return None
-        row = self._conn.execute(
-            "SELECT count, first_seen, last_seen FROM edges WHERE a=? AND b=?",
-            (a_id, b_id)
-        ).fetchone()
-        if not row:
-            return None
-        result = {
-            "count": row[0],
-            "first_seen": days_to_date(row[1]),
-            "last_seen": days_to_date(row[2]),
-        }
-        # Load zones
-        zones = [r[0] for r in self._conn.execute(
-            "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id)
-        )]
-        if zones:
-            result["zones"] = zones
-        return result
+        """Get a single connection by concept names. Returns dict or None.
+
+        CHUNK A5: locked reads (SELECT on edges + edge_zones).
+        """
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return None
+            row = self._conn.execute(
+                "SELECT count, first_seen, last_seen FROM edges WHERE a=? AND b=?",
+                (a_id, b_id)
+            ).fetchone()
+            if not row:
+                return None
+            result = {
+                "count": row[0],
+                "first_seen": days_to_date(row[1]),
+                "last_seen": days_to_date(row[2]),
+            }
+            # Load zones
+            zones = [r[0] for r in self._conn.execute(
+                "SELECT zone FROM edge_zones WHERE a=? AND b=?", (a_id, b_id)
+            )]
+            if zones:
+                result["zones"] = zones
+            return result
 
     def upsert_connection(self, concept_a: str, concept_b: str,
                           increment: int = 1, zone: str = None,
@@ -455,26 +466,27 @@ class MyceliumDB:
 
         Returns {key: {count, first_seen, last_seen, zones?}} like the JSON format.
         WARNING: This loads everything into RAM. Use only for migration/export.
+        CHUNK A5: locked iteration over edges + edge_zones.
         """
         result = {}
+        with self._lock:
+            for row in self._conn.execute("SELECT a, b, count, first_seen, last_seen FROM edges"):
+                a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+                b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
+                key = f"{a_name}|{b_name}"
+                result[key] = {
+                    "count": row[2],
+                    "first_seen": days_to_date(row[3]),
+                    "last_seen": days_to_date(row[4]),
+                }
 
-        for row in self._conn.execute("SELECT a, b, count, first_seen, last_seen FROM edges"):
-            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
-            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
-            key = f"{a_name}|{b_name}"
-            result[key] = {
-                "count": row[2],
-                "first_seen": days_to_date(row[3]),
-                "last_seen": days_to_date(row[4]),
-            }
-
-        # Load zones in batch
-        for row in self._conn.execute("SELECT a, b, zone FROM edge_zones"):
-            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
-            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
-            key = f"{a_name}|{b_name}"
-            if key in result:
-                result[key].setdefault("zones", []).append(row[2])
+            # Load zones in batch
+            for row in self._conn.execute("SELECT a, b, zone FROM edge_zones"):
+                a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+                b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
+                key = f"{a_name}|{b_name}"
+                if key in result:
+                    result[key].setdefault("zones", []).append(row[2])
 
         return result
 
@@ -482,57 +494,62 @@ class MyceliumDB:
         """Get all fusions as a dict (for compatibility).
 
         Returns {key: {concepts, form, strength, fused_at}} like the JSON format.
+        CHUNK A5: locked iteration.
         """
         result = {}
-
-        for row in self._conn.execute("SELECT a, b, form, strength, fused_at FROM fusions"):
-            a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
-            b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
-            key = f"{a_name}|{b_name}"
-            result[key] = {
-                "concepts": [a_name, b_name],
-                "form": row[2],
-                "strength": row[3],
-                "fused_at": days_to_date(row[4]),
-            }
+        with self._lock:
+            for row in self._conn.execute("SELECT a, b, form, strength, fused_at FROM fusions"):
+                a_name = self._id_to_name.get(row[0]) or self._concept_name(row[0])
+                b_name = self._id_to_name.get(row[1]) or self._concept_name(row[1])
+                key = f"{a_name}|{b_name}"
+                result[key] = {
+                    "concepts": [a_name, b_name],
+                    "form": row[2],
+                    "strength": row[3],
+                    "fused_at": days_to_date(row[4]),
+                }
 
         return result
 
     def connection_count(self) -> int:
-        """Number of connections."""
-        row = self._conn.execute("SELECT COUNT(*) FROM edges").fetchone()
-        return row[0] if row else 0
+        """Number of connections. CHUNK A5: locked."""
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) FROM edges").fetchone()
+            return row[0] if row else 0
 
     def fusion_count(self) -> int:
-        """Number of fusions."""
-        row = self._conn.execute("SELECT COUNT(*) FROM fusions").fetchone()
-        return row[0] if row else 0
+        """Number of fusions. CHUNK A5: locked."""
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) FROM fusions").fetchone()
+            return row[0] if row else 0
 
     def has_connection(self, concept_a: str, concept_b: str) -> bool:
-        """Check if a connection exists."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return False
-        row = self._conn.execute(
-            "SELECT 1 FROM edges WHERE a=? AND b=?", (a_id, b_id)
-        ).fetchone()
-        return row is not None
+        """Check if a connection exists. CHUNK A5: locked."""
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return False
+            row = self._conn.execute(
+                "SELECT 1 FROM edges WHERE a=? AND b=?", (a_id, b_id)
+            ).fetchone()
+            return row is not None
 
     def has_fusion(self, concept_a: str, concept_b: str) -> bool:
-        """Check if a fusion exists."""
-        a_key = min(concept_a, concept_b)
-        b_key = max(concept_a, concept_b)
-        a_id = self._concept_cache.get(a_key)
-        b_id = self._concept_cache.get(b_key)
-        if a_id is None or b_id is None:
-            return False
-        row = self._conn.execute(
-            "SELECT 1 FROM fusions WHERE a=? AND b=?", (a_id, b_id)
-        ).fetchone()
-        return row is not None
+        """Check if a fusion exists. CHUNK A5: locked."""
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._concept_cache.get(a_key)
+            b_id = self._concept_cache.get(b_key)
+            if a_id is None or b_id is None:
+                return False
+            row = self._conn.execute(
+                "SELECT 1 FROM fusions WHERE a=? AND b=?", (a_id, b_id)
+            ).fetchone()
+            return row is not None
 
     def upsert_fusion(self, concept_a: str, concept_b: str,
                       form: str, strength: int, fused_at=None):
