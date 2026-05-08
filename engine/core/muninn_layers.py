@@ -1260,16 +1260,12 @@ def _llm_compress(text: str, context: str = "") -> str:
     for cpat in _m._COMPILED_SECRET_PATTERNS:
         text = cpat.sub('[REDACTED]', text)
     try:
-        import os, subprocess as _sp
+        import os
+        # CHUNK C4 (2026-05-08): removed Windows PowerShell fallback.
+        # Sky is on Linux; on Windows, ANTHROPIC_API_KEY should be set
+        # via setx or the standard environment, not parsed from a
+        # subprocess (latency, stdout capture risk, fragile).
         api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            try:
-                _r = _sp.run(['powershell', '-Command',
-                    "[System.Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')"],
-                    capture_output=True, text=True, timeout=5)
-                api_key = _r.stdout.strip() or None
-            except Exception:
-                pass
         if not api_key:
             return text
         import anthropic
