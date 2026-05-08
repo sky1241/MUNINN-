@@ -1098,22 +1098,25 @@ def _hook_log(repo_path: Path, message: str):
 
 
 def _log_sync_error(context: str, exc: BaseException) -> None:
-    """Append a swallowed exception with traceback to ~/.muninn/hook_errors.log.
+    """Append a swallowed exception with traceback to the rotating hook log.
 
-    Hooks must always exit 0 to avoid breaking Claude Code, so we cannot
-    raise. Silent swallow makes bugs invisible — instead we keep an audit
-    trail. If logging itself fails, we swallow that too.
+    CHUNK A8 (2026-05-08): delegates to engine/core/_hook_logger which
+    rotates the file (1 MB max, 3 backups) and falls back to stderr when
+    the file is unwritable, so the audit trail is never silently lost.
     """
     try:
-        log_path = Path.home() / ".muninn" / "hook_errors.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} [muninn_feed:{context}] "
-                    f"{type(exc).__name__}: {exc}\n")
-            f.write(traceback.format_exc())
-            f.write("---\n")
+        from _hook_logger import log_hook_event
+        log_hook_event("muninn_feed", context, exc)
     except Exception:
-        pass
+        # Last-resort: write to stderr. Never re-raise (hooks must exit 0).
+        try:
+            sys.stderr.write(
+                f"[MUNINN HOOK LOG fallback] {datetime.now().isoformat()} "
+                f"[muninn_feed:{context}] {type(exc).__name__}: {exc}\n"
+            )
+            sys.stderr.flush()
+        except Exception:
+            pass
 
 
 # CHUNK A4 (2026-05-08): whitelist for transcript_path validation.
