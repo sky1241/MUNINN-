@@ -1293,7 +1293,20 @@ def feed_from_hook(repo_path: Path):
                 # Sleep consolidate cold branches after decay
                 try:
                     tree = _m.load_tree()
-                    nodes = {n["name"]: n for n in tree.get("nodes", []) if isinstance(n, dict)}
+                    # CHUNK EX5 (2026-05-08): tree["nodes"] is a DICT
+                    # (str -> node), not a list. Pre-fix the comprehension
+                    # iterated over the dict's KEYS (strings), so
+                    # isinstance(str, dict) was always False and `nodes`
+                    # was always {} → cold = [] → _sleep_consolidate
+                    # never invoked. Sleep consolidation (Wilson &
+                    # McNaughton 1994) was functionally DEAD on the hook
+                    # path. Iterate items() to fix.
+                    raw_nodes = tree.get("nodes", {})
+                    if isinstance(raw_nodes, dict):
+                        nodes = {name: node for name, node in raw_nodes.items()
+                                 if isinstance(node, dict)}
+                    else:
+                        nodes = {}
                     cold = []
                     for name, node in nodes.items():
                         if name == "root":
