@@ -6,8 +6,58 @@ import re
 import sys
 import time
 import traceback
+import zlib
 from datetime import datetime
 from pathlib import Path
+
+
+# CHUNK C6 (2026-05-08): magic header + version + CRC32 for .mn files.
+# Without this, format evolution (L0-L7 -> +L9 -> +L10 -> +L11 -> +L12)
+# silently broke parsing of older files, and a kill -9 mid-write left
+# truncated bytes that no reader could detect.
+_MN_MAGIC_PREFIX = "# MUNINN|"
+_MN_HEADER_RE = re.compile(
+    r"^# MUNINN\|v=(?P<version>\d+)\|crc=(?P<crc>[0-9a-f]+)\n",
+)
+
+
+def _mn_format_header(content: str, version: int = 2) -> str:
+    """Build the magic-header line for a .mn body.
+
+    Returns `"# MUNINN|v=<version>|crc=<8-hex>\\n"` where the crc is
+    `zlib.crc32(content.encode("utf-8"))` formatted as 8-char hex.
+    """
+    crc = zlib.crc32(content.encode("utf-8")) & 0xFFFFFFFF
+    return f"{_MN_MAGIC_PREFIX}v={version}|crc={crc:08x}\n"
+
+
+def _mn_parse_header(text: str) -> tuple[str, dict]:
+    """Parse the optional magic header from a .mn text.
+
+    Returns (body, meta) where meta has:
+      - version: int or None
+      - crc_ok: True (matches), False (mismatch), or None (no header)
+      - legacy: True if no magic header found
+
+    Files without the magic header are returned unchanged (legacy v1).
+    On CRC mismatch, the body is returned anyway (best-effort) but
+    crc_ok=False so callers can warn the user.
+    """
+    if not text.startswith(_MN_MAGIC_PREFIX):
+        return text, {"version": None, "crc_ok": None, "legacy": True}
+    m = _MN_HEADER_RE.match(text)
+    if not m:
+        # Magic prefix present but malformed header — treat as legacy
+        return text, {"version": None, "crc_ok": None, "legacy": True}
+    version = int(m.group("version"))
+    expected_crc = m.group("crc")
+    body = text[m.end():]
+    actual_crc = format(zlib.crc32(body.encode("utf-8")) & 0xFFFFFFFF, "08x")
+    return body, {
+        "version": version,
+        "crc_ok": (actual_crc == expected_crc),
+        "legacy": False,
+    }
 
 from tokenizer import count_tokens, token_count
 from _secrets import redact_secrets_text as _redact_secrets_text
@@ -671,12 +721,18 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
         if existing_mn.exists():
             mn_path = existing_mn  # overwrite same file
 
+    # CHUNK C6 (2026-05-08): prefix every .mn write with magic header
+    # (version + CRC32) so format drift and truncated writes are
+    # detectable. Header is one `# MUNINN|...` line which downstream
+    # parsers ignore (they skip `#`-prefixed comment lines).
+    result_with_header = _mn_format_header(result, version=2) + result
+
     # Atomic write: tempfile + os.replace to avoid corruption on crash
     import tempfile as _tf
     _fd, _tmp = _tf.mkstemp(dir=str(mn_path.parent), suffix=".tmp")
     try:
         with open(_fd, "w", encoding="utf-8") as _f:
-            _f.write(result)
+            _f.write(result_with_header)
         os.replace(_tmp, str(mn_path))
     except BaseException:
         try:
