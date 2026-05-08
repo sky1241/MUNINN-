@@ -1,0 +1,32 @@
+# CHUNK C13 (2026-05-08): Dependabot config
+#
+# Scans pip dependencies (pyproject.toml) and GitHub Actions workflows
+# weekly. Opens PRs for outdated/insecure versions instead of relying
+# on manual `pip-audit` runs.
+#
+# Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §C13
+
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
