@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+7 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11). **3 OPEN** (BUG-091 architectural smell, BUG-103 scrub_secrets false positives, BUG-104 L12 partial fix).
+## Status: 90+10+8 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11; BUG-091 dual-tree drift fixed via Phase A→D shim refactor + recurrence patch 2026-05-07/08; BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08). **1 OPEN** (BUG-104 L12 partial fix — root cause is chunk granularity, not detector).
 
 ---
 
@@ -287,21 +287,26 @@
   Fixing the fact-span detector closes the gap entirely.
 
 ### BUG-103: scrub_secrets() regex patterns have false positives on plain SQL
-- **Status**: OPEN (deferred — separate fix from BUG-102)
+- **Status**: FIXED (verified 2026-05-08, no code change needed — patterns were
+  already tightened during one of the brick refactors between 2026-04-11 and
+  2026-05-08).
 - **Symptom**: when BUG-102 corrupted the repo, the substitution pattern showed
   that `_COMPILED_SECRET_PATTERNS` matches innocuous SQL fragments. Examples
   observed in the diff: `key TEXT PRIMARY KEY` → `key [REDACTED] PRIMARY KEY`,
   `PRIMARY KEY (a, b)` → `PRIMARY KEY [REDACTED] b)`, `f"display of $-var
   matching secret name: {m.group(1)}"` → `... matching secret [REDACTED]`.
-- **Root cause**: not yet fully isolated. Likely a pattern like `\b[A-Z]{4}\b`
-  (4 uppercase letters = TOKEN-shaped) or a context-free trigger word match
-  that fires on any word followed by ` (...)` or `name:`.
-- **Fix**: TBD. Will require auditing every regex in `_SECRET_PATTERNS` and
-  adding negative lookbehind for SQL keywords (`TEXT`, `PRIMARY KEY`, etc.).
-- **Mitigation**: BUG-102 fix prevents `scrub_secrets()` from being called
-  by accident — that's the destructive part of the chain. The remaining
-  false positives are still wrong but no longer destructive.
-- **Test**: TBD.
+- **Root cause**: an earlier version of `_SECRET_PATTERNS` had loose triggers
+  on bare words like `password`, `key`, `secret` without requiring `=` or `:`.
+  The current list at engine/core/_secrets.py:11-46 only fires when a key word
+  is followed by `[=:]` and a value, eliminating the false positives.
+- **Fix**: no patch needed today — verification done 2026-05-08 with 12 test
+  cases (6 real secrets `password=...`, `token=...`, `sk-...`, `ghp_...`,
+  `cle=...`, `mdp=...` all redacted; 6 innocents `key TEXT PRIMARY KEY`,
+  `PRIMARY KEY (a, b)`, `password = "hello world"`, `password is required`,
+  `enter your password to login`, `reset password by clicking` all unchanged).
+- **Test**: ad-hoc test recorded in chat transcript 2026-05-08; should be
+  formalized as `tests/test_x1c_scrub_secrets_no_false_pos.py` next time we
+  touch `_secrets.py`.
 
 ---
 
