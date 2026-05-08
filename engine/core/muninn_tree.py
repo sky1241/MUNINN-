@@ -2116,12 +2116,28 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
         return ""
 
     # Load mycelium
+    # CHUNK B2 (2026-05-08): differentiate failure modes so silent
+    # empty bridge no longer hides real errors from the user.
     try:
         if _m._CORE_DIR not in sys.path:
             sys.path.insert(0, _m._CORE_DIR)
         from mycelium import Mycelium
         m = Mycelium(repo)
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
+        # mycelium module unavailable — typically dev env without all deps
+        print("[MUNINN BRIDGE] mycelium module unavailable", file=sys.stderr)
+        return ""
+    except FileNotFoundError:
+        # First run, no mycelium DB yet — no signal needed
+        return ""
+    except Exception as e:
+        # Real, unexpected failure — log for audit + warn user
+        print(f"[MUNINN BRIDGE] mycelium init failed: {e}", file=sys.stderr)
+        try:
+            from _hook_logger import log_hook_event
+            log_hook_event("bridge_fast", "mycelium_init", e)
+        except Exception:
+            pass
         return ""
 
     # get_related for top seeds (fast path — no full graph scan)
