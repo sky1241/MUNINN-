@@ -132,7 +132,7 @@ Un hook se declenche automatiquement:
 ### La session d'apres
 Le cousin qui prend la suite a le .mn compresse. Le cycle continue.
 
-## Les 11 couches de compression
+## Les 12 couches de compression
 ```
 L0:  tool output strip (x3.5 — vire 74% du bruit d'un transcript)
 L1:  markdown strip (headers, formatting)
@@ -145,9 +145,11 @@ L7:  fact extraction (nombres, dates, commits, metriques)
 L10: cue distillation — vire la connaissance generique que tu sais deja (Bartlett 1932)
 L11: rule extraction — factorise les patterns repetitifs (Kolmogorov 1965)
 L9:  LLM self-compress [optionnel] — Claude Haiku resume via API
+L12: BudgetMem chunk selection [opt-in via MUNINN_L12_BUDGET] (BUG-104 OPEN)
 ```
-L0-L7, L10-L11 = regex pur, zero dependance, instantane.
-L9 = optionnel, pip install anthropic, x2 additionnel.
+L0-L7, L10-L11 = regex pur, zero dependance obligatoire, instantane.
+L9 = optionnel, pip install anthropic, x2 additionnel ($0.21/full repo).
+L12 = opt-in via env var, refactor chunk granularite a faire (BUG-104).
 +7 filtres additionnels: P17 code blocks, P24 causal, P25 priority, P26-P27 dedup, P28 tics.
 
 ## Le mycelium (le champignon)
@@ -177,7 +179,24 @@ muninn.py feed --history      # Rattrape tous les transcripts passes
 muninn.py bootstrap <repo>    # Cold start sur un nouveau repo
 muninn.py prune [--force]     # Elagage R4 (froid -> supprime)
 muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
+muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 ```
+
+## Configuration / Variables d'environnement
+
+| Variable | Usage | Default |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Cle API pour L9 (compression LLM optionnelle) | unset (L9 desactivee) |
+| `MUNINN_META_PATH` | Chemin du meta-mycelium (federation cross-repo) | `~/.muninn/meta_mycelium.db` |
+| `MUNINN_CONTEXT_SIZE` | Budget tokens du boot adaptatif | `200000` |
+| `MUNINN_L12_BUDGET` | Active L12 BudgetMem (chunk selection opt-in) | unset (L12 = identity pass) |
+| `MUNINN_GL_SOFTWARE` | Force Qt OpenGL software (workaround GPU/Vulkan) | unset |
+| `MUNINN_REPO` | Repo cible pour scripts ad-hoc (CLI fallback) | `os.getcwd()` |
+| `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
+| `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
+| `MUNINN_TEST_REPOS` | Liste de repos pour test_l9_full.py (`name1:/path1,name2:/path2`) | repo courant |
+| `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
+| `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
 
 ## Etat du projet (avril 2026)
 - 43 features + 39 briques Cube, 11 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation

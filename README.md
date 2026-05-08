@@ -2,17 +2,17 @@
 
 > *Odin's raven of memory — the one that always comes back.*
 
-LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 56 features, 11 compression layers (25 filters), 76 bugs squashed across 13 audit scans.
+LLM memory compression engine. Compresses session transcripts into dense `.mn` files and reloads them intelligently at next boot. 56 features, 12 compression layers (L0-L11 + L12 opt-in BudgetMem), 76 bugs squashed across 13 audit scans.
 
-**Measured result**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline, tiktoken). 92% fact retention (40-question benchmark).
+**Measured result**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline including L9 LLM compression, tiktoken-counted). 92% fact retention (40-question benchmark). On generic prose without L9, the regex-only pipeline measures ~x1.7.
 
 ## The Problem
 
-LLMs have no persistent memory. Each session starts from zero. The only hack: a `MEMORY.md` file (~200 lines, ~3K tokens) injected into context. When context fills up, everything overflows and disappears.
+LLMs have no persistent memory. Each session starts from zero. A common workaround is a `MEMORY.md`-style file (~200 lines, ~3K tokens) injected into context. When context fills up, everything overflows and disappears.
 
 ## What Muninn Does
 
-1. **Compresses** session transcripts through 11 layers (regex-only, zero dependencies)
+1. **Compresses** session transcripts through 12 layers — L0-L7 + L10-L11 are regex-only (no required dependency); L9 (optional) calls Anthropic Haiku for additional compression; L12 (opt-in via `MUNINN_L12_BUDGET`) selects the densest paragraphs to fit a token budget
 2. **Learns** via a living co-occurrence network (mycelium) that grows with each session
 3. **Retrieves** intelligently at boot using TF-IDF + Spreading Activation scoring
 4. **Persists** across sessions via a fractal L-system tree with temperature-based pruning
