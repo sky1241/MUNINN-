@@ -1,8 +1,12 @@
-# BATTLE PLAN — AUDIT SENIOR DEV (Runs 2 + 3)
+# BATTLE PLAN — AUDIT SENIOR DEV (Runs 2 + 3) [SUPERSEDED]
+
+> ⚠️ **SUPERSEDED par [BATTLE_PLAN_AUDIT3_2026-05-08.md](BATTLE_PLAN_AUDIT3_2026-05-08.md)** (le plan définitif du jour, post-Run 4 honesty audit).
+>
+> Ce document garde l'historique du plan v2 — utile pour comprendre comment on est arrivé aux 41 commits de la journée. Les sections opérationnelles (§2–§7) sont reflétées + corrigées dans le plan v3 avec verdicts honnêtes (SOLIDE / OK_NOT_WIRED / THEATER / REGRESSION_INTRODUCED) après mesure réelle.
 
 **Date** : 2026-05-08 (v2 — consolidé après Run 3)
 **Auteur** : Sky + Claude (8 agents senior parallèles, 2 vagues)
-**Statut** : 🔴 TODO — 56 issues identifiées, 8 blocker à fixer avant nouvelle feature
+**Statut** : 🟢 EXÉCUTÉ — 41 commits poussés (Phase A 8/8, B 9/11, C 12/13, D 10/13). Voir BATTLE_PLAN_AUDIT3 pour le bilan honnête post-exécution.
 **Méthodologie** : 8 agents Explore en parallèle (4 axes Run 2 + 4 axes Run 3 orthogonaux), output verbatim, file:line traçable.
 
 ---

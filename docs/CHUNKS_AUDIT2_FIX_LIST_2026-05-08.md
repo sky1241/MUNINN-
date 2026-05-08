@@ -1,4 +1,8 @@
-# CHUNKS À CORRIGER — Audit Run 2 + Run 3 (consolidé)
+# CHUNKS À CORRIGER — Audit Run 2 + Run 3 (consolidé) [SUPERSEDED]
+
+> ⚠️ **SUPERSEDED par [BATTLE_PLAN_AUDIT3_2026-05-08.md](BATTLE_PLAN_AUDIT3_2026-05-08.md)** (le plan définitif du jour, post-Run 4 honesty audit).
+>
+> Cette liste opérationnelle garde le détail des 32 chunks A/B/C/D. **MAIS** : les "verdicts" claim'd ici (SOLIDE par défaut) ont été révisés honnêtement dans le plan v3 après audit Run 4 — 5 chunks sont THEATER, 1 régression introduite, 14 OK_NOT_WIRED. Lire le v3 pour l'état réel.
 
 **Date** : 2026-05-08
 **Source** : 8 agents senior (BATTLE_PLAN_AUDIT2_2026-05-08.md)
