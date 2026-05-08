@@ -40,6 +40,39 @@ except Exception:
     _BUDGET_SELECT_AVAILABLE = False
 
 
+def health() -> dict:
+    """CHUNK D12 (2026-05-08): expose optional-module loading status.
+
+    Three optional features in muninn_layers degrade silently when
+    their backing module is missing or broken (lexicons tier1
+    patterns, dedup SimHash, BudgetMem chunk selection). This helper
+    returns a dict so `muninn doctor` and other observability tools
+    can surface "feature available?" booleans to the user.
+
+    Keys (all bool):
+      - lexicons_tier1: was lexicons.get_safe_filler_patterns loaded?
+      - dedup:          was dedup.simhash importable?
+      - budget_select:  was budget_select.budget_select importable?
+      - l9_active:      can L9 actually call the API right now?
+
+    Returns:
+      dict[str, bool]
+    """
+    import os
+    l9_active = False
+    try:
+        import anthropic  # noqa: F401
+        l9_active = bool(os.environ.get("ANTHROPIC_API_KEY")) and not _m._SKIP_L9
+    except ImportError:
+        l9_active = False
+    return {
+        "lexicons_tier1": bool(_LEXICONS_TIER1_PATTERNS),
+        "dedup": _DEDUP_AVAILABLE,
+        "budget_select": _BUDGET_SELECT_AVAILABLE,
+        "l9_active": l9_active,
+    }
+
+
 def _l12_budget_pass(text):
     """Apply BudgetMem chunk selection if MUNINN_L12_BUDGET is set. Pure.
 
