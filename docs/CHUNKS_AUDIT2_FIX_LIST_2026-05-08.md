@@ -3,7 +3,30 @@
 **Date** : 2026-05-08
 **Source** : 8 agents senior (BATTLE_PLAN_AUDIT2_2026-05-08.md)
 **Méthodo** : chaque chunk a été VÉRIFIÉ verbatim dans le code actuel (file:line confirmé). Findings agent corrigés/affinés là où nécessaire.
-**Statut** : 🔴 PAS ENCORE COMMENCÉ — pas de modif de code à ce stade, juste la liste.
+
+**Statut** : 🟢 **17/32 chunks done** (Phase A 8/8 + Phase B 9/11) — 2026-05-08
+
+| Chunk | Push hash | Tests verts |
+|---|---|---|
+| **A1** L9 redact_secrets defense-in-depth | `290075d` | 7 |
+| **A2** UnicodeDecodeError .mn (4 sites) | `eb29eb1` | 5 |
+| **A3** PRAGMA integrity_check helper | `ad152d4` | 5 |
+| **A4** transcript_path whitelist | `5858445` | 7 |
+| **A5** Lock SQLite reads (9 sites) | `af60c9d` | 5 |
+| **A6** Sentinel calibration | `840b3fb` | 17 |
+| **A7** Hook integrity manifest + 0750 | `c4c237e` | 6 |
+| **A8** Hook log rotation centralisé | `767d52c` | 6 |
+| **B1** save_tree hard-fail on lock | `676a5eb` | 4 |
+| **B2** bridge_fast granular except | `a1bfdac` | 4 |
+| **B3** cache _id_to_name (9 sites) | `ee9438d` | 4 |
+| **B4** cleanup orphan .lock files | `bb550d2` | 6 |
+| **B5** cube_providers granular | `133bbcb` | 4 |
+| **B7** autouse _repo_path_isolate | `5279a1d` | 4 |
+| **B8** _get_high_degree single scan | `f216fc8` | 4 |
+| **B10** TLS isinstance fix (BUG-091) | `887b082` | 14 |
+| **B11** doctor() extensions | `4369c66` | 4 |
+
+**B6** (_REPO_PATH context manager) et **B9** (forge.gen_props refactor — touche `forge.py` standalone) en pending. **Phase C 0/13 démarre.**
 
 ---
 
