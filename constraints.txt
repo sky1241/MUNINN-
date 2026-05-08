@@ -1,0 +1,22 @@
+# CHUNK C1 (2026-05-08): pin optional dependencies for reproducible builds.
+#
+# Pre-fix: pyproject.toml used `tiktoken>=0.5`, `anthropic>=0.20` — any
+# `pip install -e .[all]` could pick up a 2-year-old version OR a
+# brand-new breaking release. Builds were not reproducible across
+# environments / CI / fresh machines.
+#
+# Strategy: pin the currently-tested versions here as upper bounds.
+# Use via:  pip install -c constraints.txt -e '.[all]'
+# Or in CI: pip install -c constraints.txt -r requirements-dev.txt
+#
+# Update procedure: bump the pin, re-run `pytest tests/`, commit the
+# new pin only if all tests pass. Dependabot (CHUNK C13) will open
+# PRs that propose bumps.
+#
+# Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §C1
+
+# Token counting (used by L4, L12, scoring) — currently tested with 0.12.0
+tiktoken==0.12.0
+
+# Optional LLM compression (L9) — currently tested with 0.96.0
+anthropic==0.96.0
