@@ -260,13 +260,28 @@ def load_tree():
 
 
 def save_tree(tree):
-    """Save tree metadata (atomic write via tempfile + rename). H12: file locked."""
+    """Save tree metadata (atomic write via tempfile + rename). H12: file locked.
+
+    CHUNK B1 (2026-05-08): hard-fail on lock timeout instead of proceeding.
+    Two concurrent save_tree calls that both pass a soft warning and both
+    write a tempfile race on os.replace -> second wins, first writer's
+    changes silently lost. Raise TimeoutError so the caller can retry.
+    """
     import tempfile, os
     tree["updated"] = time.strftime("%Y-%m-%d")
     _m.TREE_DIR.mkdir(parents=True, exist_ok=True)
     lock_f, acquired = _tree_lock(_m.TREE_META)
     if not acquired:
-        print("WARNING: tree lock timeout on save_tree, proceeding anyway", file=sys.stderr)
+        # Cleanup the lock file handle if one was opened
+        try:
+            if lock_f is not None:
+                lock_f.close()
+        except Exception:
+            pass
+        raise TimeoutError(
+            f"save_tree could not acquire {_m.TREE_META}.lock within timeout. "
+            "Another writer holds it; retry or wait."
+        )
     try:
         fd, tmp_path = tempfile.mkstemp(
             dir=str(_m.TREE_DIR), suffix=".tmp", prefix="tree_"
