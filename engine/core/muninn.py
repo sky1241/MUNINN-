@@ -1573,6 +1573,40 @@ def main():
         _REPO_PATH = Path(args.repo).resolve()
         _refresh_tree_paths()
 
+    # CHUNK E6 (2026-05-08): wire A3 check_integrity() at boot.
+    # Pre-fix: A3 helper existed but was only called via `muninn doctor`.
+    # If Sky never ran doctor, mycelium.db corruption stayed silent
+    # until queries returned wrong data. Now every CLI command (except
+    # init/doctor — see exemptions) runs a quick integrity check at
+    # boot and warns stderr on failure.
+    # Override with MUNINN_SKIP_INTEGRITY=1 if needed (e.g. tests on
+    # garbage DBs).
+    if (args.command not in ("init", "doctor")
+            and os.environ.get("MUNINN_SKIP_INTEGRITY") != "1"):
+        db_path = (_REPO_PATH or Path.cwd()) / ".muninn" / "mycelium.db"
+        if db_path.exists():
+            try:
+                from mycelium_db import MyceliumDB
+                _db = MyceliumDB(db_path)
+                ok, msg = _db.check_integrity()
+                if not ok:
+                    print(f"WARNING: mycelium.db integrity_check failed: {msg}",
+                          file=sys.stderr)
+                    print("  Run `muninn doctor` for full diagnostic, or set "
+                          "MUNINN_SKIP_INTEGRITY=1 to bypass.",
+                          file=sys.stderr)
+            except Exception as _ic_exc:
+                # MyceliumDB() itself can crash on garbage DB
+                # (sqlite3.DatabaseError "file is not a database").
+                # That's still a corruption signal — surface it
+                # instead of swallowing.
+                print(f"WARNING: mycelium.db integrity_check failed: "
+                      f"{type(_ic_exc).__name__}: {_ic_exc}",
+                      file=sys.stderr)
+                print("  Run `muninn doctor` for full diagnostic, or set "
+                      "MUNINN_SKIP_INTEGRITY=1 to bypass.",
+                      file=sys.stderr)
+
     if args.command == "init":
         # Full one-shot setup: tree + hooks + register
         # Works on any repo: cd /path/to/repo && muninn init
