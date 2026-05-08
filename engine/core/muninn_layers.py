@@ -1323,11 +1323,20 @@ def _llm_compress(text: str, context: str = "") -> str:
         return text
 
 
+# CHUNK C3 (2026-05-08): cap to prevent OOM on huge inputs.
+# Pre-fix: compress_file did `read_text()` unconditionally; a 100 MB
+# file would push 100 MB into RAM just to enter the L0-L11 pipeline.
+# Each regex layer then briefly doubled the working set. The cap is
+# overridable via the MUNINN_MAX_COMPRESS_BYTES env var for opt-in
+# heavy workloads.
+_MAX_COMPRESS_FILE_BYTES = 50 * 1024 * 1024  # 50 MB default cap
+
+
 def compress_file(filepath: Path) -> str:
     """Top-level compression entry point: read file, run full L0-L11 pipeline.
 
     Pipeline order (Brick 6 wired L12 BudgetMem after secret redaction):
-      1. Read file as UTF-8
+      1. Read file as UTF-8 (CHUNK C3: refuses files above the cap)
       2. P10 secret redaction
       3. L12 BudgetMem chunk selection (opt-in via MUNINN_L12_BUDGET)
       4. Section split on `##` headers
@@ -1336,10 +1345,27 @@ def compress_file(filepath: Path) -> str:
       7. L10 cue distillation
       8. L11 rule extraction
       9. L9 LLM self-compress (optional, costs API)
-    Returns the compressed text. Empty string on read failure.
+    Returns the compressed text. Empty string on read failure or
+    when filepath exceeds the size cap.
     """
+    import os
     filepath = Path(filepath)
     if not filepath.exists():
+        return ""
+    # CHUNK C3: refuse files above the cap.
+    try:
+        size = filepath.stat().st_size
+    except OSError:
+        size = 0
+    cap = int(os.environ.get("MUNINN_MAX_COMPRESS_BYTES", _MAX_COMPRESS_FILE_BYTES))
+    if size > cap:
+        import sys
+        print(
+            f"[MUNINN] compress_file: {filepath.name} too large "
+            f"({size:,} bytes > cap {cap:,}); skipping. "
+            f"Override via MUNINN_MAX_COMPRESS_BYTES env var.",
+            file=sys.stderr,
+        )
         return ""
     try:
         text = filepath.read_text(encoding="utf-8")
