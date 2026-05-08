@@ -1381,23 +1381,32 @@ class Mycelium:
             related.sort(key=lambda x: x[1], reverse=True)
             return related[:top_n]
         else:
-            conns = self.data["connections"]
-            related = []
-            for key, val in conns.items():
-                parts = key.split("|")
-                if len(parts) != 2:
-                    continue
-                if concept in parts:
-                    other = parts[1] if parts[0] == concept else parts[0]
-                    if other in hub_set:
+            # CHUNK D2 (2026-05-08): pre-index conns by concept so
+            # subsequent get_related() calls don't re-scan the entire
+            # connections dict (was O(E) per query). Lazy build, cached
+            # on the instance, invalidated by setting _adj_index_json
+            # to None after observe()/save().
+            if not hasattr(self, "_adj_index_json") or self._adj_index_json is None:
+                idx: dict[str, list[tuple[str, str, dict]]] = {}
+                for key, val in self.data["connections"].items():
+                    parts = key.split("|")
+                    if len(parts) != 2:
                         continue
-                    if self.federated:
-                        weight = self.effective_weight(key)
-                        if "zones" in val and self.zone in val["zones"]:
-                            weight *= 2.0
-                    else:
-                        weight = float(val["count"])
-                    related.append((other, weight))
+                    a, b = parts
+                    idx.setdefault(a, []).append((b, key, val))
+                    idx.setdefault(b, []).append((a, key, val))
+                self._adj_index_json = idx
+            related = []
+            for other, key, val in self._adj_index_json.get(concept, []):
+                if other in hub_set:
+                    continue
+                if self.federated:
+                    weight = self.effective_weight(key)
+                    if "zones" in val and self.zone in val["zones"]:
+                        weight *= 2.0
+                else:
+                    weight = float(val["count"])
+                related.append((other, weight))
             related.sort(key=lambda x: x[1], reverse=True)
             return related[:top_n]
 
