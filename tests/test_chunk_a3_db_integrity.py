@@ -17,14 +17,27 @@ from pathlib import Path
 
 import pytest
 
-ENGINE_CORE = Path(__file__).resolve().parent.parent / "engine" / "core"
-if str(ENGINE_CORE) not in sys.path:
-    sys.path.insert(0, str(ENGINE_CORE))
+# BUG-091 shim/path collision: when other tests load engine/core/mycelium_db
+# under the bare name, `from muninn.mycelium_db import` triggers a circular
+# import in the shim. Workaround: load the module under a unique name via
+# importlib.util.spec_from_file_location so it never collides.
+def _load_mycelium_db_class():
+    """Load MyceliumDB class from engine/core/mycelium_db.py under a unique name."""
+    repo = Path(__file__).resolve().parent.parent
+    engine_core = repo / "engine" / "core"
+    if str(engine_core) not in sys.path:
+        sys.path.insert(0, str(engine_core))
+    import importlib.util
+    src = engine_core / "mycelium_db.py"
+    spec = importlib.util.spec_from_file_location("_chunk_a3_isolated_mycelium_db", src)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.MyceliumDB
 
 
 def test_check_integrity_returns_ok_on_fresh_db(tmp_path):
     """Fresh empty DB must report integrity OK."""
-    from mycelium_db import MyceliumDB
+    MyceliumDB = _load_mycelium_db_class()
     db = MyceliumDB(tmp_path / "fresh.db")
     if not hasattr(db, "check_integrity"):
         pytest.skip("check_integrity helper not yet implemented (pre-fix)")
@@ -35,7 +48,7 @@ def test_check_integrity_returns_ok_on_fresh_db(tmp_path):
 
 def test_check_integrity_after_writes(tmp_path):
     """DB with writes must still report OK after checkpoint."""
-    from mycelium_db import MyceliumDB
+    MyceliumDB = _load_mycelium_db_class()
     db = MyceliumDB(tmp_path / "with_writes.db")
     if not hasattr(db, "check_integrity"):
         pytest.skip("check_integrity helper not yet implemented (pre-fix)")
@@ -51,7 +64,7 @@ def test_check_integrity_detects_garbage_file(tmp_path):
     Note: sqlite3.connect() may not raise on garbage; integrity_check is
     the layer that catches it.
     """
-    from mycelium_db import MyceliumDB
+    MyceliumDB = _load_mycelium_db_class()
     bad = tmp_path / "garbage.db"
     bad.write_bytes(b"NOT A SQLITE FILE - JUST BYTES" * 10)
 
@@ -71,7 +84,7 @@ def test_check_integrity_detects_garbage_file(tmp_path):
 
 def test_check_integrity_detects_truncated(tmp_path):
     """A truncated DB (mid-write kill simulation) must fail integrity."""
-    from mycelium_db import MyceliumDB
+    MyceliumDB = _load_mycelium_db_class()
 
     # Create a valid DB then truncate it
     good = tmp_path / "good.db"
@@ -108,7 +121,7 @@ def test_check_integrity_detects_truncated(tmp_path):
 
 def test_check_integrity_runs_wal_checkpoint(tmp_path):
     """Calling check_integrity should trigger a WAL checkpoint (merge WAL into main DB)."""
-    from mycelium_db import MyceliumDB
+    MyceliumDB = _load_mycelium_db_class()
     db = MyceliumDB(tmp_path / "wal_check.db")
     if not hasattr(db, "check_integrity"):
         pytest.skip("check_integrity helper not yet implemented (pre-fix)")

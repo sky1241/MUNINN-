@@ -1116,6 +1116,35 @@ def _log_sync_error(context: str, exc: BaseException) -> None:
         pass
 
 
+# CHUNK A4 (2026-05-08): whitelist for transcript_path validation.
+# Claude Code stores transcripts under ~/.claude/projects/<encoded>/<uuid>.jsonl.
+# Refusing anything outside this root prevents a malicious hook payload from
+# making Muninn read /etc/passwd, ~/.ssh/*, or any other arbitrary file.
+# Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §A4
+_TRANSCRIPT_ROOT = (Path.home() / ".claude" / "projects").resolve()
+
+
+def _validate_transcript_path(p: Path) -> bool:
+    """Return True iff `p` resolves to a path under _TRANSCRIPT_ROOT.
+
+    Resolves symlinks and `..` segments before the comparison so that
+    `projects/../outside.jsonl` is correctly rejected.
+    """
+    try:
+        resolved = Path(p).resolve()
+    except (OSError, RuntimeError):
+        return False
+    try:
+        return resolved.is_relative_to(_TRANSCRIPT_ROOT)
+    except AttributeError:
+        # Python < 3.9 fallback (not needed for 3.13 but cheap)
+        try:
+            resolved.relative_to(_TRANSCRIPT_ROOT)
+            return True
+        except ValueError:
+            return False
+
+
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
     hook_event = "PreCompact/SessionEnd"
@@ -1137,6 +1166,11 @@ def feed_from_hook(repo_path: Path):
         sys.exit(1)
 
     jsonl_path = Path(transcript_path)
+    # CHUNK A4: refuse anything outside ~/.claude/projects/
+    if not _validate_transcript_path(jsonl_path):
+        print(f"MUNINN {hook_event}: transcript_path refused (outside {_TRANSCRIPT_ROOT}): "
+              f"{_m._safe_path(jsonl_path)}", file=sys.stderr)
+        sys.exit(1)
     if not jsonl_path.exists():
         print(f"MUNINN {hook_event}: transcript not found: {_m._safe_path(jsonl_path)}", file=sys.stderr)
         sys.exit(1)
