@@ -3476,6 +3476,43 @@ def doctor():
     except Exception as e:
         _warn("hook_errors.log check skipped", str(e)[:120])
 
+    # 18. Optional layer status (CHUNK D12 wired E2)
+    # Pre-fix: muninn_layers.health() was defined but never called in
+    # production — flagged dead by test_brick19. Wiring it into doctor
+    # surfaces lexicons/dedup/budget_select/L9 status to the user.
+    try:
+        if _m._CORE_DIR not in sys.path:
+            sys.path.insert(0, _m._CORE_DIR)
+        from muninn_layers import health as _layers_health
+        h = _layers_health()
+        for k, v in h.items():
+            if v:
+                _ok(f"layer.{k} active")
+            else:
+                _warn(f"layer.{k} unavailable")
+    except Exception as e:
+        _warn("layers.health() skipped", str(e)[:120])
+
+    # 19. Anomalies log purge (CHUNK D7 wired E2)
+    # Pre-fix: purge_old_anomalies() existed but no caller. Wiring it
+    # into doctor cleans up ~/.muninn/anomalies.jsonl on every health
+    # check (cheap operation; idempotent).
+    try:
+        if _m._CORE_DIR not in sys.path:
+            sys.path.insert(0, _m._CORE_DIR)
+        from cube_analysis import purge_old_anomalies
+        anomalies_path = Path.home() / ".muninn" / "anomalies.jsonl"
+        if anomalies_path.exists():
+            n_purged = purge_old_anomalies(str(anomalies_path), max_age_days=7)
+            if n_purged > 0:
+                _ok(f"anomalies purged: {n_purged} stale entries removed (>7d)")
+            else:
+                _ok("anomalies.jsonl: no stale entries")
+        else:
+            _ok("anomalies.jsonl absent (clean)")
+    except Exception as e:
+        _warn("anomalies purge skipped", str(e)[:120])
+
     # Summary
     print(f"\n{'='*40}")
     if fail_count == 0:
