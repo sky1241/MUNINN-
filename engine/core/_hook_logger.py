@@ -25,6 +25,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 DEFAULT_LOG_PATH = Path.home() / ".muninn" / "hook_errors.log"
+# CHUNK D9 (2026-05-08): separate log for engine events so hook audit
+# trail stays focused on hook lifecycle issues.
+DEFAULT_ENGINE_LOG_PATH = Path.home() / ".muninn" / "engine_events.log"
 DEFAULT_MAX_BYTES = 1_000_000  # 1 MB
 DEFAULT_BACKUP_COUNT = 3
 
@@ -112,4 +115,74 @@ def log_hook_event(
         pass
 
 
-__all__ = ["log_hook_event", "DEFAULT_LOG_PATH", "DEFAULT_MAX_BYTES", "DEFAULT_BACKUP_COUNT"]
+# CHUNK D9 (2026-05-08): centralised logger primitives for engine code.
+# Replaces the scattered `try: ... except Exception as e: log_hook_event(...)`
+# boilerplate that has accumulated since A8.
+
+def log_engine_event(
+    source: str,
+    context: str,
+    exc: BaseException,
+    log_path: Path | None = None,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+    backup_count: int = DEFAULT_BACKUP_COUNT,
+) -> None:
+    """Same as log_hook_event but defaults to ~/.muninn/engine_events.log.
+
+    Use this for non-hook engine code paths so the hook audit trail
+    stays focused on Claude Code lifecycle issues.
+    """
+    target = Path(log_path) if log_path is not None else DEFAULT_ENGINE_LOG_PATH
+    log_hook_event(source, context, exc,
+                   log_path=target,
+                   max_bytes=max_bytes,
+                   backup_count=backup_count)
+
+
+import contextlib  # noqa: E402 — placed near its consumer for locality
+
+
+@contextlib.contextmanager
+def swallow(
+    source: str,
+    context: str,
+    log_path: Path | None = None,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+    backup_count: int = DEFAULT_BACKUP_COUNT,
+):
+    """Context manager: catch any Exception in the block and log it.
+
+    KeyboardInterrupt and SystemExit always propagate (BaseException
+    subclasses that should never be swallowed by application code).
+
+    Usage:
+        from _hook_logger import swallow
+        with swallow("cube_providers", "_query_mycelium"):
+            return mycelium.spread_activation(...)
+        # Execution continues here even if spread_activation raised.
+
+    Args mirror log_engine_event so callers can override the file.
+    Default log_path is DEFAULT_ENGINE_LOG_PATH (engine_events.log)
+    so this primitive doesn't pollute the hook audit trail.
+    """
+    target = Path(log_path) if log_path is not None else DEFAULT_ENGINE_LOG_PATH
+    try:
+        yield
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:
+        log_hook_event(source, context, exc,
+                       log_path=target,
+                       max_bytes=max_bytes,
+                       backup_count=backup_count)
+
+
+__all__ = [
+    "log_hook_event",
+    "log_engine_event",
+    "swallow",
+    "DEFAULT_LOG_PATH",
+    "DEFAULT_ENGINE_LOG_PATH",
+    "DEFAULT_MAX_BYTES",
+    "DEFAULT_BACKUP_COUNT",
+]
