@@ -3422,6 +3422,49 @@ def doctor():
         if any_missing:
             _warn("Run 'muninn doctor --fix' to auto-install missing formatters")
 
+    # CHUNK B11 (2026-05-08): integrate Phase A/B fixes into doctor.
+
+    # 15. DB integrity check (CHUNK A3)
+    if db_path and db_path.exists():
+        try:
+            if _m._CORE_DIR not in sys.path:
+                sys.path.insert(0, _m._CORE_DIR)
+            from mycelium_db import MyceliumDB
+            mdb = MyceliumDB(db_path)
+            ok, msg = mdb.check_integrity()
+            if ok:
+                _ok("DB integrity_check", "ok")
+            else:
+                _fail("DB integrity_check", msg[:120])
+        except Exception as e:
+            _warn("DB integrity_check skipped", str(e)[:120])
+
+    # 16. Cleanup stale .tmp / .lock files (CHUNK B4)
+    try:
+        n_removed = cleanup_tmp_files()
+        if n_removed > 0:
+            _ok(f"cleanup: removed {n_removed} stale .tmp/.lock file(s)")
+        else:
+            _ok("cleanup: no stale .tmp/.lock files")
+    except Exception as e:
+        _warn("cleanup skipped", str(e)[:120])
+
+    # 17. Hook log size (CHUNK A8 surface)
+    try:
+        log_path = Path.home() / ".muninn" / "hook_errors.log"
+        if log_path.exists():
+            size = log_path.stat().st_size
+            size_mb = size / (1024 * 1024)
+            if size > 1_000_000:
+                _warn(f"hook_errors.log large: {size_mb:.1f} MB",
+                      "consider archiving (rotation handles future growth)")
+            else:
+                _ok(f"hook_errors.log size: {size_mb:.2f} MB")
+        else:
+            _ok("hook_errors.log absent (clean)")
+    except Exception as e:
+        _warn("hook_errors.log check skipped", str(e)[:120])
+
     # Summary
     print(f"\n{'='*40}")
     if fail_count == 0:
