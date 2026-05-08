@@ -57,13 +57,25 @@ def test_manifest_exists():
     )
 
 
+def _resolve_manifest_path(fname: str) -> Path:
+    """CHUNK E3 (2026-05-08): manifest now stores repo-relative paths
+    (`.claude/hooks/bridge_hook.py`) so `sha256sum -c hooks.sha256sum`
+    works from the repo root. We resolve those paths against REPO,
+    falling back to bare-name lookup for backwards compatibility."""
+    if fname.startswith(".claude/"):
+        return REPO / fname
+    return HOOKS_DIR / fname
+
+
 def test_manifest_covers_all_hooks():
     """Every *.py file in hooks/ must have an entry in the manifest."""
     if not MANIFEST.exists():
         pytest.skip("manifest not yet generated")
     expected = _parse_manifest(MANIFEST.read_text())
     actual_files = {p.name for p in HOOKS_DIR.glob("*.py")}
-    missing = actual_files - set(expected.keys())
+    # Manifest may use bare or repo-relative paths
+    expected_basenames = {Path(k).name for k in expected.keys()}
+    missing = actual_files - expected_basenames
     assert not missing, f"Hooks without manifest entry: {sorted(missing)}"
 
 
@@ -74,15 +86,48 @@ def test_every_hook_matches_its_sha():
     expected = _parse_manifest(MANIFEST.read_text())
     mismatches = []
     for fname, expected_sha in expected.items():
-        path = HOOKS_DIR / fname
+        path = _resolve_manifest_path(fname)
         if not path.exists():
-            mismatches.append((fname, "missing on disk"))
+            mismatches.append((fname, f"missing on disk (resolved {path})"))
             continue
         actual_sha = _sha256_of(path)
         if actual_sha != expected_sha:
             mismatches.append((fname, f"expected {expected_sha[:12]}, got {actual_sha[:12]}"))
     assert not mismatches, f"Hook checksum mismatches:\n  " + "\n  ".join(
         f"{f}: {m}" for f, m in mismatches
+    )
+
+
+def test_manifest_uses_repo_relative_paths():
+    """CHUNK E3: paths in the manifest must be repo-relative
+    (`.claude/hooks/<name>.py`) so `sha256sum -c .claude/hooks/hooks.sha256sum`
+    works from the repo root without `cd`-dance."""
+    if not MANIFEST.exists():
+        pytest.skip("manifest not yet generated")
+    expected = _parse_manifest(MANIFEST.read_text())
+    bare = [k for k in expected.keys() if not k.startswith(".claude/")]
+    assert not bare, (
+        f"Manifest still has bare-name paths (sha256sum -c fails from repo root): "
+        f"{bare[:3]}. Regenerate via:\n"
+        f"  cd /home/sky/Bureau/MUNINN- && sha256sum .claude/hooks/*.py "
+        f"> .claude/hooks/hooks.sha256sum"
+    )
+
+
+def test_sha256sum_check_passes_from_repo_root(tmp_path):
+    """End-to-end: `sha256sum -c .claude/hooks/hooks.sha256sum` must
+    succeed when invoked from the repo root."""
+    import subprocess
+    if not MANIFEST.exists():
+        pytest.skip("manifest not yet generated")
+    result = subprocess.run(
+        ["sha256sum", "-c", str(MANIFEST.relative_to(REPO))],
+        capture_output=True, text=True, cwd=str(REPO)
+    )
+    assert result.returncode == 0, (
+        f"sha256sum -c failed from repo root:\n"
+        f"stdout: {result.stdout[-500:]}\n"
+        f"stderr: {result.stderr[-500:]}"
     )
 
 
