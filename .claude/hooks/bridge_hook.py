@@ -55,9 +55,16 @@ def _has_char_diversity(s):
     if re.search(r'[^a-zA-Z0-9\s]', s): classes += 1
     return classes >= 3
 
+# CHUNK A6 (2026-05-08): word boundaries + tighter entropy threshold to
+# reduce cry-wolf false positives observed live during the audit session.
+# - `\b` boundaries so "secret" matches the word, not "secretariat".
+# - Removed bare `auth` (too common in technical prose); kept `auth_token`,
+#   `api_key` (still matched via `api.?key`).
+# - Entropy threshold raised 2.8 -> 3.5 in the trigger-adjacent path
+#   (real passwords/hashes are ~3.5+; common English words are ~2.0-2.8).
 _SECRET_TRIGGERS = re.compile(
-    r'(?:cl[eé]|key|password|mdp|mot de passe|passwd|secret|token|passphrase'
-    r'|api.?key|credentials?|auth)',
+    r'\b(?:cl[eé]|password|mdp|mot de passe|passwd|secret|passphrase'
+    r'|api.?key|credentials?|auth_token|auth_key)\b',
     re.IGNORECASE
 )
 
@@ -74,11 +81,12 @@ def _check_secrets(prompt):
             return "[MUNINN SENTINEL] API key/token detected in your message. It will be stored in the Claude transcript. Consider rotating it."
 
     # 2. Check for password-like strings near trigger words
+    # A6: tightened entropy threshold from 2.8 -> 3.5 to avoid common words
     if _SECRET_TRIGGERS.search(prompt):
         words = prompt.split()
         for word in words:
             clean = word.strip('.,;:!?\'"/()[]{}')
-            if len(clean) >= 6 and _has_char_diversity(clean) and _shannon_entropy(clean) > 2.8:
+            if len(clean) >= 6 and _has_char_diversity(clean) and _shannon_entropy(clean) > 3.5:
                 return "[MUNINN SENTINEL] You may have typed a password or secret in your message. It will be recorded in the Claude transcript (.jsonl). Consider changing it. Muninn will redact it from .mn files but CANNOT erase it from the raw transcript."
 
     # 3. Standalone high-entropy check (no trigger needed) for very suspicious strings
