@@ -18,7 +18,15 @@ Usage:
     python muninn.py feed [--history]           # Nourrit le mycelium depuis transcripts
     python muninn.py verify <fichier>          # Verifie qualite compression (facts, ratio)
 """
-__version__ = "0.9.1"
+# CHUNK C8/D10 (2026-05-08): single source of truth = pyproject.toml.
+try:
+    from importlib.metadata import version as _pkg_version, PackageNotFoundError
+    try:
+        __version__ = _pkg_version("muninn")
+    except PackageNotFoundError:
+        __version__ = "0.9.2"  # checkout fallback (sync with pyproject.toml)
+except Exception:
+    __version__ = "0.9.2"
 
 import argparse
 import hashlib
