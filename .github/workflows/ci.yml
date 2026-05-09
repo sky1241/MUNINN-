@@ -274,3 +274,42 @@ jobs:
 
           print("OK Feed tests pass")
           EOF
+
+  forge_smoke:
+    runs-on: ubuntu-latest
+    name: forge --gen-props (smoke per engine/core module)
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install forge-shield + deps
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography
+          python3 -m pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
+      - name: Generate property tests for every engine/core module (forge --gen-props)
+        run: |
+          # CHUNK D8 (H4.2): smoke-run forge --gen-props on every critical
+          # engine/core module — catches BUG-101/102/105/106-class bugs early.
+          for f in engine/core/muninn_tree.py \
+                   engine/core/muninn_layers.py \
+                   engine/core/muninn_feed.py \
+                   engine/core/mycelium_db.py \
+                   engine/core/mycelium.py \
+                   engine/core/_secrets.py \
+                   engine/core/cube.py \
+                   engine/core/cube_providers.py \
+                   engine/core/cube_analysis.py \
+                   engine/core/sync_backend.py \
+                   engine/core/_hook_logger.py
+          do
+              echo "::group::forge --gen-props $f"
+              forge --gen-props "$f" || exit 1
+              echo "::endgroup::"
+          done
+      - name: Run all generated property tests (test_props_*.py)
+        run: |
+          pytest tests/test_props_*.py -q --tb=short
