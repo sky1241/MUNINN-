@@ -1590,7 +1590,7 @@ def _get_forge_risks(forge_root: str) -> dict:
     import io
     import contextlib
     try:
-        from engine.core.forge import predict_defects
+        from forge import predict_defects  # PyPI forge-shield 1.1.0+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             predict_defects(Path(forge_root))

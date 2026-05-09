@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 from hypothesis import given, strategies as st, settings
-from engine.core.forge import *
+from forge import *  # PyPI forge-shield 1.1.0+
 # forge: the following functions were SKIPPED because they have
 # side effects (write to disk, run subprocess, hit network).
 # Fuzzing them without isolation would corrupt the repo.

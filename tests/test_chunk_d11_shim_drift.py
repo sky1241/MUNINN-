@@ -97,7 +97,6 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
         "muninn",         # CLI entry point; muninn/ package itself wraps it
         "wal_monitor",    # internal mycelium_db helper
         "scanner",        # standalone tool tree
-        "forge",          # standalone repo at /home/sky/Bureau/forge/, BUG-091 plan
         "forge_metrics",  # F6 (2026-05-09): pure subprocess wrapper for forge-shield
                           # binary; UI imports via engine.core.forge_metrics directly,
                           # no muninn/ shim needed (no internal engine/core consumer).
