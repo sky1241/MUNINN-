@@ -108,6 +108,11 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
         "mycelium_zones", # H6 chunk 2 (2026-05-09): _MyceliumZonesMixin extracted —
                           # detect_zones / auto_label_zones / get_zones / get_bridges /
                           # _graph_entropy / _bfs_zones. Same justification.
+        "mycelium_activation",  # H6 chunk 3 (2026-05-09): _MyceliumActivationMixin —
+                                # spread_activation / transitive_inference / get_related /
+                                # adaptive_hops / _build_adj_cache / _build_adj_subgraph /
+                                # _dynamic_degree_percentile / _get_high_degree_concepts.
+                                # Same justification.
     }
     for name in engine_files:
         if name in engine_only:

@@ -50,16 +50,27 @@ def _load_mycelium_class():
 
 def test_no_double_union_all_in_get_high_degree():
     """Static check: only ONE `UNION ALL` (or zero) inside the
-    `_get_high_degree_concepts` body block, not two."""
-    src = (REPO / "engine" / "core" / "mycelium.py").read_text()
-    # Grab the function body
+    `_get_high_degree_concepts` body block, not two.
+
+    H6 chunk 3 (2026-05-09): the function lives in mycelium_activation.py
+    now. We try mycelium.py first (back-compat) then mycelium_activation.py.
+    """
     import re
+    src = ""
+    for fname in ("mycelium_activation.py", "mycelium.py"):
+        candidate = REPO / "engine" / "core" / fname
+        if candidate.exists():
+            text = candidate.read_text()
+            if "def _get_high_degree_concepts" in text:
+                src = text
+                break
+    assert src, "could not find _get_high_degree_concepts in any mycelium*.py"
     m = re.search(
         r"def _get_high_degree_concepts.*?(?=\n    def |\nclass |\Z)",
         src,
         re.DOTALL,
     )
-    assert m is not None, "could not locate _get_high_degree_concepts in source"
+    assert m is not None, "could not locate _get_high_degree_concepts body"
     body = m.group(0)
     n_union = body.upper().count("UNION ALL")
     assert n_union <= 1, (
