@@ -1063,6 +1063,107 @@ def compute_ncd(a: str, b: str) -> float:
 
 # ─── B42: Line-by-line reconstruction ───────────────────────────────
 
+def _build_anchor_map(ast_hints: dict | None, n_lines: int) -> dict[int, str]:
+    """0-indexed map of (line_idx → forced text) from ast_hints first_line +
+    last_line + anchors. Used by reconstruct_line_by_line for gap-skipping."""
+    anchor_map: dict[int, str] = {}
+    if not ast_hints:
+        return anchor_map
+    if ast_hints.get('first_line'):
+        anchor_map[0] = ast_hints['first_line']
+    if ast_hints.get('last_line'):
+        anchor_map[n_lines - 1] = ast_hints['last_line']
+    if ast_hints.get('anchors'):
+        for line_num, line_text in ast_hints['anchors']:
+            idx = line_num - 1
+            if 0 <= idx < n_lines:
+                anchor_map[idx] = line_text
+    return anchor_map
+
+
+def _build_compact_hints(ast_hints: dict | None) -> str:
+    """Single 'hints' suffix line for the per-gap prompt — packs ids/strings/
+    types/related/pkgs/const fields into a `key: val | key: val` format."""
+    if not ast_hints:
+        return ""
+    parts: list[str] = []
+    if ast_hints.get('identifiers'):
+        parts.append(f"ids: {', '.join(ast_hints['identifiers'][:15])}")
+    if ast_hints.get('strings'):
+        parts.append(f"str: {', '.join(repr(s) for s in ast_hints['strings'][:5])}")
+    if ast_hints.get('type_sigs'):
+        parts.append(f"types: {'; '.join(ast_hints['type_sigs'][:5])}")
+    if ast_hints.get('mycelium_related'):
+        parts.append(f"related: {', '.join(ast_hints['mycelium_related'][:5])}")
+    if ast_hints.get('deduced_imports'):
+        parts.append(f"pkgs: {', '.join(ast_hints['deduced_imports'][:10])}")
+    if ast_hints.get('constant_lines'):
+        for cl in ast_hints['constant_lines'][:3]:
+            parts.append(f"const: {cl.strip()}")
+    return " | ".join(parts)
+
+
+def _fill_one_gap_with_retries(provider: LLMProvider, *, line_before: str,
+                                line_after: str, target_line: str,
+                                ast_hints: dict | None,
+                                max_retries: int = 11) -> str:
+    """Die-and-retry on a single gap line. Returns the best candidate found
+    (highest expected-word match ratio, with early SHA exact-match exit).
+
+    `target_line` is the original (pre-destruction) text used solely to score
+    candidates — never sent to the LLM."""
+    expected_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', target_line))
+    gap_strings: list[str] = []
+    if ast_hints and ast_hints.get('strings'):
+        gap_strings = [s for s in ast_hints['strings'] if s in target_line]
+
+    schedule = _annealing_schedule(max_retries)
+    hints_suffix = _build_compact_hints(ast_hints)
+
+    best_line, best_score, feedback = '', 0.0, ''
+    for retry in range(max_retries):
+        prompt = (f"{line_before}\n<FILL 1 line>\n{line_after}\n"
+                  "Write the 1 missing line. Output ONLY code, no fences.")
+        if gap_strings:
+            prompt += f"\nThis line must contain: {', '.join(repr(s) for s in gap_strings)}"
+        if hints_suffix:
+            prompt += "\n" + hints_suffix
+        if feedback:
+            prompt += f"\n{feedback}"
+
+        try:
+            raw = provider.generate(prompt, max_tokens=100, temperature=schedule[retry])
+        except Exception:
+            continue
+        cleaned = raw.strip().split('\n', 1)[0]
+        if cleaned.startswith('```'):
+            cleaned = cleaned.lstrip('`').strip()
+
+        output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', cleaned))
+        if expected_words:
+            score = len(expected_words & output_words) / len(expected_words)
+        else:
+            score = 1.0 if not cleaned.strip() else 0.5
+
+        if score > best_score:
+            best_score, best_line = score, cleaned
+
+        if cleaned == target_line:
+            return cleaned  # exact SHA match, stop early
+
+        missing = sorted(expected_words - output_words)
+        extra = sorted(output_words - expected_words -
+                       {'if', 'else', 'for', 'return', 'true', 'false', 'nil', 'none'})
+        fb_parts: list[str] = []
+        if missing:
+            fb_parts.append(f"Add: {', '.join(missing[:5])}")
+        if extra:
+            fb_parts.append(f"Remove: {', '.join(extra[:3])}")
+        feedback = ' | '.join(fb_parts) if fb_parts else ''
+
+    return best_line
+
+
 def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
                               provider: LLMProvider,
                               ast_hints: dict | None = None,
@@ -1070,9 +1171,9 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
     """
     B42: Reconstruct each gap line independently.
 
-    Instead of filling all gaps at once (model loses track),
-    fill ONE gap at a time between two known anchor lines.
-    Each call = 1 line of output. Trivially easy for the model.
+    Instead of filling all gaps at once (model loses track), fill ONE
+    gap at a time between two known anchor lines. Each call = 1 line
+    of output. Trivially easy for the model.
 
     Language-agnostic: works on any code.
     """
@@ -1082,7 +1183,7 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
         try:
             from engine.core.cube import normalize_content as _nc
         except ImportError:
-            _nc = lambda t: t.strip()
+            _nc = lambda t: t.strip()  # noqa: E731
 
     orig_lines = _nc(cube.content).split('\n')
     n_lines = len(orig_lines)
@@ -1097,135 +1198,30 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
                 ast_hints = dict(ast_hints)
                 ast_hints['mycelium_related'] = new_ids[:10]
 
-    # Build anchor map
-    anchor_map = {}
-    if ast_hints:
-        if ast_hints.get('first_line'):
-            anchor_map[0] = ast_hints['first_line']
-        if ast_hints.get('last_line'):
-            anchor_map[n_lines - 1] = ast_hints['last_line']
-        if ast_hints.get('anchors'):
-            for line_num, line_text in ast_hints['anchors']:
-                idx = line_num - 1
-                if 0 <= idx < n_lines:
-                    anchor_map[idx] = line_text
+    anchor_map = _build_anchor_map(ast_hints, n_lines)
 
-    # Sort neighbors by line position
+    # Sort neighbors by line position for context fallback on edge gaps
     same_file = [n for n in neighbors if n.file_origin == cube.file_origin]
     before = sorted([n for n in same_file if n.line_end <= cube.line_start],
                     key=lambda c: c.line_start)
     after = sorted([n for n in same_file if n.line_start >= cube.line_end],
                    key=lambda c: c.line_start)
-
-    # Context for edge gaps
     context_before = "\n".join(c.content for c in before[-2:]) if before else ""
     context_after = "\n".join(c.content for c in after[:2]) if after else ""
 
-    # Annealing schedule for retries per gap
-    max_retries = 11
-    gap_schedule = _annealing_schedule(max_retries)
-
     # Build result: anchors forced, gaps filled one by one with retry
-    result_lines = [''] * n_lines
+    result_lines: list[str] = [''] * n_lines
     for idx in range(n_lines):
         if idx in anchor_map:
             result_lines[idx] = anchor_map[idx]
             continue
-
-        # This is a gap — fill with die-and-retry
         line_before = result_lines[idx - 1] if idx > 0 else (
             context_before.split('\n')[-1] if context_before else '')
         line_after = anchor_map.get(idx + 1, '') if idx + 1 < n_lines else (
             context_after.split('\n')[0] if context_after else '')
-
-        # Which identifiers SHOULD appear on this line?
-        # Use the original line to check (we have it pre-destruction)
-        expected_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', orig_lines[idx]))
-
-        # Which strings appear on this specific gap line?
-        gap_strings = []
-        if ast_hints and ast_hints.get('strings'):
-            for s in ast_hints['strings']:
-                if s in orig_lines[idx]:
-                    gap_strings.append(s)
-
-        best_line = ''
-        best_score = 0.0  # % of expected words matched
-        feedback = ''
-
-        for retry in range(max_retries):
-            temp = gap_schedule[retry]
-
-            # Build prompt — include ALL hints + per-gap string placement
-            prompt = f"{line_before}\n<FILL 1 line>\n{line_after}\n"
-            prompt += "Write the 1 missing line. Output ONLY code, no fences."
-
-            # Tell the model which strings go on THIS line
-            if gap_strings:
-                prompt += f"\nThis line must contain: {', '.join(repr(s) for s in gap_strings)}"
-
-            # All hints compact
-            hint_parts = []
-            if ast_hints:
-                if ast_hints.get('identifiers'):
-                    hint_parts.append(f"ids: {', '.join(ast_hints['identifiers'][:15])}")
-                if ast_hints.get('strings'):
-                    hint_parts.append(f"str: {', '.join(repr(s) for s in ast_hints['strings'][:5])}")
-                if ast_hints.get('type_sigs'):
-                    hint_parts.append(f"types: {'; '.join(ast_hints['type_sigs'][:5])}")
-                if ast_hints.get('mycelium_related'):
-                    hint_parts.append(f"related: {', '.join(ast_hints['mycelium_related'][:5])}")
-                if ast_hints.get('deduced_imports'):
-                    hint_parts.append(f"pkgs: {', '.join(ast_hints['deduced_imports'][:10])}")
-                if ast_hints.get('constant_lines'):
-                    for cl in ast_hints['constant_lines'][:3]:
-                        hint_parts.append(f"const: {cl.strip()}")
-            if hint_parts:
-                prompt += "\n" + " | ".join(hint_parts)
-
-            if feedback:
-                prompt += f"\n{feedback}"
-
-            try:
-                raw = provider.generate(prompt, max_tokens=100, temperature=temp)
-                cleaned = raw.strip()
-                if '\n' in cleaned:
-                    cleaned = cleaned.split('\n')[0]
-                if cleaned.startswith('```'):
-                    cleaned = cleaned.lstrip('`').strip()
-
-                # Score: how many expected words are in the output?
-                output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', cleaned))
-                if expected_words:
-                    matched = len(expected_words & output_words)
-                    score = matched / len(expected_words)
-                else:
-                    score = 1.0 if not cleaned.strip() else 0.5
-
-                if score > best_score:
-                    best_score = score
-                    best_line = cleaned
-
-                # SHA check on this line alone
-                if cleaned == orig_lines[idx]:
-                    best_line = cleaned
-                    break  # perfect match, stop retrying
-
-                # Targeted feedback for next retry
-                missing = sorted(expected_words - output_words)
-                extra = sorted(output_words - expected_words -
-                               {'if','else','for','return','true','false','nil','none'})
-                parts = []
-                if missing:
-                    parts.append(f"Add: {', '.join(missing[:5])}")
-                if extra:
-                    parts.append(f"Remove: {', '.join(extra[:3])}")
-                feedback = ' | '.join(parts) if parts else ''
-
-            except Exception:
-                continue
-
-        result_lines[idx] = best_line
+        result_lines[idx] = _fill_one_gap_with_retries(
+            provider, line_before=line_before, line_after=line_after,
+            target_line=orig_lines[idx], ast_hints=ast_hints)
 
     reconstruction = '\n'.join(result_lines)
     recon_sha = sha256_hash(reconstruction)
