@@ -24,6 +24,17 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+# P0bis (2026-05-09): chmod log files + rotated backups to 0o600.
+try:
+    from _secrets import secure_perms
+except ImportError:
+    try:
+        from muninn._secrets import secure_perms
+    except ImportError:
+        # Last resort: no-op so logging keeps working in unusual import contexts.
+        def secure_perms(path, **kwargs):  # type: ignore[no-redef]
+            pass
+
 DEFAULT_LOG_PATH = Path.home() / ".muninn" / "hook_errors.log"
 # CHUNK D9 (2026-05-08): separate log for engine events so hook audit
 # trail stays focused on hook lifecycle issues.
@@ -33,6 +44,40 @@ DEFAULT_BACKUP_COUNT = 3
 
 # Cache of (path_str -> logger) so we do not attach handlers repeatedly.
 _LOGGERS: dict[str, logging.Logger] = {}
+
+
+class _SecureRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler that chmod 0o600 every file it creates.
+
+    P0bis (2026-05-09): the default RotatingFileHandler uses os.rename
+    to roll over (current -> .1, .1 -> .2, ...) and creates a fresh
+    file inheriting the process umask — typically 0o644. Hook logs
+    contain user prompts and stack traces (potential secrets); they
+    must NOT be world-readable. We override emit() and doRollover()
+    to force 0o600 on:
+      - the active file (after first write that creates it)
+      - every rotated backup (.1, .2, ..., backupCount)
+
+    Defensive: every call to secure_perms swallows OSError (Windows
+    semantics, missing file, foreign owner) so a logging chmod never
+    breaks the logging itself.
+    """
+
+    def emit(self, record):
+        super().emit(record)
+        try:
+            secure_perms(self.baseFilename)
+        except OSError:
+            pass
+
+    def doRollover(self):
+        super().doRollover()
+        try:
+            secure_perms(self.baseFilename)
+            for i in range(1, self.backupCount + 1):
+                secure_perms(f"{self.baseFilename}.{i}")
+        except OSError:
+            pass
 
 
 def _build_logger(
@@ -47,7 +92,7 @@ def _build_logger(
         return cached
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        handler = RotatingFileHandler(
+        handler = _SecureRotatingFileHandler(
             str(log_path),
             maxBytes=max_bytes,
             backupCount=backup_count,
@@ -60,15 +105,10 @@ def _build_logger(
         logger.setLevel(logging.WARNING)
         logger.propagate = False
         _LOGGERS[key] = logger
-        # P0: hook log files contain user prompts and stack traces — chmod
-        # to 0600 if the file already exists (RotatingFileHandler defers
-        # creation until the first emit, so this is a best-effort).
-        try:
-            from _secrets import secure_perms
-            if log_path.exists():
-                secure_perms(log_path)
-        except ImportError:
-            pass
+        # Best-effort initial chmod (file may already exist from a
+        # previous session created with a wider umask).
+        if log_path.exists():
+            secure_perms(log_path)
         return logger
     except (OSError, ValueError):
         return None
