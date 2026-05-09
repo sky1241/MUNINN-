@@ -38,10 +38,34 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+# G1.2 (2026-05-09): hoist secure_perms to module scope with an explicit
+# no-op fallback. Pre-fix, _save_cache used a triple-nested try/except
+# whose ImportError branch did `return` AFTER the file was already written
+# in 0o644 — silently leaking forge-cache permissions on multi-user hosts.
+try:
+    from _secrets import secure_perms  # type: ignore[no-redef]
+except ImportError:
+    try:
+        from muninn._secrets import secure_perms  # type: ignore[no-redef]
+    except ImportError:
+        # Last resort: log to stderr ONCE so the leak is visible, then no-op.
+        # Calling code should not crash because of a missing security helper.
+        print(
+            "[forge_metrics] WARNING: _secrets.secure_perms unavailable — "
+            "forge cache files will inherit the process umask (likely 0o644). "
+            "Install muninn-memory or fix the engine.core path resolution.",
+            file=sys.stderr,
+        )
+
+        def secure_perms(path, **kwargs):  # type: ignore[no-redef]
+            """No-op fallback. _secrets.py was unimportable at module load."""
+            return None
 
 # 24h is long enough to amortise the carmack cost (which scans 12 weeks of
 # git log) but short enough that a normal dev workflow refreshes daily.
@@ -203,14 +227,7 @@ def _save_cache(report: ForgeRiskReport) -> None:
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(report.to_json(), indent=2), encoding="utf-8")
-        try:
-            from _secrets import secure_perms
-        except ImportError:
-            try:
-                from muninn._secrets import secure_perms
-            except ImportError:
-                return
-        secure_perms(p)
+        secure_perms(p)  # module-level import; no-op fallback if _secrets missing
     except OSError:
         pass
 

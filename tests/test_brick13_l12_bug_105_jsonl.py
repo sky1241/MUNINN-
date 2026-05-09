@@ -138,13 +138,28 @@ def test_multi_chunk_md_still_compresses(ml):
 
 def test_real_22mb_transcript_safe_via_helper(ml):
     """The exact file that exposed BUG-105. If this file is missing
-    on the runner, skip — but if present, verify it stays intact."""
-    src = Path(
-        "c:/Users/ludov/.claude/projects/c--Users-ludov-MUNINN-/"
-        "d00638e7-4405-43c3-b0c2-7523f0907c18.jsonl"
-    )
+    on the runner, skip — but if present, verify it stays intact.
+
+    RULE 1: derive the candidate path from `~/.claude/projects/` rather
+    than hardcoding the original Windows location. The MUNINN-_TRANSCRIPT
+    env var lets a runner with the file in a non-default location
+    point at it explicitly.
+    """
+    env_override = os.environ.get("MUNINN_BUG105_TRANSCRIPT")
+    if env_override:
+        src = Path(env_override)
+    else:
+        # Default search: ~/.claude/projects/<...MUNINN-.../d006...jsonl
+        bug_id = "d00638e7-4405-43c3-b0c2-7523f0907c18.jsonl"
+        for project_dir in (Path.home() / ".claude" / "projects").glob("*MUNINN*"):
+            candidate = project_dir / bug_id
+            if candidate.exists():
+                src = candidate
+                break
+        else:
+            src = Path.home() / ".claude" / "projects" / "_unfound" / bug_id
     if not src.exists():
-        pytest.skip(f"benchmark transcript not present: {src}")
+        pytest.skip(f"benchmark transcript not present (set MUNINN_BUG105_TRANSCRIPT to override): {src}")
     text = src.read_text(encoding="utf-8", errors="replace")
     n_chunks = len(text.split("\n\n"))
     assert n_chunks == 1, (

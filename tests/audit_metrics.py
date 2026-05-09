@@ -5,7 +5,9 @@ Chaque test mesure quelque chose de concret. Pas de PASS/FAIL vide."""
 import sys, json, time, os, tempfile, shutil, re
 from pathlib import Path
 
-ENGINE_DIR = Path(r"c:\Users\ludov\MUNINN-\engine\core")
+# RULE 1: derive engine path from this file's location, not user-specific hardcode.
+# This file lives in tests/ — engine/core is two levels up.
+ENGINE_DIR = (Path(__file__).resolve().parent.parent / "engine" / "core")
 sys.path.insert(0, str(ENGINE_DIR))
 
 TEMP_META = Path(tempfile.mkdtemp(prefix="audit_"))
@@ -298,18 +300,20 @@ if mn_path:
 print()
 
 # ============================================================
-# 8. REAL TREE STATE
+# 8. REAL TREE STATE — uses MUNINN_REPO env var or cwd (RULE 1)
 # ============================================================
 print("## 8. ETAT REEL DE L'ARBRE (.muninn/tree/)")
-real_tree = Path("c:/Users/ludov/MUNINN-/.muninn/tree/tree.json")
+_repo_root = Path(os.environ.get("MUNINN_REPO") or os.getcwd()).resolve()
+real_tree_dir = _repo_root / ".muninn" / "tree"
+real_tree = real_tree_dir / "tree.json"
 if real_tree.exists():
     tree = json.load(open(real_tree, encoding="utf-8"))
     nodes = tree["nodes"]
     branches = {n: d for n, d in nodes.items() if n != "root"}
     total_bl = sum(d.get("lines", 0) for d in branches.values())
     temps = [d.get("temperature", 0) for d in branches.values()]
-    mn_on_disk = len(list(Path("c:/Users/ludov/MUNINN-/.muninn/tree").glob("b*.mn")))
-    orphans = set(f.stem for f in Path("c:/Users/ludov/MUNINN-/.muninn/tree").glob("b*.mn")) - set(branches.keys())
+    mn_on_disk = len(list(real_tree_dir.glob("b*.mn")))
+    orphans = set(f.stem for f in real_tree_dir.glob("b*.mn")) - set(branches.keys())
     dust = sum(1 for d in branches.values() if d.get("lines", 0) <= 3)
     print(f"  Branches: {len(branches)} (was 2176 before rebuild)")
     print(f"  Total lines: {total_bl}")
@@ -323,10 +327,10 @@ if real_tree.exists():
 print()
 
 # ============================================================
-# 9. SESSION FILES
+# 9. SESSION FILES — same _repo_root (RULE 1)
 # ============================================================
 print("## 9. SESSION FILES (.muninn/sessions/)")
-sd = Path("c:/Users/ludov/MUNINN-/.muninn/sessions")
+sd = _repo_root / ".muninn" / "sessions"
 if sd.exists():
     mns = sorted(sd.glob("*.mn"))
     total_sz = sum(f.stat().st_size for f in mns)

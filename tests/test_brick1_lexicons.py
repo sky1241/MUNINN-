@@ -279,10 +279,18 @@ def test_stats_values_match_actual_lengths(lex):
 
 
 def test_module_has_no_io_at_import_time(lex):
-    """Importing the module must not touch disk, network, env."""
-    # If the import had side effects, the fixture would have failed.
-    # This test exists as a sentinel: if anyone adds I/O later, audit it.
-    assert True  # passes as long as fixture loaded
+    """Importing the module must not touch disk, network, env.
+
+    The fixture is the real sentinel — if `import lexicons` triggered
+    any disk/network/env access that errored, the fixture would crash
+    and we'd never reach here. These assertions then verify the public
+    surface is the one we expect (any silent renaming would be caught).
+    """
+    # Module loaded successfully — no side-effect crash at import time.
+    assert lex is not None
+    # Public-surface contract: documented helpers must still exist.
+    for name in ("get_tier3_raw", "get_safe_filler_patterns", "stats"):
+        assert hasattr(lex, name), f"public symbol {name!r} disappeared"
 
 
 def test_calling_helpers_does_not_mutate_constants(lex):
