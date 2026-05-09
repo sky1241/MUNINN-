@@ -2,6 +2,68 @@
 
 Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 3929 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 3163 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 413 + vault.py 551 = **24 434 lignes** (19 fichiers, post-H5.2 + audit v3 — forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.x is the source of truth)
 Tests: **2300+ collected, PASS, 0 xfail (post-H5.2), 0 FAIL**.
+Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shimification 4 fichiers byte-identiques + cube + vault).
+
+---
+
+## 2026-05-09 (soir) — B1 BUG-091 FIXED via shimification + E6 mirror
+
+Session contre-audit v4 → exécution. 4 commits sur `main`, 11 agents de vérification.
+
+### B1.1 (`83adeac`) — 4 shims byte-identiques
+
+DELETED-CONVERTED-TO-SHIMS :
+  - muninn/_secrets.py        182L → 31L (8 symbols re-exported, 7 sites prod conservés)
+  - muninn/lang_lexicons.py   1007L → 28L (5 symbols)
+  - muninn/cube_providers.py  2124L → 39L (17 symbols imported externally)
+  - muninn/wal_monitor.py     109L → 20L (2 symbols, drift cosmétique fermé)
+
+Pattern : `from <name> import *` + `from <name> import (explicit names)` après `sys.path.insert(0, "engine/core")`.
+
+### B1.2 (`2bb1ea5`) — cube.py shim
+
+  - muninn/cube.py 1558L → 70L (65 symbols + 8 defensive extras + 2 privés `_get_forge_risks`, `_extract_concepts`)
+
+cube_providers + cube_analysis re-exportés transitivement via `from cube import *`.
+
+### B1.3 (`22baf4a`) — vault.py shim + 3 fixes sécu silencieux
+
+  - muninn/vault.py 547L → 47L
+
+ALERTE SÉCURITÉ : muninn/vault.py avait 3 fixes manquants vs canonique :
+  1. verify hash sha256[:16] (64 bits) → maintenant [:32] (128 bits, datait de brick 25)
+  2. H1 fix bytearray() pour _zero_bytes() RAM wipe sur ciphertext
+  3. failed_files audit log dans Vault.unlock()
+
+Vault muninn/ était DEAD CODE en pratique (0 consommateur via muninn.vault, tous via bare `from vault import` qui résolvait engine/core). Sky 0 vault local → 0 risque migration.
+
+### B1.4 (`7de6dee`) — mirror E6 check_integrity dans muninn/_engine.py
+
+CHUNK E6 (commit 0827eb6 du 2026-05-08) avait wiré `check_integrity()` au boot dans `engine/core/muninn.py:1791` mais oublié de mirrorer dans `muninn/_engine.py`. Conséquence : `python -m muninn <cmd>` (entry pip) ne checkait pas l'intégrité SQLite, alors que `python engine/core/muninn.py <cmd>` le faisait. Asymétrie réparée (+28L identiques au canonical, byte-pour-byte modulo CRLF/LF).
+
+Décision : muninn/_engine.py reste un VRAI fichier (pas un shim). Raison : `pyproject.toml [project.scripts] muninn = "muninn._engine:main"` + imports relatifs (`.tokenizer`, `.mycelium`) + _ProxyModule dans muninn/__init__.py. Drift restant 4415L protégé par test_chunk_d10 cap 5000.
+
+### Bilan B1
+
+  - Total muninn/ : 7 700 → 2 982 lignes = **-4 718L** duplication brute
+  - 19 shims propres au total dans muninn/ (vs 13 pré-B1)
+  - 0 fichier byte-identique restant entre engine/core et muninn (vérifié md5sum)
+  - BUG-091 status : OPEN PARTIAL → **FIXED**
+  - Tests : 2332 passed, 0 fail, 0 xfail
+  - Q-modularity : 0.671 → 0.662 (-0.009 acceptable, drift attendu : shim re-export crée toujours un edge muninn↔engine au niveau Newman-Girvan)
+  - Carmack post-B1 : `muninn/cube_providers.py` artefact temporel +0.178 (churn 349 sur fenêtre 4 semaines, va se résorber)
+
+CONTRE-AUDIT v5 (10 agents en parallèle) :
+  - Symbols inventory : 105/105 préservés
+  - Test coverage : 269/269 cube tests verts, 178 hooks tests verts
+  - Runtime : 13/13 entry points OK (sauf cycle pré-existant cube_providers cold-import, 0 consommateur)
+  - Vault security : Sky 0 vault → 0 risque migration
+  - Hooks : manifest 9/9, _ProxyModule OK
+  - Behavioral diff : bit-identique pré/post B1
+  - Lost code : 0 logique perdue (105/105 symboles top-level présents dans engine/core)
+
+Trouvailles secondaires non-bloquantes :
+  - docs/D10_DRIFT_AUDIT.md ligne 39 prétend "80+ test imports of `from muninn._engine`" : FAUX (vérifié 2 agents indépendants, 0 fichier).
 
 ---
 

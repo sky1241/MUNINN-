@@ -36,7 +36,13 @@ drift on the muninn side.
 Reducing it to a raw `from engine.core.muninn import *` shim risks:
 - breaking the `python -m muninn ...` entry point (which routes through
   `muninn._engine:main`)
-- breaking 80+ test imports of the form `from muninn._engine import X`
+- ~~breaking 80+ test imports of the form `from muninn._engine import X`~~
+  ❌ CORRECTION 2026-05-09 (B1 contre-audit, 2 agents indépendants) :
+  ce claim est **faux**. Vérifié `grep -rn "from muninn._engine import" tests/` :
+  **0 fichier** dans le repo. Le seul site `muninn._engine` est `muninn/__main__.py:2`
+  (entry pip) + `muninn/__init__.py:28` (eager-load). Donc le risque shim _engine
+  reste réel mais c'est à cause des imports relatifs (`from .tokenizer` etc.)
+  + _ProxyModule, pas à cause des tests. À garder en doc historique.
 - forcing `engine/core/` onto every CI runner's sys.path eagerly
   (currently lazy via the existing shims)
 
