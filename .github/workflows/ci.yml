@@ -16,7 +16,7 @@ jobs:
     name: Validate Engine + Mycelium + Tree
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -280,7 +280,7 @@ jobs:
     name: forge --gen-props (smoke per engine/core module)
     needs: [validate]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
