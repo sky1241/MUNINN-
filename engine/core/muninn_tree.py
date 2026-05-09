@@ -3247,6 +3247,22 @@ def show_status():
     print(f"  Budget: ~{est_compressed:.0f}/{BUDGET['max_loaded_tokens']} tokens "
           f"({est_compressed / BUDGET['max_loaded_tokens'] * 100:.1f}%)")
 
+    # H3.1 (2026-05-09): expose mycelium growth_stats inline. Lazy import +
+    # try/except so a corrupt mycelium does not break `muninn status`.
+    try:
+        try:
+            from mycelium import Mycelium
+        except ImportError:
+            from engine.core.mycelium import Mycelium
+        repo = _m._REPO_PATH or Path(".").resolve()
+        g = Mycelium(repo).growth_stats()
+        print(f"\nGrowth (mycelium):")
+        print(f"  Concepts:    {g.get('concepts', 0)}")
+        print(f"  Connections: {g.get('connections', 0)} / {g.get('max_connections', 0)}"
+              f" {'(AT LIMIT)' if g.get('at_limit') else ''}")
+    except Exception as exc:
+        print(f"\nGrowth: <unavailable: {exc}>", file=sys.stderr)
+
 
 def doctor():
     """Pre-flight environment check — runs in <5s, green/red per check."""
