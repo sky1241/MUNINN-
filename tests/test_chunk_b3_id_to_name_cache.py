@@ -40,11 +40,23 @@ def test_no_dict_inversion_left_in_mycelium():
 
 
 def test_id_to_name_used_in_mycelium():
-    """The fix substitutes `_id_to_name` references at the affected sites."""
-    src = (REPO / "engine" / "core" / "mycelium.py").read_text()
-    # We expect at least 7 references to _id_to_name (one per fixed site)
-    n = src.count("_id_to_name")
-    assert n >= 7, f"Expected >=7 references to _id_to_name, found {n}"
+    """The fix substitutes `_id_to_name` references at the affected sites.
+
+    H6 (2026-05-09): mycelium.py was split into mixin modules
+    (mycelium_meta.py, mycelium_zones.py, ...). Sites can land in any
+    of them — count across the family.
+    """
+    core = REPO / "engine" / "core"
+    candidates = [
+        "mycelium.py", "mycelium_meta.py", "mycelium_zones.py",
+        "mycelium_activation.py", "mycelium_dream.py", "mycelium_core.py",
+    ]
+    files = [core / name for name in candidates if (core / name).exists()]
+    n = sum(f.read_text().count("_id_to_name") for f in files)
+    assert n >= 7, (
+        f"Expected >=7 references to _id_to_name across mycelium*.py, "
+        f"found {n} (in {[f.name for f in files]})"
+    )
 
 
 def test_db_id_to_name_consistent_with_concept_cache(tmp_path):

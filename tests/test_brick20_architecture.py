@@ -20,7 +20,9 @@ ENGINE = REPO_ROOT / "engine" / "core"
 # requires a justification in PHASE_B_ARCHITECTURE_AUDIT.md.
 DOCUMENTED_OVERSIZED_MODULES = frozenset({
     "muninn_tree.py",   # 3673 lines, split candidate documented
-    "mycelium.py",      # 3040 lines, mixin split candidate documented
+    # mycelium.py: was 3163L → 2435L post H6.1+H6.2 (mixin split started
+    # 2026-05-09). Now under the 2500L threshold but still in active split.
+    # H6.3-5 will continue extracting Activation, Dream, then leave Core ~1000L.
 })
 
 DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({

@@ -105,6 +105,9 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
                           # mixed in via class Mycelium(_MyceliumMetaMixin). External
                           # code keeps importing `from mycelium import Mycelium`, the
                           # methods are still on the class. No shim needed.
+        "mycelium_zones", # H6 chunk 2 (2026-05-09): _MyceliumZonesMixin extracted —
+                          # detect_zones / auto_label_zones / get_zones / get_bridges /
+                          # _graph_entropy / _bfs_zones. Same justification.
     }
     for name in engine_files:
         if name in engine_only:
