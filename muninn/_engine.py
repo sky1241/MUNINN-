@@ -1643,6 +1643,96 @@ def _handle_vault_command(args):
         sys.exit(1)
 
 
+# ── F1b (2026-05-09): huginn + quarantine handlers ──────────────
+# Mirrored from engine/core/muninn.py (BUG-091 dual-tree).
+
+def _ensure_repo_from_cwd() -> None:
+    """If _REPO_PATH is not set, auto-detect from cwd `.muninn/`."""
+    global _REPO_PATH
+    if not _REPO_PATH:
+        cwd = Path(".").resolve()
+        if (cwd / ".muninn").exists():
+            _REPO_PATH = cwd
+            _refresh_tree_paths()
+
+
+def _handle_huginn_trip(args) -> None:
+    """Mycelium dream-pass: generates `max_dreams` semantic connections,
+    measures entropy delta, persists if new connections were made."""
+    _ensure_repo_from_cwd()
+    repo = _REPO_PATH or Path(".")
+    if _CORE_DIR not in sys.path:
+        sys.path.insert(0, _CORE_DIR)
+    try:
+        from .mycelium import Mycelium
+    except ImportError:
+        from mycelium import Mycelium
+    m = Mycelium(repo)
+    intensity = 0.7 if args.force else 0.5
+    result = m.trip(intensity=intensity, max_dreams=20)
+    if result["created"] > 0:
+        m.save()
+    print("=== HUGINN TRIP (H1) ===")
+    print(f"  Intensity: {intensity}")
+    print(f"  Dream connections: {result['created']}")
+    print(f"  Entropy: {result['entropy_before']:.4f} -> {result['entropy_after']:.4f} "
+          f"(delta: {result.get('entropy_delta', 0):+.4f})")
+    if result.get("reason"):
+        print(f"  Note: {result['reason']}")
+    for d in result["dreams"][:10]:
+        zones = d.get('zones', [])
+        if len(zones) >= 2:
+            print(f"    {d['from']} <-> {d['to']} (zones: {zones[0][:20]}|{zones[1][:20]})")
+        else:
+            print(f"    {d['from']} <-> {d['to']}")
+    if result["created"] > 10:
+        print(f"    ... and {result['created'] - 10} more")
+
+
+def _handle_huginn_think(args) -> None:
+    """Surface stored insights ranked by mycelium relevance to `args.file`."""
+    _ensure_repo_from_cwd()
+    query = args.file or ""
+    insights = huginn_think(query=query, top_n=10)
+    print("=== HUGINN THINK (H3) ===")
+    if not insights:
+        print("  No insights yet. Run `muninn.py prune` to generate (dream runs during sleep).")
+        return
+    for ins in insights:
+        print(f"  {ins['formatted']}")
+    print(f"\n  {len(insights)} insight(s) total")
+
+
+def _handle_quarantine_command() -> None:
+    """Pretty-print ~/.muninn/quarantine.jsonl entries (cube SHA mismatches)."""
+    quarantine_path = os.path.join(os.path.expanduser('~'), '.muninn', 'quarantine.jsonl')
+    if not os.path.exists(quarantine_path):
+        print("No quarantine entries found.")
+        return
+    import json as _json
+    with open(quarantine_path, 'r', encoding='utf-8') as f:
+        entries = [_json.loads(line) for line in f if line.strip()]
+    if not entries:
+        print("Quarantine file exists but is empty.")
+        return
+    print(f"=== Quarantine — {len(entries)} entries ===\n")
+    for i, e in enumerate(entries, 1):
+        date = e.get('date', '?')
+        cube_id = e.get('cube_id', '?')
+        forigin = e.get('file_origin', '?')
+        ncd = e.get('ncd_score', '?')
+        expected = e.get('expected_sha256', '?')[:12]
+        found = e.get('found_sha256', '?')[:12]
+        print(f"  [{i}] {date} | {forigin} | NCD={ncd}")
+        print(f"      cube: {cube_id}")
+        print(f"      hash: {expected}... -> {found}...")
+        corrupted = e.get('corrupted_content', '')
+        if corrupted:
+            preview = corrupted[:120].replace('\n', '\\n')
+            print(f"      corrupted: {preview}")
+        print()
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -1732,50 +1822,11 @@ def main():
         return
 
     if args.command == "trip":
-        if not _REPO_PATH:
-            cwd = Path(".").resolve()
-            if (cwd / ".muninn").exists():
-                _REPO_PATH = cwd
-                _refresh_tree_paths()
-        repo = _REPO_PATH or Path(".")
-        if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-        try:
-            from .mycelium import Mycelium
-        except ImportError:
-            from mycelium import Mycelium
-        m = Mycelium(repo)
-        intensity = 0.7 if args.force else 0.5
-        result = m.trip(intensity=intensity, max_dreams=20)
-        if result["created"] > 0:
-            m.save()
-        print(f"=== HUGINN TRIP (H1) ===")
-        print(f"  Intensity: {intensity}")
-        print(f"  Dream connections: {result['created']}")
-        print(f"  Entropy: {result['entropy_before']:.4f} -> {result['entropy_after']:.4f} "
-              f"(delta: {result.get('entropy_delta', 0):+.4f})")
-        if result.get("reason"):
-            print(f"  Note: {result['reason']}")
-        for d in result["dreams"][:10]:
-            print(f"    {d['from']} <-> {d['to']} (zones: {d['zones'][0][:20]}|{d['zones'][1][:20]})")
-        if result["created"] > 10:
-            print(f"    ... and {result['created'] - 10} more")
+        _handle_huginn_trip(args)
         return
 
     if args.command == "think":
-        if not _REPO_PATH:
-            cwd = Path(".").resolve()
-            if (cwd / ".muninn").exists():
-                _REPO_PATH = cwd
-                _refresh_tree_paths()
-        query = args.file or ""
-        insights = huginn_think(query=query, top_n=10)
-        print("=== HUGINN THINK (H3) ===")
-        if not insights:
-            print("  No insights yet. Run `muninn.py prune` to generate (dream runs during sleep).")
-        else:
-            for ins in insights:
-                print(f"  {ins['formatted']}")
-            print(f"\n  {len(insights)} insight(s) total")
+        _handle_huginn_think(args)
         return
 
     if args.command == "scan":
@@ -2068,32 +2119,7 @@ def main():
         return
 
     if args.command == "quarantine":
-        quarantine_path = os.path.join(os.path.expanduser('~'), '.muninn', 'quarantine.jsonl')
-        if not os.path.exists(quarantine_path):
-            print("No quarantine entries found.")
-        else:
-            import json as _json
-            with open(quarantine_path, 'r', encoding='utf-8') as f:
-                entries = [_json.loads(line) for line in f if line.strip()]
-            if not entries:
-                print("Quarantine file exists but is empty.")
-            else:
-                print(f"=== Quarantine — {len(entries)} entries ===\n")
-                for i, e in enumerate(entries, 1):
-                    date = e.get('date', '?')
-                    cube_id = e.get('cube_id', '?')
-                    forigin = e.get('file_origin', '?')
-                    ncd = e.get('ncd_score', '?')
-                    expected = e.get('expected_sha256', '?')[:12]
-                    found = e.get('found_sha256', '?')[:12]
-                    print(f"  [{i}] {date} | {forigin} | NCD={ncd}")
-                    print(f"      cube: {cube_id}")
-                    print(f"      hash: {expected}... -> {found}...")
-                    corrupted = e.get('corrupted_content', '')
-                    if corrupted:
-                        preview = corrupted[:120].replace('\n', '\\n')
-                        print(f"      corrupted: {preview}")
-                    print()
+        _handle_quarantine_command()
         return
 
     if not args.file:
