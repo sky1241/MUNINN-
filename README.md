@@ -138,12 +138,12 @@ Sub-commands available:
 
 ## Commands
 
-27 CLI subcommands exposed by `engine/core/muninn.py`:
+28 CLI subcommands exposed by `engine/core/muninn.py`:
 
 ```bash
 # Memory lifecycle
 muninn boot [query]        # Load root + relevant branches + sessions
-muninn status              # Tree state + temperatures + budget
+muninn status              # Tree state + temperatures + budget + mycelium growth_stats
 muninn recall "query"      # Mid-session memory search
 muninn compress <file>     # Compress a markdown file
 muninn decode <file>       # Decompress a .mn file (debugging)
@@ -164,6 +164,7 @@ muninn feed <transcript>   # Feed mycelium + compress to .mn
 muninn feed --history      # Catch up on all past transcripts
 muninn feed --watch        # Poll-based feed (for scheduled tasks)
 muninn bridge              # Manual bridge invocation
+muninn zones               # Detect + label thematic zones (Laplacian spectral clustering)
 
 # Diagnostics
 muninn verify <file>       # Check compression quality (facts, ratio)

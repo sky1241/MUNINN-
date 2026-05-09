@@ -1761,6 +1761,35 @@ def _handle_quarantine_command() -> None:
         print()
 
 
+def _handle_zones_command(args) -> None:
+    """H3.2 (2026-05-09): detect + label thematic zones in the mycelium
+    (spectral Laplacian clustering, Newman-Girvan). Wires
+    Mycelium.detect_zones + auto_label_zones + get_zones into a
+    CLI-visible production path. Mirror of engine/core/muninn.py.
+    """
+    _ensure_repo_from_cwd()
+    repo = _REPO_PATH or Path(".").resolve()
+    if _CORE_DIR not in sys.path:
+        sys.path.insert(0, _CORE_DIR)
+    try:
+        from mycelium import Mycelium
+    except ImportError:
+        from engine.core.mycelium import Mycelium
+    m = Mycelium(repo)
+    zones = m.detect_zones()
+    if not zones:
+        print("=== MYCELIUM ZONES ===")
+        print("  No zones detected (need >= 10 connections + numpy/scipy/sklearn).")
+        return
+    m.auto_label_zones()
+    print(f"=== MYCELIUM ZONES — {len(zones)} detected ===\n")
+    sorted_zones = sorted(zones.items(), key=lambda kv: -len(kv[1]))[:10]
+    for i, (zone_name, members) in enumerate(sorted_zones, 1):
+        print(f"  [{i}] {zone_name} ({len(members)} concepts)")
+        for concept in list(members)[:5]:
+            print(f"      - {concept}")
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -1772,7 +1801,7 @@ def main():
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
         "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
-        "sync",
+        "sync", "zones",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -2128,6 +2157,10 @@ def main():
 
     if args.command == "quarantine":
         _handle_quarantine_command()
+        return
+
+    if args.command == "zones":
+        _handle_zones_command(args)
         return
 
     if not args.file:
