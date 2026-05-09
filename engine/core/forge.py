@@ -1377,98 +1377,81 @@ def _is_destructive_function(node, source_text):
     return False, ""
 
 
-def gen_props(root, module_path, include_destructive=False):
-    """Analyze a Python module and generate Hypothesis property test skeletons.
-    Detects: round-trip pairs, idempotent ops, sort/filter invariants.
+# P4 (2026-05-09): split gen_props (was 212L > brick20 200L invariant) into
+# 4 helpers + a thin orchestrator. Behaviour unchanged.
 
-    BUG-102 fix: destructive functions are skipped by default. Pass
-    include_destructive=True to override (NOT recommended without tmp_path).
+_GEN_PROPS_TYPE_MAP = {
+    "str": "st.text(max_size=100)",
+    "int": "st.integers(-1000, 1000)",
+    "float": "st.floats(allow_nan=False, allow_infinity=False)",
+    "bool": "st.booleans()",
+    "list": "st.lists(st.integers(), max_size=20)",
+    "dict": "st.dictionaries(st.text(max_size=10), st.integers(), max_size=10)",
+    "bytes": "st.binary(max_size=100)",
+}
+
+_GEN_PROPS_PAIRS = [
+    ("encode", "decode"), ("compress", "decompress"),
+    ("serialize", "deserialize"), ("pack", "unpack"),
+    ("encrypt", "decrypt"), ("dump", "load"),
+    ("to_json", "from_json"), ("to_dict", "from_dict"),
+]
+
+
+def _collect_testable_functions(tree, source, include_destructive):
+    """Walk a module AST and return (functions, skipped_destructive).
+
+    BUG-102: destructive functions filtered before any test is built,
+    unless include_destructive=True.
     """
-    mod_path = Path(module_path)
-    if not mod_path.is_absolute():
-        mod_path = root / mod_path
-    if not mod_path.exists():
-        print(f"  File not found: {_safe_path(mod_path)}")
-        return
-
-    source = mod_path.read_text(encoding="utf-8", errors="replace")
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as e:
-        print(f"  Syntax error in {_safe_path(mod_path)}: {e}")
-        return
-
-    # Collect all public functions (top-level only, skip class methods)
     functions = []
-    skipped_destructive = []
+    skipped = []
     for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
-            # BUG-102: filter destructive functions BEFORE generating any test
-            is_destr, reason = _is_destructive_function(node, source)
-            if is_destr and not include_destructive:
-                skipped_destructive.append((node.name, reason))
-                continue
-            # Extract arg names and annotations
-            args = []
-            for arg in node.args.args:
-                ann = None
-                if arg.annotation:
-                    try:
-                        ann = ast.literal_eval(arg.annotation) if isinstance(arg.annotation, ast.Constant) else \
-                              arg.annotation.id if isinstance(arg.annotation, ast.Name) else None
-                    except (ValueError, AttributeError):
-                        ann = None
-                args.append({"name": arg.arg, "type": ann})
-            functions.append({"name": node.name, "args": args, "lineno": node.lineno})
+        if not (isinstance(node, ast.FunctionDef) and not node.name.startswith("_")):
+            continue
+        is_destr, reason = _is_destructive_function(node, source)
+        if is_destr and not include_destructive:
+            skipped.append((node.name, reason))
+            continue
+        args = []
+        for arg in node.args.args:
+            ann = None
+            if arg.annotation:
+                try:
+                    ann = (ast.literal_eval(arg.annotation)
+                           if isinstance(arg.annotation, ast.Constant) else
+                           arg.annotation.id if isinstance(arg.annotation, ast.Name) else None)
+                except (ValueError, AttributeError):
+                    ann = None
+            args.append({"name": arg.arg, "type": ann})
+        functions.append({"name": node.name, "args": args, "lineno": node.lineno})
+    return functions, skipped
 
-    if not functions:
-        print(f"  No public functions found in {mod_path.name}")
-        return
 
-    # Detect pairs (encode/decode, compress/decompress, to_X/from_X)
-    names = {f["name"] for f in functions}
-    PAIRS = [("encode", "decode"), ("compress", "decompress"), ("serialize", "deserialize"),
-             ("pack", "unpack"), ("encrypt", "decrypt"), ("dump", "load"),
-             ("to_json", "from_json"), ("to_dict", "from_dict")]
-    roundtrip_pairs = []
-    for a, b in PAIRS:
-        if a in names and b in names:
-            roundtrip_pairs.append((a, b))
-    # Also check to_X/from_X dynamically
+def _detect_roundtrip_pairs(names):
+    """Return a list of (encoder, decoder) pairs found among `names`."""
+    pairs = [(a, b) for a, b in _GEN_PROPS_PAIRS if a in names and b in names]
     for name in names:
         if name.startswith("to_"):
             inverse = "from_" + name[3:]
-            if inverse in names and (name, inverse) not in roundtrip_pairs:
-                roundtrip_pairs.append((name, inverse))
+            if inverse in names and (name, inverse) not in pairs:
+                pairs.append((name, inverse))
+    return pairs
 
-    paired_funcs = {f for pair in roundtrip_pairs for f in pair}
 
-    # Type annotation -> Hypothesis strategy
-    TYPE_MAP = {"str": "st.text(max_size=100)", "int": "st.integers(-1000, 1000)",
-                "float": "st.floats(allow_nan=False, allow_infinity=False)",
-                "bool": "st.booleans()", "list": "st.lists(st.integers(), max_size=20)",
-                "dict": "st.dictionaries(st.text(max_size=10), st.integers(), max_size=10)",
-                "bytes": "st.binary(max_size=100)"}
+def _strategy_for_arg(arg):
+    """Map an annotated arg dict {name, type} to a Hypothesis strategy."""
+    return _GEN_PROPS_TYPE_MAP.get(arg["type"], "st.text(max_size=50)")
 
-    def strategy_for(arg):
-        if arg["type"] in TYPE_MAP:
-            return TYPE_MAP[arg["type"]]
-        return "st.text(max_size=50)"
 
-    # Generate module path for import
-    try:
-        rel = mod_path.relative_to(root)
-    except ValueError:
-        rel = Path(os.path.relpath(mod_path, root))
-    import_path = str(rel).replace(os.sep, ".").replace(".py", "")
-
-    # Build test file — imports are LIVE, not commented
-    lines = [
+def _build_test_file_header(mod_name, import_path):
+    """Return the boilerplate (imports + autouse cwd-isolation fixture)."""
+    return [
         "#!/usr/bin/env python3",
-        f'"""Property-based tests for {mod_path.name} — generated by forge.py --gen-props"""',
+        f'"""Property-based tests for {mod_name} — generated by forge.py --gen-props"""',
         "import sys",
         "import os",
-        f"sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))",
+        "sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))",
         "",
         "import pytest",
         "from hypothesis import given, strategies as st, settings",
@@ -1487,20 +1470,11 @@ def gen_props(root, module_path, include_destructive=False):
         "",
     ]
 
+
+def _emit_per_function_tests(lines, functions, paired_funcs):
+    """Append idempotent / subset / smoke tests for each non-paired
+    public function. Returns the number of tests appended."""
     test_count = 0
-
-    # Round-trip tests
-    for enc, dec in roundtrip_pairs:
-        lines.append(f"@given(data=st.text(max_size=200))")
-        lines.append(f"@settings(max_examples=100, deadline=None)")
-        lines.append(f"def test_roundtrip_{enc}_{dec}(data):")
-        lines.append(f'    """Round-trip: {dec}({enc}(x)) == x"""')
-        lines.append(f"    # Round-trip: {enc} <-> {dec}")
-        lines.append(f"    assert {dec}({enc}(data)) == data")
-        lines.append("")
-        test_count += 1
-
-    # Per-function tests
     for func in functions:
         if func["name"] in paired_funcs:
             continue
@@ -1508,51 +1482,112 @@ def gen_props(root, module_path, include_destructive=False):
         args = [a for a in func["args"] if a["name"] != "self"]
         if not args:
             continue
-
-        strats = ", ".join(f'{a["name"]}={strategy_for(a)}' for a in args)
-
+        strats = ", ".join(f'{a["name"]}={_strategy_for_arg(a)}' for a in args)
+        names_csv = ", ".join(a["name"] for a in args)
         if "sort" in name.lower():
-            lines.append(f"@given({strats})")
-            lines.append(f"@settings(max_examples=100, deadline=None)")
-            lines.append(f"def test_{name}_idempotent({', '.join(a['name'] for a in args)}):")
-            lines.append(f'    """Idempotent: {name}({name}(x)) == {name}(x)"""')
-            lines.append(f"    # Property test for {name}")
-            lines.append(f"    result = {name}({args[0]['name']})")
-            lines.append(f"    assert {name}(result) == result")
-            lines.append(f"    assert len(result) == len({args[0]['name']})")
-            lines.append("")
-            test_count += 1
+            lines += [
+                f"@given({strats})",
+                "@settings(max_examples=100, deadline=None)",
+                f"def test_{name}_idempotent({names_csv}):",
+                f'    """Idempotent: {name}({name}(x)) == {name}(x)"""',
+                f"    # Property test for {name}",
+                f"    result = {name}({args[0]['name']})",
+                f"    assert {name}(result) == result",
+                f"    assert len(result) == len({args[0]['name']})",
+                "",
+            ]
         elif "filter" in name.lower():
-            lines.append(f"@given({strats})")
-            lines.append(f"@settings(max_examples=100, deadline=None)")
-            lines.append(f"def test_{name}_subset({', '.join(a['name'] for a in args)}):")
-            lines.append(f'    """Subset: len({name}(x)) <= len(x)"""')
-            lines.append(f"    # Property test for {name}")
-            lines.append(f"    result = {name}({', '.join(a['name'] for a in args)})")
-            lines.append(f"    assert len(result) <= len({args[0]['name']})")
-            lines.append("")
-            test_count += 1
+            lines += [
+                f"@given({strats})",
+                "@settings(max_examples=100, deadline=None)",
+                f"def test_{name}_subset({names_csv}):",
+                f'    """Subset: len({name}(x)) <= len(x)"""',
+                f"    # Property test for {name}",
+                f"    result = {name}({names_csv})",
+                f"    assert len(result) <= len({args[0]['name']})",
+                "",
+            ]
         else:
-            # Smoke test: does not crash
-            lines.append(f"@given({strats})")
-            lines.append(f"@settings(max_examples=50, deadline=None)")
-            lines.append(f"def test_{name}_no_crash({', '.join(a['name'] for a in args)}):")
-            lines.append(f'    """Smoke: {name}() does not crash on arbitrary input"""')
-            lines.append(f"    # Property test for {name}")
-            lines.append(f"    try:")
-            lines.append(f"        {name}({', '.join(a['name'] for a in args)})")
-            lines.append(f"    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):")
-            lines.append(f"        pass  # Expected rejections are OK")
-            lines.append("")
-            test_count += 1
+            lines += [
+                f"@given({strats})",
+                "@settings(max_examples=50, deadline=None)",
+                f"def test_{name}_no_crash({names_csv}):",
+                f'    """Smoke: {name}() does not crash on arbitrary input"""',
+                f"    # Property test for {name}",
+                "    try:",
+                f"        {name}({names_csv})",
+                "    except (ValueError, TypeError, KeyError, IndexError, OSError, "
+                "AttributeError, RuntimeError, SystemExit):",
+                "        pass  # Expected rejections are OK",
+                "",
+            ]
+        test_count += 1
+    return test_count
+
+
+def gen_props(root, module_path, include_destructive=False):
+    """Analyze a Python module and generate Hypothesis property test skeletons.
+
+    Detects: round-trip pairs, idempotent ops, sort/filter invariants.
+    BUG-102: destructive functions skipped by default — pass
+    include_destructive=True to override (NOT recommended without tmp_path).
+    """
+    mod_path = Path(module_path)
+    if not mod_path.is_absolute():
+        mod_path = root / mod_path
+    if not mod_path.exists():
+        print(f"  File not found: {_safe_path(mod_path)}")
+        return
+
+    source = mod_path.read_text(encoding="utf-8", errors="replace")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as e:
+        print(f"  Syntax error in {_safe_path(mod_path)}: {e}")
+        return
+
+    functions, skipped_destructive = _collect_testable_functions(
+        tree, source, include_destructive
+    )
+    if not functions:
+        print(f"  No public functions found in {mod_path.name}")
+        return
+
+    names = {f["name"] for f in functions}
+    roundtrip_pairs = _detect_roundtrip_pairs(names)
+    paired_funcs = {f for pair in roundtrip_pairs for f in pair}
+
+    try:
+        rel = mod_path.relative_to(root)
+    except ValueError:
+        rel = Path(os.path.relpath(mod_path, root))
+    import_path = str(rel).replace(os.sep, ".").replace(".py", "")
+
+    lines = _build_test_file_header(mod_path.name, import_path)
+    test_count = 0
+
+    # Round-trip tests
+    for enc, dec in roundtrip_pairs:
+        lines += [
+            "@given(data=st.text(max_size=200))",
+            "@settings(max_examples=100, deadline=None)",
+            f"def test_roundtrip_{enc}_{dec}(data):",
+            f'    """Round-trip: {dec}({enc}(x)) == x"""',
+            f"    # Round-trip: {enc} <-> {dec}",
+            f"    assert {dec}({enc}(data)) == data",
+            "",
+        ]
+        test_count += 1
+
+    test_count += _emit_per_function_tests(lines, functions, paired_funcs)
 
     if test_count == 0:
         print(f"  No testable functions found in {mod_path.name}")
         if skipped_destructive:
-            print(f"  ({len(skipped_destructive)} destructive function(s) skipped — pass --include-destructive to override)")
+            print(f"  ({len(skipped_destructive)} destructive function(s) "
+                  "skipped — pass --include-destructive to override)")
         return
 
-    # BUG-102: header banner listing skipped destructive functions
     if skipped_destructive:
         banner = [
             "# BUG-102 (forge): the following functions were SKIPPED because",
@@ -1563,10 +1598,8 @@ def gen_props(root, module_path, include_destructive=False):
         for fn, reason in skipped_destructive:
             banner.append(f"#   - {fn}  ({reason})")
         banner.append("")
-        # Insert after import block
         lines = lines[:9] + banner + lines[9:]
 
-    # Write test file
     tests_dir = root / "tests"
     tests_dir.mkdir(exist_ok=True)
     out_name = f"test_props_{mod_path.stem}.py"
@@ -1580,13 +1613,12 @@ def gen_props(root, module_path, include_destructive=False):
             print(f"    - {fn}  ({reason})")
         if len(skipped_destructive) > 8:
             print(f"    ... and {len(skipped_destructive) - 8} more")
-        print(f"  Pass --include-destructive to fuzz them anyway (NOT RECOMMENDED).")
+        print("  Pass --include-destructive to fuzz them anyway (NOT RECOMMENDED).")
 
-    # Check if hypothesis is installed
     try:
         __import__("hypothesis")
     except ImportError:
-        print(f"  Note: pip install hypothesis to run these tests")
+        print("  Note: pip install hypothesis to run these tests")
 
 
 # === AXE 3: MUTATION TESTING WRAPPER (DeMillo 1978, Jia & Harman 2011) ===

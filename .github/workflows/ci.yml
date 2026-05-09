@@ -159,8 +159,6 @@ jobs:
           #   - tests/test_ui_*.py: need PyQt5 + X11 display (not in CI)
           #   - eval_harness_*: cost money (Anthropic API), opt-in only
           # Deselected (real, tracked debt):
-          #   - test_brick20::test_no_new_oversized_functions
-          #     forge.gen_props at 201 lines, P4 debt (will be split)
           #   - test_retrieval_benchmark::test_tfidf_relevance_meaningful
           #     depends on tree.json content, P5 debt
           #   - test_retrieval_benchmark::test_actr_activation_varies
@@ -173,13 +171,14 @@ jobs:
           #     git checkout normalises perms (0o644) + line endings,
           #     breaking the local sha256 manifest. Sky's local repo has
           #     chmod 0600 + native LF.
+          # Resolved (P4 — 2026-05-09): forge.gen_props split into 5 helpers,
+          # all <100L. test_no_new_oversized_functions now passes in CI.
           python3 -m pytest tests/ -q --tb=short \
             --ignore-glob='tests/test_ui_*.py' \
             --ignore=tests/eval_harness_chunk9.py \
             --ignore=tests/eval_harness_chunk11.py \
             --ignore=tests/test_chunk1_auto_memory_disabled.py \
             --ignore=tests/test_chunk_a7_hook_integrity.py \
-            --deselect tests/test_brick20_architecture.py::test_no_new_oversized_functions \
             --deselect tests/test_retrieval_benchmark.py::test_tfidf_relevance_meaningful \
             --deselect tests/test_retrieval_benchmark.py::test_actr_activation_varies
 
