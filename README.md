@@ -309,7 +309,7 @@ engine/
     cube_analysis.py      B33 anomaly tracking + carmack scoring (1915 lines)
     cube_providers.py     Cube I/O providers (Ollama, mock, …)
     vault.py              AES-256-GCM at-rest encryption (551 lines)
-    forge.py              Internal forge fallback (deprecated — use forge-shield)
+    forge_metrics.py      Subprocess wrapper around forge-shield 1.1.1 (cube heatmap UX)
     tokenizer.py          tiktoken wrapper with regex fallback
     watchdog.py           Scheduled task runner (15-min poll failsafe)
     sync_backend.py       Sync over git or TLS
@@ -318,7 +318,8 @@ engine/
     _hook_logger.py       _SecureRotatingFileHandler (rotated logs in 0o600)
 muninn/                   pip-installable package (mirrors engine/core)
   ...                     dual-tree shims + copies (BUG-091 graduated cleanup)
-forge.py                  Legacy CLI entry point (deprecated — use `forge` PyPI binary)
+# forge.py removed 2026-05-09 (H1) — use the `forge` PyPI binary
+# pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
 memory/
   tree.json               L-system tree (self-repo legacy)
   root.mn                 Root memory (always loaded)

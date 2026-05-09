@@ -24,10 +24,10 @@ anthropic==0.96.0
 # Phase 4 (2026-05-09): forge-shield (split out of MUNINN- on 2026-05-07,
 # polished cycles 4→8 on sky1241/forge). v1.1.0 adds --modularity
 # (Newman Q + Louvain), --fast-deep (transitive impact),
-# --paths-to-mutate, --incremental-mutate (libcst AST-diff). The 3
-# legacy forge.py copies inside MUNINN- (root + engine/core + muninn)
-# stay as a safety net during deprecation; will be removed in a later
-# cycle once forge-shield has soaked in production for 24-48h.
+# --paths-to-mutate, --incremental-mutate (libcst AST-diff).
+# H1 (2026-05-09): the 3 legacy forge.py copies (root + engine/core +
+# muninn) were removed — PyPI forge-shield 1.1.1 is the single source
+# of truth. cube_analysis.py and test_props_forge.py now `from forge`.
 #
 # Note: v1.1.0 is not on PyPI yet (PyPI has 1.0.4). CI installs from
 # git tag (.github/workflows/ci.yml). Local dev: pip install from git

@@ -1,7 +1,100 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 1964 + muninn_layers.py 1480 + muninn_tree.py 3672 + muninn_feed.py 1660 + cube.py 1132 + cube_providers.py 1244 + cube_analysis.py 1774 + mycelium.py 3145 + mycelium_db.py 1338 + sync_backend.py 1136 + sync_tls.py 600 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 413 + vault.py 523 = ~20K total (18 files)
-Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
+Engine: muninn.py 2104 + muninn_layers.py 1480 + muninn_tree.py 3692 + muninn_feed.py 1660 + cube.py 1132 + cube_providers.py 1244 + cube_analysis.py 1774 + mycelium.py 3163 + mycelium_db.py 1338 + sync_backend.py 1136 + sync_tls.py 615 + forge_metrics.py 343 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 274 + dedup.py 238 + budget_select.py 413 + vault.py 523 = ~20K total (forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.1 is the source of truth)
+Tests: **2300+ collected, PASS, 0 xfail (post-H5.2), 0 FAIL**.
+
+---
+
+## 2026-05-09 — H1→H5 production hardening (forge migration + wire orphans + 0 xfail)
+
+Session "tout en production ce soir" — 8 commits enchaînés sur main pour finir le battle plan PROD FINAL v2.
+
+### H1 (`d6a5fc3`) — forge migration totale, suppression des 3 forge.py internes
+
+- DELETED: `forge.py` root (109K), `engine/core/forge.py` (86K), `muninn/forge.py` (86K) — total -8156 lignes.
+- DELETED: 3 tests qui dépendaient des helpers privés du forge interne :
+  `tests/test_forge_real_algos.py` (38 tests), `test_forge_carmack.py` (12),
+  `test_forge_destructive_skip.py` (18). Le repo `sky1241/forge` a sa propre suite équivalente.
+- REMAPPED imports vers PyPI forge-shield 1.1.1 :
+  `engine/core/cube_analysis.py:1593` + `tests/test_props_forge.py:9` → `from forge import …`.
+- REGISTRY: retire `"forge"` de `tests/test_chunk_d11_shim_drift.py::engine_only`.
+
+### H4.1 (`a19081a`) — CHUNK C12 wired (CI permissions + slow gate + real-API gate)
+
+- `.github/workflows/ci.yml`: ajoute `permissions: contents: read` (least-privilege),
+  `-m "not slow"` sur pytest, `MUNINN_RUN_REAL_API_TESTS=0` + `MUNINN_RUN_REAL_LLM_TESTS=0` env.
+- `tests/test_chunk_c12_ci_workflow.py`: retire 5 `pytest.skip("workflow not merged")`,
+  retire helper `_workflow_change_merged()`, 7/7 tests verts.
+
+### H3.1 (`a143830`) — `muninn status` affiche `growth_stats()`
+
+- `engine/core/muninn_tree.py:show_status()`: ajout bloc "Growth (mycelium):"
+  avec `Concepts:` + `Connections: N / max_connections`, lazy-imports + try/except.
+- 1ère méthode mycelium orpheline wirée en production.
+
+### H3.2 + H3.3 (`21606d8`) — nouvelle CLI `muninn zones` + README
+
+- `engine/core/muninn.py`: ajoute `"zones"` aux argparse choices + `_handle_zones_command()`
+  qui appelle `Mycelium.detect_zones()` (Laplacian spectral clustering) + `auto_label_zones()`.
+- Mirror BUG-091 dans `muninn/_engine.py`.
+- README: 27 → 28 commandes CLI documentées.
+
+### H4.2 (`f4304c2`) — job CI `forge_smoke` (matrix sur 11 modules)
+
+- `.github/workflows/ci.yml`: ajoute job `forge_smoke` (needs `validate`),
+  matrix `forge --gen-props` sur muninn_tree, muninn_layers, muninn_feed,
+  mycelium_db, mycelium, _secrets, cube, cube_providers, cube_analysis,
+  sync_backend, _hook_logger. Puis `pytest tests/test_props_*.py`.
+- `tests/test_chunk_d8_ci_forge.py`: retire 3 `pytest.skip`, asserts acceptent
+  `forge --gen-props` (post-H1) OU `forge.py --gen-props` (legacy).
+
+### H5.1 (`11b4bba`) — retire xfail sur `test_retrieval_benchmark`
+
+- `tests/test_retrieval_benchmark.py:407`: retire `@pytest.mark.xfail` (5 lignes).
+  Le test passait XPASSED depuis avril (l'assert dur ne déclenche que si
+  `n_branches >= 20`, tree actuel = 6).
+- `.github/workflows/ci.yml`: retire `--deselect test_tfidf_relevance_meaningful`
+  (passe localement). `test_actr_activation_varies` reste deselect (vraiment flaky
+  sur small trees, std=0 quand access_counts uniformes).
+
+### H2 (`78ce4dd`) — `forge_metrics` UI helpers + cube_live preamble
+
+- `engine/core/forge_metrics.py`: ajoute `forge_score_for_path(repo, file)` →
+  Optional[float] et `forge_color_for_path(repo, file, default)` → hex 6-digits.
+  Lazy + cached via `get_repo_risk()` (24h TTL). Robuste aux variations de path.
+- `muninn/ui/cube_live.py`: émet le forge risk dans le terminal de reconstruction
+  au démarrage du worker : `[forge] risk=0.464 (MOD) for engine/core/cube_providers.py`.
+  Couleur du label : COL_FAIL ≥0.40 / COL_PARTIAL ≥0.20 / COL_SHA stable.
+- `tests/test_chunk_f6_forge_metrics.py`: +6 tests (17 total) couvrant les helpers
+  + edge cases (forge unavailable / file unknown / get_repo_risk crash / color thresholds).
+
+### H5.2 (`591fbe1`) — sync_tls TLS-RST race fixed (xfail eliminated)
+
+- Bug HIGH-confidence trouvé par agent debug : `conn.close()` après le `_send_msg`
+  du rate_limited envoyait un RST TCP qui arrivait avant les données in-protocol →
+  client recevait `ConnectionReset` au lieu du JSON `{"status":"error","message":"rate_limited"}`.
+- FIX `engine/core/sync_tls.py:_handle_client`: ajoute `try: conn.unwrap() except: pass`
+  avant `conn.close()` → graceful TLS close_notify, payload arrive AVANT le teardown TCP.
+- FIX `tests/test_sync_tls.py::test_t1_9_rate_limit_server`:
+  retire `@pytest.mark.xfail`, déplace `assert "rate_limited"` dans le `try`
+  (était dehors → testait l'ancien `r` du 3e ping = "pong" → erreur trompeuse).
+- 24/24 PASS dans la TLS suite. **0 xfail dans tout le repo.**
+
+### Bilan de la journée
+
+- **8 commits, ~700 lignes de changes nets** (-8156 forge.py vs +9000 wires/tests/docs).
+- Forge `Q-modularity = 0.673` (baseline 0.678, dans le bruit, "good — modules well isolated").
+- Forge `--carmack` top 5 inchangé : cube_providers 0.464, muninn/mycelium 0.419,
+  muninn_tree 0.344, muninn 0.338, muninn/cube_providers 0.321.
+- 4 méthodes mycelium orphelines (227L) wirées en prod : `growth_stats` (H3.1),
+  `detect_zones` + `auto_label_zones` + `get_zones` (H3.2).
+- 0 xfail, 0 deselect non-justifié, CI vert sur `main`.
+- README à jour (28 commandes, growth_stats mentionné, forge.py supprimé du tree).
+- forge_metrics consommé par UI cube_live.
+
+H6 (mycelium split refactor) reporté demain — mycelium pas dans le top 5 carmack
+(8e), Q-modularity stable, 320 tests à auditer pour un split = 3-5h de boulot,
+gain marginal vs risque régression.
 
 ---
 

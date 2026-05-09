@@ -1,8 +1,33 @@
-# Runbook PROD FINAL — 2026-05-09 (post-compact resumption guide)
+# Runbook PROD FINAL — 2026-05-09 (RÉSULTAT D'EXÉCUTION)
 
-## 🎯 Quick recap pour le moi-d'après-compact
+## 🏁 STATUT FINAL — TOUT FAIT (sauf H6 reporté demain)
 
-**Contexte** : Sky veut TOUT en production ce soir. On était sur le point de démarrer **H1 (forge migration)** quand on a pré-compacté pour avoir du contexte frais.
+**8 commits enchaînés sur `main`** :
+
+| Phase | Commit | Note |
+|---|---|---|
+| H1 — forge migration totale | `d6a5fc3` | -8156L (3 forge.py + 3 tests internes) |
+| H4.1 — C12 skips obsolètes | `a19081a` | permissions/slow/real-API gate |
+| H3.1 — growth_stats → status | `a143830` | wired in `show_status()` |
+| H3.2+H3.3 — zones CLI + README | `21606d8` | 27→28 commands |
+| H4.2 — D8 forge_smoke CI | `f4304c2` | matrix 11 modules |
+| H5.1 — xfail retrieval retiré | `11b4bba` | 10/10 tests verts |
+| H2 — forge_metrics → cube_live | `78ce4dd` | helpers + 7 tests + UX |
+| H5.2 — sync_tls TLS-RST race | `591fbe1` | 0 xfail dans tout le repo |
+| H6 — mycelium split | ⏸️ DEMAIN | agent feasibility = report (pas top 5 carmack, 320 tests à auditer) |
+
+**Métriques finales** :
+- 2300+ tests passed, **0 xfail**, 0 fail
+- Q-modularity = **0.673** (baseline 0.678, dans le bruit, "good")
+- Top 5 carmack inchangé
+- 4 méthodes mycelium orphelines (227L) wirées en prod
+- forge-shield 1.1.1 = single source of truth (PyPI)
+
+---
+
+## 🎯 Quick recap pour le moi-d'après-compact (HISTORIQUE)
+
+**Contexte initial** : Sky veut TOUT en production ce soir. On était sur le point de démarrer **H1 (forge migration)** quand on a pré-compacté pour avoir du contexte frais.
 
 **État au moment du compact** :
 - Last commit : `3094c49 docs(plan-final-v2): wire EVERYTHING into prod, no delete`

@@ -160,23 +160,27 @@ Refactor cosmétique du fichier 3163L → 3 sous-modules. Plan déjà rédigé. 
 
 ---
 
-## 🚦 Ordre d'exécution
+## 🚦 Ordre d'exécution — STATUT FINAL 2026-05-09
 
 ```
-1. H1   forge migration totale         [45min]   🔴 PROD-BLOCKING
-2. H4.1 C12 retirer skip obsolètes     [10min]   cleanup
-3. H3.1 growth_stats → muninn status   [10min]   wire
-4. H3.2 muninn zones nouvelle CLI      [30min]   wire ★
-5. H3.3 README update zones+growth     [ 5min]   doc
-6. H4.2 D8 forge_smoke workflow merge  [20min]   wire CI
-7. H5.1 retrieval_benchmark refresh    [30min]   xfail fix
-8. H2   forge_metrics → UI cube        [1h-1h30] FEATURE ★
-9. H5.2 sync_tls rate-limit fix        [1h]      xfail fix
-10. H6  F2 mycelium split              [1h40]    optionnel demain
+1. H1   forge migration totale         [45min]   🔴 PROD-BLOCKING  ✅ d6a5fc3
+2. H4.1 C12 retirer skip obsolètes     [10min]   cleanup           ✅ a19081a
+3. H3.1 growth_stats → muninn status   [10min]   wire              ✅ a143830
+4. H3.2 muninn zones nouvelle CLI      [30min]   wire ★            ✅ 21606d8
+5. H3.3 README update zones+growth     [ 5min]   doc               ✅ 21606d8
+6. H4.2 D8 forge_smoke workflow merge  [20min]   wire CI           ✅ f4304c2
+7. H5.1 retrieval_benchmark refresh    [30min]   xfail fix         ✅ 11b4bba
+8. H2   forge_metrics → UI cube        [1h-1h30] FEATURE ★         ✅ 78ce4dd
+9. H5.2 sync_tls rate-limit fix        [1h]      xfail fix         ✅ 591fbe1
+10. H6  F2 mycelium split              [1h40]    optionnel demain  ⏸️ REPORTÉ
 ```
 
-**Total essential (H1-H5)** : ~4h-5h
-**Avec H6** : ~6h-7h
+**8 commits sur main, 0 xfail, 0 fail, Q-modularity 0.673 (baseline 0.678).**
+
+H6 reporté demain : agent feasibility (parallèle) a conclu mycelium pas dans
+le top 5 carmack (8e), Q-modularity stable, 320 tests à auditer pour un split
+propre = 3-5h de boulot, gain marginal vs risque régression. Décomposition
+naturelle en 6 sous-modules (pas 3) à faire à tête reposée.
 
 ---
 
