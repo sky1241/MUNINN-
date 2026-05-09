@@ -618,118 +618,94 @@ class FIMReconstructor:
         '.cob': 'COBOL', '.cbl': 'COBOL', '.cpy': 'COBOL',
     }
 
-    def reconstruct_with_neighbors(self, cube: Cube, neighbors: list[Cube],
-                                   max_tokens: int = 256,
-                                   ast_hints: dict | None = None,
-                                   previous_attempts: list[str] | None = None,
-                                   temperature: float = 0.0) -> str:
-        """
-        Reconstruct a cube using its neighbors as context.
+    # Files (extensions) using # for line comments. Anything not in the set
+    # falls back to // — covers C-family, Java, Go, Rust, JS, etc.
+    _HASH_COMMENT_EXTS = {'.py', '.rb', '.sh', '.bash', '.zsh',
+                          '.r', '.yml', '.yaml', '.toml'}
 
-        This is the core reconstruction: neighbors provide the context,
-        the cube content is what we're trying to reconstruct.
-        Injects language lexicon + AST constraints for maximum precision.
-
-        previous_attempts: list of prior failed reconstructions (compressed
-        by Muninn L1-L7) injected as negative examples so the model learns
-        from its mistakes instead of retrying blind.
-        """
-        # Detect language from file extension
-        ext = os.path.splitext(cube.file_origin)[1].lower() if cube.file_origin else ''
-        lang = self._EXT_TO_LANG.get(ext, 'code')
-        lang_key = ext.lstrip('.')  # for lexicon lookup
-
-        # Sort neighbors by line position (not proximity — preserve order)
-        same_file = [n for n in neighbors if n.file_origin == cube.file_origin]
-        before = sorted([n for n in same_file if n.line_end <= cube.line_start],
-                        key=lambda c: c.line_start)
-        after = sorted([n for n in same_file if n.line_start >= cube.line_end],
-                       key=lambda c: c.line_start)
-
-        # Normalize content + line count (needed for Fix 20 + FIM fallback)
+    @staticmethod
+    def _normalize_content(text: str) -> str:
+        """Resolve cube.normalize_content via the dual-tree fallback chain."""
         try:
             from cube import normalize_content as _nc
         except ImportError:
             try:
                 from engine.core.cube import normalize_content as _nc
             except ImportError:
-                _nc = lambda t: t.strip()
-        n_lines = len(_nc(cube.content).split('\n'))
+                _nc = lambda t: t.strip()  # noqa: E731
+        return _nc(text)
 
-        # Fix 20 FIRST: if ALL lines are anchored, skip LLM entirely.
-        # Model-agnostic auto-SHA. Must run BEFORE the FIM branch — otherwise
-        # FIM-capable providers (qwen2.5-coder, deepseek, codellama) bypass
-        # the free auto-SHA path and waste a LLM call on cubes that are
-        # already 100% anchored. Sonnet (no-FIM) reaches this and gets
-        # 38/61 auto-SHA on btree_google.go; qwen used to skip it -> 0.
+    @staticmethod
+    def _split_neighbors_by_position(cube: Cube, neighbors: list[Cube]
+                                     ) -> tuple[list[Cube], list[Cube]]:
+        """Same-file neighbors split into (before, after) by line position."""
+        same_file = [n for n in neighbors if n.file_origin == cube.file_origin]
+        before = sorted([n for n in same_file if n.line_end <= cube.line_start],
+                        key=lambda c: c.line_start)
+        after = sorted([n for n in same_file if n.line_start >= cube.line_end],
+                       key=lambda c: c.line_start)
+        return before, after
+
+    def _try_native_fim(self, cube: Cube, before: list[Cube], after: list[Cube],
+                       n_lines: int, max_tokens: int,
+                       ast_hints: dict | None,
+                       previous_attempts: list[str] | None) -> str:
+        """CHUNK 13 native-FIM path: enrich the prefix with anchor + mycelium
+        + corrective-feedback comments before delegating to reconstruct_fim.
+
+        Without these hints qwen2.5-coder oscillates between the same 1-2
+        outputs across 11 attempts (observed). Hints make each attempt
+        diverge productively.
+        """
+        ext_prefix = "\n".join(c.content for c in before)
+        ext_suffix = "\n".join(c.content for c in after)
+        ext = os.path.splitext(cube.file_origin or '')[1].lower()
+        cmt = '#' if ext in self._HASH_COMMENT_EXTS else '//'
+
+        hint_lines: list[str] = []
         if ast_hints:
-            _orig_lines = _nc(cube.content).split('\n')
-            _ext = os.path.splitext(cube.file_origin or '')[1].lower()
-            _pre_am = _build_full_anchor_map(
-                ast_hints, _orig_lines, n_lines, _ext)
-            if len(_pre_am) >= n_lines:
-                return _nc(cube.content)
+            anchors_list = ast_hints.get('anchors') or []
+            for ln_no, ln_text in anchors_list[-5:]:
+                snippet = ln_text.strip()[:80]
+                if snippet:
+                    hint_lines.append(f"{cmt} anchor L{ln_no}: {snippet}")
+            myc_rel = ast_hints.get('mycelium_related') or []
+            if myc_rel:
+                hint_lines.append(f"{cmt} related: {', '.join(myc_rel[:8])}")
+        if previous_attempts:
+            for fb in previous_attempts[:2]:
+                if fb:
+                    hint_lines.append(f"{cmt} feedback: {str(fb)[:120]}")
+        if hint_lines:
+            ext_prefix = ext_prefix + "\n" + "\n".join(hint_lines)
+        return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
 
-        # Then native FIM if provider supports it (qwen, deepseek, etc.)
-        if self.provider.supports_fim and before and after:
-            ext_prefix = "\n".join(c.content for c in before)
-            ext_suffix = "\n".join(c.content for c in after)
+    @staticmethod
+    def _detect_indent_hint(prefix: str, suffix: str) -> str:
+        """First non-empty indented line wins; suffix scanned first."""
+        for source in (suffix, prefix):
+            if not source:
+                continue
+            it = source.split('\n') if source is suffix else reversed(source.split('\n'))
+            for ln in it:
+                if ln and ln != ln.lstrip():
+                    return ln[:len(ln) - len(ln.lstrip())]
+        return ""
 
-            # CHUNK 13: inject learned anchors + previous_attempts feedback
-            # as language-specific comment lines at the END of the prefix.
-            # The wrap <|fim_prefix|>...<|fim_suffix|>...<|fim_middle|> is
-            # hint-blind; without this enrichment qwen oscillates between
-            # the same 1-2 outputs across all 11 attempts (we observed it).
-            # Adding hints lets each attempt diverge productively.
-            ext = os.path.splitext(cube.file_origin or '')[1].lower()
-            cmt = '#' if ext in ('.py', '.rb', '.sh', '.bash', '.zsh',
-                                  '.r', '.yml', '.yaml', '.toml') else '//'
-            hint_lines = []
-            if ast_hints:
-                anchors_list = ast_hints.get('anchors') or []
-                # last 5 learned anchors — lines we know are correct
-                for ln_no, ln_text in anchors_list[-5:]:
-                    snippet = ln_text.strip()[:80]
-                    if snippet:
-                        hint_lines.append(f"{cmt} anchor L{ln_no}: {snippet}")
-                # mycelium-related identifiers (semantic context)
-                myc_rel = ast_hints.get('mycelium_related') or []
-                if myc_rel:
-                    hint_lines.append(
-                        f"{cmt} related: {', '.join(myc_rel[:8])}")
-            if previous_attempts:
-                # Targeted corrective feedback from past attempts
-                for fb in previous_attempts[:2]:
-                    if fb:
-                        hint_lines.append(f"{cmt} feedback: {str(fb)[:120]}")
-            if hint_lines:
-                ext_prefix = ext_prefix + "\n" + "\n".join(hint_lines)
-            return self.reconstruct_fim(ext_prefix, ext_suffix, max_tokens)
-
-        # ─── FIM prompt fallback: code with hole + constraints ────────
-
-        # 4 neighbors each side — tested: more context = better SHA rate
+    def _build_fim_prompt(self, cube: Cube, before: list[Cube], after: list[Cube],
+                         neighbors: list[Cube], n_lines: int,
+                         ast_hints: dict | None,
+                         previous_attempts: list[str] | None
+                         ) -> tuple[str, list[Cube]]:
+        """FIM-prompt-fallback path: builds the v3 prompt (28/80 SHA = 35%
+        on the test corpus). Returns (prompt, neighbor_patterns)."""
         prefix = "\n".join(c.content for c in before[-4:]) if before else ""
         suffix = "\n".join(c.content for c in after[:4]) if after else ""
-
-        # Learn patterns from neighbors
         neighbor_patterns = _learn_patterns_from_neighbors(neighbors)
+        indent_hint = self._detect_indent_hint(prefix, suffix)
 
-        # Detect indentation from suffix (first non-empty line)
-        indent_hint = ""
-        if suffix:
-            for sline in suffix.split('\n'):
-                if sline and sline != sline.lstrip():
-                    indent_hint = sline[:len(sline) - len(sline.lstrip())]
-                    break
-        if not indent_hint and prefix:
-            for pline in reversed(prefix.split('\n')):
-                if pline and pline != pline.lstrip():
-                    indent_hint = pline[:len(pline) - len(pline.lstrip())]
-                    break
-
-        # Build code block with hole
-        code_parts = []
+        # Code block with the <FILL N lines> hole
+        code_parts: list[str] = []
         if prefix:
             code_parts.append(prefix)
         code_parts.append(f"<FILL {n_lines} lines>")
@@ -737,8 +713,6 @@ class FIMReconstructor:
             code_parts.append(suffix)
         code_block = "\n".join(code_parts)
 
-        # Prompt: instructions + hints THEN code block
-        # This is prompt v3 — tested at 28/80 SHA (35%), best result.
         position = ""
         if not prefix:
             position = " (START of file)"
@@ -748,15 +722,10 @@ class FIMReconstructor:
             f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing{position})",
             f"Write EXACTLY {n_lines} lines. Output ONLY code. No fences. No explanation.",
         ]
-
-        # Indentation constraint
         if indent_hint:
-            if '\t' in indent_hint:
-                prompt_parts.append("Indentation: tabs")
-            else:
-                prompt_parts.append(f"Indentation: {len(indent_hint)} spaces")
+            prompt_parts.append("Indentation: tabs" if '\t' in indent_hint
+                                else f"Indentation: {len(indent_hint)} spaces")
 
-        # Line anchors — first, last, + checkpoints
         if ast_hints:
             if ast_hints.get('first_line'):
                 prompt_parts.append(f"Line 1: {ast_hints['first_line']}")
@@ -765,121 +734,147 @@ class FIMReconstructor:
                     prompt_parts.append(f"Line {line_num}: {line_text}")
             if ast_hints.get('last_line'):
                 prompt_parts.append(f"Line {n_lines}: {ast_hints['last_line']}")
-
-            # All identifiers found in the missing code
             if ast_hints.get('identifiers'):
                 cube_ids = set(ast_hints['identifiers'])
                 prompt_parts.append(f"Identifiers: {', '.join(ast_hints['identifiers'][:30])}")
-
-                # Cross-reference with neighbors
-                neighbor_ids = set()
+                neighbor_ids: set[str] = set()
                 for n in neighbors:
                     n_text = n.content if hasattr(n, 'content') else ''
-                    n_ids = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', n_text))
-                    neighbor_ids.update(n_ids)
+                    neighbor_ids.update(re.findall(r'\b([a-zA-Z_]\w{1,})\b', n_text))
                 shared = sorted(cube_ids & neighbor_ids)
                 if shared:
                     prompt_parts.append(f"Confirmed by neighbors: {', '.join(shared[:20])}")
-
-            # Structured hints
             if ast_hints.get('functions'):
                 prompt_parts.append(f"Functions: {', '.join(ast_hints['functions'])}")
             if ast_hints.get('classes'):
                 prompt_parts.append(f"Types: {', '.join(ast_hints['classes'])}")
             if ast_hints.get('variables'):
                 prompt_parts.append(f"Variables: {', '.join(ast_hints['variables'][:20])}")
-
-            # String literals
             if ast_hints.get('strings'):
                 prompt_parts.append(f"Strings: {', '.join(repr(s) for s in ast_hints['strings'][:15])}")
-
-            # Type signatures
             if ast_hints.get('type_sigs'):
                 prompt_parts.append(f"Field types: {'; '.join(ast_hints['type_sigs'][:10])}")
-
-            # Deduced imports (from scanning the full file)
             if ast_hints.get('deduced_imports'):
                 prompt_parts.append(f"Packages used in file: {', '.join(ast_hints['deduced_imports'][:20])}")
-
-            # Constant lines (exact values that can't be guessed)
             if ast_hints.get('constant_lines'):
                 for cl in ast_hints['constant_lines'][:5]:
                     prompt_parts.append(f"Constant: {cl.strip()}")
-
-            # Mycelium-discovered related concepts (from previous reconstructions)
             if ast_hints.get('mycelium_related'):
                 prompt_parts.append(f"Related (from prior reconstructions): {', '.join(ast_hints['mycelium_related'])}")
 
-        # Previous attempt (if provided)
         if previous_attempts and previous_attempts[0]:
             prompt_parts.append("Previous attempt (improve it):")
             prompt_parts.append(previous_attempts[0])
 
         prompt_parts.append("")
         prompt_parts.append(code_block)
-        prompt = "\n".join(prompt_parts)
+        return "\n".join(prompt_parts), neighbor_patterns
 
-        # Constrain output to ~1.5x expected size (not 3x)
-        constrained_tokens = min(max_tokens, cube.token_count * 2)
-
-        raw = self.provider.generate(prompt, max_tokens=constrained_tokens, temperature=temperature)
-
-        # Clean response: remove code fences but PRESERVE indentation
-        cleaned = raw
-        # Strip only trailing whitespace, not leading (preserves indentation)
-        cleaned = cleaned.rstrip()
-        # Remove leading blank lines only
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """Remove leading blanks + Markdown ``` fences, preserve indentation."""
+        cleaned = text.rstrip()
         while cleaned.startswith('\n'):
             cleaned = cleaned[1:]
-        # Strip markdown code fences
-        if cleaned.lstrip().startswith('```'):
-            lines = cleaned.split('\n')
-            # Find the opening fence
-            start = 0
-            for j, line in enumerate(lines):
-                if line.lstrip().startswith('```'):
-                    start = j + 1
-                    break
-            # Find the closing fence
-            end = len(lines)
-            for j in range(len(lines) - 1, start - 1, -1):
-                if lines[j].lstrip().startswith('```'):
-                    end = j
-                    break
-            cleaned = '\n'.join(lines[start:end])
+        if not cleaned.lstrip().startswith('```'):
+            return cleaned
+        lines = cleaned.split('\n')
+        start = 0
+        for j, line in enumerate(lines):
+            if line.lstrip().startswith('```'):
+                start = j + 1
+                break
+        end = len(lines)
+        for j in range(len(lines) - 1, start - 1, -1):
+            if lines[j].lstrip().startswith('```'):
+                end = j
+                break
+        return '\n'.join(lines[start:end])
 
-        # Smart line count adjustment
+    def _postprocess_reconstruction(self, cube: Cube, raw: str, n_lines: int,
+                                    neighbor_patterns: dict,
+                                    ast_hints: dict | None) -> str:
+        """Clean LLM output: strip fences → adjust line count → force anchors."""
+        cleaned = self._strip_code_fences(raw)
+
         out_lines = cleaned.split('\n')
-        # Strip trailing empty lines before count check
         while len(out_lines) > n_lines and out_lines and out_lines[-1].strip() == '':
             out_lines.pop()
         if len(out_lines) > n_lines:
-            # Too many lines: join continuation lines
-            cleaned = _adjust_line_count(out_lines, n_lines,
-                                          learned=neighbor_patterns)
+            cleaned = _adjust_line_count(out_lines, n_lines, learned=neighbor_patterns)
         elif len(out_lines) < n_lines:
-            # Too few lines: insert missing blank lines
             cleaned = _insert_missing_blanks(out_lines, n_lines, ast_hints,
                                               learned=neighbor_patterns)
         else:
             cleaned = '\n'.join(out_lines)
 
-        # Force known anchor lines — replace model output with stored originals.
-        # Uses _build_full_anchor_map (single source of truth for all fixes).
         if ast_hints:
-            _orig_lines = _nc(cube.content).split('\n')
+            _orig_lines = self._normalize_content(cube.content).split('\n')
             _ext = os.path.splitext(cube.file_origin or '')[1].lower()
             anchor_map = _build_full_anchor_map(
                 ast_hints, _orig_lines, n_lines, _ext)
-
             if anchor_map:
                 final_lines = cleaned.split('\n')
                 for idx, anchor_text in anchor_map.items():
                     if idx < len(final_lines):
                         final_lines[idx] = anchor_text
                 cleaned = '\n'.join(final_lines)
-
         return cleaned
+
+    def reconstruct_with_neighbors(self, cube: Cube, neighbors: list[Cube],
+                                   max_tokens: int = 256,
+                                   ast_hints: dict | None = None,
+                                   previous_attempts: list[str] | None = None,
+                                   temperature: float = 0.0) -> str:
+        """
+        Reconstruct a cube using its neighbors as context.
+
+        This is the core reconstruction: neighbors provide the context,
+        the cube content is what we're trying to reconstruct. Injects
+        language lexicon + AST constraints for maximum precision.
+
+        Pipeline:
+          1. Sort neighbors by line position (before/after).
+          2. Fix 20: if all lines are anchored, skip LLM entirely
+             (model-agnostic auto-SHA — must run BEFORE the FIM branch
+             so FIM-capable providers don't waste a call on 100% anchored
+             cubes).
+          3. Native FIM if provider supports it (qwen, deepseek, …) —
+             enriched with hint comments (CHUNK 13).
+          4. Otherwise FIM-prompt fallback with v3 prompt (35% SHA).
+          5. Post-process: strip fences, adjust line count, force anchors.
+
+        previous_attempts: list of prior failed reconstructions (compressed
+        by Muninn L1-L7) injected as negative examples so the model learns
+        from its mistakes instead of retrying blind.
+        """
+        before, after = self._split_neighbors_by_position(cube, neighbors)
+        normalized = self._normalize_content(cube.content)
+        n_lines = len(normalized.split('\n'))
+
+        # Fix 20: skip LLM if cube is fully anchored.
+        if ast_hints:
+            _ext = os.path.splitext(cube.file_origin or '')[1].lower()
+            _pre_am = _build_full_anchor_map(
+                ast_hints, normalized.split('\n'), n_lines, _ext)
+            if len(_pre_am) >= n_lines:
+                return normalized
+
+        # Native FIM if available.
+        if self.provider.supports_fim and before and after:
+            return self._try_native_fim(
+                cube, before, after, n_lines, max_tokens,
+                ast_hints, previous_attempts)
+
+        # FIM-prompt fallback.
+        prompt, neighbor_patterns = self._build_fim_prompt(
+            cube, before, after, neighbors, n_lines,
+            ast_hints, previous_attempts)
+        constrained_tokens = min(max_tokens, cube.token_count * 2)
+        raw = self.provider.generate(prompt, max_tokens=constrained_tokens,
+                                     temperature=temperature)
+        return self._postprocess_reconstruction(
+            cube, raw, n_lines, neighbor_patterns, ast_hints)
 
 
 # ─── Mock provider for testing ────────────────────────────────────────
@@ -1283,24 +1278,51 @@ def _query_mycelium(mycelium, identifiers: list[str]) -> list[str]:
     Uses spreading activation: seed with cube identifiers, find related
     concepts the mycelium learned from previous reconstructions.
     Returns new identifiers not already in the hints.
+
+    CHUNK B5 (2026-05-08): on backend error, the empty list is still
+    returned (callers expect a list) but the exception is logged via
+    _hook_logger so the audit trail catches the failure instead of
+    silently degrading to "no related concepts".
+
+    CHUNK E7 (2026-05-08): migrated to use _hook_logger.swallow()
+    context manager (D9). Kills the swallow() dead-code finding —
+    this is now a real production caller. Same audit trail behavior
+    as the previous try/except + log_hook_event boilerplate, with
+    less code.
     """
     try:
-        # Use spread_activation for semantic discovery
+        from _hook_logger import swallow
+    except ImportError:
+        # Standalone tests can run without the helper; fall back to a
+        # plain try/except so the function still returns a list.
+        try:
+            if hasattr(mycelium, 'spread_activation'):
+                return [c for c, _ in mycelium.spread_activation(
+                    seeds=identifiers[:10], hops=2, decay=0.5, top_n=15)]
+            if hasattr(mycelium, 'get_related'):
+                all_related = set()
+                for ident in identifiers[:5]:
+                    all_related.update(
+                        c for c, _ in mycelium.get_related(ident, top_n=3))
+                return sorted(all_related)
+        except Exception:
+            pass
+        return []
+
+    result: list[str] = []
+    with swallow("cube_providers", "_query_mycelium"):
         if hasattr(mycelium, 'spread_activation'):
             related = mycelium.spread_activation(
                 seeds=identifiers[:10], hops=2, decay=0.5, top_n=15
             )
-            return [concept for concept, _weight in related]
-        # Fallback: get_related per identifier
+            result = [concept for concept, _weight in related]
         elif hasattr(mycelium, 'get_related'):
             all_related = set()
             for ident in identifiers[:5]:
                 related = mycelium.get_related(ident, top_n=3)
                 all_related.update(c for c, _w in related)
-            return sorted(all_related)
-    except Exception:
-        pass
-    return []
+            result = sorted(all_related)
+    return result
 
 
 def _learn_patterns_from_neighbors(neighbors: list) -> dict:
