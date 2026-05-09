@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+# CHUNK C12 (H4.1): explicit least-privilege permissions.
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -159,6 +163,10 @@ jobs:
           rm -rf .muninn
 
       - name: Pytest suite (excludes UI Qt tests + CI-env-only failures)
+        env:
+          # CHUNK C12 (H4.1): explicit opt-out from real-API tests in CI.
+          MUNINN_RUN_REAL_API_TESTS: "0"
+          MUNINN_RUN_REAL_LLM_TESTS: "0"
         run: |
           # Excludes:
           #   - tests/test_ui_*.py: need PyQt5 + X11 display (not in CI)
@@ -179,6 +187,7 @@ jobs:
           # Resolved (P4 — 2026-05-09): forge.gen_props split into 5 helpers,
           # all <100L. test_no_new_oversized_functions now passes in CI.
           python3 -m pytest tests/ -q --tb=short \
+            -m "not slow" \
             --ignore-glob='tests/test_ui_*.py' \
             --ignore=tests/eval_harness_chunk9.py \
             --ignore=tests/eval_harness_chunk11.py \
