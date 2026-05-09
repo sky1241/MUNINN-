@@ -208,6 +208,15 @@ class SyncServer:
         if not self._limiter.allow(ip):
             try:
                 _send_msg(conn, {"status": "error", "message": "rate_limited"})
+                # H5.2 (2026-05-09): graceful TLS close so the rate_limited
+                # payload reaches the client BEFORE the TCP socket is torn
+                # down. Without this, conn.close() sends a RST that races
+                # ahead of the TCP data and the client sees ConnectionReset
+                # instead of the in-protocol error message.
+                try:
+                    conn.unwrap()
+                except (OSError, ssl.SSLError):
+                    pass
             except (OSError, ssl.SSLError):
                 pass
             conn.close()

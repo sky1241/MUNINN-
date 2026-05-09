@@ -232,17 +232,14 @@ def test_t1_8_rate_limiter():
     print(f"  T1.8 PASS: rate limiter blocks after max (3/min)")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "SyncServer rate limit regression: the 4th request inside a 1-min "
-        "window currently returns {'status': 'pong'} instead of an "
-        "in-protocol error or a transport reset. Tracked as a follow-up "
-        "to BATTLE_PLAN_MYCELIUM_2026-05-05 (separate issue from P1-P4)."
-    ),
-    strict=False,
-)
 def test_t1_9_rate_limit_server():
-    """Server rate-limits excessive requests from same client."""
+    """Server rate-limits excessive requests from same client.
+
+    H5.2 (2026-05-09): both signals are valid — in-protocol error message
+    OR transport reset. The bug pre-fix was that conn.close() raced ahead
+    of the rate_limited payload and the client got `pong` (stale read).
+    Server now does TLS unwrap() before close so the payload arrives.
+    """
     from pathlib import Path
     from sync_tls import SyncServer, SyncClient, generate_certs
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -273,14 +270,18 @@ def test_t1_9_rate_limit_server():
                 assert r["status"] == "pong", f"T1.9 FAIL: request {i+1} failed: {r}"
 
             # 4th should be rate limited — either via {"status": "error"}
-            # or via ConnectionResetError. Both are valid signals.
+            # or via a transport-layer reset.
             try:
                 r = client.ping()
-                assert r["status"] == "error", f"T1.9 FAIL: 4th request should be rate-limited: {r}"
-            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError):
-                # Transport-layer rate limit is also acceptable
+                # In-protocol signal: server delivered the JSON before close.
+                assert r["status"] == "error", \
+                    f"T1.9 FAIL: 4th request should be rate-limited: {r}"
+                assert "rate_limited" in r.get("message", ""), \
+                    f"T1.9 FAIL: wrong error: {r}"
+            except (ConnectionResetError, ConnectionAbortedError,
+                    BrokenPipeError, OSError):
+                # Transport-layer rate limit is also acceptable.
                 pass
-            assert "rate_limited" in r.get("message", ""), f"T1.9 FAIL: wrong error: {r}"
         finally:
             server.stop()
     print(f"  T1.9 PASS: server rate limiting works (3/min)")
