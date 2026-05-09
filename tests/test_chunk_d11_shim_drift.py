@@ -100,6 +100,11 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
         "forge_metrics",  # F6 (2026-05-09): pure subprocess wrapper for forge-shield
                           # binary; UI imports via engine.core.forge_metrics directly,
                           # no muninn/ shim needed (no internal engine/core consumer).
+        "mycelium_meta",  # H6 chunk 1 (2026-05-09): _MyceliumMetaMixin extracted from
+                          # mycelium.py. Internal implementation detail of Mycelium —
+                          # mixed in via class Mycelium(_MyceliumMetaMixin). External
+                          # code keeps importing `from mycelium import Mycelium`, the
+                          # methods are still on the class. No shim needed.
     }
     for name in engine_files:
         if name in engine_only:
