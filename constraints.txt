@@ -20,3 +20,12 @@ tiktoken==0.12.0
 
 # Optional LLM compression (L9) — currently tested with 0.96.0
 anthropic==0.96.0
+
+# Phase 4 (2026-05-09): forge-shield (split out of MUNINN- on 2026-05-07,
+# polished cycles 4→8 on sky1241/forge). Pinned at 1.1.0 — adds
+# --modularity (Newman Q + Louvain), --fast-deep (transitive impact),
+# --paths-to-mutate, --incremental-mutate (libcst AST-diff). The 3
+# legacy forge.py copies inside MUNINN- (root + engine/core + muninn)
+# stay as a safety net during deprecation; will be removed in a later
+# cycle once forge-shield has soaked in production for 24-48h.
+forge-shield==1.1.0

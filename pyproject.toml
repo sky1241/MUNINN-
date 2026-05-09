@@ -28,7 +28,8 @@ classifiers = [
 [project.optional-dependencies]
 tokens = ["tiktoken>=0.5"]
 llm = ["anthropic>=0.20"]
-all = ["tiktoken>=0.5", "anthropic>=0.20"]
+quality = ["forge-shield>=1.1.0"]  # Phase 4 (2026-05-09): regression shield + carmack/locate/modularity for cube heatmap UX
+all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=1.1.0"]
 
 [project.urls]
 Homepage = "https://github.com/sky1241/MUNINN-"
