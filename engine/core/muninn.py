@@ -1663,6 +1663,35 @@ def _handle_huginn_think(args) -> None:
     print(f"\n  {len(insights)} insight(s) total")
 
 
+def _handle_scrub_command(args) -> None:
+    """Run secret-redaction over a target path. Dry-run unless --force.
+    Reports files_scanned / files_modified / secrets_found / errors[]."""
+    target = Path(args.file or ".").resolve()
+    if not target.exists():
+        print(f"ERROR: path not found: {target}", file=sys.stderr)
+        sys.exit(1)
+    dry = not args.force
+    print("=== MUNINN SCRUB (dry-run) — use --force to apply ==="
+          if dry else "=== MUNINN SCRUB ===")
+    stats = scrub_secrets(target, dry_run=dry)
+    print(f"\n  Scanned: {stats['files_scanned']} files")
+    print(f"  Modified: {stats['files_modified']} files")
+    print(f"  Secrets found: {stats['secrets_found']}")
+    if stats["errors"]:
+        print(f"  Errors: {len(stats['errors'])}")
+        for e in stats["errors"][:5]:
+            print(f"    {e}")
+    if dry and stats["secrets_found"] > 0:
+        print(f"\n  Run with --force to redact {stats['secrets_found']} secret(s)")
+
+
+def _handle_purge_secrets_command(args) -> None:
+    """Repo-wide secret scrub of mycelium databases (concept names + edges)."""
+    repo = Path(args.file or ".").resolve()
+    print("=== MUNINN PURGE-SECRETS — cleaning mycelium databases ===")
+    purge_secrets_db(repo)
+
+
 def _handle_quarantine_command() -> None:
     """Pretty-print ~/.muninn/quarantine.jsonl entries (cube SHA mismatches)."""
     quarantine_path = os.path.join(os.path.expanduser('~'), '.muninn', 'quarantine.jsonl')
@@ -1996,31 +2025,11 @@ def main():
         return
 
     if args.command == "scrub":
-        target = Path(args.file or ".").resolve()
-        if not target.exists():
-            print(f"ERROR: path not found: {target}", file=sys.stderr)
-            sys.exit(1)
-        dry = not args.force
-        if dry:
-            print("=== MUNINN SCRUB (dry-run) — use --force to apply ===")
-        else:
-            print("=== MUNINN SCRUB ===")
-        stats = scrub_secrets(target, dry_run=dry)
-        print(f"\n  Scanned: {stats['files_scanned']} files")
-        print(f"  Modified: {stats['files_modified']} files")
-        print(f"  Secrets found: {stats['secrets_found']}")
-        if stats["errors"]:
-            print(f"  Errors: {len(stats['errors'])}")
-            for e in stats["errors"][:5]:
-                print(f"    {e}")
-        if dry and stats["secrets_found"] > 0:
-            print(f"\n  Run with --force to redact {stats['secrets_found']} secret(s)")
+        _handle_scrub_command(args)
         return
 
     if args.command == "purge-secrets":
-        repo = Path(args.file or ".").resolve()
-        print("=== MUNINN PURGE-SECRETS — cleaning mycelium databases ===")
-        purge_secrets_db(repo)
+        _handle_purge_secrets_command(args)
         return
 
     if args.command == "sync":
