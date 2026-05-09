@@ -138,8 +138,12 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -c constraints.txt \
-            pytest hypothesis tiktoken anthropic numpy cryptography \
-            forge-shield
+            pytest hypothesis tiktoken anthropic numpy cryptography
+          # forge-shield 1.1.0 is not on PyPI yet (cousin tagged v1.1.1 on
+          # GitHub but did not push to PyPI). Install from git tag directly
+          # so CI gets the new --modularity/--fast-deep/--paths-to-mutate
+          # features that the regenerated test_props_*.py rely on.
+          python3 -m pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
 
       - name: Configure git identity (required by sync_backend tests)
         run: |
