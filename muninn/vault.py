@@ -30,6 +30,15 @@ import socket as _socket
 import time as _time
 from pathlib import Path
 
+# P0bis (2026-05-09): vault contains the encryption salt + verify hash +
+# ciphertext + ephemeral plaintext. All MUST be 0o600. Default umask 022
+# would leak salts to other users on multi-user hosts.
+try:
+    from muninn._secrets import secure_perms
+except ImportError:
+    from _secrets import secure_perms
+
+
 # Fernet uses AES-128-CBC internally, but we use raw AES-256-GCM via AESGCM
 # for enterprise-grade encryption. Fernet is simpler but only AES-128.
 # We use PBKDF2-HMAC-SHA256 for key derivation (NIST SP 800-132).
@@ -181,10 +190,12 @@ class Vault:
 
         salt = os.urandom(32)  # 256-bit random salt
         self.salt_path.write_bytes(salt)
+        secure_perms(self.salt_path)
 
         # Backup salt — losing it means losing all encrypted data forever
         backup = self.salt_path.with_suffix(".salt.bak")
         backup.write_bytes(salt)
+        secure_perms(backup)
 
         self._key = bytearray(_derive_key(password, salt))
 
@@ -192,6 +203,7 @@ class Vault:
         verify = hashlib.sha256(self._key).hexdigest()[:16]
         verify_path = self.muninn_dir / "vault.verify"
         verify_path.write_text(verify, encoding="utf-8")
+        secure_perms(verify_path)
 
         _audit_log(self.muninn_dir, "init", True, reason="vault_initialized")
         return {"salt_path": str(self.salt_path), "backup_path": str(backup), "key_derived": True}
@@ -278,6 +290,7 @@ class Vault:
                 ct = _encrypt_bytes(data, self._key)
                 vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
                 vault_path.write_bytes(ct)
+                secure_perms(vault_path)
                 total_bytes += len(data)
                 _secure_delete(fp)  # Overwrite + delete plaintext
                 encrypted += 1
@@ -311,6 +324,7 @@ class Vault:
                 # Restore original path (strip .vault)
                 orig_path = vp.with_suffix("")
                 orig_path.write_bytes(plaintext)
+                secure_perms(orig_path)
                 total_bytes += len(plaintext)
                 vp.unlink()  # Remove encrypted
                 decrypted += 1
@@ -330,6 +344,7 @@ class Vault:
         ct = _encrypt_bytes(data, self._key)
         vault_path = fp.with_suffix(fp.suffix + _LOCK_EXT)
         vault_path.write_bytes(ct)
+        secure_perms(vault_path)
         _secure_delete(fp)
         return vault_path
 
@@ -342,6 +357,7 @@ class Vault:
         plaintext = _decrypt_bytes(data, self._key)
         orig_path = vp.with_suffix("")
         orig_path.write_bytes(plaintext)
+        secure_perms(orig_path)
         vp.unlink()
         return orig_path
 
@@ -384,6 +400,7 @@ class Vault:
                     # recover_rekey can map back: foo.vault.rekey -> foo.vault
                     rekey_path = vp.parent / (vp.name + ".rekey")
                     rekey_path.write_bytes(ct)
+                    secure_perms(rekey_path)
                     rekey_pairs.append((vp, rekey_path))
                     total_bytes += len(plaintext)
                 except Exception as e:
@@ -417,18 +434,25 @@ class Vault:
         # verifies decryptability before updating salt.
         salt_rekey = self.salt_path.with_suffix(".salt.rekey")
         salt_rekey.write_bytes(new_salt)
+        secure_perms(salt_rekey)
 
         # Replace originals with re-encrypted versions.
         # Each replace() is atomic. If interrupted mid-loop, some files are
         # rekeyed and some still have .rekey pending.
         for orig, rekey_path in rekey_pairs:
             rekey_path.replace(orig)  # Atomic on POSIX and Windows
+            secure_perms(orig)
 
         # Update salt + backup + verify (completing the rekey)
         self.salt_path.write_bytes(new_salt)
-        self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
+        secure_perms(self.salt_path)
+        salt_bak = self.salt_path.with_suffix(".salt.bak")
+        salt_bak.write_bytes(new_salt)
+        secure_perms(salt_bak)
         verify = hashlib.sha256(new_key).hexdigest()[:16]
-        (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
+        verify_path = self.muninn_dir / "vault.verify"
+        verify_path.write_text(verify, encoding="utf-8")
+        secure_perms(verify_path)
 
         # Cleanup rekey marker
         try:
@@ -502,9 +526,14 @@ class Vault:
 
         # All good — finalize salt + verify
         self.salt_path.write_bytes(new_salt)
-        self.salt_path.with_suffix(".salt.bak").write_bytes(new_salt)
+        secure_perms(self.salt_path)
+        salt_bak = self.salt_path.with_suffix(".salt.bak")
+        salt_bak.write_bytes(new_salt)
+        secure_perms(salt_bak)
         verify = hashlib.sha256(new_key).hexdigest()[:16]
-        (self.muninn_dir / "vault.verify").write_text(verify, encoding="utf-8")
+        verify_path = self.muninn_dir / "vault.verify"
+        verify_path.write_text(verify, encoding="utf-8")
+        secure_perms(verify_path)
 
         # Cleanup marker
         salt_rekey.unlink()
