@@ -91,13 +91,16 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
                           if not p.name.startswith("__"))
     # Engine-only / hook helpers that don't need a shim:
     engine_only = {
-        "_hook_logger",  # used directly by hooks
-        "watchdog",      # CLI script
-        "tokenizer",     # imported via direct path
-        "muninn",        # CLI entry point; muninn/ package itself wraps it
-        "wal_monitor",   # internal mycelium_db helper
-        "scanner",       # standalone tool tree
-        "forge",         # standalone repo at /home/sky/Bureau/forge/, BUG-091 plan
+        "_hook_logger",   # used directly by hooks
+        "watchdog",       # CLI script
+        "tokenizer",      # imported via direct path
+        "muninn",         # CLI entry point; muninn/ package itself wraps it
+        "wal_monitor",    # internal mycelium_db helper
+        "scanner",        # standalone tool tree
+        "forge",          # standalone repo at /home/sky/Bureau/forge/, BUG-091 plan
+        "forge_metrics",  # F6 (2026-05-09): pure subprocess wrapper for forge-shield
+                          # binary; UI imports via engine.core.forge_metrics directly,
+                          # no muninn/ shim needed (no internal engine/core consumer).
     }
     for name in engine_files:
         if name in engine_only:
