@@ -1657,6 +1657,94 @@ def _compress_attempt(text: str) -> str:
     return '\n'.join(lines[:20])
 
 
+def _normalize_cube_content(text: str) -> str:
+    """Resolve cube.normalize_content via the dual-tree fallback chain.
+    Used by the reconstruct_* helpers to avoid import boilerplate."""
+    try:
+        from cube import normalize_content as _nc
+    except ImportError:
+        try:
+            from engine.core.cube import normalize_content as _nc
+        except ImportError:
+            _nc = lambda t: t.strip()  # noqa: E731
+    return _nc(text)
+
+
+def _learn_anchors_from_reconstruction(ast_hints: dict, cube_content: str,
+                                       reconstruction: str) -> None:
+    """Each failed reconstruction teaches us which lines were already right.
+    Mutate ast_hints['anchors'] in place: any line whose value matches the
+    original gets locked in as an anchor for subsequent attempts."""
+    orig_lines = _normalize_cube_content(cube_content).split('\n')
+    recon_lines = reconstruction.split('\n')
+    existing = dict(ast_hints.get('anchors', []))
+    for li in range(min(len(orig_lines), len(recon_lines))):
+        if (li + 1 not in existing
+                and orig_lines[li] == recon_lines[li]
+                and orig_lines[li].strip()):
+            ast_hints.setdefault('anchors', []).append((li + 1, orig_lines[li]))
+            existing[li + 1] = orig_lines[li]
+
+
+_FEEDBACK_BORING_WORDS = {
+    'if', 'else', 'for', 'while', 'return', 'break', 'continue',
+    'true', 'false', 'null', 'nil', 'none', 'self', 'this',
+}
+
+
+def _compute_attempt_feedback(result, cube: Cube, neighbors: list[Cube],
+                              ast_hints: dict | None
+                              ) -> tuple[list[str] | None, list[str] | None,
+                                         str | None, str | None]:
+    """Build the 4 targeted feedback signals fed into the next wave attempt:
+        (missing identifiers, extra hallucinations,
+         line-count mismatch, NCD proximity %).
+    Each tuple slot is None if there's nothing useful to say."""
+    output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b', result.reconstruction))
+
+    missing_feedback: list[str] | None = None
+    extra_feedback: list[str] | None = None
+    if ast_hints and ast_hints.get('identifiers'):
+        expected = set(ast_hints['identifiers'])
+        missing = sorted(expected - output_words)
+        missing_feedback = missing[:10] if missing else None
+        extra = sorted(output_words - expected - _FEEDBACK_BORING_WORDS)
+        neighbor_words: set[str] = set()
+        for nb in neighbors:
+            nb_text = nb.content if hasattr(nb, 'content') else ''
+            neighbor_words.update(re.findall(r'\b([a-zA-Z_]\w{1,})\b', nb_text))
+        real_extra = sorted(extra - neighbor_words)
+        extra_feedback = real_extra[:5] if real_extra else None
+
+    expected_lines = len(_normalize_cube_content(cube.content).split('\n'))
+    actual_lines = len(result.reconstruction.split('\n'))
+    lines_feedback = (f"{actual_lines} lines, need {expected_lines}"
+                      if actual_lines != expected_lines else None)
+
+    pct = int((1 - result.ncd_score) * 100)
+    ncd_feedback = f"{pct}% match, small fix needed" if pct >= 80 else None
+
+    return missing_feedback, extra_feedback, lines_feedback, ncd_feedback
+
+
+def _format_feedback_for_prompt(missing: list[str] | None,
+                                 extra: list[str] | None,
+                                 lines: str | None,
+                                 ncd: str | None) -> list[str] | None:
+    """Pack the 4 feedback signals into a single 'Add: x | Remove: y | …'
+    string, wrapped in a list (the shape reconstruct_cube expects)."""
+    parts: list[str] = []
+    if missing:
+        parts.append(f"Add: {', '.join(missing)}")
+    if extra:
+        parts.append(f"Remove: {', '.join(extra)}")
+    if lines:
+        parts.append(lines)
+    if ncd:
+        parts.append(ncd)
+    return [' | '.join(parts)] if parts else None
+
+
 def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                            provider: LLMProvider,
                            attempts_per_wave: int = 11,
@@ -1678,36 +1766,22 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
 
     on_attempt: optional callback(wave, attempt, ncd, sha_match) for progress.
     """
-    # Annealing schedule: cold-hot-cold
-    # Start deterministic (best guess), explore (find alternatives), refine (lock in)
     n = attempts_per_wave
     schedule = _annealing_schedule(n)
 
     best_ncd = 1.0
     best_reconstruction = ""
     total_attempts = 0
-    missing_feedback = None   # "Add: defer, bool"
-    extra_feedback = None     # "Remove: wrongFunc"
-    lines_feedback = None     # "16 lines -> need 14"
-    ncd_feedback = None       # "93% correct, small fix"
+    missing_fb: list[str] | None = None
+    extra_fb: list[str] | None = None
+    lines_fb: str | None = None
+    ncd_fb: str | None = None
 
     for wave in range(1, max_waves + 1):
         for attempt in range(1, n + 1):
             total_attempts += 1
             temp = schedule[attempt - 1] if attempt <= len(schedule) else temperature
-
-            # Targeted feedback: tell model exactly what's wrong.
-            # Not "here's your wrong code" but specific actionable fixes.
-            feedback_parts = []
-            if missing_feedback:
-                feedback_parts.append(f"Add: {', '.join(missing_feedback)}")
-            if extra_feedback:
-                feedback_parts.append(f"Remove: {', '.join(extra_feedback)}")
-            if lines_feedback:
-                feedback_parts.append(lines_feedback)
-            if ncd_feedback:
-                feedback_parts.append(ncd_feedback)
-            feedback = [' | '.join(feedback_parts)] if feedback_parts else None
+            feedback = _format_feedback_for_prompt(missing_fb, extra_fb, lines_fb, ncd_fb)
 
             try:
                 result = reconstruct_cube(
@@ -1718,108 +1792,34 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                     temperature=temp,
                     mycelium=mycelium,
                 )
-
                 if result.ncd_score < best_ncd:
                     best_ncd = result.ncd_score
                     best_reconstruction = result.reconstruction
-
                 if on_attempt:
                     on_attempt(wave, attempt, result.ncd_score, result.exact_match)
-
                 if result.exact_match:
                     return WaveResult(
-                        cube_id=cube.id,
-                        sha_matched=True,
-                        wave_number=wave,
-                        attempt_in_wave=attempt,
+                        cube_id=cube.id, sha_matched=True,
+                        wave_number=wave, attempt_in_wave=attempt,
                         total_attempts=total_attempts,
                         best_ncd=result.ncd_score,
                         best_reconstruction=result.reconstruction,
                     )
-
-                # Learned anchors: lines the model got RIGHT become
-                # anchors for the next attempt. Each failure teaches us
-                # which lines are correct — we lock them in.
                 if ast_hints and result.reconstruction:
-                    try:
-                        from cube import normalize_content as _nc_la
-                    except ImportError:
-                        try:
-                            from engine.core.cube import normalize_content as _nc_la
-                        except ImportError:
-                            _nc_la = lambda t: t.strip()
-                    orig_lines = _nc_la(cube.content).split('\n')
-                    recon_lines = result.reconstruction.split('\n')
-                    existing_anchors = dict(ast_hints.get('anchors', []))
-                    learned = 0
-                    for li in range(min(len(orig_lines), len(recon_lines))):
-                        if li + 1 not in existing_anchors and \
-                                orig_lines[li] == recon_lines[li] and \
-                                orig_lines[li].strip():
-                            ast_hints.setdefault('anchors', []).append(
-                                (li + 1, orig_lines[li]))
-                            existing_anchors[li + 1] = orig_lines[li]
-                            learned += 1
-
-                # Targeted feedback: 3 specific signals
-                output_words = set(re.findall(r'\b([a-zA-Z_]\w{1,})\b',
-                                               result.reconstruction))
-
-                # 1. Missing identifiers
-                if ast_hints and ast_hints.get('identifiers'):
-                    expected = set(ast_hints['identifiers'])
-                    missing = sorted(expected - output_words)
-                    missing_feedback = missing[:10] if missing else None
-
-                    # 2. Extra identifiers (hallucinated words)
-                    extra = sorted(output_words - expected - {
-                        'if','else','for','while','return','break','continue',
-                        'true','false','null','nil','none','self','this',
-                    })
-                    # Only flag extras that are suspiciously wrong (not in neighbors)
-                    neighbor_words = set()
-                    for nb in neighbors:
-                        nb_text = nb.content if hasattr(nb, 'content') else ''
-                        neighbor_words.update(re.findall(r'\b([a-zA-Z_]\w{1,})\b', nb_text))
-                    real_extra = sorted(extra - neighbor_words)
-                    extra_feedback = real_extra[:5] if real_extra else None
-
-                # 3. Line count
-                try:
-                    from cube import normalize_content as _nc3
-                except ImportError:
-                    try:
-                        from engine.core.cube import normalize_content as _nc3
-                    except ImportError:
-                        _nc3 = lambda t: t.strip()
-                expected_lines = len(_nc3(cube.content).split('\n'))
-                actual_lines = len(result.reconstruction.split('\n'))
-                if actual_lines != expected_lines:
-                    lines_feedback = f"{actual_lines} lines, need {expected_lines}"
-                else:
-                    lines_feedback = None
-
-                # 4. NCD proximity
-                pct = int((1 - result.ncd_score) * 100)
-                if pct >= 80:
-                    ncd_feedback = f"{pct}% match, small fix needed"
-                else:
-                    ncd_feedback = None
-
+                    _learn_anchors_from_reconstruction(
+                        ast_hints, cube.content, result.reconstruction)
+                missing_fb, extra_fb, lines_fb, ncd_fb = _compute_attempt_feedback(
+                    result, cube, neighbors, ast_hints)
             except Exception:
                 if on_attempt:
                     on_attempt(wave, attempt, 1.0, False)
 
-        # After wave: give up if too far
         if best_ncd > ncd_give_up:
             break  # this cube needs a bigger level, stop wasting calls
 
-    # All waves exhausted, no SHA match
     return WaveResult(
-        cube_id=cube.id,
-        sha_matched=False,
-        wave_number=0,
-        attempt_in_wave=0,
+        cube_id=cube.id, sha_matched=False,
+        wave_number=0, attempt_in_wave=0,
         total_attempts=total_attempts,
         best_ncd=best_ncd,
         best_reconstruction=best_reconstruction,
@@ -1827,6 +1827,81 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
 
 
 # ─── B43: Adaptive reconstruction — auto x1→x2→x3, 3 passes per level ──
+
+def _compute_levels_count(content: str, base_tokens: int) -> int:
+    """levels = log2(lines / base_tokens) + 1, clamped to [1, 11].
+    Matches Sky's mathematically-derived ceiling — cube = whole file is
+    meaningless, hence the 11 cap (also lines up with attempts/cube)."""
+    import math
+    lines = content.count('\n') + 1
+    if lines <= base_tokens:
+        return 1
+    return min(11, max(1, int(math.log2(lines / base_tokens)) + 1))
+
+
+def _filter_cubes_to_test(cubes: list[Cube], sha_ranges: set,
+                          level: int, mycelium) -> list[int]:
+    """Return indices of cubes that still need testing at this level.
+
+    Skip rules:
+      1. Exact (line_start, line_end) already SHA'd at any earlier level.
+      2. For level > 1, fully covered by an earlier-level SHA range.
+    Skipped cubes still re-feed mycelium (Sky's insight: every observation
+    sharpens the co-occurrence network even if the SHA is already in)."""
+    to_test: list[int] = []
+    for i, c in enumerate(cubes):
+        if (c.line_start, c.line_end) in sha_ranges:
+            if mycelium:
+                mycelium.observe_text(c.content)
+            continue
+        if level > 1 and any(s <= c.line_start and e >= c.line_end
+                              for s, e in sha_ranges):
+            if mycelium:
+                mycelium.observe_text(c.content)
+            continue
+        to_test.append(i)
+    return to_test
+
+
+def _run_level_pass(cubes: list[Cube], to_test: list[int], store,
+                    provider: LLMProvider, attempts_per_cube: int,
+                    full_content: str, mycelium,
+                    on_cube_cb,
+                    sha_ranges: set, cycle: int, level: int) -> int:
+    """One pass of reconstruct_cube_waves over the to_test indices.
+    Mutates sha_ranges in place when a cube SHA-matches.
+    Returns the number of new SHA matches in this level pass."""
+    try:
+        from cube import extract_ast_hints, enrich_hints_with_file_context
+    except ImportError:
+        from engine.core.cube import extract_ast_hints, enrich_hints_with_file_context
+
+    level_sha = 0
+    for i in to_test:
+        c = cubes[i]
+        ne = store.get_neighbors(c.id)
+        nc = [store.get_cube(nid) for nid, _, _ in ne if store.get_cube(nid)]
+        hints = extract_ast_hints(c)
+        hints['_raw_content'] = c.content
+        hints = enrich_hints_with_file_context(hints, full_content)
+
+        wr = reconstruct_cube_waves(
+            c, nc, provider,
+            attempts_per_wave=attempts_per_cube, max_waves=1,
+            ast_hints=hints, mycelium=mycelium)
+
+        if wr.sha_matched:
+            level_sha += 1
+            sha_ranges.add((c.line_start, c.line_end))
+            if mycelium:
+                mycelium.observe_text(wr.best_reconstruction)
+            if on_cube_cb:
+                on_cube_cb(cycle, level, i, 'SHA', wr.attempt_in_wave, 0.0)
+        else:
+            if on_cube_cb:
+                on_cube_cb(cycle, level, i, 'FAIL', wr.total_attempts, wr.best_ncd)
+    return level_sha
+
 
 def reconstruct_adaptive(file_path: str, content: str,
                          provider: LLMProvider,
@@ -1864,37 +1939,20 @@ def reconstruct_adaptive(file_path: str, content: str,
         }
     """
     try:
-        from cube import subdivide_file, CubeStore, assign_neighbors, \
-            extract_ast_hints, normalize_content, enrich_hints_with_file_context
+        from cube import subdivide_file, CubeStore, assign_neighbors
     except ImportError:
-        from engine.core.cube import subdivide_file, CubeStore, assign_neighbors, \
-            extract_ast_hints, normalize_content, enrich_hints_with_file_context
-
-    import tempfile, math
+        from engine.core.cube import subdivide_file, CubeStore, assign_neighbors
+    import tempfile
 
     if base_tokens <= 0:
         raise ValueError(f"base_tokens must be > 0, got {base_tokens}")
 
-    # Calculate number of levels from file size
-    lines = content.count('\n') + 1
-    if lines <= base_tokens:
-        num_levels = 1
-    else:
-        num_levels = max(1, int(math.log2(lines / base_tokens)) + 1)
-        # Cap at reasonable level (cube = whole file makes no sense)
-        num_levels = min(num_levels, 11)
-
+    num_levels = _compute_levels_count(content, base_tokens)
     results = {
-        'total_cubes': 0,
-        'sha_count': 0,
-        'sha_pct': 0.0,
-        'cycles': 0,
-        'per_cycle': {},
-        'critical_cubes': [],
+        'total_cubes': 0, 'sha_count': 0, 'sha_pct': 0.0,
+        'cycles': 0, 'per_cycle': {}, 'critical_cubes': [],
     }
-
-    # Track SHA by line range (persists across cycles)
-    sha_ranges = set()
+    sha_ranges: set = set()  # persistent across cycles
 
     for cycle in range(1, max_cycles + 1):
         cycle_new_sha = 0
@@ -1904,105 +1962,45 @@ def reconstruct_adaptive(file_path: str, content: str,
             tokens = base_tokens * level
             cubes = subdivide_file(content=content, file_path=file_path,
                                    target_tokens=tokens)
-
             if cycle == 1 and level == 1:
                 results['total_cubes'] = len(cubes)
 
-            # Setup store + neighbors
             tmp = tempfile.mkdtemp()
             store = CubeStore(os.path.join(tmp, f'c{cycle}_x{level}.db'))
             for c in cubes:
                 store.save_cube(c)
             assign_neighbors(cubes, [], store, max_neighbors=9)
 
-            # Determine which cubes to test
-            to_test = []
-            for i, c in enumerate(cubes):
-                # Skip if this exact range already SHA
-                if (c.line_start, c.line_end) in sha_ranges:
-                    # Re-feed to mycelium (Sky's insight: new co-occurrences)
-                    if mycelium:
-                        mycelium.observe_text(c.content)
-                    continue
-                # For x2+: skip if fully covered by smaller SHA ranges
-                if level > 1:
-                    covered = False
-                    for start, end in sha_ranges:
-                        if start <= c.line_start and end >= c.line_end:
-                            covered = True
-                            break
-                    if covered:
-                        if mycelium:
-                            mycelium.observe_text(c.content)
-                        continue
-                to_test.append(i)
-
-            level_sha = 0
-
-            for i in to_test:
-                c = cubes[i]
-                ne = store.get_neighbors(c.id)
-                nc = [store.get_cube(nid) for nid, _, _ in ne
-                      if store.get_cube(nid)]
-                hints = extract_ast_hints(c)
-                hints['_raw_content'] = c.content
-                hints = enrich_hints_with_file_context(hints, content)
-
-                wr = reconstruct_cube_waves(
-                    c, nc, provider,
-                    attempts_per_wave=attempts_per_cube,
-                    max_waves=1,
-                    ast_hints=hints,
-                    mycelium=mycelium,
-                )
-
-                if wr.sha_matched:
-                    level_sha += 1
-                    cycle_new_sha += 1
-                    sha_ranges.add((c.line_start, c.line_end))
-                    if mycelium:
-                        mycelium.observe_text(wr.best_reconstruction)
-                    if on_cube:
-                        on_cube(cycle, level, i, 'SHA',
-                                wr.attempt_in_wave, 0.0)
-                else:
-                    if on_cube:
-                        on_cube(cycle, level, i, 'FAIL',
-                                wr.total_attempts, wr.best_ncd)
+            to_test = _filter_cubes_to_test(cubes, sha_ranges, level, mycelium)
+            level_sha = _run_level_pass(
+                cubes, to_test, store, provider, attempts_per_cube,
+                content, mycelium, on_cube, sha_ranges, cycle, level)
+            cycle_new_sha += level_sha
 
             cycle_data['per_level'][level] = {
-                'cubes': len(cubes),
-                'tokens': tokens,
-                'tested': len(to_test),
-                'sha': level_sha,
+                'cubes': len(cubes), 'tokens': tokens,
+                'tested': len(to_test), 'sha': level_sha,
             }
-
             store.close()
 
         cycle_data['new_sha'] = cycle_new_sha
         results['per_cycle'][cycle] = cycle_data
         results['sha_count'] += cycle_new_sha
         results['cycles'] = cycle
-
         if on_cube:
             on_cube(cycle, 0, 0, 'CYCLE_END', 0, cycle_new_sha)
-
-        # Plateau detection: if a full cycle produced 0 new SHA, stop
         if cycle_new_sha == 0:
-            break
+            break  # plateau detected
 
-    # Calculate final percentage
     if results['total_cubes'] > 0:
         results['sha_pct'] = 100 * results['sha_count'] / results['total_cubes']
 
-    # Critical cubes: x1 cubes that never got SHA at any level
     cubes_x1 = subdivide_file(content=content, file_path=file_path,
                                target_tokens=base_tokens)
     results['critical_cubes'] = [
         i for i, c in enumerate(cubes_x1)
         if (c.line_start, c.line_end) not in sha_ranges
     ]
-
     return results
 
 
