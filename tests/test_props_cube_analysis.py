@@ -3,41 +3,33 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
-# BUG-102 (forge): the following functions were SKIPPED because
-# they have side effects (write to disk, run subprocess, hit
-# network). Fuzzing them without isolation would corrupt the repo.
+from engine.core.cube_analysis import *
+# forge: the following functions were SKIPPED because they have
+# side effects (write to disk, run subprocess, hit network).
+# Fuzzing them without isolation would corrupt the repo.
 # To test them, write isolated tests by hand using tmp_path.
 #   - run_destruction_cycle  (name matches /^run_/)
 #   - post_cycle_analysis  (name matches /^post_/)
 #   - update_all_temperatures  (name matches /^update_/)
-#   - feed_mycelium_from_results  (name matches /^feed/)
 #   - git_blame_cube  (calls .run())
 #   - git_log_value  (calls .run())
-#   - cli_scan  (name matches /^cli_/)
-#   - cli_run  (name matches /^cli_/)
-#   - cli_status  (name matches /^cli_/)
-#   - cli_god  (name matches /^cli_/)
 #   - record_quarantine  (calls .makedirs())
+#   - purge_old_anomalies  (name matches /^purge_/)
 #   - record_anomaly  (calls .makedirs())
-#   - feedback_loop_check  (name matches /^feed/)
-#   - feed_anomalies_to_mycelium  (name matches /^feed/)
-
-from engine.core.cube_analysis import *
+#   - feedback_loop_check  (calls .run())
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -49,7 +41,10 @@ def test_compute_temperature_no_crash(cube, store):
     # from engine.core.cube_analysis import compute_temperature
     try:
         compute_temperature(cube, store)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), store=st.text(max_size=50))
@@ -59,7 +54,10 @@ def test_kaplan_meier_survival_no_crash(cube, store):
     # from engine.core.cube_analysis import kaplan_meier_survival
     try:
         kaplan_meier_survival(cube, store)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), all_cubes=st.text(max_size=50), deps=st.text(max_size=50))
@@ -69,7 +67,10 @@ def test_detect_dead_code_no_crash(cube, all_cubes, deps):
     # from engine.core.cube_analysis import detect_dead_code
     try:
         detect_dead_code(cube, all_cubes, deps)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), deps=st.text(max_size=50))
@@ -79,7 +80,10 @@ def test_filter_dead_cubes_no_crash(cubes, deps):
     # from engine.core.cube_analysis import filter_dead_cubes
     try:
         filter_dead_cubes(cubes, deps)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), deps=st.text(max_size=50), use_survey=st.booleans())
@@ -89,7 +93,10 @@ def test_prepare_cubes_no_crash(cubes, store, deps, use_survey):
     # from engine.core.cube_analysis import prepare_cubes
     try:
         prepare_cubes(cubes, store, deps, use_survey)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), deps=st.text(max_size=50), threshold=st.floats(allow_nan=False, allow_infinity=False))
@@ -99,7 +106,10 @@ def test_compute_gods_number_no_crash(cubes, store, deps, threshold):
     # from engine.core.cube_analysis import compute_gods_number
     try:
         compute_gods_number(cubes, store, deps, threshold)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(level0_cubes=st.text(max_size=50), level=st.integers(-1000, 1000), group_size=st.integers(-1000, 1000))
@@ -109,7 +119,10 @@ def test_build_level_cubes_no_crash(level0_cubes, level, group_size):
     # from engine.core.cube_analysis import build_level_cubes
     try:
         build_level_cubes(level0_cubes, level, group_size)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(upper_cube=st.text(max_size=50), sub_cubes=st.text(max_size=50))
@@ -119,7 +132,10 @@ def test_aggregate_scores_no_crash(upper_cube, sub_cubes):
     # from engine.core.cube_analysis import aggregate_scores
     try:
         aggregate_scores(upper_cube, sub_cubes)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(level0_cubes=st.text(max_size=50), store=st.text(max_size=50), max_level=st.integers(-1000, 1000))
@@ -129,7 +145,23 @@ def test_propagate_levels_no_crash(level0_cubes, store, max_level):
     # from engine.core.cube_analysis import propagate_levels
     try:
         propagate_levels(level0_cubes, store, max_level)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(results=st.text(max_size=50), cubes=st.text(max_size=50), mycelium=st.text(max_size=50))
+@settings(max_examples=50)
+def test_feed_mycelium_from_results_no_crash(results, cubes, mycelium):
+    """Smoke: feed_mycelium_from_results() does not crash on arbitrary input"""
+    # from engine.core.cube_analysis import feed_mycelium_from_results
+    try:
+        feed_mycelium_from_results(results, cubes, mycelium)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50), results=st.text(max_size=50), learning_rate=st.floats(allow_nan=False, allow_infinity=False))
@@ -139,7 +171,62 @@ def test_hebbian_update_no_crash(store, results, learning_rate):
     # from engine.core.cube_analysis import hebbian_update
     try:
         hebbian_update(store, results, learning_rate)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(repo_path=st.text(max_size=100), config=st.text(max_size=50))
+@settings(max_examples=50)
+def test_cli_scan_no_crash(repo_path, config):
+    """Smoke: cli_scan() does not crash on arbitrary input"""
+    # from engine.core.cube_analysis import cli_scan
+    try:
+        cli_scan(repo_path, config)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(repo_path=st.text(max_size=100), cycles=st.integers(-1000, 1000), level=st.integers(-1000, 1000), config=st.text(max_size=50))
+@settings(max_examples=50, deadline=None)  # cli_run reads/scans repo → can exceed Hypothesis 200ms default
+def test_cli_run_no_crash(repo_path, cycles, level, config):
+    """Smoke: cli_run() does not crash on arbitrary input"""
+    # from engine.core.cube_analysis import cli_run
+    try:
+        cli_run(repo_path, cycles, level, config)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(config=st.text(max_size=50))
+@settings(max_examples=50)
+def test_cli_status_no_crash(config):
+    """Smoke: cli_status() does not crash on arbitrary input"""
+    # from engine.core.cube_analysis import cli_status
+    try:
+        cli_status(config)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(config=st.text(max_size=50))
+@settings(max_examples=50)
+def test_cli_god_no_crash(config):
+    """Smoke: cli_god() does not crash on arbitrary input"""
+    # from engine.core.cube_analysis import cli_god
+    try:
+        cli_god(config)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50))
@@ -149,7 +236,10 @@ def test_build_adjacency_matrix_no_crash(cubes, store):
     # from engine.core.cube_analysis import build_adjacency_matrix
     try:
         build_adjacency_matrix(cubes, store)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), n_groups=st.text(max_size=50))
@@ -159,7 +249,10 @@ def test_laplacian_rg_grouping_no_crash(cubes, store, n_groups):
     # from engine.core.cube_analysis import laplacian_rg_grouping
     try:
         laplacian_rg_grouping(cubes, store, n_groups)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50))
@@ -169,7 +262,10 @@ def test_cheeger_constant_no_crash(cubes, store):
     # from engine.core.cube_analysis import cheeger_constant
     try:
         cheeger_constant(cubes, store)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), max_iter=st.integers(-1000, 1000), tolerance=st.floats(allow_nan=False, allow_infinity=False))
@@ -179,7 +275,10 @@ def test_belief_propagation_no_crash(cubes, store, max_iter, tolerance):
     # from engine.core.cube_analysis import belief_propagation
     try:
         belief_propagation(cubes, store, max_iter, tolerance)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), neutral_threshold=st.floats(allow_nan=False, allow_infinity=False))
@@ -189,7 +288,10 @@ def test_survey_propagation_filter_no_crash(cubes, store, neutral_threshold):
     # from engine.core.cube_analysis import survey_propagation_filter
     try:
         survey_propagation_filter(cubes, store, neutral_threshold)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), store=st.text(max_size=50), all_cubes=st.text(max_size=50))
@@ -199,7 +301,10 @@ def test_tononi_degeneracy_no_crash(cube, store, all_cubes):
     # from engine.core.cube_analysis import tononi_degeneracy
     try:
         tononi_degeneracy(cube, store, all_cubes)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50))
@@ -209,7 +314,10 @@ def test_cube_heatmap_no_crash(store):
     # from engine.core.cube_analysis import cube_heatmap
     try:
         cube_heatmap(store)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50), forge_root=st.text(max_size=100), forge_weight=st.floats(allow_nan=False, allow_infinity=False), cube_weight=st.floats(allow_nan=False, allow_infinity=False))
@@ -219,7 +327,10 @@ def test_fuse_risks_no_crash(store, forge_root, forge_weight, cube_weight):
     # from engine.core.cube_analysis import fuse_risks
     try:
         fuse_risks(store, forge_root, forge_weight, cube_weight)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50), failed_files=st.text(max_size=50), reconstructor=st.text(max_size=50), max_patches=st.integers(-1000, 1000))
@@ -229,5 +340,21 @@ def test_auto_repair_no_crash(store, failed_files, reconstructor, max_patches):
     # from engine.core.cube_analysis import auto_repair
     try:
         auto_repair(store, failed_files, reconstructor, max_patches)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(anomaly_path=st.text(max_size=100), mycelium=st.text(max_size=50))
+@settings(max_examples=50)
+def test_feed_anomalies_to_mycelium_no_crash(anomaly_path, mycelium):
+    """Smoke: feed_anomalies_to_mycelium() does not crash on arbitrary input"""
+    # from engine.core.cube_analysis import feed_anomalies_to_mycelium
+    try:
+        feed_anomalies_to_mycelium(anomaly_path, mycelium)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK

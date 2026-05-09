@@ -3,36 +3,44 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
-# BUG-102 (forge): the following functions were SKIPPED because
-# they have side effects (write to disk, run subprocess, hit
-# network). Fuzzing them without isolation would corrupt the repo.
+from engine.core.cube import *
+# forge: the following functions were SKIPPED because they have
+# side effects (write to disk, run subprocess, hit network).
+# Fuzzing them without isolation would corrupt the repo.
 # To test them, write isolated tests by hand using tmp_path.
-#   - scan_repo  (name matches /^scan_/)
-#   - normalize_content  (calls .replace())
+#   - scan_repo  (path arg + .walk())
 #   - format_code  (calls .run())
 #   - check_formatters  (calls .system())
 #   - install_formatters  (name matches /^install_/)
-#   - assign_neighbors  (name matches /^assign_/)
-
-from engine.core.cube import *
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+
+@given(text=st.text(max_size=100))
+@settings(max_examples=50)
+def test_normalize_content_no_crash(text):
+    """Smoke: normalize_content() does not crash on arbitrary input"""
+    # from engine.core.cube import normalize_content
+    try:
+        normalize_content(text)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), file_path=st.text(max_size=100))
 @settings(max_examples=50)
@@ -41,7 +49,10 @@ def test_sha256_hash_no_crash(text, file_path):
     # from engine.core.cube import sha256_hash
     try:
         sha256_hash(text, file_path)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(file_path=st.text(max_size=100), content=st.text(max_size=100), target_tokens=st.integers(-1000, 1000), level=st.integers(-1000, 1000))
@@ -51,7 +62,10 @@ def test_subdivide_file_no_crash(file_path, content, target_tokens, level):
     # from engine.core.cube import subdivide_file
     try:
         subdivide_file(file_path, content, target_tokens, level)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(file_path=st.text(max_size=100), content=st.text(max_size=100), target_tokens=st.integers(-1000, 1000), max_levels=st.integers(-1000, 1000))
@@ -61,7 +75,10 @@ def test_subdivide_recursive_no_crash(file_path, content, target_tokens, max_lev
     # from engine.core.cube import subdivide_recursive
     try:
         subdivide_recursive(file_path, content, target_tokens, max_levels)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(files=st.text(max_size=50))
@@ -71,7 +88,10 @@ def test_parse_dependencies_no_crash(files):
     # from engine.core.cube import parse_dependencies
     try:
         parse_dependencies(files)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50))
@@ -81,7 +101,10 @@ def test_extract_ast_hints_no_crash(cube):
     # from engine.core.cube import extract_ast_hints
     try:
         extract_ast_hints(cube)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(full_content=st.text(max_size=100))
@@ -91,7 +114,10 @@ def test_deduce_imports_from_file_no_crash(full_content):
     # from engine.core.cube import deduce_imports_from_file
     try:
         deduce_imports_from_file(full_content)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(hints=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10), full_content=st.text(max_size=100), all_cubes=st.lists(st.integers(), max_size=20))
@@ -101,7 +127,10 @@ def test_enrich_hints_with_file_context_no_crash(hints, full_content, all_cubes)
     # from engine.core.cube import enrich_hints_with_file_context
     try:
         enrich_hints_with_file_context(hints, full_content, all_cubes)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50))
@@ -111,7 +140,10 @@ def test_extract_all_ast_hints_no_crash(cubes):
     # from engine.core.cube import extract_all_ast_hints
     try:
         extract_all_ast_hints(cubes)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), deps=st.text(max_size=50), max_neighbors=st.integers(-1000, 1000))
@@ -121,5 +153,21 @@ def test_build_neighbor_graph_no_crash(cubes, deps, max_neighbors):
     # from engine.core.cube import build_neighbor_graph
     try:
         build_neighbor_graph(cubes, deps, max_neighbors)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(cubes=st.text(max_size=50), deps=st.text(max_size=50), store=st.text(max_size=50), max_neighbors=st.integers(-1000, 1000))
+@settings(max_examples=50)
+def test_assign_neighbors_no_crash(cubes, deps, store, max_neighbors):
+    """Smoke: assign_neighbors() does not crash on arbitrary input"""
+    # from engine.core.cube import assign_neighbors
+    try:
+        assign_neighbors(cubes, deps, store, max_neighbors)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK

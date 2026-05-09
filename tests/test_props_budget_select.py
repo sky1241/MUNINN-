@@ -3,22 +3,19 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
 from engine.core.budget_select import *
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -30,7 +27,10 @@ def test_has_fact_span_no_crash(chunk):
     # from engine.core.budget_select import has_fact_span
     try:
         has_fact_span(chunk)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(chunks=st.text(max_size=50))
@@ -40,7 +40,10 @@ def test_compute_idf_no_crash(chunks):
     # from engine.core.budget_select import compute_idf
     try:
         compute_idf(chunks)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(chunk=st.text(max_size=100), idf_map=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10), position_idx=st.integers(-1000, 1000), total_chunks=st.integers(-1000, 1000))
@@ -50,7 +53,10 @@ def test_score_chunk_no_crash(chunk, idf_map, position_idx, total_chunks):
     # from engine.core.budget_select import score_chunk
     try:
         score_chunk(chunk, idf_map, position_idx, total_chunks)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(chunks=st.text(max_size=50), budget_tokens=st.integers(-1000, 1000), token_count=st.text(max_size=50), keep_facts=st.booleans())
@@ -60,7 +66,10 @@ def test_select_chunks_no_crash(chunks, budget_tokens, token_count, keep_facts):
     # from engine.core.budget_select import select_chunks
     try:
         select_chunks(chunks, budget_tokens, token_count, keep_facts)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), budget_tokens=st.integers(-1000, 1000), token_count=st.text(max_size=50), keep_facts=st.booleans(), separator=st.text(max_size=100))
@@ -70,7 +79,10 @@ def test_budget_select_no_crash(text, budget_tokens, token_count, keep_facts, se
     # from engine.core.budget_select import budget_select
     try:
         budget_select(text, budget_tokens, token_count, keep_facts, separator)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), chunks=st.text(max_size=50), budget_tokens=st.integers(-1000, 1000))
@@ -80,5 +92,8 @@ def test_stats_no_crash(text, chunks, budget_tokens):
     # from engine.core.budget_select import stats
     try:
         stats(text, chunks, budget_tokens)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK

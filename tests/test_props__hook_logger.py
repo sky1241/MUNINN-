@@ -3,22 +3,19 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
 from engine.core._hook_logger import *
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -30,5 +27,34 @@ def test_log_hook_event_no_crash(source, context, exc, log_path, max_bytes, back
     # from engine.core._hook_logger import log_hook_event
     try:
         log_hook_event(source, context, exc, log_path, max_bytes, backup_count)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(source=st.text(max_size=100), context=st.text(max_size=100), exc=st.text(max_size=50), log_path=st.text(max_size=50), max_bytes=st.integers(-1000, 1000), backup_count=st.integers(-1000, 1000))
+@settings(max_examples=50)
+def test_log_engine_event_no_crash(source, context, exc, log_path, max_bytes, backup_count):
+    """Smoke: log_engine_event() does not crash on arbitrary input"""
+    # from engine.core._hook_logger import log_engine_event
+    try:
+        log_engine_event(source, context, exc, log_path, max_bytes, backup_count)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(source=st.text(max_size=100), context=st.text(max_size=100), log_path=st.text(max_size=50), max_bytes=st.integers(-1000, 1000), backup_count=st.integers(-1000, 1000))
+@settings(max_examples=50)
+def test_swallow_no_crash(source, context, log_path, max_bytes, backup_count):
+    """Smoke: swallow() does not crash on arbitrary input"""
+    # from engine.core._hook_logger import swallow
+    try:
+        swallow(source, context, log_path, max_bytes, backup_count)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK

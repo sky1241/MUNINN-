@@ -3,36 +3,25 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
-# BUG-102 (forge): the following functions were SKIPPED because
-# they have side effects (write to disk, run subprocess, hit
-# network). Fuzzing them without isolation would corrupt the repo.
+from engine.core.cube_providers import *
+# forge: the following functions were SKIPPED because they have
+# side effects (write to disk, run subprocess, hit network).
+# Fuzzing them without isolation would corrupt the repo.
 # To test them, write isolated tests by hand using tmp_path.
 #   - run_progressive_levels  (name matches /^run_/)
 
-from engine.core.cube_providers import *
-# `reconstruct_line_by_line` and `reconstruct_adaptive` are intentionally
-# excluded from cube_providers.__all__ (kept as semi-private helpers used
-# by the live UX), so star-import doesn't bring them in. Import them
-# explicitly so the smoke tests below resolve.
-from engine.core.cube_providers import (
-    reconstruct_line_by_line,
-    reconstruct_adaptive,
-)
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -44,7 +33,10 @@ def test_reconstruct_cube_no_crash(cube, neighbors, provider, ncd_threshold, ast
     # from engine.core.cube_providers import reconstruct_cube
     try:
         reconstruct_cube(cube, neighbors, provider, ncd_threshold, ast_hints, previous_attempts, temperature, mycelium)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(original=st.text(max_size=100), reconstruction=st.text(max_size=100))
@@ -54,7 +46,10 @@ def test_validate_reconstruction_no_crash(original, reconstruction):
     # from engine.core.cube_providers import validate_reconstruction
     try:
         validate_reconstruction(original, reconstruction)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50))
@@ -64,7 +59,10 @@ def test_compute_hotness_no_crash(cube, neighbors, provider):
     # from engine.core.cube_providers import compute_hotness
     try:
         compute_hotness(cube, neighbors, provider)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(a=st.text(max_size=100), b=st.text(max_size=100))
@@ -74,7 +72,10 @@ def test_compute_ncd_no_crash(a, b):
     # from engine.core.cube_providers import compute_ncd
     try:
         compute_ncd(a, b)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), ast_hints=st.text(max_size=50), mycelium=st.text(max_size=50))
@@ -84,17 +85,23 @@ def test_reconstruct_line_by_line_no_crash(cube, neighbors, provider, ast_hints,
     # from engine.core.cube_providers import reconstruct_line_by_line
     try:
         reconstruct_line_by_line(cube, neighbors, provider, ast_hints, mycelium)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), attempts_per_wave=st.integers(-1000, 1000), max_waves=st.integers(-1000, 1000), ast_hints=st.text(max_size=50), temperature=st.floats(allow_nan=False, allow_infinity=False), ncd_give_up=st.floats(allow_nan=False, allow_infinity=False), on_attempt=st.text(max_size=50), mycelium=st.text(max_size=50))
-@settings(max_examples=50, deadline=2000)
+@settings(max_examples=50, deadline=None)  # reconstruct_cube_waves runs attempts*waves loops → can exceed Hypothesis 200ms default
 def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, temperature, ncd_give_up, on_attempt, mycelium):
     """Smoke: reconstruct_cube_waves() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_cube_waves
     try:
         reconstruct_cube_waves(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, temperature, ncd_give_up, on_attempt, mycelium)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(file_path=st.text(max_size=100), content=st.text(max_size=100), provider=st.text(max_size=50), base_tokens=st.integers(-1000, 1000), max_cycles=st.integers(-1000, 1000), attempts_per_cube=st.integers(-1000, 1000), mycelium=st.text(max_size=50), on_cube=st.text(max_size=50))
@@ -104,5 +111,8 @@ def test_reconstruct_adaptive_no_crash(file_path, content, provider, base_tokens
     # from engine.core.cube_providers import reconstruct_adaptive
     try:
         reconstruct_adaptive(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, on_cube)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK

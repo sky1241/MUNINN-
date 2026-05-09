@@ -80,9 +80,11 @@ because primacy bias is real and these are the rules that actually matter.
   before claiming the work is done. Forge is the reality-check tool that
   catches BUG-101, BUG-102, BUG-105, BUG-106 before they hit production.
 
-  Required commands per touched module:
-    python forge.py --gen-props engine/core/<module>.py
-    python -m pytest tests/test_props_<module>.py -q
+  Required commands per touched module (forge-shield 1.1.0 PyPI binary
+  since 2026-05-09 — `pip install forge-shield`; legacy `python forge.py`
+  still works during the deprecation window):
+    forge --gen-props engine/core/<module>.py
+    python3 -m pytest tests/test_props_<module>.py -q
 
   The BUG-102 destructive function detector is loaded by default — it will
   skip side-effect functions (scrub_*, install_*, generate_*, _hook,

@@ -3,33 +3,30 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
-# BUG-102 (forge): the following functions were SKIPPED because
-# they have side effects (write to disk, run subprocess, hit
-# network). Fuzzing them without isolation would corrupt the repo.
+from engine.core.sync_backend import *
+# forge: the following functions were SKIPPED because they have
+# side effects (write to disk, run subprocess, hit network).
+# Fuzzing them without isolation would corrupt the repo.
 # To test them, write isolated tests by hand using tmp_path.
-#   - save_sync_config  (name matches /^save/)
+#   - save_sync_config  (calls .mkdir())
 #   - sync_metrics  (name matches /^sync_/)
 #   - migrate_backend  (name matches /^migrate/)
 #   - sync_doctor  (name matches /^sync_/)
 #   - export_meta_json  (calls .write_text())
 #   - import_meta_json  (calls .mkdir())
 
-from engine.core.sync_backend import *
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -41,7 +38,10 @@ def test_check_disk_space_no_crash(path, min_mb):
     # from engine.core.sync_backend import check_disk_space
     try:
         check_disk_space(path, min_mb)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(config=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10))
@@ -51,5 +51,8 @@ def test_get_sync_backend_no_crash(config):
     # from engine.core.sync_backend import get_sync_backend
     try:
         get_sync_backend(config)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK

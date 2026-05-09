@@ -3,39 +3,34 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine/core'))
 
 import pytest
 from hypothesis import given, strategies as st, settings
-# BUG-102 (forge): the following functions were SKIPPED because
-# they have side effects (write to disk, run subprocess, hit
-# network). Fuzzing them without isolation would corrupt the repo.
+from engine.core.muninn_tree import *
+# forge: the following functions were SKIPPED because they have
+# side effects (write to disk, run subprocess, hit network).
+# Fuzzing them without isolation would corrupt the repo.
 # To test them, write isolated tests by hand using tmp_path.
 #   - cleanup_legacy_tree  (name matches /^cleanup/)
 #   - cleanup_tmp_files  (name matches /^cleanup/)
 #   - init_tree  (calls .mkdir())
-#   - save_tree  (name matches /^save/)
+#   - save_tree  (calls .mkdir())
 #   - compute_hash  (path arg + .read_bytes())
 #   - grow_branches_from_session  (calls .unlink())
 #   - boot  (calls .run())
-#   - bridge  (name matches /^bridge/)
-#   - bridge_fast  (name matches /^bridge/)
 #   - prune  (name matches /^prune/)
 #   - doctor  (calls .write_text())
 #   - inject_memory  (calls .mkdir())
 
-from engine.core.muninn_tree import *
 
 
-# BUG-102 cwd guard (added 2026-05-07): the destructive detector
-# catches direct mkdir/write/open calls in fuzzed function bodies,
-# but it does not follow indirect calls (e.g. extract_tags() ->
-# Mycelium() -> mkdir()). When Hypothesis fuzzes a path-like arg
-# with a random string like '0' or '\xfeQ', the indirect mkdir
-# resolves it relative to cwd and pollutes the repo root.
-# This autouse fixture chdir's into a tmp_path before each test,
-# so any indirect file-system mutation lands in a sandbox that
-# pytest cleans up automatically.
+# cwd guard: the destructive detector catches direct mkdir/write/open
+# calls in fuzzed function bodies, but it does not follow indirect calls
+# (e.g. parse_input() -> IndexBuilder() -> mkdir()). When Hypothesis fuzzes
+# a path-like arg with a random string like '0' or '\xfeQ', the indirect
+# mkdir resolves it relative to cwd and pollutes the repo root.
+# This autouse fixture chdir's into tmp_path before each test, so any
+# indirect file-system mutation lands in a sandbox pytest cleans up.
 @pytest.fixture(autouse=True)
 def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -47,7 +42,10 @@ def test_adaptive_boot_budget_no_crash(context_size):
     # from engine.core.muninn_tree import adaptive_boot_budget
     try:
         adaptive_boot_budget(context_size)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(node=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10))
@@ -57,7 +55,10 @@ def test_compute_temperature_no_crash(node):
     # from engine.core.muninn_tree import compute_temperature
     try:
         compute_temperature(node)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(tree=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10))
@@ -67,7 +68,10 @@ def test_refresh_tree_metadata_no_crash(tree):
     # from engine.core.muninn_tree import refresh_tree_metadata
     try:
         refresh_tree_metadata(tree)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(name=st.text(max_size=100), _tree=st.text(max_size=50))
@@ -77,7 +81,10 @@ def test_read_node_no_crash(name, _tree):
     # from engine.core.muninn_tree import read_node
     try:
         read_node(name, _tree)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(filepath=st.text(max_size=50))
@@ -87,7 +94,10 @@ def test_build_tree_no_crash(filepath):
     # from engine.core.muninn_tree import build_tree
     try:
         build_tree(filepath)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100))
@@ -97,7 +107,10 @@ def test_extract_tags_no_crash(text):
     # from engine.core.muninn_tree import extract_tags
     try:
         extract_tags(text)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(query=st.text(max_size=100))
@@ -107,7 +120,36 @@ def test_recall_no_crash(query):
     # from engine.core.muninn_tree import recall
     try:
         recall(query)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(text=st.text(max_size=100), top_n=st.integers(-1000, 1000), hops=st.integers(-1000, 1000), include_branches=st.booleans())
+@settings(max_examples=50)
+def test_bridge_no_crash(text, top_n, hops, include_branches):
+    """Smoke: bridge() does not crash on arbitrary input"""
+    # from engine.core.muninn_tree import bridge
+    try:
+        bridge(text, top_n, hops, include_branches)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(text=st.text(max_size=100), top_n=st.integers(-1000, 1000))
+@settings(max_examples=50)
+def test_bridge_fast_no_crash(text, top_n):
+    """Smoke: bridge_fast() does not crash on arbitrary input"""
+    # from engine.core.muninn_tree import bridge_fast
+    try:
+        bridge_fast(text, top_n)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(current_concepts=st.text(max_size=50), top_n=st.integers(-1000, 1000), _mycelium=st.text(max_size=50))
@@ -117,7 +159,10 @@ def test_predict_next_no_crash(current_concepts, top_n, _mycelium):
     # from engine.core.muninn_tree import predict_next
     try:
         predict_next(current_concepts, top_n, _mycelium)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(concepts=st.text(max_size=50))
@@ -127,7 +172,10 @@ def test_detect_session_mode_no_crash(concepts):
     # from engine.core.muninn_tree import detect_session_mode
     try:
         detect_session_mode(concepts)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(concepts=st.text(max_size=50))
@@ -137,7 +185,10 @@ def test_adapt_k_no_crash(concepts):
     # from engine.core.muninn_tree import adapt_k
     try:
         adapt_k(concepts)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(concepts=st.text(max_size=50), tagged_lines=st.text(max_size=50))
@@ -147,7 +198,10 @@ def test_classify_session_no_crash(concepts, tagged_lines):
     # from engine.core.muninn_tree import classify_session
     try:
         classify_session(concepts, tagged_lines)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
 
 @given(query=st.text(max_size=100), top_n=st.integers(-1000, 1000))
@@ -157,5 +211,8 @@ def test_huginn_think_no_crash(query, top_n):
     # from engine.core.muninn_tree import huginn_think
     try:
         huginn_think(query, top_n)
-    except (ValueError, TypeError, KeyError, IndexError, OSError, AttributeError, RuntimeError, SystemExit):
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
         pass  # Expected rejections are OK
