@@ -17,6 +17,52 @@
 
 ---
 
+## NOT-A-BUG — 2026-05-09 — `forge --anomaly` z-score outliers on engine/core/ hubs
+
+### Why this is documented here
+
+Phase F5 of `docs/BATTLE_PLAN_FORGE_FINDINGS_2026-05-09.md`.
+
+`forge --anomaly` (z-score outlier detection) flags 5 files on every run:
+
+```
+ANOMALY  engine/core/muninn.py        2 flags: freq=+16.6  loc=+3.5
+ANOMALY  engine/core/mycelium.py      2 flags: freq=+6.1   loc=+5.5
+ANOMALY  engine/core/cube.py          2 flags: freq=+2.8   loc=+2.4
+ANOMALY  engine/core/cube_providers.py 2 flags: freq=+4.6  loc=+3.5
+ANOMALY  engine/core/mycelium_db.py   2 flags: freq=+2.2   loc=+2.1
+```
+
+**This is statistical noise inherent to a hub-and-spoke topology, not a
+bug.** The 5 flagged files are precisely the engine hubs — `muninn.py`
+is the CLI orchestrator, `mycelium*` are the co-occurrence core,
+`cube*` are the destruction/reconstruction core. They have:
+
+- Higher commit frequency than tests/utilities (because every feature
+  touches them at least once).
+- Higher LOC than utilities (because they aggregate sub-system logic).
+
+A z-score that flags hubs as outliers is *correct* — the hubs *are*
+statistically distinct from leaves. But the right interpretation is
+"these are the hubs", not "these have a bug". Forge's `--anomaly`
+output should be read alongside `--carmack` (composite risk including
+coupling and bugfix-rate) and `--modularity` (Q over the import graph,
+0.677 measured = "good") to avoid acting on this single signal.
+
+**Action taken**: none on the code. F1 (this cycle) split engine/core/
+muninn.py main() into named handlers (-130L, 6 helpers extracted), and
+F3 split cube_providers.py mega-functions (-1100 lines of giant
+functions across 4 sites) — but those refactors were driven by
+`--carmack` + function-size invariants, not by `--anomaly`.
+
+**Future**: if Sky wants to silence the noise in CI dashboards, add
+these 5 file paths to a future `.forge/config.json` `anomaly_excludes`
+key. Not implemented today — the signal is informative even if not
+actionable, and exclude lists hide drift if a *real* anomaly later
+appears in one of these hubs.
+
+---
+
 ## CRITICAL — 2026-04-10 — BUG-102: forge --gen-props had no isolation
 
 ### BUG-102: forge --gen-props fuzzed destructive functions, corrupted 165 files
