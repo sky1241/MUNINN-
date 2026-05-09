@@ -1544,6 +1544,67 @@ def purge_secrets_db(repo_path: Path = None):
 
     print(f"\n  Total purged: {total} concept(s)")
     return total
+
+
+# ── F1a (2026-05-09): vault command handler ──────────────────────
+# Extracted out of main() to keep the dispatcher under control. Behaviour
+# unchanged — same _REPO_PATH global mutation, same getpass fallback,
+# same exit codes.
+
+def _handle_vault_command(args):
+    """Dispatch lock / unlock / rekey to the Vault module.
+    Auto-detects repo via _REPO_PATH or `.muninn/` in cwd."""
+    global _REPO_PATH
+    if not _REPO_PATH:
+        cwd = Path(".").resolve()
+        if (cwd / ".muninn").exists():
+            _REPO_PATH = cwd
+            _refresh_tree_paths()
+    repo = _REPO_PATH or Path(".").resolve()
+    try:
+        from vault import Vault
+    except ImportError:
+        print("ERROR: vault module not found")
+        sys.exit(1)
+
+    v = Vault(repo)
+    pw = args.password  # --password for scripts/CI, getpass for interactive
+    if not pw:
+        import getpass
+        pw = getpass.getpass("Vault password: ")
+
+    try:
+        if args.command == "lock":
+            if not v.is_initialized():
+                v.init(pw)
+                print("VAULT: initialized (salt + backup saved)")
+            else:
+                v.load_key(pw)
+            result = v.lock()
+            print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
+        elif args.command == "unlock":
+            if not v.is_initialized():
+                print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
+                sys.exit(1)
+            v.load_key(pw)
+            result = v.unlock()
+            print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
+        elif args.command == "rekey":
+            if not v.is_initialized():
+                print("ERROR: vault not initialized.")
+                sys.exit(1)
+            v.load_key(pw)
+            import getpass as _gp
+            new_pw = args.file  # Can pass new password as positional arg
+            if not new_pw:
+                new_pw = _gp.getpass("New vault password: ")
+            result = v.rekey(new_pw)
+            print(f"VAULT REKEYED: {result['rekeyed']} files re-encrypted ({result['total_bytes']:,} bytes)")
+    except ValueError as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 
 def main():
@@ -1677,52 +1738,7 @@ def main():
         return
 
     if args.command in ("lock", "unlock", "rekey"):
-        if not _REPO_PATH:
-            cwd = Path(".").resolve()
-            if (cwd / ".muninn").exists():
-                _REPO_PATH = cwd
-                _refresh_tree_paths()
-        repo = _REPO_PATH or Path(".").resolve()
-        try:
-            from vault import Vault
-        except ImportError:
-            print("ERROR: vault module not found")
-            sys.exit(1)
-        v = Vault(repo)
-        pw = args.password  # --password for scripts/CI, getpass for interactive
-        if not pw:
-            import getpass
-            pw = getpass.getpass("Vault password: ")
-        try:
-            if args.command == "lock":
-                if not v.is_initialized():
-                    v.init(pw)
-                    print(f"VAULT: initialized (salt + backup saved)")
-                else:
-                    v.load_key(pw)
-                result = v.lock()
-                print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
-            elif args.command == "unlock":
-                if not v.is_initialized():
-                    print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
-                    sys.exit(1)
-                v.load_key(pw)
-                result = v.unlock()
-                print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
-            elif args.command == "rekey":
-                if not v.is_initialized():
-                    print("ERROR: vault not initialized.")
-                    sys.exit(1)
-                v.load_key(pw)
-                import getpass as _gp
-                new_pw = args.file  # Can pass new password as positional arg
-                if not new_pw:
-                    new_pw = _gp.getpass("New vault password: ")
-                result = v.rekey(new_pw)
-                print(f"VAULT REKEYED: {result['rekeyed']} files re-encrypted ({result['total_bytes']:,} bytes)")
-        except ValueError as e:
-            print(f"ERROR: {e}")
-            sys.exit(1)
+        _handle_vault_command(args)
         return
 
     if args.command == "trip":
