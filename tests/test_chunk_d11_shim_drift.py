@@ -113,6 +113,9 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
                                 # adaptive_hops / _build_adj_cache / _build_adj_subgraph /
                                 # _dynamic_degree_percentile / _get_high_degree_concepts.
                                 # Same justification.
+        "mycelium_dream", # H6 chunk 4 (2026-05-09): _MyceliumDreamMixin —
+                          # detect_anomalies / detect_blind_spots / trip / dream /
+                          # _save_insights. Same justification.
     }
     for name in engine_files:
         if name in engine_only:
