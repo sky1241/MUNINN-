@@ -433,7 +433,7 @@ Phase 5 — Orchestrator
 - Si un test echoue on corrige AVANT de continuer
 - L'orchestrator c'est la FIN pas le DEBUT
 - Si t'as envie d'assembler avant que tout soit vert: NON
-- Apres chaque brique: `python forge.py` + `python forge.py --diff`. ZERO regression toleree.
+- Apres chaque brique: `forge` + `forge --diff`. ZERO regression toleree.
 - Chaque scan doit LOGGER: debut, fin, duree, nb fichiers scannes, nb findings par severite. Fichier log: .muninn/scan_log.jsonl (append-only, comme vault_audit.jsonl)
 
 ## INTEGRATION MUNINN — Ou ca va dans le code
@@ -573,8 +573,8 @@ class TestBSCAN01BibleScraper:
 Apres chaque brique, lancer:
 ```bash
 cd C:\Users\ludov\MUNINN-
-python forge.py                    # tous les tests passent
-python forge.py --diff             # pas de regression
+forge                    # tous les tests passent
+forge --diff             # pas de regression
 ```
 
 **REGLE**: si forge.py montre un FAIL ou une regression, tu corriges AVANT de passer a la brique suivante. Pas de compromis. Pas de skip. Pas de "on verra plus tard".

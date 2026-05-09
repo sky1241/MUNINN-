@@ -6,7 +6,7 @@ the API push. Apply the diff below manually.
 
 ## Why
 
-CHUNK B9 / RULE 5 require running `python forge.py --gen-props
+CHUNK B9 / RULE 5 require running `forge --gen-props
 engine/core/X.py` after every engine module touch. Today this is
 manual discipline. A CI step that calls forge on a matrix of modules
 catches the case where someone adds an unprotected destructive
@@ -20,7 +20,7 @@ Append a new job to `.github/workflows/ci.yml` (after the existing
 ```yaml
   forge_smoke:
     runs-on: ubuntu-latest
-    name: forge.py --gen-props (smoke per engine/core module)
+    name: forge --gen-props (smoke per engine/core module)
     needs: [pytest]   # only run if pytest passed
 
     steps:
@@ -54,7 +54,7 @@ Append a new job to `.github/workflows/ci.yml` (after the existing
                    engine/core/_hook_logger.py
           do
               echo "::group::forge --gen-props $f"
-              python forge.py --gen-props "$f" || exit 1
+              forge --gen-props "$f" || exit 1
               echo "::endgroup::"
           done
 

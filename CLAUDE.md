@@ -263,7 +263,7 @@ completion and BUG-105/BUG-106 demonstrated the cost of skipping forge.
    questions at any time. (RULE 4, ABSOLUTE — written under fire)
 
 5. FORGE AFTER EVERY ENGINE MODULE TOUCH. Modified engine/core/foo.py?
-   Run `python forge.py --gen-props engine/core/foo.py` THEN
+   Run `forge --gen-props engine/core/foo.py` THEN
    `pytest tests/test_props_foo.py -q` BEFORE the commit. The Hypothesis
    falsifying example is your next test case. BUG-101, BUG-102, BUG-105,
    BUG-106 were ALL caught (or would have been caught) by this discipline.

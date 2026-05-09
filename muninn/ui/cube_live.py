@@ -88,7 +88,7 @@ class ReconstructionWorker(QObject):
             try:
                 from engine.core.cube import subdivide_file
                 from engine.core.cube_providers import (
-                    reconstruct_adaptive, OllamaProvider,
+                    reconstruct_adaptive, OllamaProvider, MockLLMProvider,
                 )
                 from engine.core.mycelium import Mycelium
             except ImportError as e:
@@ -175,7 +175,39 @@ class ReconstructionWorker(QObject):
             ]
             self.cubes_ready.emit(cubes_payload)
 
-            provider = OllamaProvider(model=self._model)
+            # POST-AUDIT FIX 2026-05-09: probe Ollama before instantiating.
+            # Pre-fix: OllamaProvider(model=...) was hardcoded; if Ollama was
+            # not running, the worker crashed in ConnectionError when the first
+            # generate() call ran, leaving the heatmap stuck mid-cycle.
+            # Now: ping /api/tags first; on any failure (down, model missing,
+            # timeout) fall back to MockLLMProvider so the user gets feedback
+            # instead of a stack trace. CubeConfig.get_provider() in
+            # cube_analysis.py uses the same probe pattern.
+            try:
+                import urllib.request as _ur, json as _json
+                _resp = _ur.urlopen("http://localhost:11434/api/tags", timeout=2)
+                _tags = _json.loads(_resp.read())
+                _models = [m.get("name", "").split(":")[0]
+                           for m in _tags.get("models", [])]
+                _target = self._model.split(":")[0]
+                if _target not in _models:
+                    raise RuntimeError(
+                        f"Ollama running but model {self._model!r} not loaded "
+                        f"(available: {_models[:5]}...)"
+                    )
+                provider = OllamaProvider(model=self._model)
+                self.status.emit(
+                    f"[provider] Ollama OK with {self._model}",
+                    self._COL_SHA,
+                )
+            except Exception as _ollama_err:
+                self.status.emit(
+                    f"[provider] Ollama unavailable ({type(_ollama_err).__name__}: "
+                    f"{_ollama_err}), falling back to MockLLMProvider — "
+                    f"reconstruction will return placeholders only",
+                    self._COL_PARTIAL,
+                )
+                provider = MockLLMProvider()
 
             # CHUNK 12 v2: stream the LLM's full output to the terminal so the
             # user can SEE every line qwen produces while reconstructing each

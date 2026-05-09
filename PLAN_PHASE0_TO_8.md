@@ -25,7 +25,7 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 - [x] **X16** Learned fillers seuil minimum (20+ occurrences avant d'appliquer) [XS] (disabled = safe)
 
 **Tests Phase 0**: ~45 tests unitaires + 5 tests regression integration
-**Regression**: python forge.py apres chaque brique
+**Regression**: forge apres chaque brique
 
 ---
 
@@ -160,7 +160,7 @@ Genere le 2026-03-27. Baseline: 1098 tests, ~7 FAIL (API only), ~7 SKIP.
 2. Test manuel rapide
 3. Ecris le test Python (pytest, tempdir, assert, try/finally)
 4. `python -m pytest tests/test_Xn.py -v` -> passe
-5. `python forge.py` -> regression globale passe
+5. `forge` -> regression globale passe
 6. git add + commit + push
 
 ## Bugs reels trouves (14)
