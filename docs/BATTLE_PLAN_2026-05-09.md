@@ -141,10 +141,42 @@ Les 5 agents de la 1re passe ont identifié 25+ findings. La 2e passe (3 agents 
 
 ## 🚦 Critère de done pour la journée
 
-- [x] Phase 0 P0bis-1 vault — 15 sites + 3 tests + CI vert
-- [x] Phase 0 P0bis-2 _engine — 13 sites mirror + 3 tests + CI vert
-- [x] Phase 1 P0bis-3 rotation — subclass + 1 test + CI vert
-- [x] Phase 2 P2 b255 — truncate + bench L12 stable + CI vert
-- [x] Phase 2 P4 forge.gen_props — split + brick20 test vert + CI vert
-- [ ] Phase 3 — selon temps restant
-- [ ] Phase 4 — chunk séparé après forge v1.1.0
+- [x] Phase 0 P0bis-1 vault — 15 sites + 6 tests + CI vert (commit `607f1a7`)
+- [x] Phase 0 P0bis-2 _engine — 11 sites mirror + 4 tests + CI vert (commit `21b4cb3`)
+- [x] Phase 1 P0bis-3 rotation — _SecureRotatingFileHandler + 3 tests + CI vert (commit `008f9c7`)
+- [x] Phase 2 P2 b255 — déjà fait hier (no-op confirmé)
+- [x] Phase 2 P4 forge.gen_props — split 212→96L + 5 helpers + brick20 7/7 vert (commit `8a9b7be`)
+- [x] **Phase 4.0** backup 17 test_props_*.py + tag `pre-forge-branch-2026-05-09`
+- [x] **Phase 4.1** pip install forge-shield 1.1.0 + pyproject [quality]/[all] (commit `0d88508`)
+- [x] **Phase 4.2** NO-OP Option B prudente (predict_defects reste local, filet)
+- [x] **Phase 4.3** régénération 17 test_props_*.py via forge-shield + 2 deadline=None fixes (commit `d85d12c`)
+- [x] **Phase 4.4** CLAUDE.md RULE 5 — `python forge.py` → `forge` (commit `d85d12c`)
+- [x] **Fix CI** install forge-shield depuis git tag v1.1.1 (PyPI lag 1.0.4 → resolution impossible) (commit `2770aa0`)
+- [ ] Phase 3 — quality polish (_LOGGERS LRU, _concept_cache TTL, @pytest.mark.slow, tests vault/sync_tls)
+- [ ] Phase 4.5 — CI `forge_smoke` job matrix (D8 proposition)
+- [ ] Phase 4.6 — heatmap UX cube wiring (`--carmack` + `--locate` + `--modularity` → muninn/ui/cube_view.py)
+- [ ] **Phase 4.7 (J+1/J+2)** — ménage final après 24-48h soak prod stable :
+  - Remap `cube_analysis.py:1593` → `from forge import predict_defects` (PyPI)
+  - Supprimer `forge.py` root + `engine/core/forge.py` + `muninn/forge.py` (3 copies dead)
+  - Effort estimé : 30 min
+
+---
+
+## 📊 Bilan journée 2026-05-09
+
+**7 commits pushés, 4 CI runs verts, 0 régression** :
+
+| # | Commit | Phase | Sécurité/Qualité |
+|---|--------|-------|------------------|
+| 1 | `607f1a7` | P0bis-1 vault.py 15 sites secure_perms | 🔴 CRITICAL — fix crypto leak vault |
+| 2 | `21b4cb3` | P0bis-2 _engine + muninn 11 sites mirror | 🟠 HIGH — root.mn + hooks générés |
+| 3 | `008f9c7` | P0bis-3 _SecureRotatingFileHandler | 🟡 P1 — rotation perms `.1/.2/.3` |
+| 4 | `8a9b7be` | P4 forge.gen_props split 212→96L | 🟢 brick20 invariant restauré |
+| 5 | `0d88508` | P4.1 wire forge-shield 1.1.0 | 🟢 nouvelles features dispo |
+| 6 | `d85d12c` | P4.3+4.4 régénération 17 tests + RULE 5 | 🟢 alignement v1.1.0 |
+| 7 | `2770aa0` | Fix CI install git tag (PyPI lag) | 🟢 CI vert |
+
+**Local final** : 2385 passed, 0 failed in 121s.
+**CI final** (run #7 25596918133) : 2356 passed, 0 failed in 74s.
+
+**État commercial** : MUNINN- est désormais **production-grade** côté sécurité (DB perms 0o600 partout, vault crypto verrouillé, rotation logs sécurisée) et **branché sur le forge moderne** (v1.1.0 pip-installable avec --modularity / --carmack / --locate / --fast-deep / --incremental-mutate).
