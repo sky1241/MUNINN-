@@ -172,30 +172,43 @@ pytest tests/test_chunk_c12_ci_workflow.py -v --tb=short 2>&1 | tail -15
 
 ## 🌱 H3.1 — growth_stats dans `muninn status` (10min)
 
+**show_status() est dans `engine/core/muninn_tree.py:3216`** (pas muninn.py).
+
 ```bash
 git tag pre-H3.1-growth-stats-2026-05-09
-
-# Lire show_status() actuel pour trouver où ajouter
-grep -n "def show_status" engine/core/muninn.py
+grep -n "^def show_status" engine/core/muninn_tree.py
+# Confirme: ligne 3216
 ```
 
-Edit manuel : ajouter dans `show_status()` après le bloc mycelium standard :
+Lire la fin de `show_status()` (vers ligne 3270-3280) pour trouver le `print` final, puis insérer juste avant le `return` ou la dernière ligne :
+
 ```python
-# H3.1 (2026-05-09): expose mycelium growth stats
-try:
-    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-    from mycelium import Mycelium
-    repo = _REPO_PATH or Path(".")
-    m = Mycelium(repo)
-    g = m.growth_stats()
-    print(f"\nGrowth: {g.get('concepts', 0)} concepts, "
-          f"{g.get('connections', 0)} connections, "
-          f"{g.get('total_observations', 0)} observations")
-except Exception:
-    pass
+    # H3.1 (2026-05-09): expose mycelium growth stats inline in `muninn status`.
+    # Imports lazy + try/except so a corrupt mycelium does not break status.
+    try:
+        try:
+            from mycelium import Mycelium
+        except ImportError:
+            from engine.core.mycelium import Mycelium
+        m = Mycelium(_m._REPO_PATH or Path("."))
+        g = m.growth_stats()
+        print(f"\nGrowth (H3.1):")
+        print(f"  Concepts:     {g.get('concepts', 0)}")
+        print(f"  Connections:  {g.get('connections', 0)}")
+        print(f"  Observations: {g.get('total_observations', 0)}")
+    except Exception as exc:
+        print(f"\nGrowth: <unavailable: {exc}>", file=sys.stderr)
 ```
 
-Mirror dans `muninn/_engine.py`. Tests + commit.
+**Note** : `show_status()` est appelée par `engine/core/muninn.py:1696` (commande `status`). Mirror dans `muninn/muninn_tree.py` (shim léger — vérifier si le shim re-exporte tout).
+
+Test :
+```bash
+python3 engine/core/muninn.py status 2>&1 | grep -A 4 "Growth"
+# Doit afficher 3 lignes Concepts/Connections/Observations
+```
+
+Commit + push + CI.
 
 ---
 
@@ -205,39 +218,90 @@ Mirror dans `muninn/_engine.py`. Tests + commit.
 git tag pre-H3.2-muninn-zones-2026-05-09
 ```
 
-Edit `engine/core/muninn.py` :
-1. Dans la liste argparse `choices` du subparser : ajouter `"zones"`
-2. Ajouter handler avant `def main()` :
+### Step 1 — argparse `choices`
+
+`engine/core/muninn.py` ligne **1731-1737** actuel :
+```python
+    parser.add_argument("command", choices=[
+        "read", "compress", "tree", "status", "init",
+        "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
+        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
+        "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
+        "sync",
+    ])
+```
+
+Edit (ajouter "zones" après "sync") :
+```python
+    parser.add_argument("command", choices=[
+        "read", "compress", "tree", "status", "init",
+        "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
+        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
+        "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
+        "sync", "zones",
+    ])
+```
+
+### Step 2 — Handler avant `def main()`
+
+Insérer juste avant `# ── MAIN` :
 ```python
 def _handle_zones_command(args) -> None:
-    """Detect + label thematic zones in the mycelium (Louvain communities)."""
+    """H3.2 (2026-05-09): detect + label thematic zones in the mycelium
+    (Louvain communities). Wires Mycelium.detect_zones + auto_label_zones
+    + get_zones into a CLI-visible production path."""
     _ensure_repo_from_cwd()
     repo = _REPO_PATH or Path(".")
-    if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-    from mycelium import Mycelium
+    if _CORE_DIR not in sys.path:
+        sys.path.insert(0, _CORE_DIR)
+    try:
+        from mycelium import Mycelium
+    except ImportError:
+        from engine.core.mycelium import Mycelium
     m = Mycelium(repo)
     zones = m.detect_zones()
     if not zones:
         print("=== MYCELIUM ZONES ===")
-        print("  No zones detected (need ≥ 50 connections).")
+        print("  No zones detected (need ≥ 50 connections in the mycelium).")
         return
     labels = m.auto_label_zones(zones)
     print(f"=== MYCELIUM ZONES — {len(zones)} detected ===\n")
-    for i, (zone_id, members) in enumerate(sorted(zones.items(), key=lambda x: -len(x[1]))[:10], 1):
+    sorted_zones = sorted(zones.items(), key=lambda kv: -len(kv[1]))[:10]
+    for i, (zone_id, members) in enumerate(sorted_zones, 1):
         label = labels.get(zone_id, "?")
-        print(f"  [{i}] zone {zone_id} ({len(members)} concepts) — label: {label}")
-        for m_concept in list(members)[:5]:
-            print(f"      - {m_concept}")
+        print(f"  [{i}] zone {zone_id} ({len(members)} concepts) — {label}")
+        for concept in list(members)[:5]:
+            print(f"      - {concept}")
 ```
 
-3. Dans `def main()` : ajouter le dispatch
+### Step 3 — Dispatch dans `main()`
+
+Trouver `if args.command == "sync":` (ligne ~2035) et ajouter APRÈS son block :
 ```python
     if args.command == "zones":
         _handle_zones_command(args)
         return
 ```
 
-Mirror dans `muninn/_engine.py`. Tests + commit + push + CI.
+### Step 4 — Mirror muninn/_engine.py
+
+Faire les 3 mêmes éditions dans `muninn/_engine.py` (les line numbers diffèrent, faut grep).
+
+### Step 5 — Test fonctionnel
+
+```bash
+python3 engine/core/muninn.py zones
+# Doit afficher "=== MYCELIUM ZONES ===" + zones OU "No zones detected"
+```
+
+### Step 6 — Update README
+
+Ajouter `muninn zones` à la table des commandes (ligne ~245 du README) :
+```markdown
+muninn zones               # Detect + label thematic zones (Louvain communities)
+```
+
+Commit + push + CI.
 
 ---
 
@@ -245,9 +309,70 @@ Mirror dans `muninn/_engine.py`. Tests + commit + push + CI.
 
 ```bash
 git tag pre-H4.2-d8-forge-smoke-2026-05-09
-cat docs/CI_PROPOSED_D8.md  # lire le doc
 ```
-Édit `.github/workflows/ci.yml` : ajouter le job `forge_smoke` (matrix par module). Retirer les 3 `pytest.skip` dans `test_chunk_d8_ci_forge.py`. Push + CI vert.
+
+### Step 1 — Ajouter le job `forge_smoke` à `.github/workflows/ci.yml`
+
+YAML à insérer **après le job `validate` existant** (vérifier la fin du fichier ci.yml) :
+
+```yaml
+  forge_smoke:
+    runs-on: ubuntu-latest
+    name: forge --gen-props (smoke per engine/core module)
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install forge-shield + deps
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography
+          python3 -m pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
+      - name: Generate property tests for every engine/core module
+        run: |
+          for f in engine/core/muninn_tree.py \
+                   engine/core/muninn_layers.py \
+                   engine/core/muninn_feed.py \
+                   engine/core/mycelium_db.py \
+                   engine/core/mycelium.py \
+                   engine/core/_secrets.py \
+                   engine/core/cube.py \
+                   engine/core/cube_providers.py \
+                   engine/core/cube_analysis.py \
+                   engine/core/sync_backend.py \
+                   engine/core/_hook_logger.py
+          do
+              echo "::group::forge --gen-props $f"
+              forge --gen-props "$f" || exit 1
+              echo "::endgroup::"
+          done
+      - name: Run all generated property tests
+        run: |
+          pytest tests/test_props_*.py -q --tb=short
+```
+
+### Step 2 — Retirer les `pytest.skip` dans test_chunk_d8_ci_forge.py
+
+```bash
+sed -i '/pytest.skip("CI workflow change not merged yet (D8 doc)")/d' tests/test_chunk_d8_ci_forge.py
+sed -i '/pytest.skip("workflow change not merged yet (D8)")/d' tests/test_chunk_d8_ci_forge.py
+# Vérifier qu'il en reste plus
+grep -n "pytest.skip" tests/test_chunk_d8_ci_forge.py
+```
+
+### Step 3 — Push avec workflow scope
+
+Le scope `workflow` a été acquis le matin (commit `bf3858a`). Push direct :
+```bash
+git add .github/workflows/ci.yml tests/test_chunk_d8_ci_forge.py
+git commit -m "feat(H4.2): wire D8 forge_smoke matrix in CI"
+git push
+```
+
+CI run #N+1 doit avoir 2 jobs verts : `validate` + `forge_smoke`.
 
 ---
 
@@ -255,10 +380,49 @@ cat docs/CI_PROPOSED_D8.md  # lire le doc
 
 ```bash
 git tag pre-H5.1-retrieval-2026-05-09
-grep -n "GROUND_TRUTH" tests/test_retrieval_benchmark.py | head -5
-# Ouvrir le dict, comparer avec memory/tree.json actual nodes/tags, refresh
-# Retirer @pytest.mark.xfail line 407
 ```
+
+### Step 1 — Dump l'état actuel du dict GROUND_TRUTH + tree.json réel
+
+```bash
+# Dict actuel hardcodé dans le test
+sed -n '23,80p' tests/test_retrieval_benchmark.py | head -60
+
+# État réel du tree
+python3 -c "
+import json
+tree = json.load(open('memory/tree.json'))
+nodes = tree.get('nodes', {})
+print(f'Total nodes: {len(nodes)}')
+for name, node in sorted(nodes.items())[:20]:
+    tags = node.get('tags', [])
+    print(f'  {name}: tags={tags[:5]}')
+"
+```
+
+### Step 2 — Refresh dict
+
+Le dict `GROUND_TRUTH` mappe `query → expected_branches`. Si une branche citée dans les expected n'existe plus, faut soit :
+- Retirer la query (si plus pertinente)
+- Remplacer par une branche actuelle pertinente
+
+Edit `tests/test_retrieval_benchmark.py` ligne 23 — refresh chaque `expected_branches:` avec ce qui existe vraiment dans `memory/tree.json`.
+
+### Step 3 — Retirer xfail + tester
+
+```bash
+# Une fois le dict à jour, retirer xfail ligne 407
+sed -i '/^@pytest\.mark\.xfail($/,/^)$/d' tests/test_retrieval_benchmark.py
+
+# Test
+pytest tests/test_retrieval_benchmark.py::test_retrieval_benchmark -v
+# Doit PASS
+
+# Aussi retirer du --deselect dans ci.yml
+sed -i '/--deselect tests\/test_retrieval_benchmark.py::test_tfidf_relevance_meaningful/d' .github/workflows/ci.yml
+```
+
+Commit + push + CI.
 
 ---
 
@@ -266,22 +430,126 @@ grep -n "GROUND_TRUTH" tests/test_retrieval_benchmark.py | head -5
 
 ```bash
 git tag pre-H2-heatmap-ux-2026-05-09
-ls muninn/ui/cube_*.py
-# Identifier le widget cube heatmap
-# Ajouter import forge_metrics + worker async + color mapping
-# Tests + push + CI
 ```
+
+### H2.1 — Identifier le widget heatmap (5min)
+
+```bash
+ls muninn/ui/*.py | grep -E "cube|heatmap|forest|tree"
+# Suspect: muninn/ui/cube_live.py, muninn/ui/forest.py, ou muninn/ui/_tree_renderer.py
+grep -l "heatmap\|HeatMap" muninn/ui/*.py
+```
+
+### H2.2 — Ajouter helper `forge_score_for_file(path)` dans `cube_live.py`
+
+```python
+# H2 (2026-05-09): forge metrics integration for cube heatmap UX
+from pathlib import Path
+
+_FORGE_CACHE = None
+
+def _get_forge_scores(repo_path: Path) -> dict[str, float]:
+    """Lazy-load + cache forge fused risk scores per file path."""
+    global _FORGE_CACHE
+    if _FORGE_CACHE is not None:
+        return _FORGE_CACHE
+    try:
+        try:
+            from forge_metrics import get_repo_risk
+        except ImportError:
+            from engine.core.forge_metrics import get_repo_risk
+        report = get_repo_risk(repo_path)
+        _FORGE_CACHE = dict(report.fused) if report.forge_available else {}
+    except Exception:
+        _FORGE_CACHE = {}
+    return _FORGE_CACHE
+
+
+def forge_color_for_path(repo_path: Path, file_path: str, default: str = "#cccccc") -> str:
+    """Map a file path to a heatmap colour using forge_metrics fused score.
+    Returns a 6-digit hex. Falls back to default if forge unavailable."""
+    scores = _get_forge_scores(repo_path)
+    if not scores or file_path not in scores:
+        return default
+    try:
+        try:
+            from forge_metrics import color_for_score
+        except ImportError:
+            from engine.core.forge_metrics import color_for_score
+        return color_for_score(scores[file_path])
+    except Exception:
+        return default
+```
+
+### H2.3 — Wire dans le paint event du widget cube (~30min)
+
+Le widget cube heatmap a un `paintEvent()` ou `_render_brick(brick, painter)`. Ajouter à l'endroit où la couleur de la brick est choisie :
+
+```python
+# Avant
+brick_color = self._temperature_color(brick.temperature)
+# Après
+forge_c = forge_color_for_path(self.repo_path, brick.file_path)
+mycelium_c = self._temperature_color(brick.temperature)
+brick_color = self._blend_colors(mycelium_c, forge_c, weight=0.6)  # 60% mycelium + 40% forge
+```
+
+### H2.4 — Test (~15min)
+
+Créer `tests/test_chunk_h2_heatmap_forge.py` qui mock `get_repo_risk` et vérifie que `forge_color_for_path` retourne la bonne couleur.
+
+Commit + push + CI.
 
 ---
 
-## 🔧 H5.2 — sync_tls rate-limit fix (1h)
+## 🔧 H5.2 — sync_tls rate-limit fix (1h, INVESTIGATION REQUISE)
 
 ```bash
 git tag pre-H5.2-sync-tls-2026-05-09
-grep -n "rate_limit" engine/core/sync_tls.py
-# Fix: ajouter early return {error: rate_limited} quand quota dépassé
-# Retirer @pytest.mark.xfail line 235 dans test_sync_tls.py
 ```
+
+### Sanity du code actuel (déjà fait dans l'audit)
+
+`engine/core/sync_tls.py:_handle_client` (ligne ~210) fait DÉJÀ :
+```python
+if not self._limiter.allow(ip):
+    _send_msg(conn, {"status": "error", "message": "rate_limited"})
+    conn.close()
+    return
+```
+→ Le code semble correct. Le bug ("4e ping retourne `pong` au lieu d'erreur") est ailleurs.
+
+### Hypothèses à investiguer
+
+1. **`RateLimiter.allow()` retourne True à tort** — voir `engine/core/sync_tls.py:121-150`. Test isolé :
+   ```python
+   from sync_tls import RateLimiter
+   rl = RateLimiter(max_requests=3, window_seconds=60)
+   for i in range(5):
+       print(i+1, rl.allow("1.2.3.4"))
+   # Attendu: True True True False False
+   ```
+
+2. **Test envoie 3 ping uniques + 1 4e — est-ce vraiment 4 dans la même fenêtre ?** Lire `tests/test_sync_tls.py:test_t1_9` pour voir le scénario exact.
+
+3. **TLS shutdown crée des artifact** — la connexion est peut-être close avant que `_send_msg(error)` arrive, le client voit un `pong` cached.
+
+### Plan d'attaque
+
+```bash
+# 1. Lire le test xfail
+sed -n '235,330p' tests/test_sync_tls.py
+
+# 2. Run le test seul, capturer l'output verbose
+pytest tests/test_sync_tls.py::test_t1_9_rate_limit_server -v --tb=long --capture=no 2>&1 | tail -30
+
+# 3. Ajouter prints dans RateLimiter.allow() pour voir ce qu'il retourne
+# 4. Fix le bug réel (probablement dans RateLimiter ou _handle_client)
+# 5. Retirer @pytest.mark.xfail (lignes 235-243 du test)
+# 6. pytest tests/test_sync_tls.py -v
+```
+
+⚠️ **C'est du DEBUG**, pas du copier-coller. Le moi-d'après doit lire le code, comprendre, fixer. Skip-able si Sky veut le faire demain.
 
 ---
 
