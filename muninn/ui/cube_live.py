@@ -133,6 +133,35 @@ class ReconstructionWorker(QObject):
                 self._COL_INFO,
             )
 
+            # H2 (2026-05-09): show the forge fused risk score for this file
+            # so the user knows a-priori how risky the reconstruction is.
+            # Falls back silently if forge-shield is not installed.
+            try:
+                from forge_metrics import forge_score_for_path
+            except ImportError:
+                try:
+                    from engine.core.forge_metrics import forge_score_for_path
+                except ImportError:
+                    forge_score_for_path = None
+            if forge_score_for_path is not None:
+                try:
+                    rel = str(self._file.resolve().relative_to(repo_root.resolve()))
+                except (ValueError, OSError):
+                    rel = str(self._file)
+                score = forge_score_for_path(repo_root, rel)
+                if score is not None:
+                    bucket = ("HIGH" if score >= 0.70 else
+                              "MOD"  if score >= 0.40 else
+                              "LOW"  if score >= 0.20 else
+                              "STABLE")
+                    color = (self._COL_FAIL if score >= 0.40 else
+                             self._COL_PARTIAL if score >= 0.20 else
+                             self._COL_SHA)
+                    self.status.emit(
+                        f"[forge] risk={score:.3f} ({bucket}) for {rel}",
+                        color,
+                    )
+
             # Expose cube descriptors to the heatmap. UX only needs idx, lines, sha.
             cubes_payload = [
                 {

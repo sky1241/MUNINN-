@@ -117,6 +117,91 @@ def test_color_for_score_thresholds():
     assert fm.color_for_score(0.05) == "#2ca02c"  # green
 
 
+# ── H2 (2026-05-09): forge_score_for_path / forge_color_for_path ─
+
+
+def test_forge_score_for_path_returns_value_when_present(tmp_path, monkeypatch):
+    """get_repo_risk → fused dict; forge_score_for_path must look up by path."""
+    fm = _load_forge_metrics()
+    repo = tmp_path / "fake_repo"
+    (repo / ".muninn").mkdir(parents=True)
+
+    fake_report = fm.ForgeRiskReport(
+        repo=repo, forge_available=True,
+        fused={"engine/core/foo.py": 0.42},
+    )
+    monkeypatch.setattr(fm, "get_repo_risk", lambda *a, **k: fake_report)
+    assert fm.forge_score_for_path(repo, "engine/core/foo.py") == 0.42
+
+
+def test_forge_score_for_path_returns_none_when_unavailable(tmp_path, monkeypatch):
+    """When forge is not installed, the helper returns None — not a crash."""
+    fm = _load_forge_metrics()
+    repo = tmp_path / "fake_repo"
+    (repo / ".muninn").mkdir(parents=True)
+
+    fake_report = fm.ForgeRiskReport(repo=repo, forge_available=False, fused={})
+    monkeypatch.setattr(fm, "get_repo_risk", lambda *a, **k: fake_report)
+    assert fm.forge_score_for_path(repo, "engine/core/foo.py") is None
+
+
+def test_forge_score_for_path_returns_none_for_unknown_file(tmp_path, monkeypatch):
+    """File not in the report (renamed, new) → None, UI falls back to default."""
+    fm = _load_forge_metrics()
+    repo = tmp_path / "fake_repo"
+    (repo / ".muninn").mkdir(parents=True)
+
+    fake_report = fm.ForgeRiskReport(
+        repo=repo, forge_available=True,
+        fused={"engine/core/foo.py": 0.42},
+    )
+    monkeypatch.setattr(fm, "get_repo_risk", lambda *a, **k: fake_report)
+    assert fm.forge_score_for_path(repo, "engine/core/never_existed.py") is None
+
+
+def test_forge_score_for_path_swallows_get_repo_risk_errors(tmp_path, monkeypatch):
+    """If get_repo_risk raises (corrupt cache, unexpected I/O), the UI helper
+    must still return None — never propagate."""
+    fm = _load_forge_metrics()
+    repo = tmp_path / "fake_repo"
+
+    def boom(*a, **k):
+        raise RuntimeError("forge crashed")
+
+    monkeypatch.setattr(fm, "get_repo_risk", boom)
+    assert fm.forge_score_for_path(repo, "anything.py") is None
+
+
+def test_forge_color_for_path_uses_score_thresholds(tmp_path, monkeypatch):
+    """End-to-end: known fused score → matches color_for_score()."""
+    fm = _load_forge_metrics()
+    repo = tmp_path / "fake_repo"
+    (repo / ".muninn").mkdir(parents=True)
+
+    fake_report = fm.ForgeRiskReport(
+        repo=repo, forge_available=True,
+        fused={"hot.py": 0.85, "warm.py": 0.45, "cool.py": 0.10},
+    )
+    monkeypatch.setattr(fm, "get_repo_risk", lambda *a, **k: fake_report)
+
+    assert fm.forge_color_for_path(repo, "hot.py")  == "#d62728"  # red
+    assert fm.forge_color_for_path(repo, "warm.py") == "#ff7f0e"  # orange
+    assert fm.forge_color_for_path(repo, "cool.py") == "#2ca02c"  # green
+
+
+def test_forge_color_for_path_falls_back_to_default_when_missing(tmp_path,
+                                                                  monkeypatch):
+    """Missing path → caller-supplied default, no exception."""
+    fm = _load_forge_metrics()
+    repo = tmp_path / "fake_repo"
+    (repo / ".muninn").mkdir(parents=True)
+
+    fake_report = fm.ForgeRiskReport(repo=repo, forge_available=False, fused={})
+    monkeypatch.setattr(fm, "get_repo_risk", lambda *a, **k: fake_report)
+    assert fm.forge_color_for_path(repo, "x.py") == "#cccccc"  # default
+    assert fm.forge_color_for_path(repo, "x.py", default="#abcdef") == "#abcdef"
+
+
 # ── Cache ────────────────────────────────────────────────────────
 
 

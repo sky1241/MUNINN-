@@ -38,12 +38,14 @@ DOCUMENTED_IN_TREE_DEAD_CANDIDATES = frozenset({
     # __all__ — the latter is the curated star-import surface.
     "reconstruct_line_by_line",
     "reconstruct_adaptive",
-    # F6 (2026-05-09): forge_metrics public API consumed by muninn/ui/
-    # to colour the cube heatmap by carmack + locate + modularity.
-    # No engine/core/ caller — UI calls only — but legitimate public
-    # surface, not dead code.
-    "get_repo_risk",
-    "color_for_score",
+    # H2 (2026-05-09): forge_metrics UI helpers. Consumed by muninn/ui/
+    # cube_live.py and (future) neuron_map.py to colour the cube heatmap
+    # by carmack + locate + modularity. No engine/core/ caller — UI calls
+    # only — but legitimate public surface, not dead code.
+    # Note: `get_repo_risk` and `color_for_score` are now referenced
+    # internally by `forge_score_for_path` / `forge_color_for_path`,
+    # so they no longer appear as dead candidates.
+    "forge_color_for_path",
 })
 
 

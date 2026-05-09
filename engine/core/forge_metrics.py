@@ -296,3 +296,49 @@ def color_for_score(score: float) -> str:
     if score >= 0.20:
         return "#bcbd22"
     return "#2ca02c"
+
+
+# ── H2 (2026-05-09): UI helpers ──────────────────────────────────
+
+
+def forge_score_for_path(repo: Path, file_path: str) -> Optional[float]:
+    """Return the fused forge risk score for `file_path` relative to `repo`.
+
+    Lazy + cached via get_repo_risk() (24h TTL on .muninn/forge_cache.json).
+    Returns None if forge is unavailable, cache is empty, or the path is not
+    in the report — UI callers can treat None as "no forge data, fall back
+    to the temperature-based colour".
+    """
+    try:
+        report = get_repo_risk(Path(repo))
+    except Exception:
+        return None
+    if not report.forge_available or not report.fused:
+        return None
+    # Try several path normalisations to be robust to caller conventions.
+    candidates = [str(file_path)]
+    p = Path(file_path)
+    candidates.append(str(p))
+    try:
+        candidates.append(str(p.relative_to(Path(repo).resolve())))
+    except ValueError:
+        pass
+    for c in candidates:
+        if c in report.fused:
+            return float(report.fused[c])
+    return None
+
+
+def forge_color_for_path(repo: Path, file_path: str,
+                         default: str = "#cccccc") -> str:
+    """Map (repo, file_path) → 6-digit hex colour via forge fused score.
+
+    Falls back to `default` when:
+      - forge binary not installed
+      - file not found in the carmack/locate report (e.g. just renamed)
+      - any subprocess error talking to forge
+    """
+    score = forge_score_for_path(repo, file_path)
+    if score is None:
+        return default
+    return color_for_score(score)
