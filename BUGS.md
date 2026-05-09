@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+8 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11; BUG-091 dual-tree drift fixed via Phase A→D shim refactor + recurrence patch 2026-05-07/08; BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08). **1 OPEN** (BUG-104 L12 partial fix — root cause is chunk granularity, not detector).
+## Status: 90+10+8 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11; BUG-091 dual-tree drift **PARTIAL** via Phase A→D shim refactor + recurrence patch 2026-05-07/08 — 15 fichiers réels shimés, mais 3 fichiers encore byte-identiques au 2026-05-09 (cube.py, cube_providers.py, lang_lexicons.py) + vault.py logic divergence already; BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08). **2 OPEN** (BUG-091 PARTIAL — 3 .py md5-identical + vault.py divergent; BUG-104 L12 partial fix — root cause is chunk granularity, not detector).
 
 ---
 

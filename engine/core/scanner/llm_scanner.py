@@ -43,8 +43,11 @@ _SCANNER_VERSION = "0.1.0"
 # Approximate tokens per character (conservative estimate for English code)
 _CHARS_PER_TOKEN = 4
 
-# Default model
-DEFAULT_MODEL = "claude-haiku-4-20250414"
+# Default model — claude-haiku-4-5 (active flagship Haiku, mai 2026)
+# Pre-fix 2026-05-09: pointed to "claude-haiku-4-20250414" which was a
+# fictitious ID never published by Anthropic (audit agent web found the
+# hallucination). claude-haiku-4-5-20251001 is the real ID.
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
 # Cost per million tokens (Haiku)
 _COST_PER_M_INPUT = 0.25   # $/M input tokens

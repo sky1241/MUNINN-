@@ -294,7 +294,7 @@ class ClaudeProvider(LLMProvider):
 
     def list_models(self) -> list[str]:
         return ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
-                'claude-opus-4-6']
+                'claude-opus-4-7', 'claude-opus-4-6']
 
 
 # ─── B14: Backend OpenAI API ─────────────────────────────────────────

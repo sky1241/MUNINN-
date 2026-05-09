@@ -202,14 +202,18 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
 
-## Etat du projet (avril 2026)
-- 43 features + 39 briques Cube, 11 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- Engine: ~19K lignes, 14 fichiers (voir WINTER_TREE.md)
+## Etat du projet (mai 2026, post-H1-H5.2)
+- 43 features + 39 briques Cube, 12 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
+- Engine: **24 434 lignes, 19 fichiers core** (voir CHANGELOG.md entête + docs/BATTLE_PLAN_FINAL_PROD_v3_2026-05-09.md)
+- forge-shield 1.1.x (PyPI) seule source de vérité — 3 forge.py internes supprimés H1
 - mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
-- Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, Forge integration
+- Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, forge_metrics integration UX
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
-- Hooks installes: 6 (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart)
+- Tests: **2328 PASS, 47 skip, 0 xfail, 0 FAIL** (sur 2563 collectés)
+- Q-modularity: **0.673** (Newman-Girvan, "good — modules well isolated")
+- CI: 12/12 success, 2 jobs (validate + forge_smoke matrix sur 11 modules)
+- Hooks installes: **9** (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart, ConfigChange, PostToolUseEditLog, PreToolUseBash{Destructive,Secrets})
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
   probleme Sky resolu nous:MEMORY.md

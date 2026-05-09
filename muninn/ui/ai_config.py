@@ -17,7 +17,7 @@ _CONFIG_FILE = _CONFIG_DIR / "ui_config.json"
 PROVIDERS = {
     "claude": {
         "label": "Claude (Anthropic)",
-        "models": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"],
+        "models": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7", "claude-opus-4-6"],
         "default_model": "claude-haiku-4-5-20251001",
         "env_key": "ANTHROPIC_API_KEY",
         "needs_key": True,
@@ -211,7 +211,7 @@ class _ClaudeLite:
                 yield text
 
     def list_models(self):
-        return ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-6']
+        return ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7', 'claude-opus-4-6']
 
 
 class _OpenAILite:

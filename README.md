@@ -138,7 +138,7 @@ Sub-commands available:
 
 ## Commands
 
-28 CLI subcommands exposed by `engine/core/muninn.py`:
+29 CLI subcommands exposed by `engine/core/muninn.py`:
 
 ```bash
 # Memory lifecycle
@@ -299,8 +299,8 @@ API cost (Haiku): **$0.21** for 230 files.
 ```
 engine/
   core/
-    muninn.py             Main CLI (2104 lines, 27 subcommands)
-    muninn_tree.py        L-system tree + sleep consolidation (3913 lines)
+    muninn.py             Main CLI (2187 lines, 29 subcommands)
+    muninn_tree.py        L-system tree + sleep consolidation (3929 lines)
     muninn_layers.py      11 compression layers + L9/L12 (1547 lines)
     muninn_feed.py        Hook → mycelium feeding pipeline
     mycelium.py           Co-occurrence network + spreading activation (3163 lines)

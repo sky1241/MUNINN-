@@ -18,8 +18,25 @@
 # Token counting (used by L4, L12, scoring) — currently tested with 0.12.0
 tiktoken==0.12.0
 
-# Optional LLM compression (L9) — currently tested with 0.96.0
-anthropic==0.96.0
+# Optional LLM compression (L9) — bumped to 0.100.0 (2026-05-09 v3 audit;
+# 0.97 = CMA Memory beta, 0.95 = Bedrock auth breaking change).
+anthropic==0.100.0
+
+# Crypto (vault.py AES-256-GCM, sync_tls). 46.0.7 patches CVE-2026-39892;
+# 48.0.0 = currently tested in dev (2026-05-09 audit v3).
+cryptography==48.0.0
+
+# HTTP client used transitively by anthropic/requests; 2.7.0 stable.
+urllib3==2.7.0
+
+# Used by sync_backend git ops + benchmark scripts.
+requests==2.33.1
+
+# Used by .claude/settings parsers + a few CI inline scripts.
+PyYAML==6.0.3
+
+# Property testing (forge --gen-props consumers). 6.152.2 currently tested.
+hypothesis==6.152.2
 
 # Phase 4 (2026-05-09): forge-shield (split out of MUNINN- on 2026-05-07,
 # polished cycles 4→8 on sky1241/forge). v1.1.0 adds --modularity

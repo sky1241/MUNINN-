@@ -2,7 +2,12 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> Mis a jour: 2026-04-22. Engine: ~22K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
+> ⚠️ **STALE depuis 2026-04-22** (17 jours d'écart au 2026-05-09). Pour l'état courant
+> voir CHANGELOG.md (entrée 2026-05-09 H1-H5.2). Réel post-H5.2 : Engine **24 434 lignes**,
+> 19 fichiers core. Tests: **2328 PASS, 47 skip, 0 xfail, 0 FAIL** (forge.py supprimé H1).
+> Le contenu ci-dessous reste utile comme carte de lignes mais les chiffres globaux mentent.
+>
+> Snapshot original 2026-04-22: Engine: ~22K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 > **Cube L1: 80/80 SHA (100%) on server.go + 53/61 (87%) on btree_google.go.** 21 fixes + refactor. 175 -> 0 gap lines. 73/80 auto-SHA (zero API). 8-language support. Smart formatter detection (doctor --fix). Generalization validated on unseen code.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers: cube.py 1553L, cube_providers.py 1952L, cube_analysis.py 1759L).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
