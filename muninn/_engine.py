@@ -56,9 +56,10 @@ except ImportError:
 
 try:
     from ._secrets import redact_secrets_text as _redact_secrets_text
+    from ._secrets import secure_perms  # P0bis (2026-05-09): chmod sensitive writes
 except ImportError:
     from _secrets import redact_secrets_text as _redact_secrets_text
-    from _secrets import redact_secrets_text as _redact_secrets_text
+    from _secrets import secure_perms
 
 try:
     from .sentiment import score_sentiment, score_session
@@ -506,6 +507,7 @@ def _bootstrap_branches(repo_path: Path, skip_dirs: set):
                 continue
             mn_temp = mn_dir / f"_bootstrap_{f.stem}.mn"
             mn_temp.write_text(compressed, encoding="utf-8")
+            secure_perms(mn_temp)
             created = grow_branches_from_session(mn_temp)
             total_branches += created
             if mn_temp.exists():
@@ -635,6 +637,7 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
     tree = load_tree()
     root_path = TREE_DIR / "root.mn"
     root_path.write_text(content, encoding="utf-8")
+    secure_perms(root_path)
     tree["nodes"]["root"]["lines"] = len(lines)
     tree["nodes"]["root"]["last_access"] = time.strftime("%Y-%m-%d")
     tree["nodes"]["root"]["tags"] = top_concepts[:7]
@@ -712,6 +715,7 @@ Modifie-le librement — c'est ta carte de route.
     wt_path = repo_path / "WINTER_TREE.md"
     if not wt_path.exists():
         wt_path.write_text(content, encoding="utf-8")
+        secure_perms(wt_path)
         print(f"  WINTER_TREE.md generated for human")
     else:
         print(f"  WINTER_TREE.md exists, skipped (not overwriting)")
@@ -913,6 +917,7 @@ if __name__ == "__main__":
     main()
 '''
     bridge_path.write_text(bridge_code, encoding="utf-8")
+    secure_perms(bridge_path, mode=0o700)  # hook script — owner-only execute
     return bridge_path
 
 
@@ -1050,6 +1055,7 @@ if __name__ == "__main__":
     main()
 '''
     ptf_path.write_text(ptf_code, encoding="utf-8")
+    secure_perms(ptf_path, mode=0o700)  # hook script — owner-only execute
     return ptf_path
 
 
@@ -1224,6 +1230,7 @@ if __name__ == "__main__":
     main()
 '''
     sas_path.write_text(sas_code, encoding="utf-8")
+    secure_perms(sas_path, mode=0o700)  # hook script — owner-only execute
     return sas_path
 
 

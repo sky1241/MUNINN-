@@ -47,6 +47,7 @@ MUNINN_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(MUNINN_ROOT / "engine" / "core"))
 from tokenizer import count_tokens, token_count
 from _secrets import redact_secrets_text as _redact_secrets_text
+from _secrets import secure_perms  # P0bis (2026-05-09): chmod sensitive writes
 try:
     from sentiment import score_sentiment, score_session
     _HAS_SENTIMENT = True
@@ -435,6 +436,7 @@ def _bootstrap_branches(repo_path: Path, skip_dirs: set):
                 continue
             mn_temp = mn_dir / f"_bootstrap_{f.stem}.mn"
             mn_temp.write_text(compressed, encoding="utf-8")
+            secure_perms(mn_temp)
             created = grow_branches_from_session(mn_temp)
             total_branches += created
             if mn_temp.exists():
@@ -647,6 +649,7 @@ Modifie-le librement — c'est ta carte de route.
     wt_path = repo_path / "WINTER_TREE.md"
     if not wt_path.exists():
         wt_path.write_text(content, encoding="utf-8")
+        secure_perms(wt_path)
         print(f"  WINTER_TREE.md generated for human")
     else:
         print(f"  WINTER_TREE.md exists, skipped (not overwriting)")
@@ -848,6 +851,7 @@ if __name__ == "__main__":
     main()
 '''
     bridge_path.write_text(bridge_code, encoding="utf-8")
+    secure_perms(bridge_path, mode=0o700)  # hook script — owner-only execute
     return bridge_path
 
 
@@ -985,6 +989,7 @@ if __name__ == "__main__":
     main()
 '''
     ptf_path.write_text(ptf_code, encoding="utf-8")
+    secure_perms(ptf_path, mode=0o700)  # hook script — owner-only execute
     return ptf_path
 
 
@@ -1159,6 +1164,7 @@ if __name__ == "__main__":
     main()
 '''
     sas_path.write_text(sas_code, encoding="utf-8")
+    secure_perms(sas_path, mode=0o700)  # hook script — owner-only execute
     return sas_path
 
 
