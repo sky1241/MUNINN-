@@ -13,7 +13,7 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+8+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11; BUG-091 dual-tree drift **FIXED 2026-05-09 via B1 shimification (commits 83adeac/2bb1ea5/22baf4a/7de6dee)** — 4 fichiers byte-identiques (cube.py, cube_providers.py, lang_lexicons.py, _secrets.py) convertis en shims, vault.py 3 fixes sécu uniformisés, wal_monitor cosmetic drift fermé, E6 check_integrity mirroré dans muninn/_engine.py ; reste muninn/_engine.py drift documenté (4415L < cap 5000) protégé par test_chunk_d10 ; BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08). **1 OPEN** (BUG-104 L12 partial fix — root cause is chunk granularity, not detector).
+## Status: 90+10+8+1+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11; BUG-091 dual-tree drift **FIXED 2026-05-09 via B1 shimification (commits 83adeac/2bb1ea5/22baf4a/7de6dee)** — 4 fichiers byte-identiques (cube.py, cube_providers.py, lang_lexicons.py, _secrets.py) convertis en shims, vault.py 3 fixes sécu uniformisés, wal_monitor cosmetic drift fermé, E6 check_integrity mirroré dans muninn/_engine.py ; muninn/_engine.py reste un VRAI fichier (entry pip + imports relatifs + _ProxyModule), 4414 lignes de **diff** (pas la taille du fichier qui est 2225L) protégées par test_chunk_d10 cap 5000 ; BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08; **CRIT-1** circular import shims muninn/mycelium.py + sync_backend.py FIXED 2026-05-10 via commit 024da87 — 10 commandes CLI cold-start `python -m muninn` (bootstrap, feed --history, ingest, bridge, trip, sync, sync status/doctor/init/push) débloquées par `sys.modules.pop` + `sys.path.remove/insert(0)` forcé). **1 OPEN** (BUG-104 L12 partial fix — root cause is chunk granularity, not detector).
 
 ---
 
@@ -445,23 +445,25 @@ anti-regression test in `test_chunk12_pre_tool_use_hooks.py` or
   correctement" — adversarial property testing finds bugs that example-based
   testing misses.
 
-### BUG-091: engine/core/ vs muninn/ pkg fully duplicated [STILL OPEN]
-- **Status**: OPEN (unchanged from before audit)
-- **Audit progress**: chunk 16 added `tests/test_audit_dual_tree_sync.py`
-  which checks that 12 specific markers from today's modifs are mirrored
-  in BOTH trees. This is NOT a fix — it's a tripwire. If a future change
-  breaks the mirror on these markers, the test fails. Doesn't help for
-  files that diverged BEFORE today (16 of 19 file pairs are still
-  diverged, see audit output).
-- **Real fix is still TODO**: pick one source of truth, delete the other.
+### BUG-091: engine/core/ vs muninn/ pkg fully duplicated [SUPERSEDED — see header]
+- **Status**: FIXED 2026-05-09 via Phase B1 shimification (header L16).
+- **Historical context** (kept for archeology): chunk 16 added
+  `tests/test_audit_dual_tree_sync.py` as a tripwire — 16/19 file pairs were
+  still diverged at that time.
+- **Resolution**: B1 commits (83adeac, 2bb1ea5, 22baf4a, 7de6dee) converted
+  the 6 remaining duplicates (cube.py, cube_providers.py, lang_lexicons.py,
+  _secrets.py, vault.py, wal_monitor.py) into shims that re-export from
+  engine/core/. muninn/_engine.py kept as real file (entry pip + relative
+  imports). 19 shims propres, 0 byte-identique restant (vérifié md5).
+- **Refer to header L16 for current status.**
 
 ---
 
 ## Status: 90 bugs fixed across 12 audit passes (2026-03-18). 0 OPEN (pre-audit).
 
-## BUG-091: engine/core/ and muninn/ package fully duplicated
-- **Status**: OPEN
-- **Symptom**: Modifying a file in `engine/core/` does NOT affect code paths
+## BUG-091: engine/core/ and muninn/ package fully duplicated [SUPERSEDED — see header]
+- **Status**: FIXED 2026-05-09 via B1 shimification (header L16).
+- **Symptom (historical)**: Modifying a file in `engine/core/` did NOT affect code paths
   that `import muninn` (the pip package). Discovered during chunk 4 of leak
   intel battle plan: chunk 3's anti-Adversa clamp had to be mirrored from
   `engine/core/_secrets.py` to `muninn/_secrets.py` to be picked up by tests.

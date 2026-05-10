@@ -1,7 +1,7 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 3929 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 3163 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 413 + vault.py 551 = **24 434 lignes** (19 fichiers, post-H5.2 + audit v3 — forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.x is the source of truth)
-Tests: **2300+ collected, PASS, 0 xfail (post-H5.2), 0 FAIL**.
+Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 3929 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 393 + mycelium_zones.py 339 + mycelium_activation.py 496 + mycelium_dream.py 529 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 413 + vault.py 551 = **22 686 lignes** (23 fichiers core post-H6 split — mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.x source of truth)
+Tests: **2332 PASS, 47 skipped, 0 xfail, 0 fail** (post-H5.2 + B1 + CRIT-1 + CRIT-2).
 Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shimification 4 fichiers byte-identiques + cube + vault).
 
 ---
