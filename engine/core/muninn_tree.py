@@ -3927,3 +3927,13 @@ def inject_memory(fact: str, repo_path: Path = None):
         return live_name
 
 
+# P3 split (2026-05-10) — ensure muninn_tree itself is registered before any
+# sub-module (muninn_tree_doctor / _prune / _boot) tries to `from muninn_tree
+# import _m, …`. setdefault is idempotent and a no-op on the canonical load.
+# Conditional on `__name__ in sys.modules` because `spec_from_file_location +
+# module_from_spec + exec_module` (used by test_chunk_d11) bypasses the
+# automatic sys.modules registration — KeyError otherwise.
+_self_mod = sys.modules.get(__name__)
+if _self_mod is not None:
+    sys.modules.setdefault('muninn_tree', _self_mod)
+

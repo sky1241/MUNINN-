@@ -116,6 +116,18 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
         "mycelium_dream", # H6 chunk 4 (2026-05-09): _MyceliumDreamMixin —
                           # detect_anomalies / detect_blind_spots / trip / dream /
                           # _save_insights. Same justification.
+        "muninn_tree_doctor",  # P3.1 (2026-05-10): doctor() extracted from
+                               # muninn_tree.py:3267-3548. Re-exported via
+                               # `from muninn_tree_doctor import doctor` at
+                               # end of muninn_tree.py. External code keeps
+                               # importing `from muninn_tree import doctor`.
+                               # No standalone shim needed.
+        "muninn_tree_prune",   # P3.2 (2026-05-10): prune + _sleep_consolidate
+                               # + _auto_backup_tree + _light_prune extracted.
+                               # Same re-export pattern as muninn_tree_doctor.
+        "muninn_tree_boot",    # P3.3 (2026-05-10): boot + _load_virtual_branches
+                               # + _surface_insights_for_boot + _surface_known_errors
+                               # + _load_relevant_sessions extracted. Same pattern.
     }
     for name in engine_files:
         if name in engine_only:
