@@ -155,7 +155,7 @@ class TestDecayInPrune:
         # the import path works by checking the code structure
         import muninn
         _mdir = Path(muninn.__file__).parent.parent / "engine" / "core"  # BUG-091 shim
-        source = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_tree_prune.py", "muninn_feed.py"])
+        source = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_tree_boot.py", "muninn_tree_prune.py", "muninn_tree_doctor.py", "muninn_feed.py"])
         # Verify decay is called in prune
         assert "m_decay.decay()" in source, "prune() must call mycelium decay()"
         assert "MYCELIUM DECAY" in source, "prune() must print decay results"

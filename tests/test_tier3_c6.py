@@ -54,7 +54,7 @@ def test_c6_2_in_choices():
     import argparse
     # Parse the source to find choices
     _mdir = Path(muninn.__file__).parent.parent / "engine" / "core"  # BUG-091 shim
-    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_tree_boot.py", "muninn_tree_prune.py", "muninn_tree_doctor.py", "muninn_feed.py"])
     assert '"diagnose"' in src, "C6.2 FAIL: diagnose not in CLI choices"
     print("  C6.2 PASS: diagnose in CLI choices")
 
