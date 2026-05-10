@@ -50,14 +50,22 @@ hypothesis==6.152.2
 freezegun==1.5.5
 
 # Phase 4 (2026-05-09): forge-shield (split out of MUNINN- on 2026-05-07,
-# polished cycles 4→8 on sky1241/forge). v1.1.0 adds --modularity
-# (Newman Q + Louvain), --fast-deep (transitive impact),
-# --paths-to-mutate, --incremental-mutate (libcst AST-diff).
-# H1 (2026-05-09): the 3 legacy forge.py copies (root + engine/core +
-# muninn) were removed — PyPI forge-shield 1.1.1 is the single source
-# of truth. cube_analysis.py and test_props_forge.py now `from forge`.
+# polished cycles 4→10 on sky1241/forge).
 #
-# Note: v1.1.0 is not on PyPI yet (PyPI has 1.0.4). CI installs from
-# git tag (.github/workflows/ci.yml). Local dev: pip install from git
-# tag too — see README.
-# forge-shield  (no constraint — install from git+v1.1.1 in CI)
+# v1.1.0 (2026-05-08) : --modularity (Newman Q + Louvain), --fast-deep
+#   (transitive impact), --paths-to-mutate, --incremental-mutate (libcst
+#   AST-diff).
+# v1.2.0 (2026-05-10) : --shield orchestration (Stage 1 carmack → Stage 2
+#   gen_props → Stage 3 fast_deep) + git pre-commit hook installer.
+# v1.2.1 (2026-05-10) : hook fix — embeds sys.executable + invokes
+#   `python -m forge` (cycle 9 follow-up E2E catch).
+# v1.2.2 (2026-05-10) : find_tests excludes .venv/.tox/.eggs/.mypy_cache
+#   (cycle 10 E2E catch — forge crashed on its own repo on libcst tests).
+#
+# H1 (2026-05-09) : the 3 legacy forge.py copies (root + engine/core +
+# muninn) were removed — PyPI forge-shield is the single source of truth.
+# cube_analysis.py and test_props_forge.py now `from forge`.
+#
+# v1.2.2 is on PyPI since 2026-05-10 (Sky uploaded after writing
+# docs/PYPI_UPLOAD_GUIDE.md). Bumped from git+v1.1.1 to PyPI pin.
+forge-shield==1.2.2

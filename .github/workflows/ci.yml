@@ -141,13 +141,11 @@ jobs:
       - name: Install pytest + runtime deps
         run: |
           python3 -m pip install --upgrade pip
+          # forge-shield is on PyPI since 2026-05-10 v1.2.2 (Sky uploaded).
+          # Bumped from git+v1.1.1 → PyPI pin v1.2.2 (cycles 9-10 add
+          # --shield orchestration + hook installer + venv exclusion fix).
           python3 -m pip install -c constraints.txt \
-            pytest hypothesis tiktoken anthropic numpy cryptography freezegun
-          # forge-shield 1.1.0 is not on PyPI yet (cousin tagged v1.1.1 on
-          # GitHub but did not push to PyPI). Install from git tag directly
-          # so CI gets the new --modularity/--fast-deep/--paths-to-mutate
-          # features that the regenerated test_props_*.py rely on.
-          python3 -m pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
 
       - name: Configure git identity (required by sync_backend tests)
         run: |
@@ -287,8 +285,7 @@ jobs:
       - name: Install forge-shield + deps
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography freezegun
-          python3 -m pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
+          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
       - name: Generate property tests for every engine/core module (forge --gen-props)
         run: |
           # CHUNK D8 (H4.2): smoke-run forge --gen-props on every critical
