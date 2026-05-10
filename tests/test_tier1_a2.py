@@ -10,13 +10,33 @@ Tests:
 """
 import sys, os, math
 from datetime import datetime, timedelta
+
+import pytest
+from freezegun import freeze_time
+
 from muninn import _actr_activation, _ebbinghaus_recall
 
+# CRIT-2 fix (2026-05-10): freeze datetime to 2026-05-10 12:00:00 UTC for the
+# whole module. Pre-fix: _days_ago(n) computed `now() - n days` as a date
+# string, then _actr_activation called _days_since(...) which re-called now().
+# If those two now() calls straddled midnight, delta differed by ±1 day and
+# the arithmetic asserts (B = ln(t_j^-0.5 sum)) failed by ~12%. Detected by
+# CI runs after 00:00 fail 50% of the time. Freezing eliminates the race.
+pytestmark = pytest.mark.usefixtures("_freeze_for_tier1_a2")
+
+
+@pytest.fixture(autouse=True)
+def _freeze_for_tier1_a2():
+    with freeze_time("2026-05-10 12:00:00"):
+        yield
+
+
 def _days_ago(n):
-    """Return date string n days ago from today."""
+    """Return date string n days ago from today (frozen)."""
     return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
-_today = _days_ago(0)
+
+_today = "2026-05-10"  # Matches the freeze_time anchor; no datetime.now() at module load.
 
 TOLERANCE = 0.02
 

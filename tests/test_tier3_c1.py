@@ -9,7 +9,22 @@ Tests:
 """
 import sys, os, json, tempfile, shutil
 from datetime import datetime, timedelta
+
+import pytest
+from freezegun import freeze_time
+
 from muninn.mycelium import Mycelium
+
+# CRIT-2 fix (2026-05-10): freeze datetime to 2026-05-10 12:00:00 UTC for the
+# whole module. Pre-fix: _make_mycelium computed `now() - 60 days` for
+# last_seen, then m.decay(days=30) re-called now() to compute the half-life
+# delta. If those two now() calls straddled midnight, delta differed by ±1
+# day and the assertion `abs(small - 7) <= 1` failed by ~8x (got 15 instead
+# of 7). Detected by CI runs after 00:00 fail 50% of the time.
+@pytest.fixture(autouse=True)
+def _freeze_for_tier3_c1():
+    with freeze_time("2026-05-10 12:00:00"):
+        yield
 
 
 def _make_mycelium(connections: dict) -> Mycelium:
