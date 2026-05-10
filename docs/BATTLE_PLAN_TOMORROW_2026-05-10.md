@@ -1,8 +1,11 @@
-# BATTLE PLAN — 2026-05-10 (en cours)
+# BATTLE PLAN — 2026-05-10 (CLOTURÉ matin — voir AFTERNOON pour la suite)
 
 Audit final 4 agents mode seigneur dev (2026-05-09 soir).
 **P1 + P2 EXÉCUTÉS ce matin** (`024da87` → `ecf1184`, 4 commits, 0 régression).
-**P3 split muninn_tree.py 3929L** = en cours d'inspection (2 agents).
+**P3 split muninn_tree.py 3929L → 2179L (-45%) LIVRÉ** (`96729ad` pré-split + `f17d34c` doctor + `2170a33` prune + `4d738c6` boot + `23a7974` cleanup, 5 commits, 0 régression).
+**CI freezegun fix** (`abf4887`) — main HEAD vert.
+
+→ Suite après-midi : `docs/BATTLE_PLAN_AFTERNOON_2026-05-10.md` (F1-F10).
 
 ---
 
@@ -29,6 +32,8 @@ Audit final 4 agents mode seigneur dev (2026-05-09 soir).
 | **B1 BUG-091** fix complet | 83adeac, 2bb1ea5, 22baf4a, 7de6dee, a8d809c | ✅ EN PROD | muninn/* 7700→2982L (-4718L), 19 shims propres |
 | Cleanup-1 archi | `74a9991` | ✅ EN PROD | Drift docs forge.py + provider fallback cube_live |
 | v5 wrap | `f15459c` | ✅ EN PROD | Plan final v5 |
+| **P3 split muninn_tree.py** | `96729ad` `f17d34c` `2170a33` `4d738c6` `23a7974` | ✅ EN PROD | 3929L → 2179L, +3 sous-modules doctor/prune/boot, 2332 PASS conservés |
+| CI freezegun fix | `abf4887` | ✅ EN PROD | constraints.txt + ci.yml — débloqué les 4 CI rouges du matin |
 
 ### Métriques objectives mesurées (forge live + pytest)
 

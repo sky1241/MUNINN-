@@ -202,17 +202,17 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
 
-## Etat du projet (mai 2026, post-H1-H5.2)
+## Etat du projet (mai 2026, post-P3 split + CRIT-1/2/3 + B1)
 - 43 features + 39 briques Cube, 12 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- Engine: **24 434 lignes, 19 fichiers core** (voir CHANGELOG.md entête + docs/BATTLE_PLAN_FINAL_PROD_v3_2026-05-09.md)
+- Engine: **24 731 lignes, 26 fichiers core** (voir CHANGELOG.md entête — P3 split 2026-05-10 a découpé muninn_tree.py 3929→2179L en 4 modules : core + boot/prune/doctor)
 - forge-shield 1.1.x (PyPI) seule source de vérité — 3 forge.py internes supprimés H1
 - mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
 - Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, forge_metrics integration UX
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
-- Tests: **2328 PASS, 47 skip, 0 xfail, 0 FAIL** (sur 2563 collectés)
-- Q-modularity: **0.673** (Newman-Girvan, "good — modules well isolated")
-- CI: 12/12 success, 2 jobs (validate + forge_smoke matrix sur 11 modules)
+- Tests: **2332 PASS, 47 skip, 0 xfail, 0 FAIL** + **101 property tests** (forge --gen-props sur 17 modules)
+- Q-modularity: **0.660** (Newman-Girvan, "good — modules well isolated", -0.013 vs pre-P3 = drift attendu lié à l'éclatement muninn_tree)
+- CI: HEAD vert, 2 jobs (validate Engine+Mycelium+Tree + forge_smoke matrix sur 11 modules — F6 reste à étendre à 17)
 - Hooks installes: **9** (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart, ConfigChange, PostToolUseEditLog, PreToolUseBash{Destructive,Secrets})
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
