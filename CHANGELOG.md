@@ -1,8 +1,37 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 3929 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 393 + mycelium_zones.py 339 + mycelium_activation.py 496 + mycelium_dream.py 529 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 413 + vault.py 551 = **22 686 lignes** (23 fichiers core post-H6 split — mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.x source of truth)
-Tests: **2332 PASS, 47 skipped, 0 xfail, 0 fail** (post-H5.2 + B1 + CRIT-1 + CRIT-2).
+Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 2179 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 393 + mycelium_zones.py 339 + mycelium_activation.py 496 + mycelium_dream.py 529 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 413 + vault.py 551 = **22 771 lignes** (26 fichiers core post-P3 split — muninn_tree 3929→2179L via 3 sous-modules doctor/prune/boot ; mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.x source of truth)
+Tests: **2332 PASS, 47 skipped, 0 xfail, 0 fail** (post-H5.2 + B1 + CRIT-1 + CRIT-2 + P3 split).
 Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shimification 4 fichiers byte-identiques + cube + vault).
+
+---
+
+## 2026-05-10 — P3 split muninn_tree.py 3929L → 2179L (-1760L = -45%)
+
+3 sous-modules extraits, 4 commits sur `main`, 0 régression sur 2332 tests.
+
+### P3.1 (`f17d34c`) — `doctor()` extracted (-278L)
+- `engine/core/muninn_tree_doctor.py` : 297L (282L doctor + 15L imports/header)
+- Pattern : sub-module re-export à la fin de muninn_tree.py via `from muninn_tree_doctor import doctor`
+- Pas de shim standalone (engine_only dans test_chunk_d11_shim_drift.py)
+
+### P3.2 (`2170a33`) — `prune` cluster extracted (-636L)
+- `engine/core/muninn_tree_prune.py` : 678L
+- 4 fonctions : `_sleep_consolidate`, `_light_prune`, `_auto_backup_tree`, `prune`
+- 7 tests source-grep mis à jour (huginn h1/h2, decay_in_prune, immune i2/i3, phase6_scale, x8_x13_fixes)
+
+### P3.3 (`4d738c6`) — `boot` cluster extracted (-846L)
+- `engine/core/muninn_tree_boot.py` : 903L
+- 5 fonctions : `_load_virtual_branches`, `_surface_insights_for_boot`, `_load_relevant_sessions`, `_surface_known_errors`, `boot`
+- recall() (resté dans muninn_tree.py) appelle `_surface_known_errors` → résolu au call time via re-export
+
+### P3.4 — Cleanup + props regen + doc
+
+- DOCUMENTED_OVERSIZED_MODULES vidé (muninn_tree.py 2179L < 2500L cap)
+- DOCUMENTED_OVERSIZED_FUNCTIONS : `boot`/`prune`/`doctor` → repointés vers nouveaux modules
+- `tests/test_props_muninn_tree.py` régénéré (14 props PASS)
+- forge --modularity Q = 0.660 (vs 0.673 pre-split, toujours "good ≥ 0.30")
+- 5 actions pré-split (`96729ad`) : tag rollback + engine_only entries + sys.modules.setdefault + shim CRIT-1 protection + baseline confirmation
 
 ---
 

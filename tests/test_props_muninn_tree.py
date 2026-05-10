@@ -17,9 +17,6 @@ from engine.core.muninn_tree import *
 #   - save_tree  (calls .mkdir())
 #   - compute_hash  (path arg + .read_bytes())
 #   - grow_branches_from_session  (calls .unlink())
-#   - boot  (calls .run())
-#   - prune  (name matches /^prune/)
-#   - doctor  (calls .write_text())
 #   - inject_memory  (calls .mkdir())
 
 
