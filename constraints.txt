@@ -38,6 +38,11 @@ PyYAML==6.0.3
 # Property testing (forge --gen-props consumers). 6.152.2 currently tested.
 hypothesis==6.152.2
 
+# CRIT-2 (2026-05-10): freeze datetime in tests that compute time deltas
+# (test_tier1_a2.py, test_tier3_c1.py). Without this lock, the test pair
+# fails 50% of the time when the run crosses midnight UTC.
+freezegun==1.5.5
+
 # Phase 4 (2026-05-09): forge-shield (split out of MUNINN- on 2026-05-07,
 # polished cycles 4→8 on sky1241/forge). v1.1.0 adds --modularity
 # (Newman Q + Louvain), --fast-deep (transitive impact),

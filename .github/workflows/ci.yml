@@ -142,7 +142,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -c constraints.txt \
-            pytest hypothesis tiktoken anthropic numpy cryptography
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun
           # forge-shield 1.1.0 is not on PyPI yet (cousin tagged v1.1.1 on
           # GitHub but did not push to PyPI). Install from git tag directly
           # so CI gets the new --modularity/--fast-deep/--paths-to-mutate
@@ -287,7 +287,7 @@ jobs:
       - name: Install forge-shield + deps
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography
+          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography freezegun
           python3 -m pip install 'git+https://github.com/sky1241/forge.git@v1.1.1'
       - name: Generate property tests for every engine/core module (forge --gen-props)
         run: |
