@@ -19,15 +19,17 @@ ENGINE = REPO_ROOT / "engine" / "core"
 # and would require multi-day refactors to fix. Adding to this set
 # requires a justification in PHASE_B_ARCHITECTURE_AUDIT.md.
 DOCUMENTED_OVERSIZED_MODULES = frozenset({
-    "muninn_tree.py",   # 3673 lines, split candidate documented
-    # mycelium.py: was 3163L → 2435L post H6.1+H6.2 (mixin split started
-    # 2026-05-09). Now under the 2500L threshold but still in active split.
-    # H6.3-5 will continue extracting Activation, Dream, then leave Core ~1000L.
+    # P3 (2026-05-10): muninn_tree.py split into 4 modules:
+    #   muninn_tree.py (2180L, was 3939L)
+    #   + muninn_tree_doctor.py (297L)
+    #   + muninn_tree_prune.py (678L)
+    #   + muninn_tree_boot.py (~810L)
+    # All sub-modules under 2500L threshold post-split. Set is intentionally
+    # empty — re-add a module here if a future PR pushes one over 2500L.
 })
 
 DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # (file, function) pairs known to be over thresholds
-    ("muninn_tree.py", "boot"),       # 646 lines
     ("muninn.py",      "main"),       # 503 lines (CLI dispatcher)
     ("muninn.py",      "scan_repo"),  # 210+ lines (CHUNK 9: + neuron map gen)
     ("bible_scraper.py", "_core_bible"),  # 478 lines (private helper)
@@ -40,6 +42,9 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # P3.2 (2026-05-10): prune() extracted to muninn_tree_prune.py
     # — moved out of muninn_tree.py (was 409 lines).
     ("muninn_tree_prune.py", "prune"),  # 409 lines
+    # P3.3 (2026-05-10): boot() extracted to muninn_tree_boot.py
+    # — moved out of muninn_tree.py (was 646 lines).
+    ("muninn_tree_boot.py", "boot"),  # 646 lines
 })
 
 # Hard caps that NO file/function may cross going forward
