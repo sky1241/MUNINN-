@@ -17,7 +17,7 @@
 
 **FIXED total** : 90 (12 audit passes 2026-03-18) + 10 (chunks 16+17 audit 2026-04-10) + 8 (BUG-102 à BUG-110, fixed 2026-04-10/11) + 1 (BUG-091 dual-tree FIXED 2026-05-09 via B1 shimification) + 1 (BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08) + 4 (CRIT-1, CRIT-2, CRIT-3, P2 fixed 2026-05-10 morning) + 7 (F1 numpy pin, F2/F3/F4 doc drift, F5 hooks audit trail, F6 forge_smoke matrix, F7 source-grep harmonize fixed 2026-05-10 PM).
 
-**OPEN** : **1** (BUG-104 L12 BudgetMem chunk granularity — PARTIAL FIX, OPT-IN via env var, impact prod = 0).
+**OPEN** : **0** (BUG-104 **FIXED 2026-05-10 PM via spill-to-tree**, voir entry détaillée ci-dessous).
 
 **Détail des fixes 2026-05-10** :
 
@@ -317,7 +317,47 @@ appears in one of these hubs.
   guard fires, so users know L12 is being skipped (currently silent
   degradation). Not critical, file as enhancement not bug.
 
-### BUG-104: L12 BudgetMem fact-recall loss at tight budgets (PARTIAL FIX brick 17)
+### BUG-104: L12 BudgetMem fact-recall loss at tight budgets — **FIXED 2026-05-10 PM via spill-to-tree**
+- **Status**: **FIXED 2026-05-10 PM** (commit pending — see CHANGELOG entry).
+  Le fix bypasse le root cause "chunk granularity" en redirigeant les chunks
+  must-keep qui ne rentrent pas dans le budget vers le tree au lieu de les
+  drop. Pattern : calque V9A+ regen (Shomrat & Levin 2013 planère) appliqué
+  à L12 au lieu de prune. Boot() retrouve les facts via TF-IDF + spreading
+  activation sur les concepts extraits via `extract_tags`.
+- **Mécanique du fix** :
+  1. `engine/core/budget_select.py` : nouvelles fonctions `select_chunks_with_dropped`
+     + `budget_select_with_dropped` qui exposent les indices/textes des chunks
+     must-keep qui n'ont pas tenu dans le budget.
+  2. `engine/core/muninn_tree.py:spill_chunks_to_tree(repo_path, chunks, source_id)` :
+     helper qui crée 1 branche `b{NN:02d}` par chunk dropped, header `## L12_SPILL`,
+     tags via `extract_tags`, marqué `spilled_from_l12: True` dans tree.json.
+  3. `engine/core/muninn_layers.py:_l12_budget_pass(text, repo_path=None,
+     source_id="")` : utilise la variante `_with_dropped`, déclenche le spill
+     quand `repo_path` disponible (default = `_m._REPO_PATH`), insère un stub
+     `[L12_SPILL: branch_names, K facts]` dans output pour traçabilité.
+- **Mesure post-fix** :
+  - verbose_memory.md b=500 : 6/15 → **15/15 facts (combined output + spill)**
+  - test `test_bug104_spill_recall_improvement` : assert `answered >= 13`
+- **Backward compat** :
+  - Si `_REPO_PATH = None` (pytest unset / certains CI) → no-op (legacy path)
+  - Si env `MUNINN_L12_NO_SPILL=1` → opt-out explicite (test pin)
+  - L12 reste OPT-IN via `MUNINN_L12_BUDGET` (par design, BUG-104 fix
+    n'inverse pas ce default)
+- **Tests** :
+  - `test_bug104_spill_creates_branches_at_tight_budget` (spill .mn files créés)
+  - `test_bug104_spill_branch_files_contain_facts` (header L12_SPILL + body non-trivial)
+  - `test_bug104_spill_tree_json_metadata` (spilled_from_l12 + tags + hash valides)
+  - `test_bug104_spill_recall_improvement` (>= 13/15 facts post-spill)
+  - `test_bug104_spill_disabled_by_env_var` (MUNINN_L12_NO_SPILL=1 désactive)
+  - Les 2 envelope tests historiques (verbose_bug_104, session_bug_104) restent
+    intacts car ils tournent avec `_REPO_PATH=None` → spill no-op → recall reste
+    à 6/15 (pinning de la legacy behaviour pour un cas où le fix n'est pas wirable).
+- **Risques mitigés** :
+  - Race condition tree lock : géré par `_tree_lock` interne à `save_tree`
+  - Spill explosion : NCD-dedup natural via `_sleep_consolidate` + decay
+  - Tags incorrects → boot rate : mitigation via brick 17 detector + extract_tags
+
+### ~~BUG-104 (historique)~~: L12 BudgetMem fact-recall loss at tight budgets (PARTIAL FIX brick 17)
 - **Status**: PARTIAL FIX (brick 17 extended has_fact_span, but the
   benchmark numbers did not change — the actual root cause is different)
 - **Symptom**: at `MUNINN_L12_BUDGET=500` on `verbose_memory.md` (1005 tok),

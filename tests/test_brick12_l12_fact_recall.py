@@ -148,3 +148,138 @@ def test_phase_b_fact_recall_doc_exists():
     assert "BUG-104" in text
     assert "verbose_memory" in text
     assert "100.0%" in text and "40.0%" in text  # the headline numbers
+
+
+# ── BUG-104 spill-to-tree fix tests (2026-05-10) ────────────────────────────
+
+
+@pytest.fixture
+def _spill_repo(tmp_path, monkeypatch):
+    """Setup a tmp repo with .muninn/tree/ + tree.json for spill tests.
+
+    BUG-104 fix : the spill helper writes new branches to the tree, so we
+    need an isolated tmp repo to avoid polluting the real .muninn/.
+    """
+    tree_dir = tmp_path / ".muninn" / "tree"
+    tree_dir.mkdir(parents=True)
+    tree_json = tree_dir / "tree.json"
+    tree_json.write_text(json.dumps({
+        "version": 2,
+        "budget": 30000,
+        "nodes": {"root": {"file": "root.mn", "lines": 5,
+                            "tags": [], "children": []}},
+        "updated": "2026-05-10",
+    }))
+    (tree_dir / "root.mn").write_text("# root\nfact: x\n")
+
+    import muninn
+    monkeypatch.setattr(muninn, "_REPO_PATH", tmp_path)
+    if hasattr(muninn, "_refresh_tree_paths"):
+        muninn._refresh_tree_paths()
+    return tmp_path
+
+
+def test_bug104_spill_creates_branches_at_tight_budget(ml, _spill_repo):
+    """BUG-104 fix: at b=500 on verbose_memory.md, must-keep chunks that
+    don't fit must be SPILLED to .muninn/tree/ as new branches (not lost)."""
+    sample = BENCH_DIR / "verbose_memory.md"
+    if not sample.exists():
+        pytest.skip("benchmark file missing")
+    os.environ["MUNINN_L12_BUDGET"] = "500"
+
+    tree_dir = _spill_repo / ".muninn" / "tree"
+    branches_before = {p.stem for p in tree_dir.glob("b*.mn")}
+    _ = ml.compress_file(sample)
+    branches_after = {p.stem for p in tree_dir.glob("b*.mn")}
+    new_branches = branches_after - branches_before
+    assert new_branches, (
+        f"BUG-104 spill did not fire on tight budget — no new branches in "
+        f"{tree_dir}. Expected at least 1 spilled branch."
+    )
+
+
+def test_bug104_spill_branch_files_contain_facts(ml, _spill_repo):
+    """Spill branch .mn files must contain L12_SPILL header + actual fact content."""
+    sample = BENCH_DIR / "verbose_memory.md"
+    if not sample.exists():
+        pytest.skip("benchmark file missing")
+    os.environ["MUNINN_L12_BUDGET"] = "500"
+    _ = ml.compress_file(sample)
+    tree_dir = _spill_repo / ".muninn" / "tree"
+    spill_files = sorted(p for p in tree_dir.glob("b*.mn") if p.name != "root.mn")
+    assert spill_files, "No spill files found"
+    first = spill_files[0].read_text(encoding="utf-8")
+    assert "## L12_SPILL" in first, f"Spill marker missing in {spill_files[0]}"
+    # Body must be non-trivial (more than just the header)
+    assert len(first.split("\n")) >= 3, f"Spill file {spill_files[0]} too short"
+
+
+def test_bug104_spill_tree_json_metadata(ml, _spill_repo):
+    """Spill branches must be registered in tree.json with valid metadata."""
+    sample = BENCH_DIR / "verbose_memory.md"
+    if not sample.exists():
+        pytest.skip("benchmark file missing")
+    os.environ["MUNINN_L12_BUDGET"] = "500"
+    _ = ml.compress_file(sample)
+
+    tree_json = _spill_repo / ".muninn" / "tree" / "tree.json"
+    tree = json.loads(tree_json.read_text())
+    spilled_nodes = {n: d for n, d in tree["nodes"].items()
+                     if d.get("spilled_from_l12") is True}
+    assert spilled_nodes, "No spilled_from_l12 marker found in tree.json"
+    sample_node = next(iter(spilled_nodes.values()))
+    # Required keys
+    for key in ("file", "lines", "tags", "temperature", "created", "hash"):
+        assert key in sample_node, f"Missing key '{key}' in spilled node"
+    # Tags should contain at least one extracted concept
+    assert isinstance(sample_node["tags"], list)
+
+
+def test_bug104_spill_recall_improvement(ml, _spill_repo):
+    """The reason d'être of BUG-104 fix : combined fact recall (output + spill
+    branches) must exceed the pre-fix 6/15 envelope on verbose_memory at b=500."""
+    sample = BENCH_DIR / "verbose_memory.md"
+    questions_path = BENCH_DIR / "questions_verbose.json"
+    if not sample.exists() or not questions_path.exists():
+        pytest.skip("benchmark file missing")
+    os.environ["MUNINN_L12_BUDGET"] = "500"
+    questions = json.loads(questions_path.read_text(encoding="utf-8"))
+    compressed = ml.compress_file(sample)
+    # Combine main output + spill branch contents (boot would do this on query)
+    tree_dir = _spill_repo / ".muninn" / "tree"
+    spill_text = ""
+    for p in tree_dir.glob("b*.mn"):
+        if p.name != "root.mn":
+            spill_text += "\n" + p.read_text(encoding="utf-8")
+    combined = compressed + spill_text
+
+    answered = 0
+    for q in questions:
+        ans = q["answer"]
+        if ans.lower() in combined.lower():
+            answered += 1
+    # Pre-fix envelope was 3-12. Post-fix with spill should exceed 12.
+    assert answered >= 13, (
+        f"BUG-104 fix did not improve recall: {answered}/15 (need >= 13). "
+        f"Either spill broke or extract_tags doesn't capture the facts. "
+        f"Check spill .mn files in {tree_dir}."
+    )
+
+
+def test_bug104_spill_disabled_by_env_var(ml, _spill_repo):
+    """MUNINN_L12_NO_SPILL=1 must disable the spill (backward compat / opt-out)."""
+    sample = BENCH_DIR / "verbose_memory.md"
+    if not sample.exists():
+        pytest.skip("benchmark file missing")
+    os.environ["MUNINN_L12_BUDGET"] = "500"
+    os.environ["MUNINN_L12_NO_SPILL"] = "1"
+    try:
+        _ = ml.compress_file(sample)
+        tree_dir = _spill_repo / ".muninn" / "tree"
+        spill_files = [p for p in tree_dir.glob("b*.mn") if p.name != "root.mn"]
+        assert not spill_files, (
+            f"L12_NO_SPILL=1 should disable spill but found {len(spill_files)} "
+            f"branches in {tree_dir}"
+        )
+    finally:
+        os.environ.pop("MUNINN_L12_NO_SPILL", None)

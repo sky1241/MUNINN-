@@ -280,6 +280,57 @@ def _default_token_count(text: str) -> int:
     return len(_tokenize(text))
 
 
+def _select_chunks_internal(
+    chunks_list: list,
+    budget_tokens: int,
+    token_count,
+    keep_facts: bool,
+) -> tuple:
+    """Internal core of select_chunks — returns (kept, dropped_must_keep, all_must_keep).
+
+    BUG-104 (2026-05-10): split out so callers who need the dropped-must-keep
+    set (for spill-to-tree) can reach it without re-running the algorithm.
+    """
+    n = len(chunks_list)
+    if n == 0:
+        return set(), set(), set()
+
+    idf_map = compute_idf(chunks_list)
+    scores = [
+        score_chunk(c, idf_map, i, n)
+        for i, c in enumerate(chunks_list)
+    ]
+    sizes = [token_count(c) for c in chunks_list]
+
+    must_keep = set()
+    if keep_facts:
+        for i, c in enumerate(chunks_list):
+            if has_fact_span(c):
+                must_keep.add(i)
+
+    # Phase 1: must-keep chunks first, capped at budget
+    kept = set()
+    used = 0
+    for i in sorted(must_keep, key=lambda j: -scores[j]):
+        if used + sizes[i] <= budget_tokens:
+            kept.add(i)
+            used += sizes[i]
+
+    # Phase 2: fill remaining budget with score-sorted others
+    others = [
+        i for i in range(n) if i not in kept
+    ]
+    others.sort(key=lambda j: -scores[j])
+    for i in others:
+        if used + sizes[i] <= budget_tokens:
+            kept.add(i)
+            used += sizes[i]
+
+    # BUG-104 fix: must-keep chunks that did NOT fit are the spill candidates
+    dropped_must_keep = must_keep - kept
+    return kept, dropped_must_keep, must_keep
+
+
 def select_chunks(
     chunks,
     budget_tokens: int,
@@ -313,42 +364,42 @@ def select_chunks(
     if token_count is None:
         token_count = _default_token_count
     chunks_list = [c if isinstance(c, str) else "" for c in chunks]
-    n = len(chunks_list)
-    if n == 0:
+    if not chunks_list:
         return []
-
-    idf_map = compute_idf(chunks_list)
-    scores = [
-        score_chunk(c, idf_map, i, n)
-        for i, c in enumerate(chunks_list)
-    ]
-    sizes = [token_count(c) for c in chunks_list]
-
-    must_keep = set()
-    if keep_facts:
-        for i, c in enumerate(chunks_list):
-            if has_fact_span(c):
-                must_keep.add(i)
-
-    # Phase 1: must-keep chunks first, capped at budget
-    kept = set()
-    used = 0
-    for i in sorted(must_keep, key=lambda j: -scores[j]):
-        if used + sizes[i] <= budget_tokens:
-            kept.add(i)
-            used += sizes[i]
-
-    # Phase 2: fill remaining budget with score-sorted others
-    others = [
-        i for i in range(n) if i not in kept
-    ]
-    others.sort(key=lambda j: -scores[j])
-    for i in others:
-        if used + sizes[i] <= budget_tokens:
-            kept.add(i)
-            used += sizes[i]
-
+    kept, _dropped_must_keep, _must_keep = _select_chunks_internal(
+        chunks_list, budget_tokens, token_count, keep_facts
+    )
     return sorted(kept)
+
+
+def select_chunks_with_dropped(
+    chunks,
+    budget_tokens: int,
+    token_count=None,
+    keep_facts: bool = True,
+) -> tuple:
+    """Like select_chunks() but ALSO returns the must-keep chunks that did NOT fit.
+
+    BUG-104 fix (2026-05-10): expose dropped-must-keep so the L12 caller can
+    spill them to the tree as new branches instead of losing the facts.
+
+    Returns:
+        tuple (kept_indices: list[int], dropped_must_keep_indices: list[int]).
+        Both sorted ascending in original order.
+    """
+    if not chunks:
+        return [], []
+    if budget_tokens <= 0:
+        return [], []
+    if token_count is None:
+        token_count = _default_token_count
+    chunks_list = [c if isinstance(c, str) else "" for c in chunks]
+    if not chunks_list:
+        return [], []
+    kept, dropped_must_keep, _all_must_keep = _select_chunks_internal(
+        chunks_list, budget_tokens, token_count, keep_facts
+    )
+    return sorted(kept), sorted(dropped_must_keep)
 
 
 def budget_select(
@@ -375,6 +426,41 @@ def budget_select(
         keep_facts=keep_facts,
     )
     return separator.join(chunks[i] for i in kept_indices)
+
+
+def budget_select_with_dropped(
+    text: str,
+    budget_tokens: int,
+    token_count=None,
+    keep_facts: bool = True,
+    separator: str = "\n\n",
+) -> tuple:
+    """Like budget_select() but also returns the dropped-must-keep chunk TEXTS.
+
+    BUG-104 fix (2026-05-10): the L12 caller (muninn_layers._l12_budget_pass)
+    uses this to spill the dropped-must-keep chunks to the tree as new
+    branches via spill_chunks_to_tree() instead of losing the facts.
+
+    Returns:
+        tuple (kept_text: str, dropped_must_keep_chunks: list[str]).
+        kept_text is the joined kept chunks (same as budget_select() return).
+        dropped_must_keep_chunks is the list of TEXTS of chunks that had
+        fact spans but did not fit in the budget — empty list if none.
+    """
+    if not isinstance(text, str) or not text:
+        return (text or ""), []
+    if budget_tokens <= 0:
+        return "", []
+    chunks = re.split(r"\n\s*\n", text)
+    kept_indices, dropped_indices = select_chunks_with_dropped(
+        chunks,
+        budget_tokens=budget_tokens,
+        token_count=token_count,
+        keep_facts=keep_facts,
+    )
+    kept_text = separator.join(chunks[i] for i in kept_indices)
+    dropped_chunks = [chunks[i] for i in dropped_indices]
+    return kept_text, dropped_chunks
 
 
 def stats(text: str = None, chunks = None, budget_tokens: int = None) -> dict:

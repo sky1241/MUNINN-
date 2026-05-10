@@ -6,6 +6,71 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-10 (soir) — BUG-104 FIXED via spill-to-tree (planère pattern)
+
+L12 BudgetMem fact-recall loss à tight budget : **résolu définitivement**
+en redirigeant les chunks must-keep qui ne rentrent pas dans le budget vers
+le tree au lieu de les drop. Calque V9A+ regen (Shomrat & Levin 2013) appliqué
+à L12 au lieu de prune.
+
+### Changements
+
+**`engine/core/budget_select.py`** (+88L)
+- Refactor : `_select_chunks_internal` extrait du core de `select_chunks` pour
+  exposer `dropped_must_keep` aux callers qui en ont besoin.
+- Ajout : `select_chunks_with_dropped(chunks, budget) -> tuple(kept, dropped)`
+- Ajout : `budget_select_with_dropped(text, budget) -> tuple(kept_text, dropped_chunks)`
+- Backward compat : `select_chunks` et `budget_select` inchangés (autres callers
+  pas affectés). `forge --gen-props` génère 8 props (vs 6 avant).
+
+**`engine/core/muninn_tree.py`** (+115L) + `__all__` updated
+- Ajout : `spill_chunks_to_tree(repo_path, dropped_chunks, source_id="")`
+- Crée 1 branche `b{NN:02d}` par chunk dropped, écriture atomique via
+  `_atomic_text_write`, header `## L12_SPILL <source_id> (date)` pour
+  traçabilité, tags via `extract_tags`, marqué `spilled_from_l12: True`
+  dans tree.json. Update tree.json sous `_tree_lock` (race-safe).
+
+**`engine/core/muninn_layers.py:_l12_budget_pass`** (signature étendue)
+- `_l12_budget_pass(text, repo_path=None, source_id="")` (était `(text)`).
+- Utilise la variante `_with_dropped` quand `repo_path` disponible
+  (default lazy = `_m._REPO_PATH`).
+- Déclenche le spill via `muninn.spill_chunks_to_tree`, insère stub
+  `[L12_SPILL: <branches>, K facts]` dans output.
+- Opt-out via env `MUNINN_L12_NO_SPILL=1` (test pin).
+
+**`muninn/muninn_tree.py` shim** : ajout `spill_chunks_to_tree` au re-export.
+
+### Tests (+5 nouveaux, 2339 PASS post-fix)
+
+`tests/test_brick12_l12_fact_recall.py` étendu :
+- `test_bug104_spill_creates_branches_at_tight_budget` (spill .mn files créés)
+- `test_bug104_spill_branch_files_contain_facts` (header + body valid)
+- `test_bug104_spill_tree_json_metadata` (spilled_from_l12 + tags + hash)
+- `test_bug104_spill_recall_improvement` (**>= 13/15 facts** post-spill, vs 6/15 pre-fix)
+- `test_bug104_spill_disabled_by_env_var` (opt-out pin)
+
+Total brick12 : 13/13 PASS (8 originaux + 5 nouveaux).
+Property tests : 103 PASS (vs 101 pre-fix, +2 budget_select).
+
+### Métriques mesurées (commande live)
+
+- verbose_memory.md b=500 : recall **6/15 → 15/15** (combined output + spill)
+- Tests pytest : **2332 → 2339 PASS** (+7 nets : 5 spill + 2 props budget_select)
+- forge --modularity Q : 0.660 (stable)
+- BUG-104 : **FIXED** → BUGS.md OPEN passe de 1 → 0
+
+### Recherche sources (pour ce fix)
+
+- BudgetMem original : [arxiv 2511.04919](https://arxiv.org/abs/2511.04919) — paper
+  ne claim quality que pour budgets >= 50% input ; spill-to-tree étend
+  l'enveloppe utilisable.
+- Anthropic effective context engineering : "automatic compaction" (fin 2025) =
+  pattern voisin (résumer le surplus au lieu de dropper).
+- Shomrat & Levin 2013 [PMID 23821717](https://pubmed.ncbi.nlm.nih.gov/23821717/) :
+  planarian flatworm memory persists through head regeneration → V9A+ inspiration.
+
+---
+
 ## 2026-05-10 (après-midi) — F1-F7 stabilisation post-P3 + F5 hook audit trail
 
 5 commits supplémentaires, 0 régression sur 2332 tests, CI vert sur HEAD.

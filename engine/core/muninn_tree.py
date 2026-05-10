@@ -25,7 +25,7 @@ class _ModRef:
 
 _m = _ModRef()
 
-__all__ = ['BUDGET', '_actr_activation', '_append_session_log', '_atomic_json_write', '_auto_backup_tree', '_days_since', '_ebbinghaus_recall', '_extract_error_fixes', '_get_tree_dir', '_get_tree_meta', '_light_prune', '_load_relevant_sessions', '_load_virtual_branches', '_refresh_tree_paths', '_safe_tree_path', '_sleep_consolidate', '_surface_insights_for_boot', '_surface_known_errors', '_tfidf_relevance', '_tokenize_words', '_tree_lock', '_tree_unlock', 'adapt_k', 'adaptive_boot_budget', 'boot', 'bridge', 'bridge_fast', 'build_tree', 'classify_session', 'cleanup_legacy_tree', 'cleanup_tmp_files', 'compute_hash', 'compute_temperature', 'detect_session_mode', 'diagnose', 'doctor', 'extract_tags', 'grow_branches_from_session', 'huginn_think', 'init_tree', 'inject_memory', 'load_tree', 'predict_next', 'prune', 'read_node', 'recall', 'refresh_tree_metadata', 'save_tree', 'show_status']
+__all__ = ['BUDGET', '_actr_activation', '_append_session_log', '_atomic_json_write', '_auto_backup_tree', '_days_since', '_ebbinghaus_recall', '_extract_error_fixes', '_get_tree_dir', '_get_tree_meta', '_light_prune', '_load_relevant_sessions', '_load_virtual_branches', '_refresh_tree_paths', '_safe_tree_path', '_sleep_consolidate', '_surface_insights_for_boot', '_surface_known_errors', '_tfidf_relevance', '_tokenize_words', '_tree_lock', '_tree_unlock', 'adapt_k', 'adaptive_boot_budget', 'boot', 'bridge', 'bridge_fast', 'build_tree', 'classify_session', 'cleanup_legacy_tree', 'cleanup_tmp_files', 'compute_hash', 'compute_temperature', 'detect_session_mode', 'diagnose', 'doctor', 'extract_tags', 'grow_branches_from_session', 'huginn_think', 'init_tree', 'inject_memory', 'load_tree', 'predict_next', 'prune', 'read_node', 'recall', 'refresh_tree_metadata', 'save_tree', 'show_status', 'spill_chunks_to_tree']
 
 
 # ── BUDGET ────────────────────────────────────────────────────────
@@ -1084,6 +1084,132 @@ def extract_tags(text: str) -> list[str]:
             pass  # Graceful: tags work without mycelium
 
     return sorted(tags)[:10]
+
+
+def spill_chunks_to_tree(repo_path: Path, dropped_chunks: list[str],
+                         source_id: str = "") -> list[str]:
+    """BUG-104 fix (2026-05-10) — spill chunks must-keep dropped par L12.
+
+    Quand le packer L12 BudgetMem doit dropper des chunks must-keep faute de
+    place dans le budget, au lieu de les perdre on les écrit dans des branches
+    dédiées du tree. Boot() les retrouvera via TF-IDF + spreading activation
+    sur les concepts (extract_tags).
+
+    Pattern : calque V9A+ regen (Shomrat & Levin 2013 planère) appliqué à L12
+    au lieu de prune. L'info ne disparaît pas, elle migre dans la couche
+    persistante au lieu d'être détruite.
+
+    Args:
+        repo_path: racine du repo (pour résoudre TREE_DIR via _refresh_tree_paths
+            si besoin). Si None ou non-existant, no-op (returns []).
+        dropped_chunks: liste des textes des chunks must-keep qui n'ont pas tenu
+            dans le budget L12. Vide → no-op.
+        source_id: identifiant optionnel de la session/transcript source
+            (utilisé dans le nom de la branche pour traçabilité).
+
+    Returns:
+        list[str] des branch names créées (ex: ["b07", "b08"]). Vide si
+        no-op (pas de chunks ou repo_path manquant).
+
+    Side effects:
+        - Crée 1 fichier .mn par chunk dans .muninn/tree/
+        - Update tree.json (sous lock _tree_lock interne à save_tree)
+    """
+    if not dropped_chunks or not repo_path:
+        return []
+    repo_path = Path(repo_path)
+    if not repo_path.exists():
+        return []
+    # Filtre chunks vides ou trop courts (< 3 lignes = dust, B14)
+    valid_chunks = [c for c in dropped_chunks
+                    if isinstance(c, str) and c.strip() and c.count("\n") >= 2]
+    if not valid_chunks:
+        return []
+
+    try:
+        tree = load_tree()
+    except Exception as e:
+        # Pas de tree → on ne peut pas spiller, fallback silencieux (les facts
+        # restent dans le transcript .jsonl original, donc pas perdus).
+        print(f"  [BUG-104 spill] tree load failed: {e}", file=sys.stderr)
+        return []
+
+    nodes = tree.get("nodes", {})
+    # Trouve next_id en scannant les b00/b01/... existants
+    existing_ids = []
+    for n in nodes:
+        if n.startswith("b") and n[1:].isdigit():
+            existing_ids.append(int(n[1:]))
+    next_id = (max(existing_ids) + 1) if existing_ids else 0
+
+    branch_names = []
+    today = time.strftime("%Y-%m-%d")
+    tree_dir = _m.TREE_DIR or (repo_path / ".muninn" / "tree")
+    if not tree_dir.exists():
+        try:
+            tree_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return []
+
+    for idx, chunk in enumerate(valid_chunks):
+        branch_name = f"b{next_id + idx:02d}"
+        branch_file = f"{branch_name}.mn"
+        branch_path = tree_dir / branch_file
+        # Header L12 SPILL pour traçabilité
+        spill_marker = f"## L12_SPILL"
+        if source_id:
+            spill_marker += f" {source_id}"
+        spill_marker += f" ({today})"
+        body = f"{spill_marker}\n{chunk.rstrip()}\n"
+        try:
+            _atomic_text_write(branch_path, body)
+        except OSError as e:
+            print(f"  [BUG-104 spill] write failed for {branch_name}: {e}",
+                  file=sys.stderr)
+            continue
+
+        try:
+            chunk_tags = extract_tags(chunk)[:10]
+        except Exception:
+            chunk_tags = []
+
+        nodes[branch_name] = {
+            "type": "branch",
+            "file": branch_file,
+            "lines": body.count("\n") + 1,
+            "max_lines": 150,
+            "tags": chunk_tags,
+            "temperature": 0.1,  # warm enough not to be immediately pruned
+            "access_count": 0,
+            "last_access": today,
+            "created": today,
+            "usefulness": 0.5,
+            "td_value": 0.5,
+            "fisher_importance": 0.0,
+            "spilled_from_l12": True,  # BUG-104 marker
+        }
+        # Add as child of root for proper tree linking
+        if "children" in nodes.get("root", {}):
+            if branch_name not in nodes["root"]["children"]:
+                nodes["root"]["children"].append(branch_name)
+        try:
+            nodes[branch_name]["hash"] = compute_hash(branch_path)
+        except OSError:
+            pass
+
+        branch_names.append(branch_name)
+
+    if branch_names:
+        try:
+            refresh_tree_metadata(tree)
+            save_tree(tree)
+        except Exception as e:
+            print(f"  [BUG-104 spill] save_tree failed: {e}", file=sys.stderr)
+            # Files were written, tree.json may be partially updated.
+            # Subsequent boot() will still find the .mn files via tree
+            # resync on next refresh_tree_metadata call.
+
+    return branch_names
 
 
 def recall(query: str) -> str:

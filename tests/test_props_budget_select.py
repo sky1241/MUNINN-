@@ -72,6 +72,19 @@ def test_select_chunks_no_crash(chunks, budget_tokens, token_count, keep_facts):
             SystemExit, Exception):
         pass  # Expected rejections are OK
 
+@given(chunks=st.text(max_size=50), budget_tokens=st.integers(-1000, 1000), token_count=st.text(max_size=50), keep_facts=st.booleans())
+@settings(max_examples=50)
+def test_select_chunks_with_dropped_no_crash(chunks, budget_tokens, token_count, keep_facts):
+    """Smoke: select_chunks_with_dropped() does not crash on arbitrary input"""
+    # from engine.core.budget_select import select_chunks_with_dropped
+    try:
+        select_chunks_with_dropped(chunks, budget_tokens, token_count, keep_facts)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
 @given(text=st.text(max_size=100), budget_tokens=st.integers(-1000, 1000), token_count=st.text(max_size=50), keep_facts=st.booleans(), separator=st.text(max_size=100))
 @settings(max_examples=50)
 def test_budget_select_no_crash(text, budget_tokens, token_count, keep_facts, separator):
@@ -79,6 +92,19 @@ def test_budget_select_no_crash(text, budget_tokens, token_count, keep_facts, se
     # from engine.core.budget_select import budget_select
     try:
         budget_select(text, budget_tokens, token_count, keep_facts, separator)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(text=st.text(max_size=100), budget_tokens=st.integers(-1000, 1000), token_count=st.text(max_size=50), keep_facts=st.booleans(), separator=st.text(max_size=100))
+@settings(max_examples=50)
+def test_budget_select_with_dropped_no_crash(text, budget_tokens, token_count, keep_facts, separator):
+    """Smoke: budget_select_with_dropped() does not crash on arbitrary input"""
+    # from engine.core.budget_select import budget_select_with_dropped
+    try:
+        budget_select_with_dropped(text, budget_tokens, token_count, keep_facts, separator)
     except (ValueError, TypeError, KeyError, IndexError,
             OSError, AttributeError, RuntimeError, SyntaxError,
             LookupError, ArithmeticError, AssertionError,

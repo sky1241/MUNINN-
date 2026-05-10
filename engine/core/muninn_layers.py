@@ -35,9 +35,11 @@ except Exception:
 # always kept (hard rule). See engine/core/budget_select.py.
 try:
     from budget_select import budget_select as _budget_select_impl
+    from budget_select import budget_select_with_dropped as _budget_select_with_dropped_impl
     _BUDGET_SELECT_AVAILABLE = True
 except Exception:
     _BUDGET_SELECT_AVAILABLE = False
+    _budget_select_with_dropped_impl = None  # type: ignore[assignment]
 
 
 def health() -> dict:
@@ -73,7 +75,7 @@ def health() -> dict:
     }
 
 
-def _l12_budget_pass(text):
+def _l12_budget_pass(text, repo_path=None, source_id: str = ""):
     """Apply BudgetMem chunk selection if MUNINN_L12_BUDGET is set. Pure.
 
     Reads the budget from the environment so existing callers don't need
@@ -90,6 +92,25 @@ def _l12_budget_pass(text):
     single chunk fits the budget. On JSONL transcripts (one JSON per
     line, no blank lines) this caused a 22MB / 5.8M token file to
     collapse to 8 tokens. Defense: count chunks first; if < 2, identity.
+
+    BUG-104 fix (2026-05-10): when must-keep chunks (those with fact spans)
+    don't fit in the budget, spill them to new tree branches via
+    `spill_chunks_to_tree` instead of dropping. Boot() retrieves spilled
+    facts via TF-IDF + spreading activation. Inserts a stub line in output
+    referencing the spill branches for traceability.
+
+    Args:
+        text: input text to compress.
+        repo_path: optional repo root for spill (defaults to muninn._REPO_PATH
+            via the proxy module). If None or unset, spill is no-op (chunks
+            still dropped, original behavior).
+        source_id: optional identifier (session, transcript filename) used in
+            spill branch headers for traceability.
+
+    Returns:
+        Compressed text (kept chunks joined). When spill fires, output ends
+        with a stub `[L12_SPILL: <branch_names>, K facts]` line so callers
+        can see what was spilled without reading the tree.
     """
     import os as _os
     import re as _re
@@ -108,11 +129,57 @@ def _l12_budget_pass(text):
     chunks = _re.split(r"\n\s*\n", text)
     if len(chunks) < 2:
         return text  # nothing to select between, return as-is
+
+    # Resolve repo_path lazily (only when we actually need it for spill)
+    if repo_path is None:
+        try:
+            import sys as _sys
+            _muninn = _sys.modules.get("muninn")
+            if _muninn is not None:
+                repo_path = getattr(_muninn, "_REPO_PATH", None)
+        except Exception:
+            repo_path = None
+
     # Tiktoken-aware token counter so the budget is in BPE tokens, not words
-    try:
-        def _tt_count(t):
+    def _tt_count(t):
+        try:
             n = count_tokens(t)
             return n[0] if isinstance(n, tuple) else n
+        except Exception:
+            return len((t or "").split())
+
+    # BUG-104 path: use the dropped-aware variant if available + repo_path set
+    spill_disabled = _os.environ.get("MUNINN_L12_NO_SPILL") == "1"
+    if (_budget_select_with_dropped_impl is not None
+            and repo_path is not None
+            and not spill_disabled):
+        try:
+            kept_text, dropped_chunks = _budget_select_with_dropped_impl(
+                text, budget_tokens=budget, token_count=_tt_count
+            )
+            if dropped_chunks:
+                # Spill — import lazily to avoid hot-path overhead when no spill
+                try:
+                    import sys as _sys
+                    _muninn = _sys.modules.get("muninn")
+                    spill_fn = getattr(_muninn, "spill_chunks_to_tree", None) if _muninn else None
+                    if spill_fn is not None:
+                        branches = spill_fn(repo_path, dropped_chunks, source_id=source_id)
+                        if branches:
+                            n_facts = len(dropped_chunks)
+                            stub = (
+                                f"\n\n[L12_SPILL: {','.join(branches)}, "
+                                f"{n_facts} fact-chunk{'s' if n_facts != 1 else ''} preserved in tree]"
+                            )
+                            return kept_text + stub
+                except Exception:
+                    pass  # spill failed, fallback to kept_text only
+            return kept_text
+        except Exception:
+            pass  # fall through to legacy path
+
+    # Legacy / fallback path (no spill, original behaviour)
+    try:
         return _budget_select_impl(text, budget_tokens=budget, token_count=_tt_count)
     except Exception:
         try:

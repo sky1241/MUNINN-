@@ -17,6 +17,7 @@ from engine.core.muninn_tree import *
 #   - save_tree  (calls .mkdir())
 #   - compute_hash  (path arg + .read_bytes())
 #   - grow_branches_from_session  (calls .unlink())
+#   - spill_chunks_to_tree  (calls .mkdir())
 #   - inject_memory  (calls .mkdir())
 
 

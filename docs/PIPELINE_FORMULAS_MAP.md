@@ -31,7 +31,7 @@ Ordre exécutif : L0 → L1 → ... → L11 → (L12 opt-in) + filtres P transve
 | 8 | **L9 LLM compress** | `muninn_layers.py:1279` (`_llm_compress`) | Claude Haiku API, chunk-aware, redacted, fallback identity | 🔵 (env `ANTHROPIC_API_KEY`) |
 | 9 | **L10 cue_distill** | `muninn_layers.py:1131` (`_cue_distill`) | Predictive Coding (Rao & Ballard 1999) — novelty<0.35→retrieval cue | ✅ |
 | 10 | **L11 rule_extract** | `muninn_layers.py:1179` (`_extract_rules`) | Kolmogorov 1965 — factorize repeated key=value sur pipes | ✅ |
-| 11 | **L12 BudgetMem** | `muninn_layers.py:76` (`_l12_budget_pass`) → `budget_select.py` | arxiv 2511.04919 — paragraph scoring 6 features, drop low-score | 🔵 (env `MUNINN_L12_BUDGET`) — **BUG-104 OPEN** |
+| 11 | **L12 BudgetMem** | `muninn_layers.py:76` (`_l12_budget_pass`) → `budget_select.py` + `muninn_tree.py:spill_chunks_to_tree` | arxiv 2511.04919 + spill-to-tree (Shomrat & Levin 2013 calque V9A+) — paragraph scoring 6 features, dropped must-keep spillés en branches tree | 🔵 (env `MUNINN_L12_BUDGET`) — **BUG-104 FIXED 2026-05-10** |
 
 ### Filtres transversaux (P10-P38)
 

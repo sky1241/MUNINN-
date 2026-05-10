@@ -67,6 +67,7 @@ from muninn_tree import (  # explicit re-export — public API
     doctor,
     diagnose,
     inject_memory,
+    spill_chunks_to_tree,  # BUG-104 fix 2026-05-10
     # Private functions referenced by some tests via `from muninn_tree import _X`
     _ebbinghaus_recall,
     _actr_activation,
