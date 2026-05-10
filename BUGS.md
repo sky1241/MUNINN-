@@ -13,7 +13,45 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status: 90+10+8+1+1 bugs fixed (90 from 12 audit passes 2026-03-18 + 10 from chunks 16+17 audit 2026-04-10 + BUG-102 forge no-isolation + BUG-105 L12 single-chunk destruction + BUG-106 mycelium spread_activation hang + BUG-107 _detect_transcript_format str crash + BUG-108 build_tree str crash + BUG-109 filter_dead_cubes non-list crash + BUG-110 pull_from_meta hang on home DB, all fixed 2026-04-10/11; BUG-091 dual-tree drift **FIXED 2026-05-09 via B1 shimification (commits 83adeac/2bb1ea5/22baf4a/7de6dee)** — 4 fichiers byte-identiques (cube.py, cube_providers.py, lang_lexicons.py, _secrets.py) convertis en shims, vault.py 3 fixes sécu uniformisés, wal_monitor cosmetic drift fermé, E6 check_integrity mirroré dans muninn/_engine.py ; muninn/_engine.py reste un VRAI fichier (entry pip + imports relatifs + _ProxyModule), 4414 lignes de **diff** (pas la taille du fichier qui est 2225L) protégées par test_chunk_d10 cap 5000 ; BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08; **CRIT-1** circular import shims muninn/mycelium.py + sync_backend.py FIXED 2026-05-10 via commit 024da87 — 10 commandes CLI cold-start `python -m muninn` (bootstrap, feed --history, ingest, bridge, trip, sync, sync status/doctor/init/push) débloquées par `sys.modules.pop` + `sys.path.remove/insert(0)` forcé). **1 OPEN** (BUG-104 L12 partial fix — root cause is chunk granularity, not detector).
+## Status (2026-05-10 PM, après 17 commits sur main aujourd'hui) :
+
+**FIXED total** : 90 (12 audit passes 2026-03-18) + 10 (chunks 16+17 audit 2026-04-10) + 8 (BUG-102 à BUG-110, fixed 2026-04-10/11) + 1 (BUG-091 dual-tree FIXED 2026-05-09 via B1 shimification) + 1 (BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08) + 4 (CRIT-1, CRIT-2, CRIT-3, P2 fixed 2026-05-10 morning) + 7 (F1 numpy pin, F2/F3/F4 doc drift, F5 hooks audit trail, F6 forge_smoke matrix, F7 source-grep harmonize fixed 2026-05-10 PM).
+
+**OPEN** : **1** (BUG-104 L12 BudgetMem chunk granularity — PARTIAL FIX, OPT-IN via env var, impact prod = 0).
+
+**Détail des fixes 2026-05-10** :
+
+| Code | Date | Commit | Effet |
+|---|---|---|---|
+| CRIT-1 | matin | `024da87` | circular imports shims muninn/mycelium.py + sync_backend.py — 10 cmd CLI cold-start débloquées (`sys.modules.pop` + `sys.path.remove/insert(0)`) |
+| CRIT-2 | matin | `b1fc72f` | freezegun on test_tier1_a2 + test_tier3_c1 — fix flaky datetime.now() race cross-midnight |
+| CRIT-3 | matin | `3b8c151` | sync 3 mensonges doc (CHANGELOG mycelium.py 3163→1415L, BUG-091 SUPERSEDED bien marqué, "_engine 4415L" reformulé en "diff count") |
+| P2 | matin | `ecf1184` | 19 pytest.skip("not yet implemented") morts → asserts (chunks a2/a3/a4/a8) |
+| P3.1 | matin | `f17d34c` | extract `doctor()` → muninn_tree_doctor.py (-278L) |
+| P3.2 | matin | `2170a33` | extract `prune` cluster (+3 helpers) → muninn_tree_prune.py (-636L) |
+| P3.3 | matin | `4d738c6` | extract `boot` cluster (+4 helpers) → muninn_tree_boot.py (-846L) |
+| P3.4 | matin | `23a7974` | cleanup test_brick20 + regen test_props_muninn_tree.py (14 PASS) |
+| CI freezegun | midi | `abf4887` | `freezegun==1.5.5` ajouté à constraints.txt + ci.yml — déblocage 4 CI rouges du matin (CRIT-2 → P3-prep) |
+| F1 | PM | `d464ce2` | `numpy==2.4.4` pinned dans constraints.txt (CRIT — build CI était non-reproductible) |
+| F6 | PM | `d464ce2` | forge_smoke matrix 11 → 17 modules (ajoute budget_select, dedup, forge_metrics, lang_lexicons, lexicons, sentiment) |
+| F2 | PM | `c54fdb3` | CHANGELOG ligne 3 : 22 771L → 24 731L (4 mycelium_*.py sous-comptés post-H6) |
+| F3 | PM | `c54fdb3` | CLAUDE.md "État du projet" : 19 → 26 fichiers core, Q=0.673 → 0.660 |
+| F4 | PM | `c54fdb3` | BATTLE_PLAN_TOMORROW : P3 marqué LIVRÉ (était "en cours d'inspection") |
+| F7 | PM | `45a5325` | 17 occurrences `chr(10).join.*read_text` harmonisées dans 12 fichiers tests (anti-fragilité split) |
+| F5 | PM | `0e9a8f7` | wire `log_hook_event` dans 8 hooks silencieux (~37 call sites) — ferme la dette "P4 reportée" log_hook_event orphelin |
+
+**État live mesuré (2026-05-10 11h40 PM)** :
+- Tests : `2332 passed, 47 skipped, 0 fail` en 158s (commande conftest)
+- Property tests : `101 passed in 27.68s` (sweep forge sur 17 modules)
+- forge --modularity Q = **0.660** (good ≥ 0.30, drift attendu post-P3)
+- forge --carmack top risks : cube_providers (0.516), muninn (0.337), muninn_tree (0.328), cube (0.276)
+- CI HEAD vert : run 25626087379 (3fba8a3) success en 38m32s
+
+**Drifts doc-vs-code identifiés** (pas des bugs, à arbitrer) — voir `docs/PIPELINE_FORMULAS_MAP.md` §7 :
+- `forge --predict`, `--anomaly`, `--diff` claim BATTLE_PLAN_PROD_FINAL_2026-05-09 / BATTLEPLAN_SCANNER mais non appelés
+- `forge --incremental-mutate` planifié OPT-IN futur
+- "BARE Wave model" (H1 trip) référence non vérifiable — sans doute nom interne
+- "Cell Systems 2017" (A2 non-Markov) référence vague à préciser
 
 ---
 
