@@ -1,7 +1,8 @@
-# BATTLE PLAN TOMORROW — 2026-05-10 (matin)
+# BATTLE PLAN — 2026-05-10 (en cours)
 
 Audit final 4 agents mode seigneur dev (2026-05-09 soir).
-Sky se lève demain → coche FAIT / PAS FAIT.
+**P1 + P2 EXÉCUTÉS ce matin** (`024da87` → `ecf1184`, 4 commits, 0 régression).
+**P3 split muninn_tree.py 3929L** = en cours d'inspection (2 agents).
 
 ---
 
@@ -44,7 +45,32 @@ Sky se lève demain → coche FAIT / PAS FAIT.
 
 ---
 
-## 🚨 DÉCOUVERTES CRITIQUES — PAS FAIT
+## 🚨 DÉCOUVERTES CRITIQUES (2026-05-09 soir → ✅ TOUTES FIXÉES 2026-05-10 matin)
+
+### ✅ CRIT-1 FIXED (`024da87`) — 10 commandes CLI débloquées
+
+bootstrap/feed --history/ingest/bridge/trip + sync/sync status/doctor/init/push
+marchent maintenant via `python -m muninn`. Fix : `sys.modules.pop` + force
+`sys.path.remove/insert(0)` dans les 2 shims `muninn/mycelium.py` + `sync_backend.py`.
+
+### ✅ CRIT-2 FIXED (`b1fc72f`) — 2 tests flaky temporels stabilisés
+
+`test_tier1_a2.py` + `test_tier3_c1.py` désormais wrap par `freezegun` (déjà
+installé v1.5.5). Plus de fail 50% en CI après minuit.
+
+### ✅ CRIT-3 FIXED (`3b8c151`) — 3 mensonges doc résolus
+
+CHANGELOG mycelium.py 3163 → 1415 (post-H6 split, 4 mixins listés).
+BUGS.md contradiction interne BUG-091 résolue (0 "Status: OPEN" restant).
+"_engine 4415L" clarifié = diff count, pas size.
+
+### ✅ P2 FIXED (`ecf1184`) — 19 skips morts → asserts
+
+test_chunk_a2/a3/a4/a8 cleanup. 23/23 PASS sur les fichiers concernés.
+
+---
+
+## 📜 HISTORIQUE DÉCOUVERTES (référence)
 
 ### CRIT-1 : 10 commandes CLI cassées en cold-start `python -m muninn`
 
@@ -151,29 +177,186 @@ python -m muninn ui  # ou équivalent qui lance Qt
 
 ---
 
-## 🎯 ORDRE D'ATTAQUE PROPOSÉ pour DEMAIN
+## 🎯 ORDRE D'ATTAQUE — STATE 2026-05-10
 
-### Priorité 1 (1.5h, bugs vrais à fixer)
+### ✅ Priorité 1 + Priorité 2 — DONE (4 commits ce matin)
+- `024da87` CRIT-1 circular imports → 10 cmd CLI débloquées
+- `b1fc72f` CRIT-2 freezegun → 2 tests temporels stables
+- `3b8c151` CRIT-3 doc sync → 0 mensonge restant
+- `ecf1184` P2 → 19 skips morts → 19 asserts
 
-1. **Fix circular imports** `muninn/mycelium.py` + `muninn/sync_backend.py` (sys.modules.pop) → débloque 10 commandes CLI. **45 min**.
-2. **Freeze datetime.now() dans 2 tests flaky** (test_tier1_a2 + test_tier3_c1). **30 min**.
-3. **Sync 3 mensonges doc** (CHANGELOG L3, BUGS L16+L448-491). **15 min**.
+**État** : 2332 PASS, 0 fail, 0 xfail, CLI 100% fonctionnelle.
 
-Total P1 : **1.5h** → CLI 100% fonctionnelle + CI stable 24/24 + doc honnête.
+---
 
-### Priorité 2 (cleanup cosmétique, 30 min)
+## 🎯 P3 — Split `muninn_tree.py` 3929L (en cours)
 
-4. **Delete 19 `pytest.skip("not yet implemented")` morts** dans test_chunk_a2/a3/a4/a8. **30 min**.
+**Inspection 2 agents 2026-05-10 matin** : GO confirmé. Pattern `cube.py`-style
+(sub-modules + `from sub import *` à la fin), pas mixin. ~4h25 Sky-réel.
 
-### Priorité 3 (gros chantiers archi, focused)
+### 5 ACTIONS PRÉ-SPLIT (préparer le terrain, ~20 min)
 
-5. **Split muninn_tree.py 3929L** (boot 656L + prune 419L + doctor 281L) → pattern H6 prouvé. **4-6h focused**.
-6. **Split cube_providers.py 2124L** par provider (Ollama/Claude/OpenAI/Mock). **3-4h focused**.
+Toutes ces actions sont SAFE, à faire dans l'ordre AVANT P3.1 :
 
-### Priorité 4 (B2B prep, dette compliance)
+1. **Tag rollback** : `git tag pre-P3-split-muninn_tree-2026-05-10`
+2. **Pré-ajouter `muninn_tree_boot/prune/doctor` à `engine_only`** dans
+   `tests/test_chunk_d11_shim_drift.py` (avec justification — calque
+   pattern mycelium_meta/zones/activation/dream)
+3. **Ajouter protection `sys.modules.setdefault('muninn_tree', sys.modules[__name__])`**
+   à la fin de `engine/core/muninn_tree.py` (sans `from sub import *` encore,
+   commit séparé low-risk)
+4. **Update shim `muninn/muninn_tree.py`** avec protection CRIT-1 (sys.modules.pop
+   + sys.path.remove/insert) — calque ce qui a été fait sur mycelium.py
+5. **Run full pytest** — confirmer 2332 PASS avant de toucher quoi que ce soit
 
-7. **Wire `_hook_logger` dans 8 hooks** (compliance audit_log/edits_log/config_changes .jsonl). **2h**.
-8. **L9 prompt caching** (cache_control sur system prompt) → -50% coût Anthropic API. **1 jour**.
+### CHUNK P3.1 — `doctor()` (lignes 3267-3548, 283L) — 30-40 min
+
+**Risque : faible** (self-contained, 0 helpers à co-extraire).
+
+**Plan d'extraction** :
+1. Créer `engine/core/muninn_tree_doctor.py` :
+   ```python
+   from muninn_tree import _m, cleanup_tmp_files
+   # + redéfinir _m localement si besoin (ModRef class, 5 lignes)
+
+   def doctor(): ...   # déplacé depuis muninn_tree.py:3267-3548
+   ```
+2. Dans `muninn_tree.py` : ajouter `from muninn_tree_doctor import doctor` à la TOUTE FIN
+3. Mirror `muninn/muninn_tree.py` shim : ajouter `from muninn_tree_doctor import doctor`
+4. Retirer `("muninn_tree.py", "doctor")` de `DOCUMENTED_OVERSIZED_FUNCTIONS`
+   dans `tests/test_brick20_architecture.py`
+5. `forge --gen-props engine/core/muninn_tree_doctor.py` (BUG-102 destructive
+   detector skip OK car `doctor` a print/side-effects)
+6. Test : `pytest tests/test_doctor.py tests/test_chunk_b11_doctor_extensions.py tests/test_chunk_e2_helpers_wired.py -v`
+
+**Tests touchés** (3) : test_doctor + test_chunk_b11 + test_chunk_e2.
+Tous appellent `muninn.doctor()` ou `muninn_tree.doctor()` → re-export OK.
+
+**Commit** : `refactor(P3.1): extract doctor() to muninn_tree_doctor.py (-283L)`
+
+### CHUNK P3.2 — `prune()` + 3 helpers (lignes 2473-3211, ~580L) — 1h-1h15
+
+**Risque : moyen** (couplage avec muninn_feed via `_m._sleep_consolidate` /
+`_m._light_prune`).
+
+**Co-extraire dans `muninn_tree_prune.py`** :
+- `_sleep_consolidate` (L2473-2629, 161L) — appelé par prune() + muninn_feed.py:1318
+- `_auto_backup_tree` (L2773-2794) — exclusif prune
+- `_light_prune` (L2729-2770) — appelé par muninn_feed.py:1267 via `_m`
+- `prune` (L2797-3211, 419L)
+
+**Plan** :
+1. Créer `engine/core/muninn_tree_prune.py` avec les 4 fonctions + imports
+   (`from muninn_tree import _m, load_tree, save_tree, refresh_tree_metadata,
+   _ebbinghaus_recall, _days_since, _atomic_text_write, _safe_read_mn, compute_hash`)
+2. Dans `muninn_tree.py` : `from muninn_tree_prune import prune, _sleep_consolidate, _auto_backup_tree, _light_prune` à la fin
+3. Mirror shim
+4. **CRITICAL — étendre concat list** dans :
+   - `tests/test_huginn_h1.py:166`
+   - `tests/test_huginn_h2.py:143`
+   - `tests/test_decay_in_prune.py:158`
+   Ces tests font `chr(10).join(read_text(...))` sur les 4 fichiers historiques
+   et grep `m_decay.decay()` / `dream(` / `trip(`. Ajouter `muninn_tree_prune.py`
+   à la liste pour que le grep retrouve.
+5. Forge --gen-props sur le nouveau module
+6. Test : `pytest tests/test_biovectors_v9b.py tests/test_chunk_a2_mn_corruption.py tests/test_huginn_h1.py tests/test_huginn_h2.py tests/test_decay_in_prune.py tests/test_chunk_ex5_sleep_consolidate_wired.py tests/test_phase6_scale.py tests/test_phase7_intelligence.py -v`
+
+**Tests touchés** (8 fichiers) — voir ci-dessus.
+
+**Commit** : `refactor(P3.2): extract prune + _sleep_consolidate + _auto_backup_tree + _light_prune (-580L)`
+
+### CHUNK P3.3 — `boot()` + 4 helpers (lignes 1089-3927, ~857L) — 2h-2h30
+
+**Risque : élevé** (le monstre 656L + 4 helpers + cycles imports + 144 occurrences `_m.X`).
+
+**Co-extraire dans `muninn_tree_boot.py`** :
+- `_load_virtual_branches` (L1089-1202, 115L)
+- `_load_relevant_sessions` (L3655-3706, 52L)
+- `_surface_insights_for_boot` (L2716-2727, 10L)
+- `_surface_known_errors` (L3813-3837, 24L)
+- `boot` (L1204-1857, 656L)
+
+**LAISSER dans muninn_tree.py core** :
+- `_extract_error_fixes` (L3768) — appelé par muninn_feed.py via `_m`
+- `_append_session_log` (L3708) — idem
+
+**Plan** :
+1. Créer `engine/core/muninn_tree_boot.py` :
+   ```python
+   from muninn_tree import (
+       _m, BUDGET, load_tree, save_tree, read_node,
+       _ebbinghaus_recall, _actr_activation, _tfidf_relevance,
+       adaptive_boot_budget, _atomic_json_write,
+       detect_session_mode, classify_session, predict_next,
+       _extract_error_fixes, _append_session_log,
+   )
+   # 5 fonctions co-extraites + boot
+   ```
+2. Dans `muninn_tree.py` : `from muninn_tree_boot import boot, _load_virtual_branches, _surface_insights_for_boot, _surface_known_errors, _load_relevant_sessions` à la TOUTE FIN
+3. Mirror shim
+4. **CRITICAL — étendre concat list** dans `tests/test_huginn_h3.py:175,185`
+   pour inclure `muninn_tree_boot.py`
+5. **Vérifier qu'aucun test n'importe directement** `_load_virtual_branches`
+   ou `_load_relevant_sessions` :
+   `grep -rn "_load_virtual_branches\|_load_relevant_sessions" tests/`
+6. **Confirmer ordre d'imports** : `from muninn_tree_boot import boot` DOIT
+   être en TOUTE FIN de muninn_tree.py (après toutes les défs)
+7. Forge --gen-props sur le nouveau module
+8. Test : `pytest tests/test_biovectors_v11b.py tests/test_biovectors_v5a.py tests/test_biovectors_v8b.py tests/test_huginn_h3.py tests/test_chunk_e6_boot_integrity.py tests/test_ablation_vectors.py -v`
+
+**Cycle Python** : pas de nouveau setdefault nécessaire si action #3 pré-split
+faite (sys.modules.setdefault dans muninn_tree.py). Le proxy `_m` existe déjà
+et résout via `sys.modules['muninn']`.
+
+**Commit** : `refactor(P3.3): extract boot + _load_virtual_branches + _surface_* (-857L)`
+
+### CHUNK P3.4 — Cleanup test_brick20 + props régénération (~30 min)
+
+1. Retirer `"muninn_tree.py"` de `DOCUMENTED_OVERSIZED_MODULES` dans
+   `test_brick20_architecture.py` (passé sous le seuil 2500L post-split)
+2. Régénérer `tests/test_props_muninn_tree.py` complet via
+   `forge --gen-props engine/core/muninn_tree.py` (le fichier core, pas les
+   sous-modules — le props existe déjà avec 14 tests, à mettre à jour)
+3. Run full pytest : `rm -rf .muninn && pytest tests/ -q ...` → cible 2332+ PASS
+4. Run forge baseline : `forge --modularity` (cible Q ≥ 0.65)
+5. Update CHANGELOG.md ligne 3 avec les nouvelles tailles fichiers
+
+**Commit** : `refactor(P3.4): cleanup oversized refs + regen props post-split`
+
+---
+
+### POINTS DE GARDE communs aux 3 chunks
+
+- [ ] Mirror dans `muninn/muninn_tree.py` shim après chaque chunk
+- [ ] `__all__` de muninn_tree.py : **NE PAS retirer boot/prune/doctor**
+      (sinon shim casse)
+- [ ] Forge --gen-props sur chaque nouveau module
+- [ ] Update `tests/test_brick20_architecture.py::DOCUMENTED_OVERSIZED_FUNCTIONS`
+- [ ] Run `pytest tests/ -q` complet après chaque extraction (~120s, 2332 tests)
+- [ ] `_m` proxy doit être importable depuis chaque sous-module
+      (option 1: `from muninn_tree import _m`, option 2: redéfinir `_ModRef` localement)
+
+### ESTIMATION TOTALE P3 (mode Sky-réel cohérent H6 hier)
+
+| Chunk | Effort | Risque |
+|---|---|---|
+| Pré-split (5 actions) | 20 min | bas |
+| P3.1 doctor | 30-40 min | bas |
+| P3.2 prune + 3 helpers | 1h-1h15 | moyen |
+| P3.3 boot + 4 helpers | 2h-2h30 | élevé |
+| P3.4 cleanup + props | 30 min | bas |
+| Buffer surprises | 30 min | — |
+| **TOTAL** | **~4h25** | une après-midi |
+
+À l'allure H6 d'hier (4 chunks × 30min = 2h), Sky peut atteindre 3h en flow.
+
+---
+
+### Priorité 4 — Reportée (gros chantiers + B2B prep)
+
+- **Split cube_providers.py 2124L** par provider (Ollama/Claude/OpenAI/Mock). **3-4h focused**.
+- **Wire `_hook_logger` dans 8 hooks** (compliance audit_log/edits_log/config_changes .jsonl). **2h**.
+- **L9 prompt caching** (cache_control sur system prompt) → -50% coût Anthropic API. **1 jour**.
 
 ---
 
