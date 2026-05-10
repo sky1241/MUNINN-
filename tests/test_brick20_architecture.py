@@ -35,7 +35,9 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     ("orchestrator.py", "scan"),      # 370 lines
     ("muninn_feed.py", "compress_transcript"),  # 228 lines
     ("muninn_layers.py", "compress_line"),  # 208 lines
-    ("muninn_tree.py", "doctor"),     # 201 lines (sync diagnostics, just over 200)
+    # P3.1 (2026-05-10): doctor() extracted to muninn_tree_doctor.py
+    # — moved out of muninn_tree.py (was 201 lines).
+    ("muninn_tree_doctor.py", "doctor"),  # 282 lines (still oversized, post-split)
 })
 
 # Hard caps that NO file/function may cross going forward
