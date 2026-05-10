@@ -69,18 +69,24 @@ anomaly(branch) = 1  si  distance(branch, self_profile) > threshold
                   0  sinon
 ```
 
-**Self-profile** = medianes des branches saines:
+**Self-profile** = medianes des branches saines (2 metrics):
 ```
 self_profile = {
-    token_density:  median(tokens/ligne),
-    fact_ratio:     median(lignes_taguees / lignes_totales),
-    line_count:     median(nombre de lignes)
+    line_count:  median(nombre de lignes),
+    fact_ratio:  median(lignes_taguees [D>/B>/F>/E>/A>] / lignes_totales)
 }
 
 distance(b, self) = sum(|b.metric - self.metric| / max(self.metric, 0.01))
 ```
 
-**Seuil**: distance > 2.0 = anomalie (3x la mediane sur un axe = flag)
+**Seuil**: distance > 2.0 = anomalie (somme normalisée des 2 axes).
+
+**Note 2026-05-10** : la spec initiale mentionnait un 3ème metric `token_density`
+(median tokens/ligne) — non implémenté car redondant avec line_count + fact_ratio
+(les 3 cas réels d'anomalie sont déjà détectés par les 2 metrics actuels) et
+coûteux (un appel `tokenizer.token_count` par branche × 2000 branches = +1-2s
+par prune). Si un cas concret apparaît plus tard où la densité est un signal
+indépendant, le rajouter à ce moment-là.
 
 **Injection**: `prune()` — branches flaggees sont loggees `[ANOMALY]` et demotees vers cold.
 
