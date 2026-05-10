@@ -6,6 +6,68 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-10 (après-midi) — F1-F7 stabilisation post-P3 + F5 hook audit trail
+
+5 commits supplémentaires, 0 régression sur 2332 tests, CI vert sur HEAD.
+
+### F1+F6 (`d464ce2`) — numpy pin + forge_smoke matrix complète
+- **F1** : `constraints.txt` ajoute `numpy==2.4.4` (CRIT — build CI était non
+  reproductible, numpy installé sans pin).
+- **F6** : `.github/workflows/ci.yml` smoke matrix passe de **11 → 17 modules**
+  (ajoute budget_select, dedup, forge_metrics, lang_lexicons, lexicons,
+  sentiment) — synchronise avec l'inventaire forge --gen-props.
+
+### F2+F3+F4 (`c54fdb3`) — doc drift sync
+- **F2** : CHANGELOG ligne 3 : 22 771 → 24 731L (+1 960L). 4 fichiers
+  mycelium_*.py sous-comptés post-H6 / pré-CRIT-2 / pré-P3 :
+  meta 393→428, zones 339→383, activation 496→545, dream 529→561.
+- **F3** : CLAUDE.md "État du projet" : "19 fichiers core" → "26 fichiers
+  core post-P3", Q-modularity 0.673 → 0.660.
+- **F4** : `BATTLE_PLAN_TOMORROW_2026-05-10.md` : marque P3 LIVRÉ
+  (header + table) — était encore "en cours d'inspection" alors qu'EN PROD.
+
+### F7 (`45a5325`) — anti-fragilité tests source-grep
+- 17 occurrences `chr(10).join.*read_text` harmonisées dans **12 fichiers
+  tests** (test_huginn_h1/h2/h3, test_decay_in_prune, test_phase6_scale,
+  test_phase7_intelligence, test_immune_i2/i3, test_tier3_c3/c4/c6/c7,
+  test_x8_x13_fixes).
+- Concat list standard post-P3 : muninn{,_layers,_tree,_tree_boot,
+  _tree_prune,_tree_doctor,_feed}.py.
+- Garantit qu'une fonction migrée à un futur split ne casse pas
+  silencieusement les tests source-grep.
+
+### F5 (`0e9a8f7`) — wire `log_hook_event` dans 8 hooks (audit trail)
+- `engine/core/_hook_logger.py:log_hook_event` existait + 5 prop tests OK
+  + chunk a8 testé. **MAIS sur les 9 hooks .claude/hooks/, seul
+  bridge_hook.py l'utilisait.** Les 8 autres swallow silencieux
+  (`except Exception: pass`).
+- ~37 call sites `_log_hook_error` ajoutés dans :
+  config_change, notification_audit, post_tool_failure, post_tool_use_edit_log,
+  pre_tool_use_bash_destructive, pre_tool_use_bash_secrets,
+  pre_tool_use_edit_hardcode, subagent_start.
+- Helper calque bridge_hook.py:20-43 (rotation 1 MB, 3 backups, fallback
+  stderr). Hooks gardent `sys.exit(0)` après log.
+- **Ferme la dette "P4 reportée" identifiée dans BATTLE_PLAN_TOMORROW.**
+- Smoke tests : empty stdin + bad JSON + valid payload → tous exit 0,
+  log fichier appendé (~/.muninn/hook_errors.log).
+
+### CI freezegun (`abf4887`) — débloque 4 CI rouges du matin
+- CRIT-2 ce matin a wrappé test_tier1_a2.py + test_tier3_c1.py avec
+  `freezegun==1.5.5` (pin local pyenv). Mais **freezegun absent des
+  deps CI** → 4 commits consécutifs en échec sur
+  `ModuleNotFoundError: freezegun` (b1fc72f, 3b8c151, ecf1184, 15df2fa).
+- Fix : `constraints.txt` + `.github/workflows/ci.yml` ajoutent freezegun.
+
+### Métriques cumulées 2026-05-10 (matin + après-midi)
+- 14 commits sur main (depuis 024da87 CRIT-1 à 0e9a8f7 F5)
+- muninn_tree.py : 3929 → 2179L (-1760L = -45%)
+- 3 nouveaux sous-modules engine/core/ (doctor + prune + boot = 1878L)
+- Forge sweep complet : 17 modules avec test_props (101 tests PASS)
+- Tests : 2332 PASS strict baseline préservé sur 14/14 commits
+- forge --modularity Q = 0.660 (good ≥ 0.30)
+
+---
+
 ## 2026-05-10 — P3 split muninn_tree.py 3929L → 2179L (-1760L = -45%)
 
 3 sous-modules extraits, 4 commits sur `main`, 0 régression sur 2332 tests.

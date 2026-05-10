@@ -164,28 +164,27 @@ J'avais patché ces 2 fichiers ce matin pour P3 (concat list +muninn_tree_boot.p
 
 ---
 
-### CHUNK F8 — Tests qui modifient repo réel : 31 occurrences `_REPO_PATH = Path` **(FRAGILITÉ)**
+### ~~CHUNK F8 — `_REPO_PATH` cleanup~~ → **VALIDÉ NON-ACTION (2026-05-10 PM)**
 
-**Symptôme** : 31 tests (test_doctor, test_huginn_h3, test_immune_i1/2, etc.) font `muninn._REPO_PATH = Path(...)` directement (pas via monkeypatch). Risque pollution si test échoue avant restauration.
+**Audit révisé** : `tests/conftest.py` L91-109 contient déjà une fixture autouse
+`_repo_path_isolate` (ajoutée CHUNK B7 le 2026-05-08) qui snapshot
+`muninn._REPO_PATH` + `TREE_DIR` + `TREE_META` au début de CHAQUE test et les
+restore en `finally`. Donc même si un test crash sans cleanup explicite, la
+fixture protège la session pytest.
 
-**Fix conservateur** (1h-2h) :
-- Audit fichier par fichier : utilise-t-il `try/finally` ou `monkeypatch.setattr` pour restaurer ?
-- Convertir les patterns sans cleanup → monkeypatch
-- 1 commit par fichier
-
-**Tests touchés** : eux-mêmes (refactor sans changement comportement)
-
-**Décision** : à reporter sauf si Sky veut zero-trust complet.
+Les 31 occurrences `muninn._REPO_PATH = Path(...)` flaggées par mon audit du
+midi sont SAFE → pas d'action.
 
 ---
 
-### CHUNK F9 — Tests Path.home() : 10 occurrences à auditer **(FRAGILITÉ)**
+### ~~CHUNK F9 — `Path.home()` cleanup~~ → **VALIDÉ NON-ACTION (2026-05-10 PM)**
 
-**Symptôme** : 10 tests utilisent `Path.home()` directement. Si non monkeypatchés → écrivent vraiment dans `~/.muninn/` du runner CI (pollution).
+**Audit révisé** : sur 10 occurrences `Path.home()` dans tests/ :
+- 9 sont READ-ONLY (assertions ou construction de path pour grep)
+- 1 est explicitement monkeypatchée (test_phase1_sync.py:347)
+- **0 écriture réelle vers `$HOME`** (ni `.write_text` ni `.mkdir` ni `.unlink`).
 
-**Fix** (30 min) :
-- Audit fichier par fichier
-- Convertir en `tmp_path` quand pertinent
+Pas de pollution possible du runner CI. Pas d'action.
 
 ---
 
