@@ -16,10 +16,10 @@ jobs:
     name: Validate Engine + Mycelium + Tree
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           # Aligned with Sky's local env (pyenv 3.13). Brick19 dead-code
           # AST scan behaves differently between 3.11 and 3.13 (3.11 misses
@@ -279,9 +279,9 @@ jobs:
     name: forge --gen-props (smoke per engine/core module)
     needs: [validate]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install forge-shield + deps

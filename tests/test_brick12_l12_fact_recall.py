@@ -116,27 +116,39 @@ def test_l12_huge_budget_no_regression_compact(ml):
 
 
 def test_l12_tight_budget_loses_facts_verbose_bug_104(ml):
-    """BUG-104 documentation: at tight budget, verbose_memory loses
-    a measurable number of facts. This test EXPECTS the loss so it
-    fails the day BUG-104 is fixed (alerts to update the doc)."""
+    """BUG-104 LEGACY-PATH pin (post-fix 2026-05-10):
+    quand `_REPO_PATH` est None (ex: pytest sans setup explicite), le spill
+    ne fire pas et L12 retombe sur la legacy path qui DROP les chunks
+    must-keep oversized. Ce test pin ce comportement legacy.
+
+    Pour vérifier le FIX (spill actif), voir test_bug104_spill_recall_improvement
+    ci-dessous : avec `_REPO_PATH = tmp_path` set, recall remonte à >= 13/15
+    (vs 6/15 ici en legacy path).
+    """
     os.environ["MUNINN_L12_BUDGET"] = "500"
     answered, total = _run_recall(ml, "verbose_memory.md", "questions_verbose.json")
-    # Empirically measured 2026-04-10: 6/15 (40%)
-    # If this drops to 0/15, the algorithm broke. If it rises to 14+/15,
-    # BUG-104 was fixed and this test should be updated.
+    # Empirically measured 2026-04-10 PRE-fix: 6/15 (40%)
+    # Post-fix: same when _REPO_PATH=None (legacy path no-op spill).
+    # When _REPO_PATH set, see test_bug104_spill_recall_improvement.
     assert 3 <= answered <= 12, (
-        f"verbose_memory at b=500 returned {answered}/15 — outside expected "
-        f"BUG-104 envelope [3, 12]. Either the algorithm broke or improved "
-        f"meaningfully. Update PHASE_B_FACT_RECALL.md."
+        f"verbose_memory at b=500 (legacy path, no _REPO_PATH) returned "
+        f"{answered}/15 — outside legacy envelope [3, 12]. Si > 12 alors le "
+        f"spill a fire (_REPO_PATH leaked from test isolation). Si < 3 alors "
+        f"l'algo legacy a régressé. Cf. BUGS.md BUG-104 FIXED entry."
     )
 
 
 def test_l12_tight_budget_loses_facts_session_bug_104(ml):
+    """BUG-104 LEGACY-PATH pin sur sample_session (post-fix 2026-05-10).
+    Voir docstring de test_l12_tight_budget_loses_facts_verbose_bug_104.
+    """
     os.environ["MUNINN_L12_BUDGET"] = "500"
     answered, total = _run_recall(ml, "sample_session.md", "questions_session.json")
-    # Empirically measured 2026-04-10: 9/15 (60%)
+    # Empirically measured 2026-04-10 PRE-fix: 9/15 (60%)
+    # Post-fix: same when _REPO_PATH=None (legacy path no-op spill).
     assert 6 <= answered <= 13, (
-        f"sample_session at b=500 returned {answered}/15 — outside BUG-104 envelope [6, 13]"
+        f"sample_session at b=500 returned {answered}/15 — outside legacy "
+        f"envelope [6, 13]. Cf. BUGS.md BUG-104 FIXED entry."
     )
 
 
