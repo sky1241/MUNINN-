@@ -140,7 +140,7 @@ def test_h2_7_wired_in_prune():
     import muninn
     _mdir = Path(muninn.__file__).parent
     _engine_core = _mdir.parent / "engine" / "core"
-    src = chr(10).join((_engine_core / f.replace("_engine.py", "muninn.py")).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_feed.py"])
+    src = chr(10).join((_engine_core / f.replace("_engine.py", "muninn.py")).read_text(encoding="utf-8") for f in ["_engine.py", "muninn_layers.py", "muninn_tree.py", "muninn_tree_prune.py", "muninn_feed.py"])
     prune_start = src.find("def prune(")
     prune_end = src.find("\ndef ", prune_start + 1)
     prune_body = src[prune_start:prune_end]

@@ -31,13 +31,15 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     ("muninn.py",      "main"),       # 503 lines (CLI dispatcher)
     ("muninn.py",      "scan_repo"),  # 210+ lines (CHUNK 9: + neuron map gen)
     ("bible_scraper.py", "_core_bible"),  # 478 lines (private helper)
-    ("muninn_tree.py", "prune"),      # 409 lines
     ("orchestrator.py", "scan"),      # 370 lines
     ("muninn_feed.py", "compress_transcript"),  # 228 lines
     ("muninn_layers.py", "compress_line"),  # 208 lines
     # P3.1 (2026-05-10): doctor() extracted to muninn_tree_doctor.py
     # — moved out of muninn_tree.py (was 201 lines).
     ("muninn_tree_doctor.py", "doctor"),  # 282 lines (still oversized, post-split)
+    # P3.2 (2026-05-10): prune() extracted to muninn_tree_prune.py
+    # — moved out of muninn_tree.py (was 409 lines).
+    ("muninn_tree_prune.py", "prune"),  # 409 lines
 })
 
 # Hard caps that NO file/function may cross going forward
