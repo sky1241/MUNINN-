@@ -23,24 +23,24 @@ if str(ENGINE_CORE) not in sys.path:
 def test_validate_refuses_etc_passwd():
     """Validator must refuse /etc/passwd (clear-cut malicious)."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     assert muninn_feed._validate_transcript_path(Path("/etc/passwd")) is False
 
 
 def test_validate_refuses_tmp_outside():
     """Validator must refuse arbitrary /tmp paths."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     assert muninn_feed._validate_transcript_path(Path("/tmp/evil.jsonl")) is False
 
 
 def test_validate_refuses_home_outside_claude():
     """Validator must refuse paths in user home but outside .claude/projects/."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     bad = Path.home() / "Documents" / "secret.txt"
     assert muninn_feed._validate_transcript_path(bad) is False
 
@@ -48,8 +48,8 @@ def test_validate_refuses_home_outside_claude():
 def test_validate_accepts_claude_projects(tmp_path, monkeypatch):
     """Validator must accept paths under ~/.claude/projects/."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     # Use tmp_path as a stand-in for ~/.claude/projects/ via env var
     fake_root = tmp_path / "fake_claude_projects"
     fake_root.mkdir()
@@ -62,8 +62,8 @@ def test_validate_accepts_claude_projects(tmp_path, monkeypatch):
 def test_validate_accepts_subdir_of_projects(tmp_path, monkeypatch):
     """Validator must accept paths in a subdirectory of projects root."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     fake_root = tmp_path / "fake_projects"
     fake_root.mkdir()
     nested = fake_root / "repo-foo" / "session-xyz.jsonl"
@@ -76,8 +76,8 @@ def test_validate_accepts_subdir_of_projects(tmp_path, monkeypatch):
 def test_validate_refuses_traversal_via_dotdot(tmp_path, monkeypatch):
     """Validator must refuse paths that resolve outside root via ../."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     fake_root = tmp_path / "projects"
     fake_root.mkdir()
     monkeypatch.setattr(muninn_feed, "_TRANSCRIPT_ROOT", fake_root.resolve())
@@ -90,8 +90,8 @@ def test_validate_refuses_traversal_via_dotdot(tmp_path, monkeypatch):
 def test_validate_accepts_real_claude_path_format(tmp_path, monkeypatch):
     """Sanity: a path in the format Claude Code actually sends must pass."""
     import muninn_feed
-    if not hasattr(muninn_feed, "_validate_transcript_path"):
-        pytest.skip("_validate_transcript_path not yet implemented")
+    assert hasattr(muninn_feed, "_validate_transcript_path"), \
+        "_validate_transcript_path missing — should be in muninn_feed since chunk a4 fix"
     # Real Claude format: ~/.claude/projects/<encoded-path>/<uuid>.jsonl
     fake_root = tmp_path / "claude_projects"
     fake_root.mkdir()

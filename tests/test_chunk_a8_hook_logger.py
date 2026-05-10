@@ -40,8 +40,7 @@ def test_module_exists():
 def test_log_to_custom_path(tmp_path):
     """Logger writes to the path given via env var override."""
     mod = _load_hook_logger()
-    if mod is None:
-        pytest.skip("module not yet implemented")
+    assert mod is not None, "engine/core/_hook_logger.py missing — A8 was wired in chunk a8"
     log_path = tmp_path / "test.log"
     mod.log_hook_event("test", "stdin_parse", ValueError("boom"),
                        log_path=log_path)
@@ -55,8 +54,7 @@ def test_log_to_custom_path(tmp_path):
 def test_rotation_at_max_bytes(tmp_path):
     """When the log file reaches max_bytes, it must rotate to .1 backup."""
     mod = _load_hook_logger()
-    if mod is None:
-        pytest.skip("module not yet implemented")
+    assert mod is not None, "engine/core/_hook_logger.py missing — A8 was wired in chunk a8"
     log_path = tmp_path / "rot.log"
     # Use a tiny max_bytes to trigger rotation quickly
     for i in range(50):
@@ -77,8 +75,7 @@ def test_rotation_at_max_bytes(tmp_path):
 def test_falls_back_to_stderr_when_unwritable(tmp_path, capsys, monkeypatch):
     """When the log path can't be written, error must go to stderr."""
     mod = _load_hook_logger()
-    if mod is None:
-        pytest.skip("module not yet implemented")
+    assert mod is not None, "engine/core/_hook_logger.py missing — A8 was wired in chunk a8"
     # Path that cannot be created (parent is a file, not dir)
     blocker = tmp_path / "blocker"
     blocker.write_text("i am a file not a directory")
@@ -100,8 +97,7 @@ def test_falls_back_to_stderr_when_unwritable(tmp_path, capsys, monkeypatch):
 def test_log_format_includes_timestamp(tmp_path):
     """Each log entry must start with an ISO-8601-ish timestamp."""
     mod = _load_hook_logger()
-    if mod is None:
-        pytest.skip("module not yet implemented")
+    assert mod is not None, "engine/core/_hook_logger.py missing — A8 was wired in chunk a8"
     log_path = tmp_path / "ts.log"
     mod.log_hook_event("test", "ts_check", Exception("x"), log_path=log_path)
     line = log_path.read_text().splitlines()[0]
@@ -114,8 +110,7 @@ def test_log_format_includes_timestamp(tmp_path):
 def test_two_calls_append_not_overwrite(tmp_path):
     """Logger must append, never truncate."""
     mod = _load_hook_logger()
-    if mod is None:
-        pytest.skip("module not yet implemented")
+    assert mod is not None, "engine/core/_hook_logger.py missing — A8 was wired in chunk a8"
     log_path = tmp_path / "append.log"
     mod.log_hook_event("test", "first", Exception("a"), log_path=log_path)
     mod.log_hook_event("test", "second", Exception("b"), log_path=log_path)

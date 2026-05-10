@@ -39,8 +39,8 @@ def test_check_integrity_returns_ok_on_fresh_db(tmp_path):
     """Fresh empty DB must report integrity OK."""
     MyceliumDB = _load_mycelium_db_class()
     db = MyceliumDB(tmp_path / "fresh.db")
-    if not hasattr(db, "check_integrity"):
-        pytest.skip("check_integrity helper not yet implemented (pre-fix)")
+    assert hasattr(db, "check_integrity"), \
+        "check_integrity missing — should be on MyceliumDB since chunk a3 fix"
     ok, msg = db.check_integrity()
     assert ok is True, f"Fresh DB reported corrupt: {msg}"
     assert msg == "ok"
@@ -50,8 +50,8 @@ def test_check_integrity_after_writes(tmp_path):
     """DB with writes must still report OK after checkpoint."""
     MyceliumDB = _load_mycelium_db_class()
     db = MyceliumDB(tmp_path / "with_writes.db")
-    if not hasattr(db, "check_integrity"):
-        pytest.skip("check_integrity helper not yet implemented (pre-fix)")
+    assert hasattr(db, "check_integrity"), \
+        "check_integrity missing — should be on MyceliumDB since chunk a3 fix"
     db.set_meta("test_key", "test_value")
     db.set_meta("counter", "42")
     ok, msg = db.check_integrity()
@@ -72,8 +72,8 @@ def test_check_integrity_detects_garbage_file(tmp_path):
     # Both are acceptable — what matters is we don't continue with corrupt data.
     try:
         db = MyceliumDB(bad)
-        if not hasattr(db, "check_integrity"):
-            pytest.skip("check_integrity helper not yet implemented (pre-fix)")
+        assert hasattr(db, "check_integrity"), \
+            "check_integrity missing — should be on MyceliumDB since chunk a3 fix"
         ok, msg = db.check_integrity()
         assert ok is False, "Garbage file passed integrity check (it should not)"
         assert msg != "ok"
@@ -89,8 +89,8 @@ def test_check_integrity_detects_truncated(tmp_path):
     # Create a valid DB then truncate it
     good = tmp_path / "good.db"
     db = MyceliumDB(good)
-    if not hasattr(db, "check_integrity"):
-        pytest.skip("check_integrity helper not yet implemented (pre-fix)")
+    assert hasattr(db, "check_integrity"), \
+        "check_integrity missing — should be on MyceliumDB since chunk a3 fix"
 
     # Force some content
     for i in range(10):
@@ -123,8 +123,8 @@ def test_check_integrity_runs_wal_checkpoint(tmp_path):
     """Calling check_integrity should trigger a WAL checkpoint (merge WAL into main DB)."""
     MyceliumDB = _load_mycelium_db_class()
     db = MyceliumDB(tmp_path / "wal_check.db")
-    if not hasattr(db, "check_integrity"):
-        pytest.skip("check_integrity helper not yet implemented (pre-fix)")
+    assert hasattr(db, "check_integrity"), \
+        "check_integrity missing — should be on MyceliumDB since chunk a3 fix"
     # Write something to ensure WAL has data
     db.set_meta("checkpoint_test", "1")
     ok, _ = db.check_integrity()

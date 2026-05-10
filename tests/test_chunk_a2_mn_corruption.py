@@ -71,8 +71,8 @@ def test_safe_read_mn_returns_none_on_truncated(isolated_tree):
     (pre-fix) and PASS after the helper is added.
     """
     import muninn_tree
-    if not hasattr(muninn_tree, "_safe_read_mn"):
-        pytest.skip("_safe_read_mn helper not yet implemented (pre-fix)")
+    assert hasattr(muninn_tree, "_safe_read_mn"), \
+        "_safe_read_mn missing — should be in muninn_tree since chunk a2 fix"
     tmp_path, tree_dir, _ = isolated_tree
     bad = _make_truncated_mn(tree_dir / "broken.mn", "## hdr\nfact: été ok\n")
     result = muninn_tree._safe_read_mn(bad)
@@ -82,8 +82,8 @@ def test_safe_read_mn_returns_none_on_truncated(isolated_tree):
 def test_safe_read_mn_returns_text_on_valid(isolated_tree):
     """Helper must return the text on valid UTF-8."""
     import muninn_tree
-    if not hasattr(muninn_tree, "_safe_read_mn"):
-        pytest.skip("_safe_read_mn helper not yet implemented (pre-fix)")
+    assert hasattr(muninn_tree, "_safe_read_mn"), \
+        "_safe_read_mn missing — should be in muninn_tree since chunk a2 fix"
     tmp_path, tree_dir, _ = isolated_tree
     good = tree_dir / "good.mn"
     good.write_text("## valid\nfact: été ok\n", encoding="utf-8")
