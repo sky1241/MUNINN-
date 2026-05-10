@@ -25,7 +25,34 @@ import json
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
+
+
+def _log_hook_error(context: str, exc: BaseException) -> None:
+    """Append a swallowed exception to ~/.muninn/hook_errors.log.
+
+    F5 (2026-05-10): delegates to engine/core/_hook_logger which
+    rotates the file (1 MB max, 3 backups) and falls back to stderr if
+    the file is unwritable so the audit trail is never silently lost.
+    """
+    try:
+        engine_core = str(Path(__file__).resolve().parent.parent.parent
+                          / "engine" / "core")
+        if engine_core not in sys.path:
+            sys.path.insert(0, engine_core)
+        from _hook_logger import log_hook_event
+        log_hook_event("pre_tool_use_edit_hardcode", context, exc)
+    except Exception:
+        # Last-resort fallback: write directly to stderr; hooks must exit 0.
+        try:
+            sys.stderr.write(
+                f"[MUNINN HOOK LOG fallback] {datetime.now().isoformat()} "
+                f"[pre_tool_use_edit_hardcode:{context}] {type(exc).__name__}: {exc}\n"
+            )
+            sys.stderr.flush()
+        except Exception:
+            pass
 
 
 # Paths under these dirs are subject to the rule
@@ -90,8 +117,21 @@ def find_hardcode_in_content(content: str) -> tuple[bool, str]:
 def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError as e:
+        _log_hook_error("stdin_decode", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_hook_error("stdin_read", e)
+        sys.exit(0)
+    if not raw.strip():
+        sys.exit(0)
+    try:
         payload = json.loads(raw)
-    except Exception:
+    except json.JSONDecodeError as e:
+        _log_hook_error("stdin_parse", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_hook_error("stdin_unexpected", e)
         sys.exit(0)
 
     if not isinstance(payload, dict):

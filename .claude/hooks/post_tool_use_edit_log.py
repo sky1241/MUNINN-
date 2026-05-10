@@ -34,6 +34,33 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+
+def _log_hook_error(context: str, exc: BaseException) -> None:
+    """Append a swallowed exception to ~/.muninn/hook_errors.log.
+
+    F5 (2026-05-10): delegates to engine/core/_hook_logger which
+    rotates the file (1 MB max, 3 backups) and falls back to stderr if
+    the file is unwritable so the audit trail is never silently lost.
+    """
+    try:
+        engine_core = str(Path(__file__).resolve().parent.parent.parent
+                          / "engine" / "core")
+        if engine_core not in sys.path:
+            sys.path.insert(0, engine_core)
+        from _hook_logger import log_hook_event
+        log_hook_event("post_tool_use_edit_log", context, exc)
+    except Exception:
+        # Last-resort fallback: write directly to stderr; hooks must exit 0.
+        try:
+            sys.stderr.write(
+                f"[MUNINN HOOK LOG fallback] {datetime.now().isoformat()} "
+                f"[post_tool_use_edit_log:{context}] {type(exc).__name__}: {exc}\n"
+            )
+            sys.stderr.flush()
+        except Exception:
+            pass
+
+
 MAX_ENTRIES = 10000
 
 
@@ -123,8 +150,21 @@ def append_edit_log(payload: dict, repo_path: Path) -> bool:
 def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError as e:
+        _log_hook_error("stdin_decode", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_hook_error("stdin_read", e)
+        sys.exit(0)
+    if not raw.strip():
+        sys.exit(0)
+    try:
         payload = json.loads(raw)
-    except Exception:
+    except json.JSONDecodeError as e:
+        _log_hook_error("stdin_parse", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_hook_error("stdin_unexpected", e)
         sys.exit(0)
 
     # Audit 2026-04-10: type-check before .get() to never crash on bad input
@@ -135,8 +175,8 @@ def main():
 
     try:
         append_edit_log(payload, Path(repo_path))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_hook_error("append_edit_log", e)
 
     sys.exit(0)
 
