@@ -293,6 +293,10 @@ jobs:
         run: |
           # CHUNK D8 (H4.2): smoke-run forge --gen-props on every critical
           # engine/core module — catches BUG-101/102/105/106-class bugs early.
+          # F6 (2026-05-10 PM): smoke matrix étendue de 11 → 17 modules,
+          # synchronisée avec l'inventaire des fichiers tests/test_props_*.py.
+          # Les 13 modules absents (sub-modules P3 + mixins H6 + sync_tls/vault/
+          # wal_monitor/watchdog/muninn) n'ont pas de fonction publique fuzzable.
           for f in engine/core/muninn_tree.py \
                    engine/core/muninn_layers.py \
                    engine/core/muninn_feed.py \
@@ -303,7 +307,13 @@ jobs:
                    engine/core/cube_providers.py \
                    engine/core/cube_analysis.py \
                    engine/core/sync_backend.py \
-                   engine/core/_hook_logger.py
+                   engine/core/_hook_logger.py \
+                   engine/core/budget_select.py \
+                   engine/core/dedup.py \
+                   engine/core/forge_metrics.py \
+                   engine/core/lang_lexicons.py \
+                   engine/core/lexicons.py \
+                   engine/core/sentiment.py
           do
               echo "::group::forge --gen-props $f"
               forge --gen-props "$f" || exit 1

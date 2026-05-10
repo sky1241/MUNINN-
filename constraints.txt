@@ -26,6 +26,12 @@ anthropic==0.100.0
 # 48.0.0 = currently tested in dev (2026-05-09 audit v3).
 cryptography==48.0.0
 
+# F1 (2026-05-10 PM): numpy used by cube_analysis (linalg/eigh for spectral),
+# mycelium_zones (graph entropy), engine/core/scanner/propagation.py, and
+# muninn/ui/neuron_map.py. Was installed in CI without version pin → builds
+# non-reproductible. 2.4.4 = currently tested locally (pyenv 3.13.13).
+numpy==2.4.4
+
 # HTTP client used transitively by anthropic/requests; 2.7.0 stable.
 urllib3==2.7.0
 
