@@ -62,6 +62,22 @@ TREE_TOOL_MAX_CHARS = 60_000
 _BRANCH_NAME_RE = re.compile(r"^[A-Za-z0-9_]{1,64}$")
 
 
+# ── Chunk B.3 dual-mycelium routing thresholds ──────────────────────────────
+# Defaults validated by an 11-source deep audit (Collins-Loftus 1975, Anderson
+# ACT-R, Weaviate/Pinecone hybrid search, Cormack 2009 RRF, Liu 2024 lost-in-
+# the-middle, Anthropic Contextual Retrieval 2024, BEIR/MTEB).
+# All overridable via env vars so users can calibrate without code changes.
+
+THRESHOLD_LOCAL_STRONG = float(os.environ.get("MUNINN_DUAL_LOCAL_STRONG", "4.0"))
+ALPHA_LOCAL = float(os.environ.get("MUNINN_DUAL_LOCAL_WEIGHT", "0.7"))
+BETA_META = float(os.environ.get("MUNINN_DUAL_META_WEIGHT", "0.3"))
+TOP_K_DEFAULT = int(os.environ.get("MUNINN_DUAL_TOP_K", "10"))
+FUSION_METHOD = os.environ.get("MUNINN_DUAL_FUSION", "linear")  # "linear" | "rrf"
+
+# RRF constant (Cormack, Clarke & Buettcher SIGIR 2009).
+RRF_K = 60
+
+
 def _resolve_repo_path(repo_path: str | None) -> Path:
     """Resolve the target repo: explicit arg > MUNINN_REPO env > cwd."""
     if repo_path:
@@ -181,6 +197,336 @@ def _recall_local_impl(
         "source": "local",
         "repo_path": str(repo),
     }
+
+
+# ── Chunk B.3 dual-mycelium routing (read-only meta access) ─────────────────
+
+
+def _resolve_meta_db_path() -> Path:
+    """Resolve the meta_mycelium.db path: MUNINN_META_PATH > ~/.muninn/.
+
+    MUNINN_META_PATH (if set) points to the DIRECTORY containing
+    meta_mycelium.db, NOT the file itself — matches mycelium_meta.py convention.
+    """
+    env_dir = os.environ.get("MUNINN_META_PATH")
+    if env_dir:
+        return Path(env_dir).expanduser().resolve() / "meta_mycelium.db"
+    return Path.home() / ".muninn" / "meta_mycelium.db"
+
+
+def _tokenize_for_meta(query: str) -> list[str]:
+    """Same tokenization as the local recall — keeps the two sides aligned."""
+    return _tokenize_query(query)
+
+
+def _recall_meta_impl(
+    query: str,
+    top_k: int = 10,
+    hops: int = 2,
+) -> dict:
+    """Read-only query into the meta-mycelium (federation cross-repo).
+
+    Uses the MyceliumDB neighbor lookup directly — no spread_activation
+    on the meta graph (it has 7.5M edges; full 2-hop would be too expensive).
+    Falls back gracefully when the meta DB is absent or locked: returns
+    `{results: [], error: "meta_unavailable" | "meta_locked"}` instead of
+    raising — so the auto-router can degrade to local-only.
+    """
+    start = time.time()
+    top_k = max(TOP_K_MIN, min(TOP_K_MAX, int(top_k)))
+    meta_db_path = _resolve_meta_db_path()
+
+    if not meta_db_path.exists():
+        return {
+            "query": query,
+            "results": [],
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+            "source": "meta",
+            "meta_path": str(meta_db_path),
+            "error": "meta_unavailable",
+        }
+
+    seeds = _tokenize_for_meta(query)
+    if not seeds:
+        return {
+            "query": query,
+            "results": [],
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+            "source": "meta",
+            "meta_path": str(meta_db_path),
+        }
+
+    # Open the meta DB read-only via SQLite URI. We bypass MyceliumDB.__init__
+    # so we don't trigger any schema migrations or session-start side-effects.
+    aggregated: dict[str, float] = {}
+    seed_set = set(seeds)
+    try:
+        conn = sqlite3.connect(
+            f"file:{meta_db_path}?mode=ro",
+            uri=True, timeout=2.0,
+        )
+        try:
+            placeholders = ",".join("?" for _ in seeds)
+            cursor = conn.execute(
+                f"""
+                SELECT c1.name, c2.name, e.count
+                FROM edges e
+                JOIN concepts c1 ON c1.id = e.a
+                JOIN concepts c2 ON c2.id = e.b
+                WHERE c1.name IN ({placeholders}) OR c2.name IN ({placeholders})
+                ORDER BY e.count DESC
+                LIMIT ?
+                """,
+                seeds + seeds + [top_k * 4],
+            )
+            rows = cursor.fetchall()
+            # Aggregate neighbors by name, summing edge counts.
+            for a_name, b_name, count in rows:
+                neighbor = b_name if a_name in seed_set else a_name
+                if neighbor in seed_set:
+                    continue  # skip self-references
+                aggregated[neighbor] = aggregated.get(neighbor, 0.0) + float(count)
+        finally:
+            conn.close()
+    except sqlite3.OperationalError as exc:
+        _log.warning("meta DB locked or unreadable: %s", exc)
+        return {
+            "query": query,
+            "results": [],
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+            "source": "meta",
+            "meta_path": str(meta_db_path),
+            "error": "meta_locked",
+        }
+    except Exception as exc:
+        _log.exception("meta query failed: %s", exc)
+        return {
+            "query": query,
+            "results": [],
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+            "source": "meta",
+            "meta_path": str(meta_db_path),
+            "error": f"meta_error: {type(exc).__name__}",
+        }
+
+    # Normalize aggregated counts onto [0, 1] so they're comparable with the
+    # local spread_activation outputs.
+    if aggregated:
+        max_count = max(aggregated.values())
+        if max_count > 0:
+            for k_ in aggregated:
+                aggregated[k_] = aggregated[k_] / max_count
+
+    sorted_pairs = sorted(aggregated.items(), key=lambda kv: kv[1], reverse=True)
+    results = [
+        {"concept": name, "activation": round(score, 4), "hops": hops}
+        for name, score in sorted_pairs[:top_k]
+    ]
+    return {
+        "query": query,
+        "results": results,
+        "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+        "source": "meta",
+        "meta_path": str(meta_db_path),
+    }
+
+
+def _compute_strength_total(results: list[dict]) -> float:
+    """Sum of activations — the local-confidence proxy used by `auto`."""
+    return float(sum(float(r.get("activation", 0.0)) for r in results))
+
+
+def _merge_results(
+    local_results: list[dict],
+    meta_results: list[dict],
+    fusion: str,
+    alpha: float,
+    beta: float,
+    top_k: int,
+) -> list[dict]:
+    """Merge local + meta results into a single ranked list.
+
+    - "linear" : min-max normalize each side, then `score = α·local + β·meta`
+                 per concept (lowercased dedup key). Robust to magnitude
+                 differences between local (94k edges) and meta (7.5M).
+    - "rrf"    : Reciprocal Rank Fusion (Cormack 2009).
+                 `score = α/(K+rank_local) + β/(K+rank_meta)` with K=60.
+                 Pure rank-based; raw activations ignored. Most robust to
+                 magnitude gaps but loses score-level granularity.
+    """
+    if fusion not in ("linear", "rrf"):
+        fusion = "linear"
+
+    # Index results by lowercased concept name (dedup key)
+    local_map: dict[str, dict] = {}
+    meta_map: dict[str, dict] = {}
+    for r in local_results or []:
+        key = str(r.get("concept", "")).lower()
+        if key:
+            local_map[key] = r
+    for r in meta_results or []:
+        key = str(r.get("concept", "")).lower()
+        if key:
+            meta_map[key] = r
+
+    all_keys = set(local_map) | set(meta_map)
+    if not all_keys:
+        return []
+
+    scored: dict[str, dict] = {}
+
+    if fusion == "linear":
+        # Min-max normalize each side onto [0, 1].
+        def _norm(results, m):
+            vals = [float(r.get("activation", 0.0)) for r in results]
+            if not vals:
+                return {}
+            lo, hi = min(vals), max(vals)
+            span = hi - lo if hi > lo else 1.0
+            return {
+                str(r.get("concept", "")).lower(): (float(r.get("activation", 0.0)) - lo) / span
+                for r in results
+            }
+
+        local_norm = _norm(local_results or [], "local")
+        meta_norm = _norm(meta_results or [], "meta")
+        for key in all_keys:
+            score = alpha * local_norm.get(key, 0.0) + beta * meta_norm.get(key, 0.0)
+            base = local_map.get(key) or meta_map.get(key) or {}
+            scored[key] = {
+                "concept": base.get("concept", key),
+                "activation": round(score, 4),
+                "hops": base.get("hops", 2),
+                "from": "both" if key in local_map and key in meta_map
+                        else ("local" if key in local_map else "meta"),
+            }
+    else:  # rrf
+        # Build rank maps: rank 0 = first place.
+        def _ranks(results):
+            return {str(r.get("concept", "")).lower(): i for i, r in enumerate(results or [])}
+
+        local_rank = _ranks(local_results)
+        meta_rank = _ranks(meta_results)
+        for key in all_keys:
+            score = 0.0
+            if key in local_rank:
+                score += alpha / (RRF_K + local_rank[key] + 1)
+            if key in meta_rank:
+                score += beta / (RRF_K + meta_rank[key] + 1)
+            base = local_map.get(key) or meta_map.get(key) or {}
+            scored[key] = {
+                "concept": base.get("concept", key),
+                "activation": round(score, 6),
+                "hops": base.get("hops", 2),
+                "from": "both" if key in local_map and key in meta_map
+                        else ("local" if key in local_map else "meta"),
+            }
+
+    sorted_results = sorted(
+        scored.values(), key=lambda d: d["activation"], reverse=True
+    )
+    return sorted_results[:top_k]
+
+
+def _recall_dual_impl(
+    query: str,
+    scope: str = "auto",
+    top_k: int = 10,
+    hops: int = 2,
+    repo_path: str | None = None,
+    fusion: str | None = None,
+    alpha: float | None = None,
+    beta: float | None = None,
+) -> dict:
+    """Smart router: picks local-only / meta-only / both / auto based on `scope`.
+
+    `auto` first queries local; if `sum(activations) >= THRESHOLD_LOCAL_STRONG`
+    we trust local alone, otherwise we also query meta and merge the two
+    via the configured fusion method.
+
+    `fusion` / `alpha` / `beta` default to module constants (env-var driven).
+    """
+    start = time.time()
+    if scope not in ("auto", "local", "meta", "both"):
+        scope = "auto"
+    top_k = max(TOP_K_MIN, min(TOP_K_MAX, int(top_k)))
+    fusion = fusion or FUSION_METHOD
+    alpha = ALPHA_LOCAL if alpha is None else float(alpha)
+    beta = BETA_META if beta is None else float(beta)
+
+    out: dict = {
+        "query": query,
+        "scope": scope,
+        "results": [],
+        "elapsed_ms": 0.0,
+        "source": "",
+        "scope_used": "",
+        "fusion_used": None,
+        "strength_local": None,
+        "strength_meta": None,
+        "repo_path": None,
+        "meta_path": str(_resolve_meta_db_path()),
+    }
+
+    if scope == "local":
+        r = _recall_local_impl(query=query, top_k=top_k,
+                                repo_path=repo_path, hops=hops)
+        out["results"] = r.get("results", [])
+        out["source"] = "local"
+        out["scope_used"] = "local"
+        out["strength_local"] = _compute_strength_total(out["results"])
+        out["repo_path"] = r.get("repo_path")
+    elif scope == "meta":
+        r = _recall_meta_impl(query=query, top_k=top_k, hops=hops)
+        out["results"] = r.get("results", [])
+        out["source"] = "meta"
+        out["scope_used"] = "meta"
+        out["strength_meta"] = _compute_strength_total(out["results"])
+    elif scope == "both":
+        rl = _recall_local_impl(query=query, top_k=top_k,
+                                 repo_path=repo_path, hops=hops)
+        rm = _recall_meta_impl(query=query, top_k=top_k, hops=hops)
+        merged = _merge_results(
+            rl.get("results", []), rm.get("results", []),
+            fusion, alpha, beta, top_k,
+        )
+        out["results"] = merged
+        out["source"] = "local+meta"
+        out["scope_used"] = "both"
+        out["fusion_used"] = fusion
+        out["strength_local"] = _compute_strength_total(rl.get("results", []))
+        out["strength_meta"] = _compute_strength_total(rm.get("results", []))
+        out["repo_path"] = rl.get("repo_path")
+    else:  # auto
+        rl = _recall_local_impl(query=query, top_k=top_k,
+                                 repo_path=repo_path, hops=hops)
+        strength_local = _compute_strength_total(rl.get("results", []))
+        out["strength_local"] = strength_local
+        out["repo_path"] = rl.get("repo_path")
+        if strength_local >= THRESHOLD_LOCAL_STRONG:
+            out["results"] = rl.get("results", [])
+            out["source"] = "local"
+            out["scope_used"] = "auto→local"
+        else:
+            rm = _recall_meta_impl(query=query, top_k=top_k, hops=hops)
+            out["strength_meta"] = _compute_strength_total(rm.get("results", []))
+            if not rm.get("results"):
+                # meta unavailable → fall back to local-only
+                out["results"] = rl.get("results", [])
+                out["source"] = "local"
+                out["scope_used"] = "auto→local (meta_unavailable)"
+            else:
+                merged = _merge_results(
+                    rl.get("results", []), rm.get("results", []),
+                    fusion, alpha, beta, top_k,
+                )
+                out["results"] = merged
+                out["source"] = "local+meta"
+                out["scope_used"] = "auto→merged"
+                out["fusion_used"] = fusion
+
+    out["elapsed_ms"] = round((time.time() - start) * 1000.0, 2)
+    return out
 
 
 # ── Chunk B.2 tree tools (read-only) ─────────────────────────────────────────
@@ -410,6 +756,90 @@ def create_server() -> FastMCP:
         """
         return _recall_local_impl(
             query=query, top_k=top_k, repo_path=repo_path, hops=hops,
+        )
+
+    # ── Chunk B.3 dual-mycelium routing (local / meta / auto / both) ──
+
+    @app.tool()
+    def mycelium_recall_meta(
+        query: str,
+        top_k: int = 10,
+        hops: int = 2,
+    ) -> dict:
+        """Search the *meta*-mycelium (federation cross-repo, ~7.5M edges).
+
+        READ-ONLY query on ~/.muninn/meta_mycelium.db (or wherever
+        MUNINN_META_PATH points). Use this when you want broader, cross-repo
+        signal that the project-local mycelium (`mycelium_recall_local`)
+        wouldn't have observed.
+
+        Args:
+            query: free-text query.
+            top_k: max results (1..100, default 10).
+            hops: included for symmetry with the local tool; meta query is
+                  single-hop neighbor lookup, so this is informational only.
+
+        Returns:
+            {
+              "query": str, "results": [{"concept", "activation", "hops"}],
+              "elapsed_ms": float, "source": "meta", "meta_path": str,
+              "error"?: "meta_unavailable" | "meta_locked"
+            }
+
+        Fail-safe: returns empty `results` with an `error` tag if the meta DB
+        is missing or locked — never raises.
+        """
+        return _recall_meta_impl(query=query, top_k=top_k, hops=hops)
+
+    @app.tool()
+    def mycelium_recall(
+        query: str,
+        scope: str = "auto",
+        top_k: int = 10,
+        hops: int = 2,
+        repo_path: str | None = None,
+    ) -> dict:
+        """Smart dual-mycelium router. Chooses local / meta / both / auto.
+
+        Use this when you don't want to decide upfront whether the project
+        mycelium has enough signal — the `auto` heuristic queries local
+        first and only falls back to meta if `sum(activations) <
+        THRESHOLD_LOCAL_STRONG` (default 4.0, configurable via
+        MUNINN_DUAL_LOCAL_STRONG env var).
+
+        Args:
+            query: free-text query.
+            scope: one of "auto" (default), "local", "meta", "both".
+                   - "auto"  : local first, fallback merge if weak
+                   - "local" : project mycelium only (B.1 equivalent)
+                   - "meta"  : federation only (B.3 _meta tool equivalent)
+                   - "both"  : force fusion of local + meta
+            top_k: max results (1..100, default 10 — NDCG@10 standard).
+            hops: spreading-activation depth for local (1..3).
+            repo_path: defaults to $MUNINN_REPO env or cwd.
+
+        Returns:
+            {
+              "query": str, "scope": str, "results": [...],
+              "source": "local" | "meta" | "local+meta",
+              "scope_used": "local" | "meta" | "both" | "auto→local" |
+                            "auto→merged" | "auto→local (meta_unavailable)",
+              "fusion_used": "linear" | "rrf" | None,
+              "strength_local": float | None,
+              "strength_meta": float | None,
+              "elapsed_ms": float, "repo_path": str | None, "meta_path": str,
+            }
+
+        Tuning (env vars):
+            MUNINN_DUAL_LOCAL_STRONG   (default 4.0)
+            MUNINN_DUAL_LOCAL_WEIGHT   (default 0.7)
+            MUNINN_DUAL_META_WEIGHT    (default 0.3)
+            MUNINN_DUAL_TOP_K          (default 10)
+            MUNINN_DUAL_FUSION         (default "linear", or "rrf")
+        """
+        return _recall_dual_impl(
+            query=query, scope=scope, top_k=top_k, hops=hops,
+            repo_path=repo_path,
         )
 
     # ── Chunk B.2 tree tools (read-only access to .muninn/tree/) ──

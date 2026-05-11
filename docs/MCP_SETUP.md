@@ -75,14 +75,39 @@ claude mcp list
 # Expected:  muninn  running
 ```
 
-## Available tools (B.1 + B.2)
+## Available tools (B.1 + B.2 + B.3)
 
 | Tool | Args | Returns |
 |---|---|---|
 | `mycelium_recall_local` (B.1) | `query` (str), `top_k` (int=10), `repo_path`, `hops` (int=2) | `{query, results[{concept,activation,hops}], elapsed_ms, source="local", repo_path}` |
+| `mycelium_recall_meta` (B.3) | `query` (str), `top_k` (int=10), `hops` (int=2) | `{query, results, elapsed_ms, source="meta", meta_path, [error?]}` — read-only on `~/.muninn/meta_mycelium.db` |
+| `mycelium_recall` (B.3) | `query` (str), `scope` ∈ `auto`\|`local`\|`meta`\|`both` (default `auto`), `top_k`, `hops`, `repo_path` | `{query, scope, results, source, scope_used, fusion_used, strength_local, strength_meta, elapsed_ms, repo_path, meta_path}` |
 | `tree_get_root` (B.2) | `repo_path` | `{node="root", content (str .mn), metadata{lines, children, tags, ...}, truncated, repo_path, elapsed_ms}` |
 | `tree_get_branch` (B.2) | `branch_name` (str regex `^[A-Za-z0-9_]{1,64}$`), `repo_path` | Same shape as tree_get_root, or `{error, available, repo_path, elapsed_ms}` if branch absent (no raise) |
 | `tree_list_branches` (B.2) | `repo_path` | `{branches[{name, lines, last_access, access_count, temperature, tags, children_count}], count, repo_path, elapsed_ms}` sorted by last_access DESC |
+
+### Tuning the dual-mycelium router (B.3)
+
+`mycelium_recall(scope="auto")` uses a heuristic to decide if it needs to consult the meta-mycelium :
+
+1. Query local mycelium first.
+2. Compute `strength_local = sum(activation for each result)`.
+3. If `strength_local >= THRESHOLD_LOCAL_STRONG`, return local-only (`scope_used="auto→local"`).
+4. Otherwise, also query meta and merge via the configured fusion method (`scope_used="auto→merged"`).
+
+5 env vars expose the defaults (validated by 11 sources : ACT-R, Weaviate, Pinecone, Cormack 2009 RRF, Liu 2024 lost-in-the-middle, Anthropic Contextual Retrieval, BEIR/MTEB) :
+
+| Env var | Default | Source / rationale |
+|---|---|---|
+| `MUNINN_DUAL_LOCAL_STRONG` | `4.0` | 40 % of theoretical max (top_k=10). Aligns ACT-R log-odds τ=-0.5 → sigmoid 0.38 (Anderson 1983, ACT-R reference manual). FAISS/Qdrant "high confidence" range 0.3–0.7. |
+| `MUNINN_DUAL_LOCAL_WEIGHT` | `0.7` | Weaviate hybrid search default α=0.75. Personalization papers (Teevan-Dumais 2005, Bing) bias 0.6–0.7 toward local. |
+| `MUNINN_DUAL_META_WEIGHT` | `0.3` | Complement of local weight (sums to 1.0 with default α=0.7). |
+| `MUNINN_DUAL_TOP_K` | `10` | NDCG@10 BEIR/MTEB standard. Anthropic Contextual Retrieval (2024) recommends top-20 only when a reranker is in the pipeline; without rerank, top-10 is the sweet spot before lost-in-the-middle (Liu 2024). |
+| `MUNINN_DUAL_FUSION` | `linear` | Default = min-max normalize each side onto [0, 1] then `α·local + β·meta`. Alternative `rrf` (Cormack 2009 Reciprocal Rank Fusion) uses ranks only — robust to the ~80× magnitude gap between local (~94 k edges) and meta (~7.5 M edges). |
+
+When to switch to `rrf` : if local and meta have very different score distributions (large repo + tiny local = magnitude bias). RRF ignores raw activations and ranks alone, so it's safer when the two sources are imbalanced.
+
+When to calibrate empirically : `THRESHOLD_LOCAL_STRONG` is the most repo-specific value. Log `strength_local` over 20–30 real queries, recompute the 75th percentile, and set the threshold there.
 
 Example invocations:
 > Claude calls `mycelium_recall_local(query="BUG-104 spill tree", top_k=5)`

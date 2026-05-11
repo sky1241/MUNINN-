@@ -803,7 +803,7 @@ Returns `{query, results: [{concept, activation, hops}], elapsed_ms, source: "lo
 |---|---|---|
 | B.1 MCP server scaffold + `mycelium_recall_local` | ✅ DONE | 8h |
 | B.2 `tree_get_root` + `tree_get_branch` + bonus `tree_list_branches` | ✅ DONE | 5h |
-| B.3 Dual-mycelium routing (3 tools `_local`/`_meta`/`auto`) | ⏳ PENDING | 8h |
+| B.3 Dual-mycelium routing (3 tools `_local`/`_meta`/`auto`) | ✅ DONE | 8h |
 | B.4 `bugs_list` + `bugs_get` (read-only BUGS.md access) | ⏳ PENDING | 6h |
 | B.5 `runbook_get` (CHANGELOG/WINTER/BATTLE_PLAN snippets) | ⏳ PENDING | 6h |
 | B.6 Integration testing + E2E avec Claude Code réel | ⏳ PENDING | 4h |
@@ -872,3 +872,61 @@ Sky a explicitement demandé : **pause après B.1 pour validation manuelle** ava
 | B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
 
 Phase B : **13/37h livrées** (35%). Pause possible avant B.3 (dual-mycelium routing — spec gravée § Dual-mycelium routing nécessitant validation user des seuils heuristiques).
+
+### État au 2026-05-11 (nuit) — chunk B.3 DONE
+
+**Phase B.3 — Dual-mycelium routing** livré.
+
+**Deep audit 11 sources convergent** (ACT-R, Weaviate, Pinecone, Cormack 2009 RRF, Liu 2024 lost-in-the-middle, Anthropic Contextual Retrieval, BEIR/MTEB, Si-Callan, Shokouhi, Bing personalized search, memory networks) :
+- `THRESHOLD_LOCAL_STRONG = 4.0` (ACT-R log-odds τ=-0.5 → sigmoid 0.38 ≈ 40% du max top_k=10)
+- `α_local = 0.7, β_meta = 0.3` (Weaviate hybrid default 0.75)
+- `top_k = 10` (NDCG@10 standard BEIR/MTEB, juste avant lost-in-the-middle)
+- Fusion `linear` (default) **+ alternative `rrf`** (Cormack 2009) pour robustesse magnitude-gap local 94k vs meta 7.5M.
+
+**Livré** :
+- `muninn/mcp/server.py` (+330L) : 5 env-var-driven constants, `_resolve_meta_db_path`, `_recall_meta_impl`, `_compute_strength_total`, `_merge_results` (linear + rrf), `_recall_dual_impl`, 2 `@app.tool()` wrappers (`mycelium_recall_meta`, `mycelium_recall`).
+- `tests/test_chunk_mcp_b3_dual_routing.py` (~430L) : 16 tests behavioural.
+- `docs/MCP_SETUP.md` : tableau Available tools étendu + nouvelle section "Tuning the dual-mycelium router" avec tableau env vars + sources + guidance "when to switch to RRF" + "when to calibrate empirically".
+- `CLAUDE.md` : 5 env vars ajoutées au tableau (sinon `test_chunk_c10_c11_doc_drift` fail).
+
+**Architecture clé** :
+- Meta-DB ouverte en SQLite **read-only URI** (`file:meta_mycelium.db?mode=ro`) — hard-stop OS-level si tentative d'écriture.
+- Bypass de `MyceliumDB.__init__` (qui ferait des schema migrations) — query SQL direct sur table `edges` JOIN `concepts`.
+- `auto` heuristic : local first, si `strength_local >= 4.0` skip meta ; sinon merge.
+- `linear` fusion min-max normalize chaque côté puis `α·local + β·meta`. Robuste si les 2 sources ont des distributions comparables.
+- `rrf` fusion (Cormack 2009) : `score = α/(60+rank_local) + β/(60+rank_meta)`. Ignore les scores absolus, robuste aux magnitude gaps.
+
+**Vérifications** (RULE 4) :
+- Test pin B.3 : 16/16 PASS en 1.68s (TDD : 16/16 fail RED → PASS GREEN).
+- Smoke réel sur MUNINN- source repo + ~/.muninn/meta_mycelium.db (7.5M edges) :
+  ```
+  mycelium_recall_meta(query="muninn compression") → 5 results en 1.2ms (read-only)
+  mycelium_recall(scope="auto", query="session start hook") → strength_local=1.636
+       < 4.0 → fallback merge avec meta → scope_used="auto→merged" en 483ms
+  ```
+- Full regression : **2439 PASS, 35 skipped, 1 deselected, 0 fail** (vs B.2 baseline 2432 = +7 nouveaux + le doc_drift fix).
+- Source repo intact (root.mn = "MUNINN-" toujours).
+- **2 tests anti-régression cruciaux** : `test_meta_db_read_only` (mtime + size avant/après les 4 scopes) — pas de modification disque.
+
+**Garanties contractuelles respectées** (les 7 du § Dual-mycelium routing gravées) :
+1. `mycelium_recall_local` existe (B.1 untouched) ✅
+2. `mycelium_recall_meta` existe (B.3 NEW) ✅
+3. `mycelium_recall(scope=)` existe (B.3 NEW) ✅
+4. `scope="local"` ne touche jamais meta ✅ (test #4)
+5. `scope="meta"` ne touche jamais local ✅ (test #5)
+6. `auto` heuristic skip meta si local fort ✅ (test #7)
+7. Read-only sur les 2 DBs ✅ (test #13 mtime check)
+
+**Forge** : skip RULE 5 N/A — aucune modif `engine/core/*`, server.py est un pur adapter.
+
+**Phase B — état** :
+| Chunk | Statut | Heures | Tests |
+|---|---|---|---|
+| B.1 MCP scaffold + `mycelium_recall_local` | ✅ | 8h | 10 |
+| B.2 tree tools (root + branch + list_branches) | ✅ | 5h | 12 |
+| B.3 dual-mycelium routing (3 tools + 5 env vars) | ✅ | 8h | 16 |
+| B.4 `bugs_list` + `bugs_get` | ⏳ | 6h | — |
+| B.5 `runbook_get` | ⏳ | 6h | — |
+| B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
+
+Phase B : **21/37h livrées** (57%). Sky autorise enchaînement vers B.4 (bugs_list / bugs_get — bien plus simple, lecture de BUGS.md).

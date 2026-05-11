@@ -199,6 +199,11 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
 | `MUNINN_SKIP_META_SYNC` | Opt-out de la sync auto vers meta-mycelium dans SessionEnd/Stop hooks (chunk MCP A.2) | unset (sync actif) |
+| `MUNINN_DUAL_LOCAL_STRONG` | Seuil somme-activation pour considérer local "fort" et skip meta (chunk MCP B.3) | `4.0` |
+| `MUNINN_DUAL_LOCAL_WEIGHT` | Pondération α du local dans le merge fusion linear (chunk B.3) | `0.7` |
+| `MUNINN_DUAL_META_WEIGHT` | Pondération β du meta dans le merge fusion linear (chunk B.3) | `0.3` |
+| `MUNINN_DUAL_TOP_K` | Top-K results retournés par mycelium_recall (chunk B.3) | `10` |
+| `MUNINN_DUAL_FUSION` | Méthode de fusion local+meta : `linear` (min-max norm + α·local + β·meta) ou `rrf` (Cormack 2009, rank-based, magnitude-robust) | `linear` |
 | `MUNINN_TEST_REPOS` | Liste de repos pour test_l9_full.py (`name1:/path1,name2:/path2`) | repo courant |
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
