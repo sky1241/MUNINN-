@@ -87,6 +87,8 @@ claude mcp list
 | `tree_list_branches` (B.2) | `repo_path` | `{branches[{name, lines, last_access, access_count, temperature, tags, children_count}], count, repo_path, elapsed_ms}` sorted by last_access DESC |
 | `bugs_list` (B.4) | `repo_path`, `status_filter` (e.g. "OPEN"/"FIXED"/"WONTFIX"), `limit` (default 50) | `{bugs[{id, status, title, line}], count, total, status_filter, truncated, repo_path, elapsed_ms}` |
 | `bugs_get` (B.4) | `bug_id` (regex `^BUG-\d{3,4}$`), `repo_path` | `{id, status, title, content, sections{Symptom, Root cause, Fix, Test, Regression}, line, truncated, repo_path, elapsed_ms}` — or `{error, bug_id, available_count, ...}` if absent |
+| `runbook_list_sections` (B.5) | `document` ∈ `changelog`\|`winter_tree`\|`battle_plan`, `repo_path` | `{document, sections[{id, title, line}], count, file_path, repo_path, elapsed_ms}` |
+| `runbook_get` (B.5) | `document` (whitelist), `section_id` (regex `^[a-z0-9][a-z0-9_-]{0,79}$`), `repo_path` | `{document, section_id, title, content (cap 40K), line, truncated, file_path, repo_path, elapsed_ms}` — or `{error, available_sections, ...}` if absent |
 
 ### Tuning the dual-mycelium router (B.3)
 

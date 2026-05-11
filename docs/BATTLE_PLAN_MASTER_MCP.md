@@ -805,7 +805,7 @@ Returns `{query, results: [{concept, activation, hops}], elapsed_ms, source: "lo
 | B.2 `tree_get_root` + `tree_get_branch` + bonus `tree_list_branches` | ✅ DONE | 5h |
 | B.3 Dual-mycelium routing (3 tools `_local`/`_meta`/`auto`) | ✅ DONE | 8h |
 | B.4 `bugs_list` + `bugs_get` (read-only BUGS.md access) | ✅ DONE | 6h |
-| B.5 `runbook_get` (CHANGELOG/WINTER/BATTLE_PLAN snippets) | ⏳ PENDING | 6h |
+| B.5 `runbook_list_sections` + `runbook_get` (CHANGELOG/WINTER/BATTLE_PLAN snippets) | ✅ DONE | 6h |
 | B.6 Integration testing + E2E avec Claude Code réel | ⏳ PENDING | 4h |
 
 Sky a explicitement demandé : **pause après B.1 pour validation manuelle** avant d'enchaîner B.2-B.5 (les MCP tools exposent de la data à Claude pendant qu'il génère — décisions sensibles nécessitent input Sky : granularité, format, scopes).
@@ -966,3 +966,51 @@ Phase B : **21/37h livrées** (57%). Sky autorise enchaînement vers B.4 (bugs_l
 | B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
 
 Phase B : **27/37h livrées** (73%). Enchaînement B.5 logique : runbook_get pour lire CHANGELOG / WINTER_TREE / sections du MASTER_MCP.
+
+### État au 2026-05-11 (nuit 3) — chunk B.5 DONE
+
+**Phase B.5 — runbook MCP tools (read-only CHANGELOG / WINTER_TREE / MASTER_MCP)** livré.
+
+**Décisions** :
+- 2 tools (pattern parallèle B.4) : `runbook_list_sections(document)` + `runbook_get(document, section_id)`.
+- `document` whitelist STRICTE : `{"changelog", "winter_tree", "battle_plan"}` (anti path-traversal).
+- `section_id` regex `^[a-z0-9][a-z0-9_-]{0,79}$` (slug stable).
+- Parsing par H2 headers, avec slug ID dépendant du doc_type :
+  - CHANGELOG → `YYYY-MM-DD` ou `YYYY-MM-DD-suffix` (ex : `2026-05-11-soir`)
+  - WINTER_TREE → slug du titre (ex : `architecture`, `mycelium-le-champignon-vivant`)
+  - BATTLE_PLAN → juste le numéro (`0`, `1`, ..., `8`)
+- Cap 40K chars (matche A.1 SessionStart hook — même type de matériel narratif).
+- Read-only strict.
+
+**Livré** :
+- `muninn/mcp/server.py` (+220L) : `_RUNBOOK_DOCS` whitelist, `_slugify_runbook`, `_resolve_runbook_path`, `_parse_runbook_sections`, `_runbook_list_sections_impl`, `_runbook_get_impl` + 2 `@app.tool()` wrappers.
+- `tests/test_chunk_mcp_b5_runbook_tools.py` (~250L) : 14 tests behavioural dont 1 smoke réel.
+- `docs/MCP_SETUP.md` : tableau Available tools étendu (B.1 + B.2 + B.3 + B.4 + B.5).
+- `docs/BATTLE_PLAN_MASTER_MCP.md` : checkbox B.5 ✅, cette section.
+
+**Vérifications** (RULE 4) :
+- Test pin B.5 : 14/14 PASS en 0.78s (TDD).
+- Smoke réel :
+  - CHANGELOG : 52 sections détectées (`2026-05-11-soir`, `2026-05-11-midi`, ..., `2026-04-22`, ...)
+  - BATTLE_PLAN : 9 sections (`0`, `1`, ..., `8`)
+- Read-only contract proven par `test_files_not_modified` (mtime + size + content snapshot sur les 3 fichiers).
+
+**Forge** : skip RULE 5 N/A.
+
+**Phase B — état final partiel** :
+| Chunk | Statut | Heures | Tests |
+|---|---|---|---|
+| B.1 MCP scaffold + mycelium_recall_local | ✅ | 8h | 10 |
+| B.2 tree tools (3 tools) | ✅ | 5h | 12 |
+| B.3 dual-mycelium routing (3 tools + 5 env vars) | ✅ | 8h | 16 |
+| B.4 bugs tools (2 tools) | ✅ | 6h | 11 |
+| B.5 runbook tools (2 tools) | ✅ | 6h | 14 |
+| B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
+
+**Phase B : 33/37h livrées (89%)**. Reste B.6 (E2E avec Claude Code réel — test que les 10 MCP tools sont effectivement visibles + callable depuis une session Claude Code après `pip install + ~/.claude.json` setup).
+
+**Total MCP tools livrés (10)** :
+- `mycelium_recall_local`, `mycelium_recall_meta`, `mycelium_recall` (B.1 + B.3)
+- `tree_get_root`, `tree_get_branch`, `tree_list_branches` (B.2)
+- `bugs_list`, `bugs_get` (B.4)
+- `runbook_list_sections`, `runbook_get` (B.5)

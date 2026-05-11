@@ -529,6 +529,198 @@ def _recall_dual_impl(
     return out
 
 
+# ── Chunk B.5 runbook tools (read-only CHANGELOG / WINTER_TREE / MASTER_MCP) ─
+
+
+# Whitelist of allowed runbook documents (anti path-traversal).
+# (path_relative_to_repo, parser_type)
+_RUNBOOK_DOCS = {
+    "changelog":   ("CHANGELOG.md", "h2_date"),
+    "winter_tree": ("WINTER_TREE.md", "h2_title"),
+    "battle_plan": ("docs/BATTLE_PLAN_MASTER_MCP.md", "h2_numbered"),
+}
+
+_DOC_NAME_RE = re.compile(r"^[a-z_]{1,32}$")
+_SECTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,79}$")
+_H2_HEADER_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+_DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:\s*\(([^)]+)\))?")
+_NUMBERED_PREFIX_RE = re.compile(r"^(\d+)\.\s")
+RUNBOOK_TOOL_MAX_CHARS = 40_000
+
+
+def _slugify_runbook(text: str) -> str:
+    """Lower + non-alnum→'-' + collapse repeated dashes + trim dashes."""
+    s = text.lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s[:80] or "section"
+
+
+def _resolve_runbook_path(document: str, repo: Path) -> Path:
+    """Returns the absolute path to the runbook document, validated."""
+    if document not in _RUNBOOK_DOCS:
+        raise ValueError(
+            f"invalid document {document!r}. Allowed: {sorted(_RUNBOOK_DOCS)}"
+        )
+    rel, _ = _RUNBOOK_DOCS[document]
+    return repo / rel
+
+
+def _parse_runbook_sections(content: str, doc_type: str) -> list[dict]:
+    """Parse runbook content into sections by H2 headers.
+
+    Returns list of dicts with: {id, title, line, char_start, char_end}.
+    `id` slug depends on doc_type:
+      - h2_date     : "YYYY-MM-DD" or "YYYY-MM-DD-suffix"
+      - h2_title    : slug(title)
+      - h2_numbered : "N" (just the number), or slug if no number prefix.
+    """
+    if not content:
+        return []
+    matches = list(_H2_HEADER_RE.finditer(content))
+    if not matches:
+        return []
+    sections: list[dict] = []
+    seen_ids: set[str] = set()
+    for i, m in enumerate(matches):
+        title = m.group(1).strip()
+        char_start = m.end()
+        char_end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        line = content[: m.start()].count("\n") + 1
+
+        if doc_type == "h2_date":
+            dm = _DATE_PREFIX_RE.match(title)
+            if dm:
+                date = dm.group(1)
+                suffix = dm.group(2)
+                section_id = date if not suffix else f"{date}-{_slugify_runbook(suffix)}"
+            else:
+                section_id = _slugify_runbook(title)
+        elif doc_type == "h2_numbered":
+            nm = _NUMBERED_PREFIX_RE.match(title)
+            section_id = nm.group(1) if nm else _slugify_runbook(title)
+        else:  # h2_title
+            section_id = _slugify_runbook(title)
+
+        # Dedup if same id (rare) — append counter
+        base_id = section_id
+        counter = 2
+        while section_id in seen_ids:
+            section_id = f"{base_id}-{counter}"
+            counter += 1
+        seen_ids.add(section_id)
+
+        sections.append({
+            "id": section_id,
+            "title": title,
+            "line": line,
+            "char_start": char_start,
+            "char_end": char_end,
+        })
+    return sections
+
+
+def _runbook_list_sections_impl(
+    document: str,
+    repo_path: str | None = None,
+) -> dict:
+    """Return the list of H2 sections for the requested runbook."""
+    start = time.time()
+    if not isinstance(document, str) or not _DOC_NAME_RE.match(document):
+        raise ValueError(
+            f"invalid document {document!r}: must match ^[a-z_]{{1,32}}$"
+        )
+    if document not in _RUNBOOK_DOCS:
+        raise ValueError(
+            f"invalid document {document!r}. Allowed: {sorted(_RUNBOOK_DOCS)}"
+        )
+    repo = _resolve_repo_path(repo_path)
+    file_path = _resolve_runbook_path(document, repo)
+    if not file_path.exists():
+        return {
+            "document": document,
+            "sections": [],
+            "count": 0,
+            "file_path": str(file_path),
+            "repo_path": str(repo),
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+            "error": "document_missing",
+        }
+    content = file_path.read_text(encoding="utf-8")
+    _, doc_type = _RUNBOOK_DOCS[document]
+    sections = _parse_runbook_sections(content, doc_type)
+    return {
+        "document": document,
+        "sections": [
+            {"id": s["id"], "title": s["title"], "line": s["line"]}
+            for s in sections
+        ],
+        "count": len(sections),
+        "file_path": str(file_path),
+        "repo_path": str(repo),
+        "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+    }
+
+
+def _runbook_get_impl(
+    document: str,
+    section_id: str,
+    repo_path: str | None = None,
+) -> dict:
+    """Return the content + metadata for one H2 section of the requested runbook."""
+    start = time.time()
+    if not isinstance(document, str) or not _DOC_NAME_RE.match(document):
+        raise ValueError(
+            f"invalid document {document!r}: must match ^[a-z_]{{1,32}}$"
+        )
+    if document not in _RUNBOOK_DOCS:
+        raise ValueError(
+            f"invalid document {document!r}. Allowed: {sorted(_RUNBOOK_DOCS)}"
+        )
+    if not isinstance(section_id, str) or not _SECTION_ID_RE.match(section_id):
+        raise ValueError(
+            f"invalid section_id {section_id!r}: must match ^[a-z0-9][a-z0-9_-]{{0,79}}$"
+        )
+    repo = _resolve_repo_path(repo_path)
+    file_path = _resolve_runbook_path(document, repo)
+    if not file_path.exists():
+        return {
+            "error": "document_missing",
+            "document": document,
+            "section_id": section_id,
+            "file_path": str(file_path),
+            "repo_path": str(repo),
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+        }
+    content = file_path.read_text(encoding="utf-8")
+    _, doc_type = _RUNBOOK_DOCS[document]
+    sections = _parse_runbook_sections(content, doc_type)
+    match = next((s for s in sections if s["id"] == section_id), None)
+    if match is None:
+        return {
+            "error": "section_not_found",
+            "document": document,
+            "section_id": section_id,
+            "available_sections": [s["id"] for s in sections],
+            "file_path": str(file_path),
+            "repo_path": str(repo),
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+        }
+    body = content[match["char_start"]:match["char_end"]].strip()
+    capped, truncated = _cap_with_marker(body, RUNBOOK_TOOL_MAX_CHARS)
+    return {
+        "document": document,
+        "section_id": section_id,
+        "title": match["title"],
+        "content": capped,
+        "line": match["line"],
+        "truncated": truncated,
+        "file_path": str(file_path),
+        "repo_path": str(repo),
+        "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+    }
+
+
 # ── Chunk B.4 BUGS.md tools (read-only) ─────────────────────────────────────
 
 
@@ -1027,6 +1219,82 @@ def create_server() -> FastMCP:
         return _recall_dual_impl(
             query=query, scope=scope, top_k=top_k, hops=hops,
             repo_path=repo_path,
+        )
+
+    # ── Chunk B.5 runbook tools (read-only) ──
+
+    @app.tool()
+    def runbook_list_sections(
+        document: str,
+        repo_path: str | None = None,
+    ) -> dict:
+        """List H2 sections of a Muninn runbook document.
+
+        Companion to `runbook_get`. Use this first to discover section IDs
+        before reading their content.
+
+        Args:
+            document: one of "changelog" | "winter_tree" | "battle_plan"
+                      (strict whitelist — anti path-traversal).
+            repo_path: absolute path to the project (defaults to $MUNINN_REPO
+                       env, then cwd).
+
+        Returns:
+            {
+              "document": str,
+              "sections": [{"id": str, "title": str, "line": int}],
+              "count": int,
+              "file_path": str,
+              "repo_path": str,
+              "elapsed_ms": float,
+              "error"?: "document_missing",     # if the file is absent
+            }
+
+        Section IDs by document:
+          - "changelog"   : `YYYY-MM-DD` or `YYYY-MM-DD-suffix` (slug)
+          - "winter_tree" : slug of the section title
+          - "battle_plan" : just the number ("0", "1", "2", ...)
+        """
+        return _runbook_list_sections_impl(
+            document=document, repo_path=repo_path,
+        )
+
+    @app.tool()
+    def runbook_get(
+        document: str,
+        section_id: str,
+        repo_path: str | None = None,
+    ) -> dict:
+        """Read one H2 section of a Muninn runbook document.
+
+        Companion to `runbook_list_sections` — call that first to discover
+        valid section IDs.
+
+        Args:
+            document: one of "changelog" | "winter_tree" | "battle_plan"
+                      (strict whitelist).
+            section_id: section identifier, validated against
+                        `^[a-z0-9][a-z0-9_-]{0,79}$` (anti path-traversal).
+            repo_path: absolute path to the project.
+
+        Returns:
+            {
+              "document": str, "section_id": str, "title": str,
+              "content": str,                # cap 40K chars (~10K tokens)
+              "line": int,                   # line in the source file
+              "truncated": bool,
+              "file_path": str, "repo_path": str, "elapsed_ms": float,
+            }
+
+        If the section doesn't exist: {"error": "section_not_found",
+        "available_sections": [...], ...} WITHOUT raising — recover by
+        calling runbook_list_sections.
+
+        Raises:
+            ValueError on invalid document or section_id format.
+        """
+        return _runbook_get_impl(
+            document=document, section_id=section_id, repo_path=repo_path,
         )
 
     # ── Chunk B.4 BUGS.md tools (read-only) ──
