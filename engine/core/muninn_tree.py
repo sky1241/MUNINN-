@@ -2205,6 +2205,19 @@ def inject_memory(fact: str, repo_path: Path = None):
         return
 
     repo = repo_path or _m._REPO_PATH or Path(".").resolve()
+    repo = Path(repo).resolve()
+
+    # CRITICAL (2026-05-11 PM, follow-up to BUG-111): propagate _REPO_PATH
+    # to the package namespace BEFORE load_tree/init_tree call so the
+    # init_tree guard recognizes this tree dir as legitimate. Same pattern
+    # as bootstrap_mycelium and the `muninn init` handler.
+    _m._REPO_PATH = repo
+    try:
+        import muninn as _pkg
+        _pkg._REPO_PATH = repo
+    except Exception:
+        pass
+    _refresh_tree_paths()
 
     with _m._MuninnLock(repo):
         # Ensure tree exists
