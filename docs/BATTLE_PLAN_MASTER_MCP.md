@@ -809,3 +809,24 @@ Returns `{query, results: [{concept, activation, hops}], elapsed_ms, source: "lo
 | B.6 Integration testing + E2E avec Claude Code réel | ⏳ PENDING | 4h |
 
 Sky a explicitement demandé : **pause après B.1 pour validation manuelle** avant d'enchaîner B.2-B.5 (les MCP tools exposent de la data à Claude pendant qu'il génère — décisions sensibles nécessitent input Sky : granularité, format, scopes).
+
+### État au 2026-05-11 (soir 2) — BUG-111 hotfix + retest A.1
+
+**Découverte** : Sky a re-testé A.1 SessionStart en ouvrant une nouvelle session Claude Code. Le hook a bien tourné mécaniquement (4714 chars injectés) MAIS le contenu était nul : `P:test_repo|unknown|21L|1files` au lieu du vrai état Muninn. Cause : `.muninn/tree/root.mn` du repo source avait été écrasé par un test E2E pendant la session — 3 sites violaient RULE 1 (paths hardcoded au top du module).
+
+**Commit `f857d8c`** : 3 RULE-1 leaks fixés en un seul commit :
+- `args.command == "init"` handler — `tree_meta = repo / ".muninn" / "tree" / "tree.json"` direct depuis l'arg.
+- `bootstrap_mycelium(repo_path)` — propage `_pkg._REPO_PATH = repo_path` AVANT toute écriture.
+- `generate_root_mn(repo_path, ...)` — `target_tree_dir = repo_path / ".muninn" / "tree"` direct.
+- `init_tree()` — safety net `RuntimeError` si target hors `_REPO_PATH`.
+- Mirror exact dans `muninn/_engine.py`.
+
+**Tests** : `tests/test_chunk_mcp_a5_tree_isolation.py` (5 behavioural). Voir `BUGS.md` BUG-111 pour le détail.
+
+**Recovery** : mycelium intact (188k→94k par decay naturel, pas perte). Root.mn régénéré via `generate_root_mn(repo_source, file_count, mycelium)` qui reuse le mycelium existant. Branches b02-b07 (vrai contenu Sky) préservées ; seul b01.mn (clobber) supprimé.
+
+**Commit `540889e`** : cleanup `docs/MCP_SETUP.md` — Sky a demandé "ça marchera-t-il chez un client ?" → grep confirmé 0 hardcoded `/home/sky` dans `engine/`, `muninn/`, `.claude/hooks/`. Mais MCP_SETUP.md avait 4 exemples avec mon path → remplacés par `<PATH_TO_YOUR_REPO>`, `<OUTPUT_OF_WHICH_PYTHON>`.
+
+**Retest A.1** : nouvelle session Claude Code après le hotfix → le boot context contient maintenant le vrai état Muninn (483K lignes, 526 fichiers, derniers commits dont B.1 + hotfix). Hook A.1 livre VRAIMENT de la valeur, pas du bruit.
+
+**Phase B reprend ici**. Pas de blocker. Sky autorise B.2 (`tree_get_root` + `tree_get_branch`, 5h) — mais B.3 (dual-mycelium routing) et B.4-B.5 (bugs / runbook) nécessitent validation Sky sur les décisions de design (granularité, scopes, format).

@@ -151,6 +151,52 @@ appears in one of these hubs.
   `count_chained_commands`, `clamp_chained_commands` are still detected as
   safe and continue to be fuzzed normally.
 
+### BUG-111: bootstrap_mycelium / generate_root_mn / init handler leak tree writes into source repo
+- **Status**: FIXED 2026-05-11 PM (commit `f857d8c`)
+- **Symptom**: Running `pytest tests/test_e2e_pip_install_from_scratch.py` (Phase A
+  chunk A.4 E2E) and `pytest tests/test_wire_observe_latex.py::test_bootstrap_picks_up_tex_files`
+  silently clobbered the SOURCE repo's `.muninn/tree/root.mn` with content like
+  `P:test_repo|unknown|21L|1files` (a bootstrap-on-empty-dir result) instead of
+  writing into the test's `tmp_path`. Sky's real Muninn tree was overwritten;
+  next `muninn boot` and the SessionStart hook A.1 injected garbage into Claude.
+- **Root cause**: Three RULE-1 violations sharing the same pattern. The module-
+  level globals `TREE_DIR = MUNINN_ROOT / ".muninn" / "tree"` and `TREE_META =
+  TREE_DIR / "tree.json"` are computed at import time. In pip-install-e mode
+  (the E2E test) the package and the `_engine` module diverge: the local
+  `global _REPO_PATH; _REPO_PATH = repo` in the handler did NOT propagate to
+  `muninn._REPO_PATH` (the package namespace), so downstream `_get_tree_dir()`
+  (called by `_refresh_tree_paths`) fell back to `MUNINN_ROOT / ".muninn" /
+  "tree"` = source repo. Three writes used those stale globals:
+    1. `args.command == "init"` checked `TREE_META.exists()` (source repo) then
+       called `init_tree()` which wrote into `_m.TREE_DIR` (the bogus value).
+    2. `bootstrap_mycelium(repo_path)` never propagated `_REPO_PATH` before
+       its tree-write loop (`mn_dir = TREE_DIR` at L428).
+    3. `generate_root_mn(repo_path, ...)` used `TREE_DIR.mkdir()` and
+       `root_path = TREE_DIR / "root.mn"` (L565-567) — bypassing its own
+       `repo_path` argument.
+- **Fix** (commit `f857d8c`):
+  - Every entry point that takes a `repo_path` argument now propagates it
+    BEFORE any tree write: `import muninn as _pkg; _pkg._REPO_PATH = repo_path;
+    _refresh_tree_paths()`, then computes paths DIRECTLY from `repo_path`
+    (`target_tree_dir = repo_path / ".muninn" / "tree"`).
+  - `init_tree()` adds a safety net: raises `RuntimeError("REFUSING init_tree:
+    target ... is outside the bound repo ...")` if `_m.TREE_DIR.resolve()` is
+    not a prefix of `_m._REPO_PATH.resolve()`. Catches any future regression
+    of the same class.
+  - Mirrored EXACTLY in `muninn/_engine.py` (BUG-091 duplication rule).
+- **Test**: `tests/test_chunk_mcp_a5_tree_isolation.py` — 5 behavioural
+  (init_tree refusal, alignment OK, init handler uses repo arg, package
+  propagation, mirror).
+- **Regression**: none. 2421 PASS local. `MUNINN_RUN_E2E=1 pytest
+  tests/test_e2e_pip_install_from_scratch.py` re-run: 7/7 PASS, source repo
+  intact (`head -2 .muninn/tree/root.mn` still shows `P:MUNINN-`).
+- **Recovery**: `mycelium.db` was never touched (188265 → 94130 edges
+  through natural Sleep Consolidation decay, not data loss). Branches
+  `b02..b07` contained real Sky content and were preserved; only the
+  test-clobbered `b01.mn` was deleted. `root.mn` was regenerated via
+  `generate_root_mn(repo_path, file_count, mycelium)` reusing the intact
+  mycelium — no data lost.
+
 ### BUG-110: mycelium.pull_from_meta hangs on user's home meta DB during tests
 - **Status**: FIXED (brick 22 part 2)
 - **Symptom**: `tests/test_biovectors_v11b.py` and other tests that create

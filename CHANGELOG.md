@@ -1,10 +1,75 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 2179 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 501 + vault.py 551 = **24 819 lignes** (26 fichiers core post-P3 split + BUG-104 fix — muninn_tree 3929→2179L via 3 sous-modules doctor/prune/boot ; mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; budget_select 413→501L via BUG-104 spill-to-tree wrapper ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield **v1.3.0** source of truth)
-Tests: **2339 PASS, 47 skipped, 0 xfail, 0 fail** + **103 property tests** (forge --gen-props sur 17 modules) — post-BUG-104 spill fix (+5 brick12 nouveaux + 2 budget_select props).
-forge --modularity Q = **0.664** (stable post-bump v1.1.1 → v1.2.2 → v1.3.0).
-**0 BUG OPEN officiel** depuis BUG-104 FIXED 2026-05-10 PM.
+Engine: muninn.py 2625 + muninn_layers.py 1547 + muninn_tree.py 2325 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1962 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 501 + vault.py 551 + muninn/mcp/server.py 225 (B.1) = **~25 273 lignes** (27 fichiers core post-Phase A + B.1 + BUG-111 hotfix — muninn_tree 3929→2325L incl. init_tree guard ; muninn_feed +145L for _sync_to_meta_guarded ; muninn.py +250L for install_cron + _generate_session_start_hook ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield **v1.3.0** source of truth).
+Tests: **2421 PASS, 36 skipped, 0 xfail, 0 fail** + **104 property tests** (forge --gen-props sur 18 modules) — post-Phase A (A.1-A.4) + B.1 + BUG-111 hotfix (+13 A.1 + 9 A.2 + 13 A.3 + 7 E2E A.4 opt-in + 10 B.1 + 5 A.5 isolation).
+forge --modularity Q = **0.664** (stable).
+**0 BUG OPEN officiel** depuis BUG-111 FIXED 2026-05-11 PM.
 Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shimification 4 fichiers byte-identiques + cube + vault).
+
+---
+
+## 2026-05-11 (soir) — Phase A complète (4/4 chunks) + Phase B démarrée (B.1) + BUG-111 hotfix
+
+Grosse journée. 6 commits poussés, tous CI verts.
+
+### `c56245c` — Phase A.1 SessionStart hook + auto-boot (4h)
+
+- Nouveau `.claude/hooks/session_start_hook.py` (6914 bytes, perm 0o700) généré par `_generate_session_start_hook()` dans `engine/core/muninn.py` (261L template) — mirror dans `muninn/_engine.py`.
+- `install_hooks()` étendu : SessionStart timeout 30s registered + stale-detection inclut `session_start_hook`.
+- Hook calque le pattern `subagent_start_hook` : pure file I/O (root.mn + 5 branches récemment modifiées par mtime), cap 40K chars, exit 0 fail-safe.
+- Source filter `startup|resume` → boot, `clear|compact` → no-op (PreCompact gère déjà la compaction).
+- `tests/test_chunk_mcp_a1_session_start.py` : 13 tests behavioural.
+
+### `0542581` — Phase A.2 SessionEnd guarded sync (3h)
+
+- Découverte pre-chunk (Explore + Plan) : la sync local→meta était DÉJÀ câblée depuis commit `b7c3803` (2026-03-06) à 3 sites. Gap réel = garde-fous (timeout, opt-out, marker doctor).
+- Nouveau `_sync_to_meta_guarded(repo_path, hook_event, budget_seconds=60.0) -> dict` + helper `_write_meta_sync_marker()` dans `engine/core/muninn_feed.py` (+145L).
+- Thread-based timeout (daemon), opt-out `MUNINN_SKIP_META_SYNC=1` (CLAUDE.md env var table), marker `.muninn/last_meta_sync.json` pour `muninn doctor`.
+- Les 3 blocs inline remplacés (feed_from_hook, feed_from_stop_hook, muninn.py direct-file).
+- `tests/test_chunk_mcp_a2_session_end_sync.py` : 9 tests behavioural.
+
+### `d4feee6` — Phase A.3 install-cron systemd-user timer (4h)
+
+- Nouvelle sub-command `muninn install-cron` + flag `--uninstall`. Génère 2 fichiers `~/.config/systemd/user/muninn-prune.{service,timer}` (`OnCalendar=Sun *-*-* 04:00:00`, `Persistent=true`, `RandomizedDelaySec=600`, `Nice=10`, perms 0o644).
+- Ne lance PAS `systemctl` — print un hint avec la commande exacte (test-friendly, sandbox-safe). Idempotent. Skip propre si systemctl absent.
+- `muninn.py` dépasse 2500L → ajouté à `DOCUMENTED_OVERSIZED_MODULES` avec plan de split prévu Phase C polish.
+- `tests/test_chunk_mcp_a3_cron_install.py` : 13 tests behavioural.
+
+### `ff89ca1` — Phase A.4 E2E test "from scratch" (4h) — clôture Phase A
+
+- Nouveau `tests/test_e2e_pip_install_from_scratch.py` (7 tests, fixture session-scoped, ~8s amorti). Opt-in via `MUNINN_RUN_E2E=1` + marker `e2e` (skip par défaut, ~60-120s d'install).
+- Prouve E2E : venv vierge → `pip install -e ".[tokens]"` → `muninn init` → `muninn doctor` ALL GREEN + tous les hooks Phase A registered (SessionStart inclus).
+- Nouveau job CI `e2e` (push-only, needs validate, MUNINN_RUN_E2E=1).
+- Caught lors du smoke : `doctor` flagge `[FAIL] tiktoken missing` si install sans `[tokens]` extra → test docs explicitement le bon incantation user.
+
+### `54cbc34` — Phase B.1 MCP server scaffold + 1er tool (8h)
+
+- Nouveau package `muninn/mcp/{__init__, server, __main__}.py` (~250L). FastMCP 1.7.1+ sur stdio. Logger stderr-only (stdout = MCP wire format).
+- Tool `mycelium_recall_local(query, top_k=10, repo_path=None, hops=2) -> dict`. Pure adapter sur `Mycelium.spread_activation` — pas de logique algo, **forge skip RULE 5 N/A**.
+- `pyproject.toml` : `[mcp]` extra (`mcp>=1.7.1,<2.0`) + console_script `muninn-mcp`.
+- `docs/MCP_SETUP.md` : snippet `~/.claude.json` + troubleshooting.
+- README : nouvelle section "MCP integration".
+- `tests/test_chunk_mcp_b1_server_scaffold.py` : 10 tests (9 unit + 1 stdio smoke marker `@pytest.mark.slow`).
+
+### `f857d8c` — BUG-111 hotfix : tree write paths leak source repo
+
+Caught dans la même session après que Sky a constaté son `root.mn` corrompu (`P:test_repo|unknown|21L|1files` au lieu de `P:MUNINN-|python|483863L|526files`). 3 RULE-1 violations sharing the same pattern dans :
+- `args.command == "init"` handler (utilisait `TREE_META.exists()` global)
+- `bootstrap_mycelium(repo_path)` (jamais propagé `_REPO_PATH` au package)
+- `generate_root_mn(repo_path, ...)` (utilisait `TREE_DIR` global au lieu de l'arg)
+
+Fix belt-and-suspenders : chaque entry point propage maintenant `_pkg._REPO_PATH = repo_path` AVANT toute écriture, puis calcule `target_tree_dir = repo_path / ".muninn" / "tree"` DIRECTEMENT depuis l'arg. `init_tree()` ajoute un safety net (`RuntimeError` si target hors `_REPO_PATH`). Mirror dans `muninn/_engine.py`.
+
+`tests/test_chunk_mcp_a5_tree_isolation.py` : 5 tests behavioural. Voir BUG-111 pour le détail complet.
+
+Vérifications de non-régression poussées :
+- Source repo intact après `MUNINN_RUN_E2E=1 pytest test_e2e_pip_install`
+- Source repo intact après full `pytest -q` (qui inclut `test_wire_observe_latex`)
+- Mycelium jamais touché (188265 → 94130 edges = decay naturel Sleep Consolidation Wilson & McNaughton 1994, pas perte de données)
+
+### `540889e` — Cleanup docs/MCP_SETUP.md (`/home/sky` → placeholders)
+
+Sky a demandé : "le code marchera-t-il chez un client ?". Vérifié grep : code de production = 0 hardcoded `/home/sky`. Mais `docs/MCP_SETUP.md` (que j'avais écrit dans B.1) avait 4 références à `/home/sky/Bureau/MUNINN-` comme exemples. Remplacés par `<PATH_TO_YOUR_REPO>`, `<PATH_TO_MUNINN>`, `<OUTPUT_OF_WHICH_PYTHON>`.
 
 ---
 
