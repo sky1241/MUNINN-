@@ -204,6 +204,7 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_DUAL_META_WEIGHT` | Pondération β du meta dans le merge fusion linear (chunk B.3) | `0.3` |
 | `MUNINN_DUAL_TOP_K` | Top-K results retournés par mycelium_recall (chunk B.3) | `10` |
 | `MUNINN_DUAL_FUSION` | Méthode de fusion local+meta : `linear` (min-max norm + α·local + β·meta) ou `rrf` (Cormack 2009, rank-based, magnitude-robust) | `linear` |
+| `MUNINN_DUAL_AUTO_CALIBRATE` | Active auto-calibration adaptive per-client du seuil `MUNINN_DUAL_LOCAL_STRONG` (chunk MCP C.0). Le système log `strength_local` à chaque `mycelium_recall(scope=auto)`, recompute le quantile p75 toutes les 30 samples (min 30), et persiste dans `<repo>/.muninn/dual_mycelium_threshold.json`. Mettre à `0` pour figer le défaut. | `1` (actif) |
 | `MUNINN_TEST_REPOS` | Liste de repos pour test_l9_full.py (`name1:/path1,name2:/path2`) | repo courant |
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |

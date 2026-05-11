@@ -463,7 +463,29 @@ Même pattern que B.3 pour :
 
 ---
 
-### Phase C — Polish (20h) — RE-SPEC 2026-05-11 nuit après livraison Phase B
+### Phase C — Polish (~22h) — RE-SPEC 2026-05-11 nuit après livraison Phase B + C.0
+
+> **Ajout 2026-05-11 nuit (deuxième pass)** : Sky a explicitement demandé
+> que le système **se calibre tout seul par client**, pas qu'on calibre
+> pour lui. Un nouveau chunk **C.0 (auto-calibration adaptive, 3-4h)** a
+> été ajouté en TÊTE de la Phase C — il doit passer AVANT le reste.
+
+#### Chunk C.0 — Auto-calibration adaptive per-client (3-4h) — ✅ DONE
+
+**Pourquoi** : les defaults B.3 (`THRESHOLD_LOCAL_STRONG=4.0`, etc.) sont sains théoriquement mais non optimaux pour chaque client. Sky veut un système **autonome**, pas "calibrer pour moi".
+
+**Architecture livrée** :
+- À chaque `mycelium_recall(scope=auto)`, log `strength_local` dans `<repo>/.muninn/dual_mycelium_calibration.jsonl` (fire-and-forget, never raise).
+- Toutes les 30 samples (min 30), recompute p75 et écrit `<repo>/.muninn/dual_mycelium_threshold.json`.
+- `_recall_dual_impl` lit ce JSON et override le défaut.
+- Opt-out via `MUNINN_DUAL_AUTO_CALIBRATE=0`.
+- Threshold clampé à `[0.5, 50.0]` (anti-aberration).
+
+**Démo réelle sur MUNINN-** : 30 queries auto → log 30 samples → threshold recalculé à **3.4497** (vs default 4.0). Le système s'auto-ajuste sur les données réelles du client.
+
+**Test pin** : `tests/test_chunk_mcp_c0_auto_calibration.py` — 11 tests behavioural (lookup default/stored, opt-out, log append, recompute, integration, clamp, scope filter pour seul `auto` log).
+
+---
 
 > L'ancienne Phase C (property tests + benchmark fact-recall) a été déplacée.
 > Phase B a livré 10 MCP tools + 6 E2E tests, donc le besoin urgent est

@@ -108,10 +108,33 @@ claude mcp list
 | `MUNINN_DUAL_META_WEIGHT` | `0.3` | Complement of local weight (sums to 1.0 with default α=0.7). |
 | `MUNINN_DUAL_TOP_K` | `10` | NDCG@10 BEIR/MTEB standard. Anthropic Contextual Retrieval (2024) recommends top-20 only when a reranker is in the pipeline; without rerank, top-10 is the sweet spot before lost-in-the-middle (Liu 2024). |
 | `MUNINN_DUAL_FUSION` | `linear` | Default = min-max normalize each side onto [0, 1] then `α·local + β·meta`. Alternative `rrf` (Cormack 2009 Reciprocal Rank Fusion) uses ranks only — robust to the ~80× magnitude gap between local (~94 k edges) and meta (~7.5 M edges). |
+| `MUNINN_DUAL_AUTO_CALIBRATE` | `1` (active) | **Auto-calibration adaptive per-client (chunk C.0)**. When active, every `mycelium_recall(scope="auto")` call appends its observed `strength_local` to `<repo>/.muninn/dual_mycelium_calibration.jsonl`. Every 30 samples (after a 30-sample minimum), the system recomputes the 75th percentile and writes `<repo>/.muninn/dual_mycelium_threshold.json` — that file then overrides the global `MUNINN_DUAL_LOCAL_STRONG` default for that specific client. Set to `0` to freeze the global default. |
 
 When to switch to `rrf` : if local and meta have very different score distributions (large repo + tiny local = magnitude bias). RRF ignores raw activations and ranks alone, so it's safer when the two sources are imbalanced.
 
-When to calibrate empirically : `THRESHOLD_LOCAL_STRONG` is the most repo-specific value. Log `strength_local` over 20–30 real queries, recompute the 75th percentile, and set the threshold there.
+### Auto-calibration in practice (C.0)
+
+The `MUNINN_DUAL_LOCAL_STRONG=4.0` default is a theoretical baseline backed by 11 sources, but the **right** threshold depends on what your queries actually look like. Rather than asking each user to calibrate by hand, Muninn does it automatically per-repo :
+
+1. First 30 `mycelium_recall(scope=auto)` calls use the global default (4.0).
+2. Each call's `strength_local` is logged to `<repo>/.muninn/dual_mycelium_calibration.jsonl` (fire-and-forget, never raises).
+3. On the 30th call (and every 30 thereafter), the system reads the log, computes the p75, and writes the calibrated threshold to `<repo>/.muninn/dual_mycelium_threshold.json`.
+4. Subsequent calls read that file and use the calibrated value instead.
+5. Threshold is clamped to `[0.5, 50.0]` so a pathological run can't break the router.
+
+**Concrete example** (real run on the MUNINN- repo, 30 queries) :
+```json
+{
+  "threshold": 3.4497,
+  "samples": 30,
+  "percentile": 75,
+  "raw_percentile_value": 3.4497,
+  "updated_at": "2026-05-11T17:14:09Z"
+}
+```
+The default 4.0 was lowered to 3.45 for this repo — meaning queries on this codebase produce slightly weaker local signal than the theoretical sweet spot, so the router will fall back to the meta-mycelium more often. That's the right call for THIS data.
+
+Opt-out via `MUNINN_DUAL_AUTO_CALIBRATE=0` if you prefer a fixed threshold. The default behavior is always-on adaptive calibration.
 
 Example invocations:
 > Claude calls `mycelium_recall_local(query="BUG-104 spill tree", top_k=5)`

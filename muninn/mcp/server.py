@@ -77,6 +77,135 @@ FUSION_METHOD = os.environ.get("MUNINN_DUAL_FUSION", "linear")  # "linear" | "rr
 # RRF constant (Cormack, Clarke & Buettcher SIGIR 2009).
 RRF_K = 60
 
+# ── Auto-calibration (chunk C.0) ─────────────────────────────────────────────
+# Sky asked (2026-05-11 nuit): "je veux pas calibrer pour moi, je veux un
+# système qui se calibre en fonction de chaque client". So the 4.0 default
+# stays as a sane bootstrap, but on EACH client we log strength_local on
+# every scope=auto call, recompute the p75 every CALIBRATION_RECOMPUTE_EVERY
+# samples, and persist the calibrated value under the client's `.muninn/`.
+# Opt-out via MUNINN_DUAL_AUTO_CALIBRATE=0.
+
+CALIBRATION_MIN_SAMPLES = 30
+CALIBRATION_RECOMPUTE_EVERY = 30
+CALIBRATION_PERCENTILE = 75
+CALIBRATION_THRESHOLD_MIN = 0.5  # clamp lower bound (anti aberration)
+CALIBRATION_THRESHOLD_MAX = 50.0  # clamp upper bound (anti aberration)
+
+
+def _is_auto_calibrate_enabled() -> bool:
+    return os.environ.get("MUNINN_DUAL_AUTO_CALIBRATE", "1") != "0"
+
+
+def _calibration_log_path(repo: Path) -> Path:
+    return repo / ".muninn" / "dual_mycelium_calibration.jsonl"
+
+
+def _calibration_threshold_path(repo: Path) -> Path:
+    return repo / ".muninn" / "dual_mycelium_threshold.json"
+
+
+def _get_calibrated_threshold(repo: Path) -> float:
+    """Return the auto-calibrated threshold for this client repo.
+
+    - If auto-calibration is disabled (env var), always return the default.
+    - If the threshold JSON file doesn't exist or is corrupt, return default.
+    - Otherwise return the stored value clamped to [MIN, MAX].
+    Never raises.
+    """
+    if not _is_auto_calibrate_enabled():
+        return THRESHOLD_LOCAL_STRONG
+    try:
+        path = _calibration_threshold_path(repo)
+        if not path.exists():
+            return THRESHOLD_LOCAL_STRONG
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = float(data.get("threshold", THRESHOLD_LOCAL_STRONG))
+        return max(CALIBRATION_THRESHOLD_MIN,
+                   min(CALIBRATION_THRESHOLD_MAX, value))
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        return THRESHOLD_LOCAL_STRONG
+
+
+def _log_strength_to_calibration(repo: Path, strength: float) -> None:
+    """Append one observation to the client's calibration jsonl.
+
+    Fire-and-forget : any I/O error is swallowed. The MCP tool path must
+    never raise just because the calibration log couldn't be written.
+    """
+    if not _is_auto_calibrate_enabled():
+        return
+    try:
+        path = _calibration_log_path(repo)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps({
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "strength": round(float(strength), 4),
+        })
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass  # fire-and-forget
+
+
+def _recompute_calibration_if_needed(repo: Path, force: bool = False) -> bool:
+    """Read the jsonl log and (re)write the threshold JSON when conditions met.
+
+    Triggers a recompute when :
+      - auto-calibration enabled
+      - sample count >= CALIBRATION_MIN_SAMPLES
+      - sample count % CALIBRATION_RECOMPUTE_EVERY == 0 (or `force=True`)
+
+    Returns True if a new threshold was written, False otherwise.
+    Never raises.
+    """
+    if not _is_auto_calibrate_enabled():
+        return False
+    try:
+        log_path = _calibration_log_path(repo)
+        if not log_path.exists():
+            return False
+        samples: list[float] = []
+        for raw_line in log_path.read_text(encoding="utf-8").splitlines():
+            if not raw_line.strip():
+                continue
+            try:
+                entry = json.loads(raw_line)
+                s = float(entry.get("strength", 0.0))
+                samples.append(s)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                continue  # skip corrupt lines
+        n = len(samples)
+        if n < CALIBRATION_MIN_SAMPLES:
+            return False
+        if not force and (n % CALIBRATION_RECOMPUTE_EVERY != 0):
+            return False
+        # Compute the percentile (no numpy dependency — keep it light)
+        sorted_samples = sorted(samples)
+        # Linear interpolation between closest ranks (numpy-compatible)
+        k = (CALIBRATION_PERCENTILE / 100.0) * (n - 1)
+        lo = int(k)
+        hi = min(lo + 1, n - 1)
+        frac = k - lo
+        percentile_value = sorted_samples[lo] + frac * (sorted_samples[hi] - sorted_samples[lo])
+        clamped = max(CALIBRATION_THRESHOLD_MIN,
+                      min(CALIBRATION_THRESHOLD_MAX, percentile_value))
+        out = {
+            "threshold": round(clamped, 4),
+            "samples": n,
+            "percentile": CALIBRATION_PERCENTILE,
+            "raw_percentile_value": round(percentile_value, 4),
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        path = _calibration_threshold_path(repo)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Atomic-ish write
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(out, indent=2), encoding="utf-8")
+        os.replace(str(tmp), str(path))
+        return True
+    except Exception:
+        return False
+
 
 def _resolve_repo_path(repo_path: str | None) -> Path:
     """Resolve the target repo: explicit arg > MUNINN_REPO env > cwd."""
@@ -503,7 +632,14 @@ def _recall_dual_impl(
         strength_local = _compute_strength_total(rl.get("results", []))
         out["strength_local"] = strength_local
         out["repo_path"] = rl.get("repo_path")
-        if strength_local >= THRESHOLD_LOCAL_STRONG:
+        # Chunk C.0: per-client auto-calibration. Use the calibrated threshold
+        # if available, fall back to the global default otherwise.
+        repo_resolved = _resolve_repo_path(repo_path)
+        threshold_used = _get_calibrated_threshold(repo_resolved)
+        out["threshold_used"] = round(threshold_used, 4)
+        # Log this observation so the threshold can self-calibrate over time.
+        _log_strength_to_calibration(repo_resolved, strength_local)
+        if strength_local >= threshold_used:
             out["results"] = rl.get("results", [])
             out["source"] = "local"
             out["scope_used"] = "auto→local"
@@ -524,6 +660,8 @@ def _recall_dual_impl(
                 out["source"] = "local+meta"
                 out["scope_used"] = "auto→merged"
                 out["fusion_used"] = fusion
+        # Recompute calibration periodically (fire-and-forget).
+        _recompute_calibration_if_needed(repo_resolved)
 
     out["elapsed_ms"] = round((time.time() - start) * 1000.0, 2)
     return out
