@@ -26,32 +26,33 @@ SYNC_MARKERS = [
      ["engine/core/muninn_tree.py", "muninn/muninn_tree.py"]),
 
     # Chunk 4 — PostToolUseFailure generator
+    # Chunk C.1 split (2026-05-11 nuit): hook generators moved to muninn_install.py.
     ("_generate_post_tool_failure_hook",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
 
     # Chunk 5 — SubagentStart generator (LIGHT mode after chunk 14 fix)
     ("_generate_subagent_start_hook",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
     ("MUNINN LIGHT BOOT",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
 
     # Chunk 12 — PreToolUse enforcement hooks
     ("_install_pre_tool_use_hooks",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
     ("PreToolUse",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
 
     # Chunk 15 — Scaling hooks
     ("_install_scaling_hooks",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
     ("_copy_hooks_from_source",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
 
     # Audit 2026-04-10 — type-check fix in hook templates
     ("if not isinstance(payload, dict)",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
     ("if not isinstance(hook_input, dict)",
-     ["engine/core/muninn.py", "muninn/_engine.py"]),
+     ["engine/core/muninn_install.py", "muninn/_engine.py"]),
 ]
 
 

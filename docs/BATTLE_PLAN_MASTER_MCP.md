@@ -492,7 +492,29 @@ Même pattern que B.3 pour :
 > de **nettoyer la dette technique** accumulée pendant le sprint A+B
 > (muninn.py au-dessus du cap, CI à 40min, 1 test pré-existant fail).
 
-#### Chunk C.1 — Split `muninn.py` oversized (5h)
+#### Chunk C.1 — Split `muninn.py` oversized (5h) — ✅ DONE 2026-05-11 nuit
+
+**Livré** :
+- `engine/core/muninn.py` : 2666L → **1347L** (CLI dispatcher + scan_repo + bootstrap_mycelium + generate_root_mn + generate_winter_tree + handlers vault/quarantine/zones/huginn).
+- `engine/core/muninn_install.py` NEW **1201L** (registry + 4 hook generators + install_hooks + install_cron + _detect_init_system).
+- `engine/core/muninn_secrets.py` NEW **211L** (scrub_secrets + purge_secrets_db + _SCRUB_*/_TRIGGER_* + 2 handlers).
+- `muninn/_engine.py` : 2698L → **1428L** (miroir splitté, re-export depuis les shims).
+- `muninn/muninn_install.py` NEW (shim ~31L, re-export from canonical).
+- `muninn/muninn_secrets.py` NEW (shim ~24L).
+- `tests/test_chunk_mcp_c1_split.py` NEW : 11 tests behavioural (size + public API + private re-exports + mirror + CLI entrypoint).
+- `tests/test_brick20_architecture.py` : `muninn.py` RETIRÉ de `DOCUMENTED_OVERSIZED_MODULES` (plus oversized), `_generate_session_start_hook` move vers `muninn_install.py` dans `DOCUMENTED_OVERSIZED_FUNCTIONS`.
+- `tests/test_chunk_d11_shim_drift.py` : `muninn_install` + `muninn_secrets` ajoutés à `SHIMMED_MODULES`.
+- `tests/test_audit_dual_tree_sync.py` : 8 markers (hook generators) re-pointés vers `engine/core/muninn_install.py`.
+- `tests/test_chunk_p0bis_engine_perms.py` : `secure_perms` check étendu aux 3 fichiers (muninn.py + muninn_install.py + muninn/_engine.py).
+
+**Vérifications** (RULE 4) :
+- Test pin C.1 : 11/11 PASS.
+- Full regression : **2498 PASS, 42 skip, 0 fail** (+11 vs C.0 baseline = exactement les 11 tests pin C.1).
+- `python -c "import muninn; print(muninn.install_hooks)"` → résout vers `engine/core/muninn_install.py` ✅
+- `python -m muninn --help` → exit 0, liste `install-cron` ✅
+- 0 import circulaire : `import muninn as _m` reste **inside function bodies only**.
+
+**Plan original v2 (4h)** :
 
 **Objectif** : Sortir `muninn.py` (2666L) du `DOCUMENTED_OVERSIZED_MODULES` en éclatant en 3 modules sous le cap 2500L, sans casser un test.
 

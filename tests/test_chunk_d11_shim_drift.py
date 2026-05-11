@@ -27,6 +27,8 @@ SHIMMED_MODULES = [
     "muninn_tree",
     "muninn_layers",
     "muninn_feed",
+    "muninn_install",   # NEW (chunk C.1 split, 2026-05-11 nuit)
+    "muninn_secrets",   # NEW (chunk C.1 split, 2026-05-11 nuit)
     "mycelium_db",
     "mycelium",
     "_secrets",

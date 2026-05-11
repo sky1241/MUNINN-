@@ -41,10 +41,19 @@ def _mode(p: Path) -> int:
 
 
 def test_engine_core_muninn_calls_secure_perms_after_writes():
-    """engine/core/muninn.py: every write_text on a Muninn-managed file
-    is followed by a secure_perms() call within ~3 lines."""
-    src = (ENGINE_CORE / "muninn.py").read_text(encoding="utf-8")
-    lines = src.split("\n")
+    """engine/core/muninn{,_install}.py: every write_text on a Muninn-managed
+    file is followed by a secure_perms() call within ~3 lines.
+
+    Chunk C.1 split (2026-05-11): the hook generators (bridge_path, ptf_path,
+    sas_path) moved from muninn.py to muninn_install.py, so each marker is
+    looked up in BOTH files transparently.
+    """
+    src_muninn = (ENGINE_CORE / "muninn.py").read_text(encoding="utf-8")
+    src_install = (ENGINE_CORE / "muninn_install.py").read_text(encoding="utf-8")
+    sources = {
+        "muninn.py": src_muninn.split("\n"),
+        "muninn_install.py": src_install.split("\n"),
+    }
 
     expected_writes = [
         "mn_temp.write_text",
@@ -54,26 +63,47 @@ def test_engine_core_muninn_calls_secure_perms_after_writes():
         "sas_path.write_text",
     ]
     for marker in expected_writes:
-        # Find the write
+        # Find the write across both files
+        found_in = None
         write_lineno = None
-        for i, line in enumerate(lines):
-            if marker in line:
-                write_lineno = i
+        for fname, lines in sources.items():
+            for i, line in enumerate(lines):
+                if marker in line:
+                    found_in = fname
+                    write_lineno = i
+                    break
+            if found_in:
                 break
-        assert write_lineno is not None, f"{marker!r} not found in muninn.py"
+        assert found_in is not None, (
+            f"{marker!r} not found in muninn.py NOR muninn_install.py"
+        )
         # Check next 3 lines for secure_perms
+        lines = sources[found_in]
         nearby = "\n".join(lines[write_lineno : write_lineno + 4])
         assert "secure_perms(" in nearby, (
-            f"engine/core/muninn.py: {marker!r} at line {write_lineno + 1} "
+            f"engine/core/{found_in}: {marker!r} at line {write_lineno + 1} "
             f"is NOT followed by secure_perms() within 3 lines.\n"
             f"Context:\n{nearby}"
         )
 
 
 def test_muninn_engine_py_calls_secure_perms_after_writes():
-    """muninn/_engine.py (BUG-091 mirror): same invariant."""
-    src = (REPO / "muninn" / "_engine.py").read_text(encoding="utf-8")
-    lines = src.split("\n")
+    """muninn/_engine.py + muninn/muninn_install.py (BUG-091 mirror):
+    same invariant. Chunk C.1 split moved bridge_path/ptf_path/sas_path
+    write_text calls to muninn_install.py (the engine side mirrors via
+    re-export).
+    """
+    src_engine = (REPO / "muninn" / "_engine.py").read_text(encoding="utf-8")
+    # The shim re-exports from the canonical engine/core/muninn_install.py;
+    # we check the source-tree mirror muninn/muninn_install.py exists and
+    # falls back to the canonical file if the shim is just a re-export stub.
+    src_install_shim = (REPO / "muninn" / "muninn_install.py").read_text(encoding="utf-8")
+    src_install_canon = (REPO / "engine" / "core" / "muninn_install.py").read_text(encoding="utf-8")
+    sources = {
+        "muninn/_engine.py": src_engine.split("\n"),
+        "muninn/muninn_install.py": src_install_shim.split("\n"),
+        "engine/core/muninn_install.py (canonical for shim)": src_install_canon.split("\n"),
+    }
 
     expected_writes = [
         "mn_temp.write_text",
@@ -84,15 +114,23 @@ def test_muninn_engine_py_calls_secure_perms_after_writes():
         "sas_path.write_text",
     ]
     for marker in expected_writes:
+        found_in = None
         write_lineno = None
-        for i, line in enumerate(lines):
-            if marker in line:
-                write_lineno = i
+        for fname, lines in sources.items():
+            for i, line in enumerate(lines):
+                if marker in line:
+                    found_in = fname
+                    write_lineno = i
+                    break
+            if found_in:
                 break
-        assert write_lineno is not None, f"{marker!r} not found in _engine.py"
+        assert found_in is not None, (
+            f"{marker!r} not found in any of: {list(sources)}"
+        )
+        lines = sources[found_in]
         nearby = "\n".join(lines[write_lineno : write_lineno + 4])
         assert "secure_perms(" in nearby, (
-            f"muninn/_engine.py: {marker!r} at line {write_lineno + 1} "
+            f"{found_in}: {marker!r} at line {write_lineno + 1} "
             f"is NOT followed by secure_perms() within 3 lines.\n"
             f"Context:\n{nearby}"
         )

@@ -25,14 +25,11 @@ DOCUMENTED_OVERSIZED_MODULES = frozenset({
     #   + muninn_tree_prune.py (678L)
     #   + muninn_tree_boot.py (~810L)
     # All sub-modules under 2500L threshold post-split.
-    # MCP A.3 (2026-05-11): muninn.py pushed to ~2624L by install_cron()
-    # addition. Pre-existing oversize from CLI dispatcher + install_hooks
-    # + scrub_secrets co-located. Planned split (post-Phase A) :
-    #   muninn.py        (CLI dispatcher only, ~700L)
-    #   muninn_install.py (install_hooks + install_cron + _generate_*, ~1200L)
-    #   muninn_secrets.py (scrub_secrets + _SCRUB_* + _TRIGGER_*, ~500L)
-    # Tracked in docs/BATTLE_PLAN_MASTER_MCP.md as a Phase C polish item.
-    "muninn.py",
+    # MCP C.1 (2026-05-11 nuit): muninn.py split completed.
+    # 2666L → 1347L (CLI dispatcher only). New siblings:
+    #   muninn_install.py (~1200L, registry + hook generators + install_*)
+    #   muninn_secrets.py (~210L, scrub + purge + handlers)
+    # All three under 2500L. Removed from this list.
 })
 
 DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
@@ -57,7 +54,8 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # The 261 lines are mostly the hook source code itself (which lives inside
     # the string). Refactoring would require splitting into a separate template
     # file — not worth it for an auto-generated artifact.
-    ("muninn.py", "_generate_session_start_hook"),  # 261 lines (template)
+    # Chunk C.1 split (2026-05-11 nuit): moved from muninn.py to muninn_install.py.
+    ("muninn_install.py", "_generate_session_start_hook"),  # 261 lines (template)
 })
 
 # Hard caps that NO file/function may cross going forward
