@@ -8,6 +8,23 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-11 (nuit) — Phase A + B complète + 5/6 chunks Phase C livrés
+
+Journée monstre. **23 commits** poussés, tous CI verts au final. Phase A 4/4 + Phase B 6/6 + Phase C C.0/C.1/C.3/C.4/C.5 = ~62h de roadmap initiale livrées en ~11h effectives (méthodologie 3-agents + TDD strict + pre-chunk parallèle).
+
+**Post-mortem complet** : voir [`docs/RETRO_PHASE_AB_2026-05-11.md`](docs/RETRO_PHASE_AB_2026-05-11.md) (7 sections : métriques chiffrées, méthodologie 3-agents, TDD ratio 93%, pre-chunk parallel, when-wait-CI, top 3 RULE violations, décisions arch retenues vs à revisit).
+
+**Highlights** :
+- 10 MCP tools opérationnels (mycelium dual + tree + bugs + runbook)
+- 146 test pins MCP (sur 14 fichiers `tests/test_chunk_mcp_*.py`)
+- 1 BUG-111 ouvert et fermé même session (3 RULE-1 leaks + safety net)
+- 1 split muninn.py 2666L → 3 modules <2500L (C.1)
+- 1 auto-calibration adaptive per-client (C.0) — démontrée sur le repo Sky : threshold 4.0 → 3.45
+- 1 doc utilisateur complète (`docs/QUICKSTART.md` + section README + cheatsheet MCP_SETUP)
+- 2506 PASS, 42 skip, 0 fail au full pytest local
+
+Détail des commits ci-dessous.
+
 ## 2026-05-11 (soir) — Phase A complète (4/4 chunks) + Phase B démarrée (B.1) + BUG-111 hotfix
 
 Grosse journée. 6 commits poussés, tous CI verts.

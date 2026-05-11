@@ -587,7 +587,30 @@ Même pattern que B.3 pour :
 
 **Commit** : `docs(mcp.C4): user-facing onboarding (README + QUICKSTART + MCP cheatsheet)`
 
-#### Chunk C.5 — Post-mortem RETRO Phase A+B (3h)
+#### Chunk C.5 — Post-mortem RETRO Phase A+B (3h) — ✅ DONE 2026-05-11 nuit
+
+**Livré** : [`docs/RETRO_PHASE_AB_2026-05-11.md`](RETRO_PHASE_AB_2026-05-11.md) (~280 lignes), 7 sections + TL;DR :
+1. Métriques chiffrées (23 commits, +9342 LOC, 146 test pins, 10 tools, 2506 PASS, ratio livraison ~7.4×)
+2. Méthodologie 3-agents — gain (spec drift catché tôt, cartographie précise) vs sur-coût (3 agents quand 2 suffisent sur chunks simples)
+3. TDD ratio 93% (13/14 chunks strict TDD)
+4. Pre-chunk parallèle — gain (Phase B 4h vs 12h séquentiel) vs rework (5 CI fail intermédiaires stackées B.2-B.6, HEAD resté vert)
+5. When-wait-CI — 0 rebase mais angoisse Sky pendant la nuit
+6. Top 3 RULE violations (BUG-111 RULE 1 tree leak ; /home/sky paths dans docs ; sycophant biais résiduel) + comment évitées la 2e fois
+7. Décisions arch retenues (MCP pure adapter, read-only contract prouvé, anti-circular pattern, auto-calibration adaptive) vs à revisit (mirror BUG-091, CI 40min, defaults B.3 vs calibration)
+
+Plus une note finale honnête sur le côté humain (Sky en gestion famille + dissociation cortisol).
+
+**Cross-links** :
+- `CHANGELOG.md` : entrée "2026-05-11 (nuit)" qui pointe vers le RETRO
+- `tests/test_chunk_mcp_c5_retro.py` : 7 tests vérifient structure, TL;DR présent, métriques cohérentes, cross-links CHANGELOG + MASTER_MCP
+
+**Vérifications** (RULE 4) :
+- Test pin C.5 : 7/7 PASS en 0.34s.
+- Full regression : 2513 PASS, 0 fail.
+
+**Phase C — état final partiel** : C.0 ✅ + C.1 ✅ + C.3 ✅ + C.4 ✅ + C.5 ✅ = 5/6 chunks livrés. **Reste UNIQUEMENT C.2 CI speedup** (3h, gardé pour quand Sky est réveillé car ça modifie `ci.yml` et c'est le seul chunk avec risque de casser la CI elle-même).
+
+
 
 **Objectif** : Capturer les apprentissages pour Phase D et au-delà.
 
