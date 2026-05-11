@@ -8,8 +8,13 @@ MCP (Model Context Protocol) tools, callable actively during generation.
 
 ## Install
 
+Replace `<PATH_TO_MUNINN>` below with the absolute path where you cloned
+Muninn (e.g. `~/Bureau/MUNINN-` on Sky's machine, `/opt/muninn` on a CI box).
+Nothing in the runtime hardcodes this — paths are resolved from arguments,
+the `MUNINN_REPO` env var, or the current working directory.
+
 ```bash
-pip install -e "/home/sky/Bureau/MUNINN-[mcp]"
+pip install -e "<PATH_TO_MUNINN>[mcp]"
 # or once on PyPI:
 pip install "muninn-memory[mcp]"
 ```
@@ -25,6 +30,10 @@ python -m muninn.mcp &
 
 ## Wire it into Claude Code
 
+Replace `<PATH_TO_YOUR_REPO>` with the absolute path of the project whose
+Muninn memory you want exposed to Claude (typically the same repo you ran
+`muninn init` in).
+
 Add this stanza to `~/.claude.json` (global) or `<repo>/.mcp.json` (per-project):
 
 ```json
@@ -34,7 +43,7 @@ Add this stanza to `~/.claude.json` (global) or `<repo>/.mcp.json` (per-project)
       "command": "muninn-mcp",
       "args": [],
       "env": {
-        "MUNINN_REPO": "/home/sky/Bureau/MUNINN-"
+        "MUNINN_REPO": "<PATH_TO_YOUR_REPO>"
       }
     }
   }
@@ -42,16 +51,17 @@ Add this stanza to `~/.claude.json` (global) or `<repo>/.mcp.json` (per-project)
 ```
 
 If `muninn-mcp` is not on `$PATH` (e.g. you installed into a venv that Claude Code
-does not source), use the explicit Python path:
+does not source), use the explicit Python path. Find your active interpreter with
+`which python` then plug it in:
 
 ```json
 {
   "mcpServers": {
     "muninn": {
-      "command": "/home/sky/.pyenv/versions/3.13.13/bin/python",
+      "command": "<OUTPUT_OF_WHICH_PYTHON>",
       "args": ["-m", "muninn.mcp"],
       "env": {
-        "MUNINN_REPO": "/home/sky/Bureau/MUNINN-"
+        "MUNINN_REPO": "<PATH_TO_YOUR_REPO>"
       }
     }
   }
