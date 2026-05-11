@@ -2,12 +2,29 @@
 
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
-> ⚠️ **STALE depuis 2026-04-22** (17 jours d'écart au 2026-05-09). Pour l'état courant
-> voir CHANGELOG.md (entrée 2026-05-09 H1-H5.2). Réel post-H5.2 : Engine **24 434 lignes**,
-> 19 fichiers core. Tests: **2328 PASS, 47 skip, 0 xfail, 0 FAIL** (forge.py supprimé H1).
-> Le contenu ci-dessous reste utile comme carte de lignes mais les chiffres globaux mentent.
 >
-> Snapshot original 2026-04-22: Engine: ~22K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
+> ### 📍 SNAPSHOT 2026-05-11 (à jour)
+>
+> **Engine** : **24 819 lignes / 26 fichiers core** (post-P3 split + H6 mixins + BUG-104 fix)
+> - muninn_tree.py : 3929 → **2179L** post-P3 split (-1750L = -45%)
+> - 3 nouveaux sous-modules : muninn_tree_boot.py (903L), muninn_tree_prune.py (678L), muninn_tree_doctor.py (297L)
+> - mycelium.py : 3163 → **1415L** post-H6 split (-1748L) via 4 mixins (meta 428 / zones 383 / activation 545 / dream 561)
+> - budget_select.py : 413 → **501L** post-BUG-104 (wrappers _with_dropped)
+>
+> **Tests** : **2339 PASS / 47 skip / 0 fail** + **103 property tests** (17 modules)
+> **forge --modularity Q** : **0.664** (good ≥ 0.30)
+> **Bugs OPEN** : **0** depuis BUG-104 FIXED 2026-05-10 PM (spill-to-tree, V9A+ planère)
+> **forge-shield** : **v1.2.2** (PyPI, bumped 2026-05-10 PM)
+> **Hooks Claude Code** : **9 wirés** au logger central (F5 fix 2026-05-10)
+> **Papers cités** : **22 directs + 10 cross-validation** (`sky1241/tree/CROSSVAL_REPORT`)
+> **CI HEAD** : vert sur 2 jobs (validate + forge_smoke matrix 17 modules)
+>
+> **Battle plan vivant unique** : `docs/BATTLE_PLAN_MASTER_MCP.md` (570L, ~117h roadmap MCP)
+> Anciens battle plans archivés : `docs/archive/` (8 fichiers)
+>
+> ### 📜 HISTORIQUE (snapshots conservés)
+>
+> **Snapshot 2026-04-22 (initial)** : Engine: ~22K lignes, 18 fichiers. UI: ~4900 lignes (+5197 ref), 20 fichiers. Tests: **2200+ collected, PASS, 27 skip, 0 FAIL**.
 > **Cube L1: 80/80 SHA (100%) on server.go + 53/61 (87%) on btree_google.go.** 21 fixes + refactor. 175 -> 0 gap lines. 73/80 auto-SHA (zero API). 8-language support. Smart formatter detection (doctor --fix). Generalization validated on unseen code.
 > Split: muninn.py (7959L -> 4 fichiers), cube.py (3273L -> 3 fichiers: cube.py 1553L, cube_providers.py 1952L, cube_analysis.py 1759L).
 > Package: muninn/ pip-installable. _ProxyModule (getattr+setattr+delattr). conftest.py pre-load.
@@ -280,9 +297,30 @@ Real measured impact (`tests/benchmark/PHASE_B_RESULTS.md`):
 
 ---
 
-## muninn_tree.py — Arbre + Boot + Intelligence (3608 lignes)
+## muninn_tree.py — Arbre + Intelligence (2179 lignes post-P3 split)
 
-Tout l'arbre L-system, boot, recall, prune, diagnostics.
+> **⚠️ POST-P3 SPLIT 2026-05-10** : muninn_tree.py 3929 → 2179L (-1750L = -45%).
+> 3 fonctions monstres extraites en sous-modules :
+> - **`engine/core/muninn_tree_boot.py`** (903L) : `boot()` + `_load_virtual_branches` + `_surface_insights_for_boot` + `_load_relevant_sessions` + `_surface_known_errors`
+> - **`engine/core/muninn_tree_prune.py`** (678L) : `prune()` + `_sleep_consolidate` + `_light_prune` + `_auto_backup_tree`
+> - **`engine/core/muninn_tree_doctor.py`** (297L) : `doctor()`
+>
+> Les 3 modules sont re-exportés via `from muninn_tree_X import *` à la
+> fin de muninn_tree.py (backward compat 100%, callers inchangés).
+> Le shim `muninn/muninn_tree.py` re-exporte aussi (CRIT-1 protection).
+>
+> Restent dans muninn_tree.py : Tree I/O, Memory Intelligence (Ebbinghaus,
+> ACT-R, V4B/V6B/A1), TF-IDF, build_tree, grow_branches_from_session,
+> extract_tags, recall, bridge, bridge_fast, predict_next, detect_session_mode,
+> adapt_k, classify_session, huginn_think, show_status, diagnose, inject_memory,
+> **spill_chunks_to_tree** (BUG-104 fix 2026-05-10 PM).
+
+### Numéros de lignes ATTENTION : invalidés post-P3
+> Les ranges de lignes ci-dessous datent d'avant le P3 split. Pour le nouveau
+> mapping fonction → ligne, voir directement le code post-split. Cette section
+> sera refait dans une session future si Sky en a besoin pour navigation
+> précise. Les fonctions listées EXISTENT toujours (re-exportées), juste pas
+> à ces lignes-là.
 
 ### Tree I/O (43-306)
 | Fonction | Lignes | Role |

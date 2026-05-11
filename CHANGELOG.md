@@ -1,8 +1,87 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 2179 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 413 + vault.py 551 = **24 731 lignes** (26 fichiers core post-P3 split — muninn_tree 3929→2179L via 3 sous-modules doctor/prune/boot ; mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield 1.1.x source of truth)
-Tests: **2332 PASS, 47 skipped, 0 xfail, 0 fail** (post-H5.2 + B1 + CRIT-1 + CRIT-2 + P3 split).
+Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 2179 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 501 + vault.py 551 = **24 819 lignes** (26 fichiers core post-P3 split + BUG-104 fix — muninn_tree 3929→2179L via 3 sous-modules doctor/prune/boot ; mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; budget_select 413→501L via BUG-104 spill-to-tree wrapper ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield **v1.2.2** source of truth)
+Tests: **2339 PASS, 47 skipped, 0 xfail, 0 fail** + **103 property tests** (forge --gen-props sur 17 modules) — post-BUG-104 spill fix (+5 brick12 nouveaux + 2 budget_select props).
+forge --modularity Q = **0.664** (stable post-bump v1.1.1 → v1.2.2).
+**0 BUG OPEN officiel** depuis BUG-104 FIXED 2026-05-10 PM.
 Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shimification 4 fichiers byte-identiques + cube + vault).
+
+---
+
+## 2026-05-11 (matin) — Battle plans unification + forge bump + Node 24 ready
+
+5 commits sur main, focus housekeeping post-BUG-104 + préparation MCP.
+
+### F10 (`be92f6a`) — GH Actions bumped to Node 24-ready
+
+- `actions/checkout@v4` → `@v6` (latest, Node 24 compatible)
+- `actions/setup-python@v5` → `@v6` (latest, Node 24 compatible)
+- Préemptif vs deadline GitHub juin 2026 (Node 20 deprecated)
+- Dependabot confirme : v6 OK sur les 2 actions
+
+### `ac13146` — 10 mycelium papers cross-link
+
+- `docs/PIPELINE_FORMULAS_MAP.md` §5.1 ajoute la cross-validation depuis
+  `sky1241/tree/docs/CROSSVAL_REPORT.md` (26 tests vs 10 papers, 25 MATCH)
+- 10 papers réseau biologique cités : Bebber 2007 (Phanerochaete velutina),
+  Watts-Strogatz 1998 (Nature), Latora-Marchiori 2001 (PRL), Tero 2010
+  (Science Physarum slime mold), Towlson 2013 (C. elegans connectome),
+  Newman 2003 (SIAM), Humphries-Gurney 2008 (PLOS ONE), Freeman 1977
+  (Sociometry betweenness), Buhl 2004 (J R Soc Interface ant trails),
+  Haggett-Chorley 1969 (livre α formula)
+- Total papers cités MUNINN : **22 directs + 10 cross-validation = 32+**
+- Mycelium MUNINN s'inscrit explicitement dans 40 ans de tradition réseau bio
+
+### `cfbe452` — forge-shield v1.1.1 → v1.2.2 (PyPI)
+
+- `constraints.txt` : `forge-shield==1.2.2` (PyPI pin propre)
+- `.github/workflows/ci.yml` : remove `pip install 'git+...@v1.1.1'`,
+  forge-shield ajouté à la liste pip install standard
+- v1.2.0 (orchestration `--shield` + git pre-commit hook installer)
+- v1.2.1 (hook fix : sys.executable + python -m forge)
+- v1.2.2 (find_tests exclude .venv/.tox/.eggs/.mypy_cache, cycle 10 E2E catch)
+- Tests post-bump : 103 props PASS, 2339 pytest PASS, Q=0.664 stable
+- Pipeline forge ↔ MUNINN- aligné sur dernière stable
+
+### `858b13d` — Battle plans unification
+
+- 8 anciens battle plans archivés dans `docs/archive/` :
+  BATTLE_PLAN_2026-05-09, AFTERNOON, BUG104, FINAL_PROD_v3/v4/v5,
+  PROD_FINAL, TOMORROW
+- NOUVEAU : `docs/BATTLE_PLAN_MASTER_MCP.md` (570 lignes) — seul battle
+  plan vivant, référent unique pointé depuis CLAUDE.md
+- Roadmap forward ~117h en 4 phases : A (auto session 15h) + B (MCP
+  server 40h, killer feature) + C (polish 20h) + D (PyPI 17h, fin) +
+  buffer 25h
+- Issu de deep audit 3 agents :
+  - MCP package `pip install mcp` v1.7.1 (FastMCP en 14 lignes, stable)
+  - SessionStart hook supporte `additionalContext` (Claude Code docs officielle)
+  - 31 hook events disponibles dans Claude Code
+- Discipline : ne plus créer de `BATTLE_PLAN_*.md` daté, append "État au
+  YYYY-MM-DD" dans MASTER_MCP à chaque session
+
+### Forge case studies (2026-05-11) — verdict honest 0/3 OUI
+
+Repo séparé `sky1241/forge-case-studies` : test scientifique pré-enregistré
+de forge --carmack sur 9 (puis 20+17 v3) bugs Python réels stratifiés
+small/medium/large.
+
+Verdict cycle 12 v3 sur N=37 effective (Fisher exact + Wilson CI +
+delta AUC hold-out) :
+- C1 forge bat random : **NON** (p=0.7164)
+- C2 precision@10 ≥ 50% : **NON** (0.30 < 0.50)
+- C3 calibration bat heuristic : **NON** (Δ=+0.039 sous seuil +0.05)
+- Total **0/3 OUI** → `forge_au_niveau_hasard` (matrix pré-enregistrée)
+
+Finding scientifique : forge --carmack marche sur **projets avec bugfix
+history régulier** (sherlock, youtube-dl, PySnooper, cookiecutter,
+scrapy, luigi, black hits top-10), rate sur **cold-start modules**
+(thefuck rules avec 0 bugfix antérieur) et **mega-projets** (ansible
+7000+ fichiers). 12 frictions admises (charte D9).
+
+Action : NE PAS release forge v1.3.0 avec nouvelle calibration
+(instable v2/v3). Refactor cycle 13 ou repenser carmack composite.
+Test pré-enregistré reproductible : `bash run_all.sh`.
 
 ---
 
