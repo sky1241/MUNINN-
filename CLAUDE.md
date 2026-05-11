@@ -198,6 +198,7 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_REPO` | Repo cible pour scripts ad-hoc (CLI fallback) | `os.getcwd()` |
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
+| `MUNINN_SKIP_META_SYNC` | Opt-out de la sync auto vers meta-mycelium dans SessionEnd/Stop hooks (chunk MCP A.2) | unset (sync actif) |
 | `MUNINN_TEST_REPOS` | Liste de repos pour test_l9_full.py (`name1:/path1,name2:/path2`) | repo courant |
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |

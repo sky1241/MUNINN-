@@ -644,3 +644,32 @@ gravée AVANT B.3 :
 - Bytes-identiques entre `engine/core/muninn.py` et `muninn/_engine.py` (RULE python.md)
 
 **Restant Phase A** : A.2 SessionEnd auto-sync meta (3h) → A.3 cron timer (4h) → A.4 E2E test (4h).
+
+### État au 2026-05-11 (après-midi 2) — chunk A.2 DONE
+
+**Phase A.2 — SessionEnd auto-sync meta** livré après méthodologie 3-agents.
+
+**Découverte importante** (agents Explore + Plan) : la sync auto `Mycelium.sync_to_meta()` était DÉJÀ câblée depuis commit `b7c3803` (2026-03-06) à 3 sites (`feed_from_hook`, `feed_from_stop_hook`, direct-file feed). Le gap réel n'était pas "ajouter la sync" mais "ajouter les garde-fous" : durée bornée, opt-out, signal d'erreur observable.
+
+**Livré** :
+- `engine/core/muninn_feed.py` : `_sync_to_meta_guarded(repo_path, hook_event, budget_seconds=60.0) -> dict` + helper `_write_meta_sync_marker()`. Thread-based timeout (daemon), opt-out `MUNINN_SKIP_META_SYNC=1`, marker `.muninn/last_meta_sync.json` (status + pushed + elapsed + timestamp + hook_event).
+- Les 3 blocs inline `try: sync_to_meta()` remplacés par appel au wrapper (feed_from_hook, feed_from_stop_hook, muninn.py direct-file).
+- `muninn/_engine.py` : miroir du patch direct-file (le hook code shime via `muninn/muninn_feed.py` qui re-export `engine/core/muninn_feed.py`).
+- `tests/test_chunk_mcp_a2_session_end_sync.py` : 9 tests behavioural (signature, opt-out, status ok/error/timeout, marker écrit succès+erreur, idempotence).
+- `tests/test_props_muninn_feed.py` : forge regen (1 prop test, +6 destructive funcs skipped).
+- `CLAUDE.md` : ajout `MUNINN_SKIP_META_SYNC` au tableau env vars (sinon test_chunk_c10_c11_doc_drift fail).
+
+**Vérifications** (RULE 4) :
+- Test pin A.2 : 9/9 PASS (TDD : 9/9 fail avant impl → 9/9 pass après).
+- Forge : `pytest tests/test_props_muninn_feed.py -q` → 1 passed.
+- Full regression : **2394 PASS, 29 skip, 0 fail** (vs 2385 baseline A.1 = +9 net = 9 tests A.2).
+- Smoke test : `MUNINN_SKIP_META_SYNC=1 python -c "from muninn_feed import _sync_to_meta_guarded; ..."` → `{'status': 'skipped', 'pushed': 0, ...}` ; marker `.muninn/last_meta_sync.json` écrit OK.
+
+**Contrats respectés** :
+- Wrapper retourne TOUJOURS un dict, ne raise JAMAIS (hook contract).
+- Marker écrit dans les 4 status (ok/skipped/error/timeout) — doctor signal fiable.
+- Opt-out via env var (compat docker/CI où meta-db peut être indisponible).
+- Daemon thread → meurt avec le process si timeout.
+- 3 sites désormais cohérents (même comportement, même marker, même logging).
+
+**Restant Phase A** : A.3 cron timer pour sync périodique indépendante des hooks (4h) → A.4 E2E test full auto-session (4h).

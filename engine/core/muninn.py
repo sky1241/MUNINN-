@@ -2220,14 +2220,15 @@ def main():
             tree = load_tree()
             refresh_tree_metadata(tree)
             save_tree(tree)
-            try:
-                if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
-                from mycelium import Mycelium
-                m = Mycelium(repo)
-                pushed = m.sync_to_meta()
-                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-            except Exception as e:
-                print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
+            # Chunk MCP A.2: guarded sync (timeout + opt-out + doctor marker)
+            sync_result = _sync_to_meta_guarded(repo, hook_event="direct_file")
+            if sync_result["status"] == "ok":
+                print(f"MUNINN SYNC: {sync_result['pushed']} connections -> meta-mycelium")
+            elif sync_result["status"] == "timeout":
+                print(f"MUNINN SYNC: timeout after {sync_result['elapsed_s']}s",
+                      file=sys.stderr)
+            elif sync_result["status"] == "error":
+                print(f"MUNINN SYNC warning: {sync_result['error']}", file=sys.stderr)
         elif args.trigger == "stop":
             # P32: Stop hook — debounced feed
             feed_from_stop_hook(repo)

@@ -72,7 +72,7 @@ class _ModRef:
 
 _m = _ModRef()
 
-__all__ = ['_MuninnLock', '_compress_code_blocks', '_detect_transcript_format', '_feed_from_stop_hook_locked', '_hook_log', '_parse_json_conversation', '_parse_markdown_conversation', '_semantic_rle', '_update_session_index', '_update_usefulness', 'compress_transcript', 'feed_from_hook', 'feed_from_stop_hook', 'feed_from_transcript', 'feed_history', 'feed_watch', 'ingest', 'parse_transcript']
+__all__ = ['_MuninnLock', '_compress_code_blocks', '_detect_transcript_format', '_feed_from_stop_hook_locked', '_hook_log', '_parse_json_conversation', '_parse_markdown_conversation', '_semantic_rle', '_sync_to_meta_guarded', '_update_session_index', '_update_usefulness', '_write_meta_sync_marker', 'compress_transcript', 'feed_from_hook', 'feed_from_stop_hook', 'feed_from_transcript', 'feed_history', 'feed_watch', 'ingest', 'parse_transcript']
 
 
 def _compress_code_blocks(text: str) -> str:
@@ -1175,6 +1175,122 @@ def _log_sync_error(context: str, exc: BaseException) -> None:
             pass
 
 
+def _write_meta_sync_marker(repo_path: Path, payload: dict) -> None:
+    """Write .muninn/last_meta_sync.json — signal for `muninn doctor`.
+
+    Never raises. Atomic-ish write (write to tmp + rename). Always called by
+    _sync_to_meta_guarded so the doctor has a fresh signal of the last sync.
+    """
+    try:
+        muninn_dir = repo_path / ".muninn"
+        muninn_dir.mkdir(parents=True, exist_ok=True)
+        marker = muninn_dir / "last_meta_sync.json"
+        tmp = marker.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        os.replace(str(tmp), str(marker))
+    except Exception:
+        # Marker is best-effort. Never break the hook.
+        pass
+
+
+def _sync_to_meta_guarded(
+    repo_path: Path,
+    hook_event: str,
+    budget_seconds: float = 60.0,
+) -> dict:
+    """Sync local mycelium -> meta-mycelium with timeout, opt-out, doctor marker.
+
+    Chunk MCP A.2 of docs/BATTLE_PLAN_MASTER_MCP.md.
+
+    Wraps Mycelium.sync_to_meta() with three guard-rails the inline calls
+    lacked since the original wiring (commit b7c3803, 2026-03-06):
+      - Bounded duration via a daemon thread + join(timeout=budget_seconds).
+        On gros mycelium (230k+ edges), sync can exceed the 180s hook timeout
+        and hang SessionEnd; the wrapper gives up at `budget_seconds` and
+        returns status=timeout. The thread continues in the background but
+        is daemon so it dies with the process.
+      - Opt-out via MUNINN_SKIP_META_SYNC=1 (returns status=skipped early).
+      - Observability marker .muninn/last_meta_sync.json (status + pushed +
+        elapsed + timestamp), so `muninn doctor` can flag drift.
+
+    Returns a dict with keys: status, pushed, elapsed_s, error, timestamp,
+    hook_event. status is one of: ok, skipped, error, timeout.
+
+    Never raises — hook contract demands exit 0 always.
+    """
+    import threading
+
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    result = {
+        "status": "unknown",
+        "pushed": 0,
+        "elapsed_s": 0.0,
+        "error": None,
+        "timestamp": timestamp,
+        "hook_event": hook_event,
+    }
+
+    # Opt-out — early return before any sync work.
+    if os.environ.get("MUNINN_SKIP_META_SYNC") == "1":
+        result["status"] = "skipped"
+        _write_meta_sync_marker(repo_path, result)
+        return result
+
+    container = {"pushed": 0, "error": None}
+
+    def _runner():
+        try:
+            if _m._CORE_DIR not in sys.path:
+                sys.path.insert(0, _m._CORE_DIR)
+            from mycelium import Mycelium
+            m = Mycelium(repo_path)
+            try:
+                pushed = m.sync_to_meta()
+            finally:
+                try:
+                    m.close()
+                except Exception:
+                    pass
+            container["pushed"] = int(pushed) if pushed is not None else 0
+        except BaseException as exc:
+            container["error"] = exc
+
+    start = time.time()
+    th = threading.Thread(target=_runner, daemon=True, name=f"meta_sync_{hook_event}")
+    th.start()
+    th.join(timeout=budget_seconds)
+    elapsed = time.time() - start
+    result["elapsed_s"] = round(elapsed, 3)
+
+    if th.is_alive():
+        # Thread still running after budget — accept the loss, signal timeout.
+        result["status"] = "timeout"
+        result["error"] = f"sync_to_meta exceeded budget {budget_seconds}s"
+        try:
+            _hook_log(repo_path, f"SYNC TIMEOUT [{hook_event}]: budget={budget_seconds}s")
+        except Exception:
+            pass
+    elif container["error"] is not None:
+        exc = container["error"]
+        result["status"] = "error"
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            _log_sync_error(f"_sync_to_meta_guarded[{hook_event}]", exc)
+        except Exception:
+            pass
+    else:
+        result["status"] = "ok"
+        result["pushed"] = container["pushed"]
+        if container["pushed"] > 0:
+            try:
+                _hook_log(repo_path, f"SYNC [{hook_event}]: {container['pushed']} -> meta")
+            except Exception:
+                pass
+
+    _write_meta_sync_marker(repo_path, result)
+    return result
+
+
 # CHUNK A4 (2026-05-08): whitelist for transcript_path validation.
 # Claude Code stores transcripts under ~/.claude/projects/<encoded>/<uuid>.jsonl.
 # Refusing anything outside this root prevents a malicious hook payload from
@@ -1321,15 +1437,20 @@ def feed_from_hook(repo_path: Path):
                             _hook_log(repo_path, f"SLEEP_CONSOLIDATE: {len(merged)} merged")
                 except Exception as e:
                     print(f"MUNINN CONSOLIDATE warning: {e}", file=sys.stderr)
-            # THEN sync clean data to meta
-            pushed = m.sync_to_meta()
-            if pushed > 0:
-                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-                _hook_log(repo_path, f"SYNC: {pushed} -> meta")
             m.close()
         except Exception as e:
-            print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
-            _log_sync_error("feed_from_hook.sync_to_meta", e)
+            print(f"MUNINN DECAY/CONSOLIDATE warning: {e}", file=sys.stderr)
+            _log_sync_error("feed_from_hook.decay_or_consolidate", e)
+
+        # Chunk MCP A.2: guarded sync (timeout + opt-out + doctor marker)
+        sync_result = _sync_to_meta_guarded(repo_path, hook_event=hook_event)
+        if sync_result["status"] == "ok" and sync_result["pushed"] > 0:
+            print(f"MUNINN SYNC: {sync_result['pushed']} connections -> meta-mycelium")
+        elif sync_result["status"] == "timeout":
+            print(f"MUNINN SYNC: timeout after {sync_result['elapsed_s']}s "
+                  f"(opt-out via MUNINN_SKIP_META_SYNC=1)", file=sys.stderr)
+        elif sync_result["status"] == "error":
+            print(f"MUNINN SYNC warning: {sync_result['error']}", file=sys.stderr)
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -1428,18 +1549,15 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
         _hook_log(repo_path, f"STOP feed error: {e}")
         print(f"MUNINN STOP feed error: {e}", file=sys.stderr)
     finally:
-        # 5. Sync to meta-mycelium — ALWAYS, even if feed crashed
-        try:
-            if _m._CORE_DIR not in sys.path: sys.path.insert(0, _m._CORE_DIR)
-            from mycelium import Mycelium
-            m = Mycelium(repo_path)
-            pushed = m.sync_to_meta()
-            if pushed > 0:
-                print(f"MUNINN SYNC: {pushed} connections -> meta-mycelium")
-                _hook_log(repo_path, f"STOP sync: {pushed} -> meta")
-        except Exception as e:
-            print(f"MUNINN SYNC warning: {e}", file=sys.stderr)
-            _log_sync_error("feed_from_stop_hook.sync_to_meta", e)
+        # 5. Chunk MCP A.2: guarded sync (timeout + opt-out + doctor marker)
+        sync_result = _sync_to_meta_guarded(repo_path, hook_event="Stop")
+        if sync_result["status"] == "ok" and sync_result["pushed"] > 0:
+            print(f"MUNINN SYNC: {sync_result['pushed']} connections -> meta-mycelium")
+        elif sync_result["status"] == "timeout":
+            print(f"MUNINN SYNC: timeout after {sync_result['elapsed_s']}s "
+                  f"(opt-out via MUNINN_SKIP_META_SYNC=1)", file=sys.stderr)
+        elif sync_result["status"] == "error":
+            print(f"MUNINN SYNC warning: {sync_result['error']}", file=sys.stderr)
 
     # 6. Update dedup — keep only last 20 sessions
     dedup[session_id] = msg_count
