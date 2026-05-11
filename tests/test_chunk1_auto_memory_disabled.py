@@ -87,6 +87,8 @@ def test_hooks_still_point_to_muninn(settings):
         "bridge_hook.py",
         "post_tool_failure_hook.py",
         "subagent_start_hook.py",
+        # Chunk MCP A.1 (2026-05-11): SessionStart auto-boot hook
+        "session_start_hook.py",
         "pre_tool_use_bash_destructive.py",
         "pre_tool_use_bash_secrets.py",
         "pre_tool_use_edit_hardcode.py",

@@ -612,3 +612,35 @@ gravée AVANT B.3 :
 - Autres tools MCP (tree/bug/runbook) restent scopés repo courant — dualité concerne UNIQUEMENT mycelium_recall
 
 **Impact effort** : B.3 passe 6h → 8h (3 tools + 7 tests). Phase B 40h → 42h. Total 117h → 119h (toujours dans le 120h cible).
+
+### État au 2026-05-11 (après-midi) — chunk A.1 DONE
+
+**Phase A.1 — SessionStart hook + auto-boot** livré en autonome après méthodologie 3-agents (Explore + claude-code-guide + Plan).
+
+**Livré** :
+- `engine/core/muninn.py` : `_generate_session_start_hook()` (261L, template-mode comme `_generate_subagent_start_hook`)
+- `muninn/_engine.py` : miroir EXACT (RULE python.md duplication BUG-091)
+- `install_hooks()` étendu : register `SessionStart` (timeout 30s) + stale-detection inclut `session_start_hook`
+- `.claude/hooks/session_start_hook.py` (6914 bytes, perm 0o700) — pure file I/O calque subagent_start
+- `.claude/settings.json` : entrée `SessionStart` ajoutée pointant vers le hook
+- `.claude/hooks/hooks.sha256sum` : regen (incluait session_start_hook + 8 stale SHA pré-existants fixés)
+- `tests/test_chunk_mcp_a1_session_start.py` : 13 tests behavioural (generator, install_hooks integration, source filtering, fail-safe, cap)
+- `tests/test_brick20_architecture.py` : `_generate_session_start_hook` ajouté à `DOCUMENTED_OVERSIZED_FUNCTIONS` (261L template)
+- `tests/test_chunk1_auto_memory_disabled.py` : `session_start_hook.py` ajouté aux valid_markers
+
+**Vérifications** (RULE 4) :
+- Test pin : 13/13 PASS
+- Full regression : **2385 PASS, 29 skip, 0 fail** (vs 2339 baseline = +46 dont +13 nouveau + fixes pré-existants)
+- chunk_a7 hook integrity : 8/8 PASS (était 6 pass + 3 fail pré-existants → 8 pass après regen manifest + chmod 0o700)
+- Smoke test manuel : `source=startup` → JSON valide avec root.mn + 5 branches ; `source=clear` → empty additionalContext ; `source=compact` → empty
+- Forge `--gen-props engine/core/muninn.py` : "No public functions found" (BUG-102 destructive detector skip tout — comportement attendu pour les fichiers générateurs de code)
+
+**Contrats respectés** :
+- Pure file I/O (pas de subprocess, pas d'import engine) → <500ms cible
+- Exit 0 always (fail-safe — hook ne doit jamais bloquer le démarrage de session)
+- Source filter : `startup|resume` → boot ; `clear|compact` → no-op (PreCompact gère déjà la compaction)
+- Cap output 40K chars (vs 20K subagent) — main session a plus de marge mais on cap quand même
+- Top 5 branches récemment modifiées (proxy hot memory)
+- Bytes-identiques entre `engine/core/muninn.py` et `muninn/_engine.py` (RULE python.md)
+
+**Restant Phase A** : A.2 SessionEnd auto-sync meta (3h) → A.3 cron timer (4h) → A.4 E2E test (4h).

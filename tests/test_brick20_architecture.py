@@ -45,6 +45,12 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # P3.3 (2026-05-10): boot() extracted to muninn_tree_boot.py
     # — moved out of muninn_tree.py (was 646 lines).
     ("muninn_tree_boot.py", "boot"),  # 646 lines
+    # MCP A.1 (2026-05-11): _generate_session_start_hook is a triple-quoted
+    # code template generator (like _generate_bridge_hook, _generate_subagent_start_hook).
+    # The 261 lines are mostly the hook source code itself (which lives inside
+    # the string). Refactoring would require splitting into a separate template
+    # file — not worth it for an auto-generated artifact.
+    ("muninn.py", "_generate_session_start_hook"),  # 261 lines (template)
 })
 
 # Hard caps that NO file/function may cross going forward
