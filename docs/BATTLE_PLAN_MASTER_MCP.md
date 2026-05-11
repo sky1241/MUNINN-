@@ -38,7 +38,7 @@
 | G5 | **Pas de MCP server** — Claude ne peut pas query le mycelium pendant qu'il génère | Mycelium reste passif (juste contexte pré-loadé), pas actif | **40h** |
 | G6 | Pas sur PyPI public | Sky doit faire support manuel sur chaque install | 17h (en fin) |
 
-**Total effort : ~92h core + 25h buffer = ~117h** (cible Sky : ~120h, ✓).
+**Total effort : ~94h core + 25h buffer = ~119h** (cible Sky : ~120h, ✓). Post-révision dual-mycelium routing : +2h sur B.3 (3 tools + 7 test pins).
 
 ---
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
 ---
 
-## 2. ROADMAP — 4 PHASES, ~117H
+## 2. ROADMAP — 4 PHASES, ~119H
 
 ### Vue d'ensemble
 
@@ -107,10 +107,10 @@ Phase A — Auto session lifecycle (15h)
 ├── A.3 Cron/systemd timer auto-prune               4h
 └── A.4 Test E2E "from scratch"                     4h
 
-Phase B — MCP server core (40h) ← LE KILLER FEATURE
+Phase B — MCP server core (42h) ← LE KILLER FEATURE
 ├── B.1 Scaffold projet muninn_mcp/                 3h
 ├── B.2 Server minimal stdio + .mcp.json setup      4h
-├── B.3 Tool mycelium_recall(query)                 6h
+├── B.3 DUAL-mycelium recall (local/meta/auto)      8h  ← +2h vs initial
 ├── B.4 Tool tree_search(query)                     5h
 ├── B.5 Tool bug_lookup(query)                      4h
 ├── B.6 Tool meta_pull(concepts)                    5h
@@ -134,8 +134,58 @@ Phase D — PyPI release (17h, à la FIN comme demandé Sky)
 
 Buffer R&D / bugs imprévus                          25h
 ─────────────────────────────────────────────────────
-TOTAL                                               117h
+TOTAL                                               119h
+(was 117h, +2h pour dual-mycelium routing en B.3)
 ```
+
+### Méthodologie d'exécution chunk-par-chunk (NON-NÉGOCIABLE)
+
+> Chaque chunk de A.1 à D.5 suit la même procédure obligatoire. Validée
+> par usage réel sur BUG-104 spill-to-tree (2026-05-10 PM) qui a livré
+> en 6 phases sans régression sur 2339 tests. Pas de chunk exécuté
+> sans avoir passé les 3 phases ci-dessous.
+
+#### Phase pre-chunk — multi-agent rails (30-60 min)
+
+Pour CHAQUE chunk, AVANT toute modification de code, lancer **3 agents
+en parallèle** :
+
+| Agent | Type | Mission |
+|---|---|---|
+| **A1** | `Explore` (read-only) | Lire le code actuel concerné, dumper l'état (fichiers, lignes, fonctions, dépendances) |
+| **A2** | `claude-code-guide` ou `Explore` | Recherche docs externes / spec / patterns pertinents (MCP docs, Claude Code hooks, examples Anthropic) |
+| **A3** | `Plan` | Analyser risques + proposer plan détaillé d'implémentation (signatures, tests, ordre) |
+
+Synthèse → **mini-battle-plan du chunk** : `chunk_X_Y_plan.md` committed
+AVANT exécution. Pas de code écrit tant que mini-plan pas validé.
+
+#### Phase exécution (2-4h par chunk)
+
+- Implémenter selon le mini-plan, pas dévier
+- **Test pin écrit AVANT le code** (TDD light) — il doit fail puis pass
+- `forge --gen-props <module>` après chaque modif engine/core
+- Capture output verbatim de chaque commande (RULE 4 anti-bullshit)
+- **1 chunk = 1 commit** (granularité fine, rollback facile)
+
+#### Phase post-chunk (10 min)
+
+- `git push origin main`
+- Attendre CI vert (gh run list)
+- Append "État au YYYY-MM-DD chunk X.Y done" dans la section 8 HISTORIQUE
+  de ce document — pas dans un nouveau fichier
+- Si chunk casse 2339 PASS baseline → tag rollback + investigate
+
+#### Skip rules pre-définies (anti cherry-pick post-hoc)
+
+Un chunk peut être skippé / reporté SEULEMENT pour ces raisons :
+- `dependency_blocker` : autre chunk pas fini d'abord
+- `external_blocker` : doc Anthropic manque, MCP API à clarifier
+- `scope_creep_detected` : agent A3 a découvert plus gros que prévu, ré-estimer
+- `decision_needed_from_sky` : choix architectural à arbitrer
+
+Toute autre raison = INTERDITE (pas "j'ai pas envie" ou "ça me semble compliqué").
+
+---
 
 ### Phase A — Auto session lifecycle (15h)
 
@@ -202,9 +252,100 @@ TOTAL                                               117h
 
 ---
 
-### Phase B — MCP server core (40h) — **LE KILLER FEATURE**
+### Phase B — MCP server core (42h) — **LE KILLER FEATURE**
 
 **Objectif** : Claude peut activement query le mycelium / tree / BUGS / runbook pendant qu'il génère, via MCP tools.
+
+#### 🧠 Dual-mycelium routing — spec architecture (SPÉCIFICATION GRAVÉE)
+
+> Sky a explicitement demandé que les 2 mycelium (local + meta) soient
+> utilisés intelligemment, pas un seul aveuglément. Cette spec fixe le
+> contrat AVANT d'écrire le code.
+
+**Les 2 mycelium qu'on a (mesuré 2026-05-11)** :
+
+| Mycelium | Path | Edges | Scope | Latence cible |
+|---|---|---|---|---|
+| **Local** | `.muninn/mycelium.db` (24 MB, 230 036 edges) | Concepts repo courant uniquement | < 50ms |
+| **Meta** | `~/.muninn/meta_mycelium.db` (1.3 GB, 7.5M edges) | Cross-repo (8+ repos fédérés) | 100-200ms |
+
+**3 tools MCP exposés (pas 1)** :
+
+```python
+@mcp.tool()
+def mycelium_recall_local(query: str, top_n: int = 10) -> str:
+    """Query ONLY le mycelium du projet courant (.muninn/mycelium.db).
+    Rapide (<50ms), focused sur ce repo. Pour debugging local.
+    """
+    from mycelium import Mycelium
+    m = Mycelium(repo_path)  # connecte local
+    return format(m.spread_activation(query.split(), hops=2, top_n=top_n))
+
+@mcp.tool()
+def mycelium_recall_meta(query: str, top_n: int = 10) -> str:
+    """Query ONLY le meta-mycelium global (~/.muninn/meta_mycelium.db).
+    Plus lent (100-200ms), large (cross-repo). Pour patterns transverses.
+    """
+    from mycelium_meta import MetaMycelium  # ou via Mycelium.pull_from_meta
+    return format(meta.spread_activation(query.split(), hops=2, top_n=top_n))
+
+@mcp.tool()
+def mycelium_recall(query: str, scope: str = "auto", top_n: int = 10) -> str:
+    """Smart routing — par défaut auto, peut être forcé local/meta/both.
+
+    scope="auto" heuristique :
+      1. Query local first (<50ms)
+      2. Si strength_total ≥ THRESHOLD_LOCAL_STRONG (default 5.0)
+         → return local seul (assez de signal)
+      3. Sinon → query meta + merge weighted (local ×1.0, meta ×0.5
+         calque _load_virtual_branches pattern P20c)
+      4. Dedup par concept, return top_n global
+
+    scope="local"|"meta"|"both" force explicite.
+    """
+    if scope == "local":
+        return mycelium_recall_local(query, top_n)
+    if scope == "meta":
+        return mycelium_recall_meta(query, top_n)
+    if scope == "both":
+        local = local_results(query, top_n)
+        meta = meta_results(query, top_n)
+        return weighted_merge(local, meta, weights={"local": 1.0, "meta": 0.5})
+
+    # scope == "auto"
+    local_results = mycelium_local.spread_activation(query.split(), top_n)
+    local_strength = sum(r.strength for r in local_results)
+    if local_strength >= THRESHOLD_LOCAL_STRONG:  # default 5.0, configurable
+        return format(local_results, source="local")
+    meta_results = mycelium_meta.spread_activation(query.split(), top_n)
+    merged = weighted_merge(local_results, meta_results,
+                            weights={"local": 1.0, "meta": 0.5})
+    return format(merged, source="hybrid")
+```
+
+**Garanties contractuelles (à test pin en B.3)** :
+
+| Garantie | Test |
+|---|---|
+| Local toujours consulté en premier (auto) | `test_dual_routing_local_first` |
+| Meta consulté seulement si local insuffisant (auto) | `test_dual_routing_meta_fallback_threshold` |
+| `scope="local"` ne touche jamais meta-DB | `test_dual_routing_scope_local_excludes_meta` |
+| `scope="meta"` ne touche jamais local-DB | `test_dual_routing_scope_meta_excludes_local` |
+| `scope="both"` retourne union pondérée (local ×1.0, meta ×0.5) | `test_dual_routing_both_weighted_merge` |
+| Latence p95 `auto` < 250ms (local + meta sérialisé) | `test_dual_routing_latency_p95` |
+| THRESHOLD_LOCAL_STRONG configurable via `.forge/config.json` | `test_dual_routing_threshold_configurable` |
+
+**Décision pré-enregistrée pour les autres tools MCP** :
+
+- `tree_search(query)` → SEUL le tree du projet courant (pas équivalent meta)
+- `bug_lookup(query)` → SEUL BUGS.md du projet courant
+- `meta_pull(concepts)` → tool EXPLICITE pour cross-repo, pas de auto
+- `runbook_step(action)` → SEUL RUNBOOK_PROD_FINAL du projet courant
+
+→ La dualité local/meta concerne UNIQUEMENT `mycelium_recall`. Les autres
+  tools sont scopés au repo courant (sécurité + latence + simplicité).
+
+---
 
 #### Chunk B.1 — Scaffold projet muninn_mcp/ (3h)
 
@@ -251,32 +392,36 @@ TOTAL                                               117h
 
 **Commit** : `feat(mcp.B2): minimal MCP server + install-mcp sub-command`
 
-#### Chunk B.3 — Tool mycelium_recall(query) (6h)
+#### Chunk B.3 — Dual-mycelium recall (3 tools : local / meta / auto) (6h)
 
-**Spec** :
-- `@mcp.tool() def mycelium_recall(query: str, top_n: int = 10) -> str`
-- Wraps `mycelium.spread_activation(query.split(), hops=2) + transitive_inference()`
-- Format output :
+**Effort augmenté** : 6h → **8h** (3 tools au lieu de 1, + 7 test pins).
+
+**Spec** : implémenter les 3 tools `mycelium_recall_local`, `mycelium_recall_meta`,
+`mycelium_recall(scope="auto"|"local"|"meta"|"both")` SELON LA SPEC GRAVÉE
+section "🧠 Dual-mycelium routing" ci-dessus (Phase B intro).
+
+Format output unifié pour les 3 :
   ```
-  Top related concepts for "<query>":
-  - concept_a (strength=0.85, hops=1)
-  - concept_b (strength=0.62, hops=2)
+  Top related concepts for "<query>" (source=<local|meta|hybrid>):
+  - concept_a (strength=0.85, hops=1, origin=local)
+  - concept_b (strength=0.62, hops=2, origin=meta)
   ...
 
   Related branches in tree:
   - b03 (tags: bureau, channel, claude)
   ...
   ```
-- Latency budget : < 200ms (mesurer)
 
-**Test pin** : `tests/test_chunk_mcp_b3_recall.py` — 5 tests :
-1. Tool registered
-2. Returns non-empty for known concept
-3. Returns gracefully for unknown
-4. Latency < 200ms
-5. Handles empty query
+**Test pin** : `tests/test_chunk_mcp_b3_dual_recall.py` — **7 tests** (cf. spec) :
+1. Tool `mycelium_recall_local` registered + ne touche jamais meta-DB
+2. Tool `mycelium_recall_meta` registered + ne touche jamais local-DB
+3. Tool `mycelium_recall(scope="auto")` : local first, fallback meta si signal faible
+4. Tool `mycelium_recall(scope="both")` : merge weighted local×1.0 + meta×0.5
+5. THRESHOLD_LOCAL_STRONG configurable via `.forge/config.json`
+6. Latence p95 `mycelium_recall_local` < 50ms
+7. Latence p95 `mycelium_recall(auto)` < 250ms
 
-**Commit** : `feat(mcp.B3): mycelium_recall tool wired to spread_activation`
+**Commit** : `feat(mcp.B3): dual-mycelium recall (local/meta/auto) + 7 test pins`
 
 #### Chunks B.4-B.7 — 4 autres tools (19h total)
 
@@ -383,7 +528,7 @@ Cf. [`docs/ANTI_BULLSHIT_BATTLE_PLAN.md`](ANTI_BULLSHIT_BATTLE_PLAN.md) — non-
 | Phase | Effort | Risque | Priorité |
 |---|---|---|---|
 | **A — Auto session lifecycle** | 15h | bas | 🥇 commencer ici, win rapide |
-| **B — MCP server core** | 40h | moyen | 🥈 le killer feature |
+| **B — MCP server core** | 42h | moyen | 🥈 le killer feature (dual-mycelium routing inclus) |
 | **C — Polish + benchmark** | 20h | bas | 🥉 quand B est vert |
 | **D — PyPI release** | 17h | bas | 🏁 à la fin |
 | Buffer | 25h | — | à dispatcher |
@@ -445,3 +590,24 @@ PAS FAIT (à reprendre) :
 - 8 anciens battle plans archivés dans `docs/archive/`
 - Phase A.1 → début prévu cette semaine
 - Note : ne PAS publier sur HN/blog avant Phase C terminée (forge-case-studies a montré qu'il faut des benchmarks avant la promo)
+
+### État au 2026-05-11 (midi) — 2 sections critiques ajoutées
+
+Suite à questions Sky pour graver les contrats AVANT exécution :
+
+**Section "Méthodologie d'exécution chunk-par-chunk"** ajoutée entre §2
+roadmap et §Phase A. Devient obligation NON-NÉGOCIABLE :
+- 3 agents pre-chunk (Explore + claude-code-guide + Plan)
+- Mini-battle-plan committed AVANT code
+- Test pin AVANT implementation
+- 1 chunk = 1 commit
+- Skip rules pré-définies (anti cherry-pick post-hoc)
+
+**Section "🧠 Dual-mycelium routing"** ajoutée en tête de Phase B. Spec
+gravée AVANT B.3 :
+- 3 tools MCP au lieu de 1 : `mycelium_recall_local` / `_meta` / `mycelium_recall(scope=auto)`
+- Heuristique routage `auto` : local first (<50ms) → fallback meta si signal faible
+- 7 garanties contractuelles à test pin en B.3
+- Autres tools MCP (tree/bug/runbook) restent scopés repo courant — dualité concerne UNIQUEMENT mycelium_recall
+
+**Impact effort** : B.3 passe 6h → 8h (3 tools + 7 tests). Phase B 40h → 42h. Total 117h → 119h (toujours dans le 120h cible).
