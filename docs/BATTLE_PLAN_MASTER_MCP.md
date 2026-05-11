@@ -463,46 +463,115 @@ Même pattern que B.3 pour :
 
 ---
 
-### Phase C — Polish + benchmark (20h)
+### Phase C — Polish (20h) — RE-SPEC 2026-05-11 nuit après livraison Phase B
 
-#### Chunk C.1 — Property tests sur chaque tool (5h)
+> L'ancienne Phase C (property tests + benchmark fact-recall) a été déplacée.
+> Phase B a livré 10 MCP tools + 6 E2E tests, donc le besoin urgent est
+> de **nettoyer la dette technique** accumulée pendant le sprint A+B
+> (muninn.py au-dessus du cap, CI à 40min, 1 test pré-existant fail).
 
-**Spec** : `forge --gen-props muninn_mcp/tools/recall.py` puis pareil pour les autres. Vérifier que les tools ne crash pas sur input random (BUG-102 destructive detector skip OK).
+#### Chunk C.1 — Split `muninn.py` oversized (5h)
 
-**Commit** : `test(mcp.C1): 5 property test files for MCP tools`
+**Objectif** : Sortir `muninn.py` (2666L) du `DOCUMENTED_OVERSIZED_MODULES` en éclatant en 3 modules sous le cap 2500L, sans casser un test.
 
-#### Chunk C.2 — Documentation user (4h)
+**Fichiers touchés** (mirror obligatoire `engine/core/` ↔ `muninn/_engine.py` BUG-091) :
+- `engine/core/muninn.py` (2666L → ~700L) : garde CLI argparse + `main()` + dispatchers + `scan_repo` + `bootstrap_mycelium` + `generate_root_mn` + `generate_winter_tree`.
+- `engine/core/muninn_install.py` (NEW, ~1200L) : `install_hooks`, `install_cron`, `_detect_init_system`, `_generate_*_hook` (bridge, post_tool_failure, subagent_start, session_start), `_install_pre_tool_use_hooks`, `_install_scaling_hooks`, `_copy_hooks_from_source`.
+- `engine/core/muninn_secrets.py` (NEW, ~500L) : `scrub_secrets`, `purge_secrets_db`, `_handle_scrub_command`, `_handle_vault_command`, `_handle_quarantine_command`, patterns `_SCRUB_*` / `_TRIGGER_*`, `_shannon_entropy`, `_has_char_diversity`.
+- `muninn/__init__.py` : re-exporter pour préserver API publique.
+- `tests/test_brick20_architecture.py` : retirer "muninn.py" de `DOCUMENTED_OVERSIZED_MODULES`.
 
-**Spec** :
-- Update README.md MUNINN- section "Claude integration"
-- Section "How Claude actively recalls from your mycelium" avec exemples
-- Diagram ASCII du flow user → Claude → MCP → mycelium
+**Test pin** : `tests/test_chunk_mcp_c1_split.py` — verify imports public API still works + 3 files <2500L each.
 
-**Commit** : `docs(mcp.C2): user-facing MCP integration guide`
+**Risques** : imports circulaires (mitigation : import paresseux). `_check_secrets` partagé (mitigation : centraliser dans `muninn_secrets`).
 
-#### Chunk C.3 — Examples gallery (4h)
+**Commit** : `refactor(mcp.C1): split muninn.py into muninn + muninn_install + muninn_secrets`
 
-**Spec** : `examples/mcp_demo/` avec un mini-projet où user clone, lance Claude, et voit Muninn en action en 30s. Calque sur `forge/examples/calculator`.
+#### Chunk C.2 — CI speedup 40min → 10min (3h)
 
-**Commit** : `examples(mcp.C3): muninn-in-action demo project`
+**Objectif** : Diviser le wall-time CI par 4 sur la PR loop.
 
-#### Chunk C.4 — Benchmark fact-recall avant/après MCP (4h)
+**Fichiers** :
+- `.github/workflows/ci.yml` : `pip install pytest-xdist` → `pytest -n auto`. `forge_smoke` matrix 17 → 8 modules critiques. Transformer le `for f in ...` shell en `strategy.matrix` GitHub Actions (8 jobs parallèles). Ajouter `MUNINN_SKIP_QT=1` + `--deselect tests/ui/`.
+- `constraints.txt` : pin `pytest-xdist`.
+- `conftest.py` (top-level) : auto-skip `test_*qt*` si `MUNINN_SKIP_QT=1`.
 
-**Spec** : 
-- Reprendre les 40 questions du benchmark factuel existant
-- Mesurer le score sans MCP (just bridge hook + CLAUDE.md) : baseline
-- Mesurer le score avec MCP (Claude can call mycelium_recall) : post-fix
-- Comparer. **Cible : +10 points minimum** sur 40 questions.
+**Métrique** : 40min → <10min total observé sur 3 push consécutifs.
 
-**Test pin** : `tests/test_mcp_benchmark_fact_recall.py`
+**Risques** : tests qui partagent état global (mycelium.db) — mitigation : marquer `@pytest.mark.serial`, run en 2 passes.
 
-**Commit** : `test(mcp.C4): fact-recall benchmark before/after MCP`
+**Commit** : `ci(mcp.C2): pytest-xdist + forge_smoke parallel matrix (40min→10min)`
 
-#### Chunk C.5 — CHANGELOG + version bump (3h)
+#### Chunk C.3 — Fix `test_actr_activation_varies` pre-existing fail (2h)
 
-**Spec** : section [0.10.0] dans CHANGELOG.md, bump version partout, prepare release notes.
+**Objectif** : Atteindre 2474/2474 PASS local + CI.
 
-**Commit** : `release(mcp.C5): v0.10.0 — MCP integration complete`
+**Fichier** : `tests/test_retrieval_benchmark.py` (L571-588). Le garde-fou L582-588 skip si `access_counts` set ≤ 1 — durcir pour aussi skip si toutes valeurs = 0 (uniform-zero case).
+
+**Bonus** : ajouter fixture `_actr_tree_with_varied_access` pour test robustesse forcée.
+
+**Risques** : ne pas masquer un vrai bug ACT-R (mitigation : lire le log de fail réel avant fix).
+
+**Commit** : `fix(mcp.C3): test_actr_activation_varies robust to all-zero access_counts`
+
+#### Chunk C.4 — Documentation utilisateur first-onboarding (5h)
+
+**Objectif** : Onboarding "first-user" lisible en 5min sans connaître le repo.
+
+**Fichiers** :
+- `README.md` : section "How to use Muninn for your own repo" (3 sous-sections : Quickstart 10-commands, "What happens automatically", "When to call which MCP tool" table avec les 10 tools livrés).
+- `docs/QUICKSTART.md` (NEW) : 10 commandes exactes copy-paste, du `git clone` au premier `mycelium_recall_local`. Snippet `~/.claude.json` minimal.
+- `docs/MCP_SETUP.md` : ajout section "Phase B tools cheatsheet" (10 tools × when/params/example).
+
+**Test pin** : `tests/test_chunk_mcp_c4_quickstart_commands.py` — parse blocs ```bash de QUICKSTART.md, sanity check existence des commandes citées.
+
+**Commit** : `docs(mcp.C4): user-facing onboarding (README + QUICKSTART + MCP cheatsheet)`
+
+#### Chunk C.5 — Post-mortem RETRO Phase A+B (3h)
+
+**Objectif** : Capturer les apprentissages pour Phase D et au-delà.
+
+**Fichier NEW** : `docs/RETRO_PHASE_AB_2026-05-11.md` (~400-600L) — 7 sections :
+1. Métriques chiffrées (`git diff --stat` cumulé, LOC, tests, CI time, BUGS ouverts/fermés)
+2. Méthode 3-agents — ce qui a marché vs sur-coûté
+3. TDD réel : ratio test-first/test-after sur 18 commits
+4. Pre-chunk parallèle : où ça a accéléré, où ça a créé du rework
+5. When-wait-CI : combien de rebase causés par push trop tôt
+6. Top 3 RULE violations + comment évitées la 2e fois
+7. Décisions d'arch retenues vs à revisit (e.g. seuil dual-mycelium 4.0 → C.6)
+
+**Cross-links** : CHANGELOG entry + section "Lessons learned" dans MASTER_MCP.
+
+**Commit** : `docs(mcp.C5): post-mortem Phase A+B 2026-05-11 — methodology + metrics`
+
+#### Chunk C.6 — Bonus calibration empirique B.3 seuil (2h, OPTIONNEL)
+
+**Objectif** : Remplacer le seuil théorique `MUNINN_DUAL_LOCAL_STRONG=4.0` par valeur empirique p75 mesurée sur ≥50 calls réels.
+
+**Fichiers** :
+- `muninn/mcp/server.py` : flag `MUNINN_LOG_STRENGTH_LOCAL=1` qui append `.muninn/dual_mycelium_calibration.jsonl` à chaque `scope=auto`.
+- `scripts/calibrate_dual_threshold.py` (NEW) : analyse statistiques, propose nouveau seuil.
+
+**Condition** : N≥50 calls disponibles, sinon SKIP et reschedule en Phase D.
+
+**Commit** : `feat(mcp.C6): empirical calibration of dual_mycelium threshold (optional)`
+
+---
+
+#### Ordre d'exécution recommandé Phase C
+
+| # | Chunk | Effort | Justification ordre |
+|---|---|---|---|
+| 1 | C.3 (fix actr) | 2h | Nettoie le signal CI avant le reste |
+| 2 | C.1 (split muninn.py) | 5h | Plus gros risque arch → faire tôt |
+| 3 | C.2 (CI speedup) | 3h | Indépendant, peut paralléliser |
+| 4 | C.4 (doc user) | 5h | Indépendant |
+| 5 | C.5 (RETRO) | 3h | À la fin une fois C.1-C.4 mergés |
+| 6 | C.6 (calibration) | 2h optionnel | Seulement si N≥50 |
+
+**Total** : 20h (18h core + 2h C.6 optionnel) — aligné cible Sky.
+
+**Garde-fous transverses** : mirror BUG-091, test pin par chunk, pas de `--force`, fixer C.3 AVANT C.1 pour ne pas brouiller la lecture des régressions du split.
 
 ---
 
