@@ -202,18 +202,28 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
 
-## Etat du projet (mai 2026, post-P3 split + CRIT-1/2/3 + B1)
+## Etat du projet (mai 2026, post-P3 split + BUG-104 fix + forge v1.2.2)
 - 43 features + 39 briques Cube, 12 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- Engine: **24 731 lignes, 26 fichiers core** (voir CHANGELOG.md entête — P3 split 2026-05-10 a découpé muninn_tree.py 3929→2179L en 4 modules : core + boot/prune/doctor)
-- forge-shield 1.1.x (PyPI) seule source de vérité — 3 forge.py internes supprimés H1
-- mycelium federe, meta-mycelium cross-repo, spreading activation (Collins & Loftus 1975)
+- Engine: **24 731 lignes, 26 fichiers core** (P3 split 2026-05-10 a découpé muninn_tree.py 3929→2179L en 4 modules : core + boot/prune/doctor)
+- forge-shield **v1.2.2** (PyPI) seule source de vérité — bumped 2026-05-10 PM
+- mycelium federe, meta-mycelium cross-repo (7.5M edges sur 54 jours), spreading activation (Collins & Loftus 1975)
 - Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, forge_metrics integration UX
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
-- Tests: **2332 PASS, 47 skip, 0 xfail, 0 FAIL** + **101 property tests** (forge --gen-props sur 17 modules)
-- Q-modularity: **0.660** (Newman-Girvan, "good — modules well isolated", -0.013 vs pre-P3 = drift attendu lié à l'éclatement muninn_tree)
-- CI: HEAD vert, 2 jobs (validate Engine+Mycelium+Tree + forge_smoke matrix sur 11 modules — F6 reste à étendre à 17)
-- Hooks installes: **9** (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart, ConfigChange, PostToolUseEditLog, PreToolUseBash{Destructive,Secrets})
+- Tests: **2339 PASS, 47 skip, 0 xfail, 0 FAIL** + **103 property tests** (forge --gen-props sur 17 modules)
+- Q-modularity: **0.664** (Newman-Girvan, "good — modules well isolated")
+- CI: HEAD vert, 2 jobs (validate + forge_smoke matrix sur **17 modules**)
+- Hooks installes: **9** (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart, ConfigChange, PreToolUseBash{Destructive,Secrets})
+- **BUG-104 FIXED** 2026-05-10 PM via spill-to-tree pattern (V9A+ planère calque). **0 bug OPEN officiel**.
+
+## Plan de bataille en cours (référence unique)
+
+> **Tous les anciens battle plans sont archivés dans `docs/archive/`.**
+> Le SEUL battle plan vivant et référent est :
+> **[`docs/BATTLE_PLAN_MASTER_MCP.md`](docs/BATTLE_PLAN_MASTER_MCP.md)** — ~117h roadmap MCP integration + auto-setup.
+>
+> Phases : A (auto session 15h) + B (MCP server 40h, killer feature) + C (polish 20h) + D (PyPI release 17h, à la fin) + buffer 25h.
+> Append "État au YYYY-MM-DD" dans ce doc à chaque session, NE PAS créer de nouveau `BATTLE_PLAN_*.md`.
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
   probleme Sky resolu nous:MEMORY.md
