@@ -804,7 +804,7 @@ Returns `{query, results: [{concept, activation, hops}], elapsed_ms, source: "lo
 | B.1 MCP server scaffold + `mycelium_recall_local` | ✅ DONE | 8h |
 | B.2 `tree_get_root` + `tree_get_branch` + bonus `tree_list_branches` | ✅ DONE | 5h |
 | B.3 Dual-mycelium routing (3 tools `_local`/`_meta`/`auto`) | ✅ DONE | 8h |
-| B.4 `bugs_list` + `bugs_get` (read-only BUGS.md access) | ⏳ PENDING | 6h |
+| B.4 `bugs_list` + `bugs_get` (read-only BUGS.md access) | ✅ DONE | 6h |
 | B.5 `runbook_get` (CHANGELOG/WINTER/BATTLE_PLAN snippets) | ⏳ PENDING | 6h |
 | B.6 Integration testing + E2E avec Claude Code réel | ⏳ PENDING | 4h |
 
@@ -930,3 +930,39 @@ Phase B : **13/37h livrées** (35%). Pause possible avant B.3 (dual-mycelium rou
 | B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
 
 Phase B : **21/37h livrées** (57%). Sky autorise enchaînement vers B.4 (bugs_list / bugs_get — bien plus simple, lecture de BUGS.md).
+
+### État au 2026-05-11 (nuit 2) — chunk B.4 DONE
+
+**Phase B.4 — bugs MCP tools (read-only BUGS.md)** livré.
+
+**Décisions** :
+- 2 tools : `bugs_list(repo_path, status_filter, limit)` retourne juste les headers (id, status, title, line) ; `bugs_get(bug_id, repo_path)` retourne le bug complet parsé en sections (Symptom, Root cause, Fix, Test, Regression).
+- Validation `bug_id` regex `^BUG-\d{3,4}$` (anti path-traversal, même si on ne touche pas au filesystem avec ce param — défense en profondeur).
+- Cap 30K chars sur `bugs_get.content` (un bug peut atteindre 5K, marge confortable).
+- Read-only strict (mtime + size + content snapshot).
+- BUGS.md absent → empty list / error tag, pas raise.
+
+**Livré** :
+- `muninn/mcp/server.py` (+225L) : `_BUG_ID_RE`, `_BUG_HEADER_RE`, `_BUG_STATUS_RE`, `_load_bugs_md`, `_parse_bugs_md`, `_bugs_list_impl`, `_bugs_get_impl` + 2 `@app.tool()` wrappers avec docstrings riches.
+- `tests/test_chunk_mcp_b4_bugs_tools.py` (~200L) : 11 tests behavioural dont 1 smoke réel sur `BUGS.md` du repo source.
+- `docs/MCP_SETUP.md` : tableau Available tools étendu (B.1 + B.2 + B.3 + B.4).
+- `docs/BATTLE_PLAN_MASTER_MCP.md` : checkbox B.4 ✅, cette section.
+
+**Vérifications** (RULE 4) :
+- Test pin B.4 : 11/11 PASS en 0.76s (TDD : 11/11 fail RED → PASS GREEN).
+- Smoke réel sur MUNINN-/BUGS.md : 25 bugs détectés, BUG-111 parse 4/5 sections (le `Fix` est inclus dans `content` complet — parsing regex a une limite mineure mais info pas perdue).
+- Read-only contract proven par `test_bugs_md_not_modified` (mtime + size + content snapshot avant/après).
+
+**Forge** : skip RULE 5 N/A (pas de `engine/core/*` touché).
+
+**Phase B — état** :
+| Chunk | Statut | Heures | Tests |
+|---|---|---|---|
+| B.1 MCP scaffold + `mycelium_recall_local` | ✅ | 8h | 10 |
+| B.2 tree tools (3 tools) | ✅ | 5h | 12 |
+| B.3 dual-mycelium routing (3 tools + 5 env vars) | ✅ | 8h | 16 |
+| B.4 bugs tools (2 tools) | ✅ | 6h | 11 |
+| B.5 `runbook_get` | ⏳ | 6h | — |
+| B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
+
+Phase B : **27/37h livrées** (73%). Enchaînement B.5 logique : runbook_get pour lire CHANGELOG / WINTER_TREE / sections du MASTER_MCP.

@@ -85,6 +85,8 @@ claude mcp list
 | `tree_get_root` (B.2) | `repo_path` | `{node="root", content (str .mn), metadata{lines, children, tags, ...}, truncated, repo_path, elapsed_ms}` |
 | `tree_get_branch` (B.2) | `branch_name` (str regex `^[A-Za-z0-9_]{1,64}$`), `repo_path` | Same shape as tree_get_root, or `{error, available, repo_path, elapsed_ms}` if branch absent (no raise) |
 | `tree_list_branches` (B.2) | `repo_path` | `{branches[{name, lines, last_access, access_count, temperature, tags, children_count}], count, repo_path, elapsed_ms}` sorted by last_access DESC |
+| `bugs_list` (B.4) | `repo_path`, `status_filter` (e.g. "OPEN"/"FIXED"/"WONTFIX"), `limit` (default 50) | `{bugs[{id, status, title, line}], count, total, status_filter, truncated, repo_path, elapsed_ms}` |
+| `bugs_get` (B.4) | `bug_id` (regex `^BUG-\d{3,4}$`), `repo_path` | `{id, status, title, content, sections{Symptom, Root cause, Fix, Test, Regression}, line, truncated, repo_path, elapsed_ms}` — or `{error, bug_id, available_count, ...}` if absent |
 
 ### Tuning the dual-mycelium router (B.3)
 

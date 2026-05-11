@@ -529,6 +529,193 @@ def _recall_dual_impl(
     return out
 
 
+# ── Chunk B.4 BUGS.md tools (read-only) ─────────────────────────────────────
+
+
+# Bug ID validation — anti path-traversal + format guarantee.
+_BUG_ID_RE = re.compile(r"^BUG-\d{3,4}$")
+
+# Match `## BUG-XXX:` and `### BUG-XXX:` headers (tolerate optional ~~strike~~).
+_BUG_HEADER_RE = re.compile(
+    r"^(#{2,3})\s+(?:~~)?(BUG-\d{3,4}):\s*(.+?)(?:~~)?\s*$",
+    re.MULTILINE,
+)
+
+# Status field inside a bug body.
+_BUG_STATUS_RE = re.compile(
+    r"^\s*-\s*\*\*Status\*\*:\s*\**\s*([A-Za-z]+)",
+    re.MULTILINE,
+)
+
+# Section fields: Symptom, Root cause, Fix, Test, Regression.
+_BUG_SECTION_NAMES = ("Symptom", "Root cause", "Fix", "Test", "Regression")
+
+BUGS_TOOL_MAX_CHARS = 30_000
+BUGS_LIST_LIMIT_MAX = 500
+VALID_BUG_STATUS = {"OPEN", "FIXED", "WONTFIX", "PARTIAL"}
+
+
+def _load_bugs_md(repo: Path) -> str | None:
+    """Read <repo>/BUGS.md or return None if absent. Read-only."""
+    bugs_path = repo / "BUGS.md"
+    if not bugs_path.exists() or not bugs_path.is_file():
+        return None
+    try:
+        return bugs_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _parse_bugs_md(content: str) -> list[dict]:
+    """Parse BUGS.md into a list of bug dicts.
+
+    Each bug: {id, status, title, body, sections: {...}, line: int}.
+    Skips the literal "BUG-XXX" template placeholder.
+    """
+    if not content:
+        return []
+    matches = list(_BUG_HEADER_RE.finditer(content))
+    if not matches:
+        return []
+    bugs: list[dict] = []
+    for i, m in enumerate(matches):
+        bug_id = m.group(2)
+        if bug_id == "BUG-XXX":
+            continue  # template line
+        title = m.group(3).strip()
+        body_start = m.end()
+        body_end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        body = content[body_start:body_end].strip()
+
+        status_match = _BUG_STATUS_RE.search(body)
+        status = status_match.group(1).upper() if status_match else "UNKNOWN"
+
+        sections: dict[str, str] = {}
+        for name in _BUG_SECTION_NAMES:
+            # Capture from `**Name**:` until the next `**Field**:` or end of body
+            pattern = re.compile(
+                rf"^\s*-\s*\*\*{re.escape(name)}\*\*:\s*(.+?)"
+                rf"(?=^\s*-\s*\*\*(?:{'|'.join(re.escape(n) for n in _BUG_SECTION_NAMES)})\*\*|\Z)",
+                re.MULTILINE | re.DOTALL | re.IGNORECASE,
+            )
+            sm = pattern.search(body)
+            if sm:
+                sections[name] = sm.group(1).strip()
+
+        # Approximate line number = number of '\n' before the header + 1
+        line_num = content[: m.start()].count("\n") + 1
+
+        bugs.append({
+            "id": bug_id,
+            "status": status,
+            "title": title,
+            "body": body,
+            "sections": sections,
+            "line": line_num,
+        })
+    # Dedup by id keeping FIRST occurrence (canonical wins over ~~legacy~~)
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for b in bugs:
+        if b["id"] in seen:
+            continue
+        seen.add(b["id"])
+        unique.append(b)
+    return unique
+
+
+def _bugs_list_impl(
+    repo_path: str | None = None,
+    status_filter: str | None = None,
+    limit: int = 50,
+) -> dict:
+    """Return a short headers-only list of bugs from <repo>/BUGS.md.
+
+    Read-only. Filters by status when `status_filter` is set (case-insensitive).
+    """
+    start = time.time()
+    limit = max(1, min(BUGS_LIST_LIMIT_MAX, int(limit)))
+    repo = _resolve_repo_path(repo_path)
+    content = _load_bugs_md(repo)
+    if content is None:
+        return {
+            "bugs": [],
+            "count": 0,
+            "total": 0,
+            "status_filter": status_filter,
+            "truncated": False,
+            "repo_path": str(repo),
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+        }
+    all_bugs = _parse_bugs_md(content)
+    if status_filter:
+        status_filter_norm = status_filter.strip().upper()
+        filtered = [b for b in all_bugs if b["status"] == status_filter_norm]
+    else:
+        filtered = list(all_bugs)
+    total = len(filtered)
+    truncated = total > limit
+    sliced = filtered[:limit]
+    out_bugs = [
+        {"id": b["id"], "status": b["status"], "title": b["title"], "line": b["line"]}
+        for b in sliced
+    ]
+    return {
+        "bugs": out_bugs,
+        "count": len(out_bugs),
+        "total": total,
+        "status_filter": status_filter,
+        "truncated": truncated,
+        "repo_path": str(repo),
+        "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+    }
+
+
+def _bugs_get_impl(bug_id: str, repo_path: str | None = None) -> dict:
+    """Return one bug's full content + parsed sections.
+
+    Read-only. `bug_id` is regex-validated (`^BUG-\\d{3,4}$`) for defense
+    against path traversal — even though we never touch the filesystem with
+    the bug_id, we keep the same hardening pattern as B.2 tree_get_branch.
+    """
+    start = time.time()
+    if not isinstance(bug_id, str) or not _BUG_ID_RE.match(bug_id):
+        raise ValueError(
+            f"invalid bug_id {bug_id!r}: must match ^BUG-\\d{{3,4}}$"
+        )
+    repo = _resolve_repo_path(repo_path)
+    content = _load_bugs_md(repo)
+    if content is None:
+        return {
+            "error": "bugs_md_missing",
+            "bug_id": bug_id,
+            "repo_path": str(repo),
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+        }
+    all_bugs = _parse_bugs_md(content)
+    match = next((b for b in all_bugs if b["id"] == bug_id), None)
+    if match is None:
+        return {
+            "error": "bug_not_found",
+            "bug_id": bug_id,
+            "available_count": len(all_bugs),
+            "repo_path": str(repo),
+            "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+        }
+    capped, truncated = _cap_with_marker(match["body"], BUGS_TOOL_MAX_CHARS)
+    return {
+        "id": match["id"],
+        "status": match["status"],
+        "title": match["title"],
+        "content": capped,
+        "sections": dict(match["sections"]),
+        "line": match["line"],
+        "truncated": truncated,
+        "repo_path": str(repo),
+        "elapsed_ms": round((time.time() - start) * 1000.0, 2),
+    }
+
+
 # ── Chunk B.2 tree tools (read-only) ─────────────────────────────────────────
 
 
@@ -841,6 +1028,77 @@ def create_server() -> FastMCP:
             query=query, scope=scope, top_k=top_k, hops=hops,
             repo_path=repo_path,
         )
+
+    # ── Chunk B.4 BUGS.md tools (read-only) ──
+
+    @app.tool()
+    def bugs_list(
+        repo_path: str | None = None,
+        status_filter: str | None = None,
+        limit: int = 50,
+    ) -> dict:
+        """List bugs from the project's BUGS.md (headers only).
+
+        Read-only. Returns a compact header list so you can decide which
+        bugs to read in full via `bugs_get(bug_id)`.
+
+        Args:
+            repo_path: absolute path to the project (defaults to $MUNINN_REPO
+                       env, then cwd).
+            status_filter: case-insensitive filter — typically "OPEN",
+                           "FIXED", "WONTFIX", "PARTIAL". None = all bugs.
+            limit: max bugs returned (1..500, default 50).
+
+        Returns:
+            {
+              "bugs": [{"id": "BUG-111", "status": "FIXED",
+                        "title": "tree write paths leak", "line": int}],
+              "count": int,                # bugs actually returned
+              "total": int,                # bugs matched before limit
+              "status_filter": str | None,
+              "truncated": bool,           # True if total > count
+              "repo_path": str,
+              "elapsed_ms": float,
+            }
+
+        Empty result (count=0) is returned silently if BUGS.md is missing.
+        """
+        return _bugs_list_impl(
+            repo_path=repo_path, status_filter=status_filter, limit=limit,
+        )
+
+    @app.tool()
+    def bugs_get(bug_id: str, repo_path: str | None = None) -> dict:
+        """Read one bug's full content + parsed sections from BUGS.md.
+
+        Companion to `bugs_list`. Use `bugs_list` first to discover IDs.
+        Read-only.
+
+        Args:
+            bug_id: bug identifier, e.g. "BUG-111". Validated against
+                    `^BUG-\\d{3,4}$` — anti path-traversal hardening.
+            repo_path: absolute path to the project.
+
+        Returns:
+            {
+              "id": str, "status": str, "title": str,
+              "content": str,              # full bug body (cap 30K chars)
+              "sections": {"Symptom": str, "Root cause": str,
+                            "Fix": str, "Test": str, "Regression": str},
+              "line": int,                 # line number in BUGS.md
+              "truncated": bool,
+              "repo_path": str,
+              "elapsed_ms": float,
+            }
+
+        If the bug doesn't exist: returns {"error": "bug_not_found", "bug_id",
+        "available_count", ...} WITHOUT raising — Claude can recover by
+        listing bugs and retrying.
+
+        Raises:
+            ValueError on invalid bug_id format (regex mismatch).
+        """
+        return _bugs_get_impl(bug_id=bug_id, repo_path=repo_path)
 
     # ── Chunk B.2 tree tools (read-only access to .muninn/tree/) ──
 
