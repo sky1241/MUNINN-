@@ -754,3 +754,58 @@ gravée AVANT B.3 :
 **Phase A totale** : 4 chunks, 42 tests pin, 2407 PASS local, 100% CI verte sur A.1+A.2+A.3 (A.4 inclura nouveau job e2e push-only).
 
 **Next : Phase B — MCP server core** (42h, 5 chunks, KILLER FEATURE). Le 1er chunk B.1 sera "scaffold + dependency mcp on PyPI". Voir §3 Phase B + §Dual-mycelium routing pour la spec gravée AVANT exécution.
+
+### État au 2026-05-11 (nuit) — chunk B.1 DONE → Phase B démarrée
+
+**Phase B.1 — MCP server scaffold + 1er tool** livré après méthodologie 3-agents (claude-code-guide + Explore + Plan convergent).
+
+**Décisions techniques validées par les 3 agents** :
+- Lib : `mcp>=1.7.1,<2.0` PyPI (FastMCP API recommandée 2026).
+- Transport : `stdio` (Claude Code spawn le process et parle JSON-RPC sur stdin/stdout).
+- Package path : **`muninn/mcp/`** (PAS `engine/core/`) — pure adapter, pas de logique algorithmique → **forge skip RULE 5 N/A**.
+- Entry point : `muninn-mcp` console_script + `python -m muninn.mcp` (deux modes pour résilience PATH/venv).
+
+**Livré** :
+- `muninn/mcp/__init__.py` (5L) — re-exports `create_server`, `main`.
+- `muninn/mcp/server.py` (~225L) — FastMCP app + `_recall_local_impl()` (fonction pure testable directement) + `@app.tool()` wrapper `mycelium_recall_local` + `main()` stdio runner.
+- `muninn/mcp/__main__.py` (8L) — entry pour `python -m muninn.mcp`.
+- `pyproject.toml` : `[project.optional-dependencies] mcp = ["mcp>=1.7.1,<2.0"]` + `[project.scripts] muninn-mcp = "muninn.mcp.server:main"`. `all` extra mis à jour.
+- `docs/MCP_SETUP.md` (~115L) — snippet `~/.claude.json` 2 variantes (console_script PATH vs venv-explicit Python), `claude mcp list` verif, troubleshooting.
+- `README.md` : nouvelle section `## MCP integration (experimental)` pointant vers MCP_SETUP.md.
+- `tests/test_chunk_mcp_b1_server_scaffold.py` (~250L) — 9 unit tests + 1 slow stdio smoke (marker `@pytest.mark.slow`).
+
+**Tool spec** :
+```python
+@app.tool()
+def mycelium_recall_local(
+    query: str,
+    top_k: int = 10,
+    repo_path: str | None = None,
+    hops: int = 2,
+) -> dict
+```
+Returns `{query, results: [{concept, activation, hops}], elapsed_ms, source: "local", repo_path}`. Hard caps `1 ≤ top_k ≤ 100`, `1 ≤ hops ≤ 3` (clamped silently). Fail-safe : invalid `repo_path` → `ValueError` user-friendly ; DB lock → empty results + `error: "db_unavailable"`.
+
+**Vérifications** (RULE 4) :
+- Test pin B.1 : 10/10 PASS (9 unit en 1.45s + 1 stdio smoke en 2.95s). TDD : 10/10 fail RED → PASS GREEN.
+- Stdio smoke : `python -m muninn.mcp` répond bien au handshake JSON-RPC `initialize` avec `serverInfo.name == "muninn"`.
+- Full regression : **2416 PASS, 36 skip, 1 deselected (slow), 0 fail** (vs A.4 baseline 2407 = +9 nouveaux tests B.1).
+- Aucune touch `engine/core/*` → forge skip explicite (justifié RULE 5 N/A).
+
+**Contrats respectés** :
+- stderr-only logger (stdout = MCP protocol, jamais print).
+- Tool retourne TOUJOURS un dict JSON-serializable (jamais raise dans le tool wrapper, sauf ValueError pour repo invalide).
+- `Mycelium` lazy-imported (server boot rapide).
+- `_recall_local_impl()` factorisé = testable sans subprocess MCP.
+
+**Phase B — Roadmap restante** :
+| Chunk | Statut | Heures |
+|---|---|---|
+| B.1 MCP server scaffold + `mycelium_recall_local` | ✅ DONE | 8h |
+| B.2 `tree_get_root` + `tree_get_branch` | ⏳ PENDING | 5h |
+| B.3 Dual-mycelium routing (3 tools `_local`/`_meta`/`auto`) | ⏳ PENDING | 8h |
+| B.4 `bugs_list` + `bugs_get` (read-only BUGS.md access) | ⏳ PENDING | 6h |
+| B.5 `runbook_get` (CHANGELOG/WINTER/BATTLE_PLAN snippets) | ⏳ PENDING | 6h |
+| B.6 Integration testing + E2E avec Claude Code réel | ⏳ PENDING | 4h |
+
+Sky a explicitement demandé : **pause après B.1 pour validation manuelle** avant d'enchaîner B.2-B.5 (les MCP tools exposent de la data à Claude pendant qu'il génère — décisions sensibles nécessitent input Sky : granularité, format, scopes).

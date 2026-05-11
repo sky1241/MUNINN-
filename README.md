@@ -216,6 +216,33 @@ Manual setup example:
 
 A watchdog (`engine/core/watchdog.py`) runs every 15 minutes via Task Scheduler as a failsafe, feeding only transcripts that grew since last check.
 
+## MCP integration (experimental)
+
+Phase B (in progress) exposes Muninn data to Claude Code/Desktop as MCP tools, callable actively during generation. Install with the `[mcp]` extra:
+
+```bash
+pip install -e ".[mcp]"
+muninn-mcp &   # or: python -m muninn.mcp
+```
+
+Wire it into `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "muninn": {
+      "command": "muninn-mcp",
+      "env": {"MUNINN_REPO": "/path/to/your/repo"}
+    }
+  }
+}
+```
+
+Currently exposed tools (chunk B.1):
+- `mycelium_recall_local(query, top_k=10, hops=2)` — spreading activation over the local mycelium.
+
+Coming next: `mycelium_recall_meta`, `mycelium_recall(scope="auto")`, `tree_get_root`, `bugs_list`, `runbook_get`. Full spec in `docs/MCP_SETUP.md` and `docs/BATTLE_PLAN_MASTER_MCP.md` §Phase B.
+
 ## Continuous Integration
 
 `.github/workflows/ci.yml` runs on every push and every PR to `main`:
