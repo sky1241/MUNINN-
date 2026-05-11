@@ -802,7 +802,7 @@ Returns `{query, results: [{concept, activation, hops}], elapsed_ms, source: "lo
 | Chunk | Statut | Heures |
 |---|---|---|
 | B.1 MCP server scaffold + `mycelium_recall_local` | ✅ DONE | 8h |
-| B.2 `tree_get_root` + `tree_get_branch` | ⏳ PENDING | 5h |
+| B.2 `tree_get_root` + `tree_get_branch` + bonus `tree_list_branches` | ✅ DONE | 5h |
 | B.3 Dual-mycelium routing (3 tools `_local`/`_meta`/`auto`) | ⏳ PENDING | 8h |
 | B.4 `bugs_list` + `bugs_get` (read-only BUGS.md access) | ⏳ PENDING | 6h |
 | B.5 `runbook_get` (CHANGELOG/WINTER/BATTLE_PLAN snippets) | ⏳ PENDING | 6h |
@@ -830,3 +830,45 @@ Sky a explicitement demandé : **pause après B.1 pour validation manuelle** ava
 **Retest A.1** : nouvelle session Claude Code après le hotfix → le boot context contient maintenant le vrai état Muninn (483K lignes, 526 fichiers, derniers commits dont B.1 + hotfix). Hook A.1 livre VRAIMENT de la valeur, pas du bruit.
 
 **Phase B reprend ici**. Pas de blocker. Sky autorise B.2 (`tree_get_root` + `tree_get_branch`, 5h) — mais B.3 (dual-mycelium routing) et B.4-B.5 (bugs / runbook) nécessitent validation Sky sur les décisions de design (granularité, scopes, format).
+
+### État au 2026-05-11 (soir 3) — chunk B.2 DONE
+
+**Phase B.2 — tree MCP tools (read-only)** livré après méthodologie 2-agents (Explore + Plan).
+
+**Décisions clés validées par les 2 agents** :
+- 3 tools (pas 2) : `tree_get_root`, `tree_get_branch`, **bonus** `tree_list_branches`. La spec demandait juste 2 mais Plan a recommandé le list comme cheap+utile pour que Claude découvre avant de query.
+- **Read-only STRICT** : ne PAS appeler `engine/core/muninn_tree.read_node()` qui mute `access_count`, met à jour `last_access`, appelle `save_tree()` et trigger reconsolidation. Helper privé `_load_tree_for_repo()` parse `tree.json` + read `.mn` directement.
+- Cap output 60K chars (vs 40K hook A.1 — tool result vit dans le message courant, pas le system prompt cached).
+- Regex anti-path-traversal sur `branch_name` (`^[A-Za-z0-9_]{1,64}$`).
+- Branch absente → `{error, available}` au lieu de raise → Claude peut récupérer via `tree_list_branches`.
+
+**Livré** :
+- `muninn/mcp/server.py` (+225L) : `_load_tree_for_repo`, `_cap_with_marker`, `_read_branch_file`, `_tree_get_root_impl`, `_tree_get_branch_impl`, `_tree_list_branches_impl` + 3 `@app.tool()` wrappers avec docstrings riches.
+- `tests/test_chunk_mcp_b2_tree_tools.py` (~280L) : 12 tests behavioural.
+- `docs/MCP_SETUP.md` : tableau Available tools étendu B.2.
+- `docs/BATTLE_PLAN_MASTER_MCP.md` : checkbox B.2 ✅, cette section.
+
+**Vérifications** (RULE 4) :
+- Test pin B.2 : 12/12 PASS en 0.74s (TDD : 12/12 fail RED → PASS GREEN).
+- Smoke réel sur MUNINN- source repo :
+  ```
+  tree_get_root → node="root", content "P:MUNINN-|python|483863L|526files", children=["b01","b02","b03","b04","b05"], elapsed=0.4ms
+  tree_list_branches → count=10, top 3 = [b0000, b01, b02] (sorted by last_access DESC)
+  ```
+- Full regression : **2432 PASS, 36 skipped, 1 deselected (slow), 1 fail PRÉ-EXISTANT** (`test_actr_activation_varies` — vérifié via `git stash` qu'il échoue déjà sur main pré-B.2, dû à l'état actuel du tree avec all access_count=0 ; pas une régression de B.2).
+- Source repo intact (root.mn = "MUNINN-" toujours).
+- 2 tests anti-régression cruciaux : `test_tools_dont_touch_mycelium_db` + `test_tools_dont_touch_tree_json` (mtime + content snapshot avant/après — read-only prouvé).
+
+**Forge** : skip explicite (RULE 5 N/A — aucune modif sous `engine/core/*`). Justifié.
+
+**Phase B — état** :
+| Chunk | Statut | Heures | Tests pin |
+|---|---|---|---|
+| B.1 MCP scaffold + `mycelium_recall_local` | ✅ | 8h | 10 |
+| B.2 tree tools (root + branch + list_branches) | ✅ | 5h | 12 |
+| B.3 dual-mycelium routing | ⏳ | 8h | (specs gravées) |
+| B.4 `bugs_list` + `bugs_get` | ⏳ | 6h | — |
+| B.5 `runbook_get` | ⏳ | 6h | — |
+| B.6 E2E avec Claude Code réel | ⏳ | 4h | — |
+
+Phase B : **13/37h livrées** (35%). Pause possible avant B.3 (dual-mycelium routing — spec gravée § Dual-mycelium routing nécessitant validation user des seuils heuristiques).

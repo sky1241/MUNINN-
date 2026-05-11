@@ -75,19 +75,30 @@ claude mcp list
 # Expected:  muninn  running
 ```
 
-## Available tools (B.1)
+## Available tools (B.1 + B.2)
 
 | Tool | Args | Returns |
 |---|---|---|
-| `mycelium_recall_local` | `query` (str), `top_k` (int=10), `repo_path` (str=$MUNINN_REPO\|cwd), `hops` (int=2) | `{query, results[{concept,activation,hops}], elapsed_ms, source="local", repo_path}` |
+| `mycelium_recall_local` (B.1) | `query` (str), `top_k` (int=10), `repo_path`, `hops` (int=2) | `{query, results[{concept,activation,hops}], elapsed_ms, source="local", repo_path}` |
+| `tree_get_root` (B.2) | `repo_path` | `{node="root", content (str .mn), metadata{lines, children, tags, ...}, truncated, repo_path, elapsed_ms}` |
+| `tree_get_branch` (B.2) | `branch_name` (str regex `^[A-Za-z0-9_]{1,64}$`), `repo_path` | Same shape as tree_get_root, or `{error, available, repo_path, elapsed_ms}` if branch absent (no raise) |
+| `tree_list_branches` (B.2) | `repo_path` | `{branches[{name, lines, last_access, access_count, temperature, tags, children_count}], count, repo_path, elapsed_ms}` sorted by last_access DESC |
 
-Example invocation (from Claude during a session):
+Example invocations:
 > Claude calls `mycelium_recall_local(query="BUG-104 spill tree", top_k=5)`
 > → `{"results": [{"concept": "v9a", "activation": 0.87, "hops": 2}, ...], "elapsed_ms": 12.4, ...}`
+>
+> Claude calls `tree_list_branches()` → discovers `["b03", "b06", "b02", ...]`
+>
+> Claude calls `tree_get_branch(branch_name="b03")` → reads the bug-recovery branch.
 
-Hard caps: `1 <= top_k <= 100`, `1 <= hops <= 3` (clamped silently).
-Fail-safe: invalid `repo_path` raises `ValueError` with a user-friendly message ;
-DB lock errors return an empty `results` list with `error: "db_unavailable"`.
+Hard caps: B.1 `1 <= top_k <= 100`, `1 <= hops <= 3` (clamped). B.2 tools cap
+content at 60K chars (~15K tokens) with `truncated: True` sentinel.
+
+Fail-safe across all tools: invalid `repo_path` raises `ValueError` with a
+user-friendly message; DB lock errors return empty results + error tag; B.2
+tools are strictly **read-only** (no `access_count` mutation, no `tree.json`
+write, no `mycelium.db` touch — proven by `test_tools_dont_touch_*`).
 
 ## Coming next (Phase B roadmap)
 
