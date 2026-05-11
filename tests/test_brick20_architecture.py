@@ -24,8 +24,15 @@ DOCUMENTED_OVERSIZED_MODULES = frozenset({
     #   + muninn_tree_doctor.py (297L)
     #   + muninn_tree_prune.py (678L)
     #   + muninn_tree_boot.py (~810L)
-    # All sub-modules under 2500L threshold post-split. Set is intentionally
-    # empty — re-add a module here if a future PR pushes one over 2500L.
+    # All sub-modules under 2500L threshold post-split.
+    # MCP A.3 (2026-05-11): muninn.py pushed to ~2624L by install_cron()
+    # addition. Pre-existing oversize from CLI dispatcher + install_hooks
+    # + scrub_secrets co-located. Planned split (post-Phase A) :
+    #   muninn.py        (CLI dispatcher only, ~700L)
+    #   muninn_install.py (install_hooks + install_cron + _generate_*, ~1200L)
+    #   muninn_secrets.py (scrub_secrets + _SCRUB_* + _TRIGGER_*, ~500L)
+    # Tracked in docs/BATTLE_PLAN_MASTER_MCP.md as a Phase C polish item.
+    "muninn.py",
 })
 
 DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({

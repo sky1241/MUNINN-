@@ -1711,6 +1711,149 @@ def install_hooks(repo_path: Path):
     _register_repo(repo_path)
 
 
+# ── INSTALL-CRON — weekly systemd-user timer for `muninn prune` ────
+
+
+def _detect_init_system() -> str:
+    """Return 'systemd-user' if systemctl is on PATH, else 'none'.
+
+    Cron fallback is not yet implemented — that's a planned A.3.bis chunk.
+    """
+    import shutil
+    if shutil.which("systemctl") is not None:
+        return "systemd-user"
+    return "none"
+
+
+def install_cron(repo_path: Path, uninstall: bool = False) -> dict:
+    """Install (or uninstall) a systemd-user weekly timer for `muninn prune`.
+
+    Chunk MCP A.3 of docs/BATTLE_PLAN_MASTER_MCP.md.
+
+    Generates two systemd-user units under ~/.config/systemd/user/:
+      - muninn-prune.service (Type=oneshot, calls `python -m muninn prune --force`)
+      - muninn-prune.timer   (OnCalendar=Sun *-*-* 04:00:00, Persistent=true)
+
+    The function does NOT invoke systemctl — Sky runs the activation
+    manually (the printed `next_action` hint shows the exact command).
+    Test-friendly, sandbox-safe.
+
+    On hosts without systemctl, returns status="skipped_no_systemd".
+    Cron fallback is out-of-scope this chunk.
+
+    Args:
+        repo_path: absolute path of the Muninn repo whose mycelium to prune.
+        uninstall: if True, remove the two unit files (idempotent).
+
+    Returns:
+        dict with keys: status, init_system, service_path, timer_path,
+        next_action.
+    """
+    repo_path = Path(repo_path).resolve()
+    init_system = _detect_init_system()
+
+    home = Path(os.environ.get("HOME") or str(Path.home())).resolve()
+    units_dir = home / ".config" / "systemd" / "user"
+    service_path = units_dir / "muninn-prune.service"
+    timer_path = units_dir / "muninn-prune.timer"
+
+    result = {
+        "status": "unknown",
+        "init_system": init_system,
+        "service_path": str(service_path),
+        "timer_path": str(timer_path),
+        "next_action": "",
+    }
+
+    if init_system != "systemd-user":
+        result["status"] = "skipped_no_systemd"
+        result["service_path"] = None
+        result["timer_path"] = None
+        return result
+
+    if uninstall:
+        for p in (service_path, timer_path):
+            try:
+                p.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+        result["status"] = "uninstalled"
+        result["next_action"] = "systemctl --user daemon-reload"
+        return result
+
+    units_dir.mkdir(parents=True, exist_ok=True)
+    python_bin = sys.executable or "python3"
+
+    service_content = (
+        "[Unit]\n"
+        f"Description=Muninn weekly mycelium prune for {repo_path}\n"
+        "Documentation=https://github.com/sky1241/MUNINN-\n"
+        "After=network.target\n"
+        "\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        f"WorkingDirectory={repo_path}\n"
+        "Environment=PYTHONIOENCODING=utf-8\n"
+        f"ExecStart={python_bin} -m muninn prune --force --repo {repo_path}\n"
+        "StandardOutput=journal\n"
+        "StandardError=journal\n"
+        "TimeoutStartSec=600\n"
+        "Nice=10\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=default.target\n"
+    )
+
+    timer_content = (
+        "[Unit]\n"
+        "Description=Muninn weekly prune timer (Sundays 04:00 local time)\n"
+        "Documentation=https://github.com/sky1241/MUNINN-\n"
+        "\n"
+        "[Timer]\n"
+        "OnCalendar=Sun *-*-* 04:00:00\n"
+        "Persistent=true\n"
+        "RandomizedDelaySec=600\n"
+        "Unit=muninn-prune.service\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=timers.target\n"
+    )
+
+    # Idempotency : if both files exist with identical content, return already_installed.
+    was_present = service_path.exists() and timer_path.exists()
+    if was_present:
+        try:
+            existing_svc = service_path.read_text(encoding="utf-8")
+            existing_tmr = timer_path.read_text(encoding="utf-8")
+            if existing_svc == service_content and existing_tmr == timer_content:
+                result["status"] = "already_installed"
+                result["next_action"] = (
+                    "systemctl --user daemon-reload && "
+                    "systemctl --user enable --now muninn-prune.timer"
+                )
+                return result
+        except OSError:
+            pass
+
+    service_path.write_text(service_content, encoding="utf-8")
+    timer_path.write_text(timer_content, encoding="utf-8")
+    # Systemd requires 0o644 (rw-r--r--). It silently ignores other perms.
+    try:
+        os.chmod(str(service_path), 0o644)
+        os.chmod(str(timer_path), 0o644)
+    except OSError:
+        pass
+
+    result["status"] = "installed"
+    result["next_action"] = (
+        "systemctl --user daemon-reload && "
+        "systemctl --user enable --now muninn-prune.timer"
+    )
+    return result
+
+
 # ── SCRUB — universal secret redaction ────────────────────────────
 
 _SCRUB_EXTENSIONS = {
@@ -2070,7 +2213,7 @@ def main():
     parser.add_argument("command", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
-        "ingest", "recall", "bridge", "upgrade-hooks", "inject", "diagnose", "doctor",
+        "ingest", "recall", "bridge", "upgrade-hooks", "install-cron", "inject", "diagnose", "doctor",
         "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
         "sync", "zones",
     ])
@@ -2084,6 +2227,8 @@ def main():
     parser.add_argument("--output", help="Output file path (e.g., scan JSON for UI)")
     parser.add_argument("--force", action="store_true", help="Force operation (e.g., prune without dry-run)")
     parser.add_argument("--password", help="Password for vault lock/unlock (AES-256)")
+    parser.add_argument("--uninstall", action="store_true",
+                        help="For install-cron: remove the systemd timer instead of installing")
 
     args = parser.parse_args()
 
@@ -2210,6 +2355,26 @@ def main():
             print(f"ERROR: {repo} is not a Muninn repo (no .muninn/ directory)")
             sys.exit(1)
         install_hooks(repo)
+        return
+
+    if args.command == "install-cron":
+        # Chunk MCP A.3: weekly systemd-user timer for `muninn prune`.
+        repo = Path(args.repo or args.file or ".").resolve()
+        if not (repo / ".muninn").exists():
+            print(f"ERROR: {repo} is not a Muninn repo (no .muninn/ directory)")
+            sys.exit(1)
+        result = install_cron(repo, uninstall=args.uninstall)
+        print(f"install-cron: {result['status']}")
+        if result["status"] == "skipped_no_systemd":
+            print("  systemctl not found on PATH. Cron fallback is not yet implemented.")
+            print("  See docs/BATTLE_PLAN_MASTER_MCP.md for the planned A.3.bis chunk.")
+        elif result["status"] == "installed":
+            print(f"  service: {result['service_path']}")
+            print(f"  timer:   {result['timer_path']}")
+            print(f"  next:    {result.get('next_action', '')}")
+        elif result["status"] == "uninstalled":
+            print("  service + timer files removed.")
+            print("  next: systemctl --user daemon-reload (then verify with `systemctl --user list-timers`)")
         return
 
     if args.command == "feed":

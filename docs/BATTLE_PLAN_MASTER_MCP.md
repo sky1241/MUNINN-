@@ -673,3 +673,47 @@ gravée AVANT B.3 :
 - 3 sites désormais cohérents (même comportement, même marker, même logging).
 
 **Restant Phase A** : A.3 cron timer pour sync périodique indépendante des hooks (4h) → A.4 E2E test full auto-session (4h).
+
+### État au 2026-05-11 (fin de journée) — chunk A.3 DONE
+
+**Phase A.3 — Cron/systemd timer auto-prune** livré après méthodologie 3-agents.
+
+**Décision technique** (Plan agent + claude-code-guide) :
+- **Linux systemd-user UNIQUEMENT** dans ce chunk. Sky est sur Debian 6.1 systemd, c'est le scope cible.
+- Cron fallback explicitement out-of-scope (stub planifié A.3.bis si besoin).
+- macOS LaunchAgent hors scope (Sky n'a pas de Mac).
+
+**Livré** :
+- `engine/core/muninn.py` : new sub-command `install-cron` + flag `--uninstall` ; new fonction `install_cron(repo_path, uninstall=False) -> dict` (152L) + helper `_detect_init_system()` (10L). CLI hint print pour activation manuelle (`systemctl --user daemon-reload && enable --now`).
+- `muninn/_engine.py` : miroir EXACT (RULE python.md duplication).
+- `tests/test_chunk_mcp_a3_cron_install.py` : 13 tests behavioural — signature, install ok, .timer contient `OnCalendar=Sun *-*-* 04:00:00`, .service contient `python -m muninn prune --force`, uninstall idempotent, NE PAS invoquer systemctl, skip propre si pas de systemd, perms 0o644, sys.executable utilisé.
+- `tests/test_brick20_architecture.py` : `muninn.py` ajouté à `DOCUMENTED_OVERSIZED_MODULES` (2624L post-A.3, split prévu en Phase C polish : muninn.py / muninn_install.py / muninn_secrets.py).
+
+**Vérifications** (RULE 4) :
+- Test pin A.3 : 13/13 PASS (TDD : 13/13 fail avant impl → 13/13 pass après).
+- Forge `--gen-props engine/core/muninn.py` : `No public functions found` (BUG-102 destructive detector skip tout — comportement attendu pour générateurs).
+- Full regression : **2407 PASS, 29 skip, 0 fail** (vs 2394 baseline A.2 = +13 = test pin A.3).
+- Smoke test CLI :
+  ```
+  $ HOME=/tmp/fake_a3 python muninn.py install-cron --repo /home/sky/Bureau/MUNINN-
+  install-cron: installed
+    service: /tmp/fake_a3/.config/systemd/user/muninn-prune.service
+    timer:   /tmp/fake_a3/.config/systemd/user/muninn-prune.timer
+    next:    systemctl --user daemon-reload && systemctl --user enable --now muninn-prune.timer
+  $ ls -la /tmp/fake_a3/.config/systemd/user/
+  -rw-r--r-- muninn-prune.service (467 bytes)
+  -rw-r--r-- muninn-prune.timer   (259 bytes)
+  $ HOME=/tmp/fake_a3 python muninn.py install-cron --uninstall ...
+  install-cron: uninstalled
+  ```
+
+**Contrats respectés** :
+- Pas d'invocation `systemctl` depuis Python — Sky run l'activation manuelle (test-friendly + sandbox-safe).
+- Idempotent : 2 calls install → identique. uninstall sur état frais → no-op gracieux.
+- `sys.executable` résolu à install-time (mitige R3 venv/pyenv).
+- `Persistent=true` rattrape les missed runs (machine off à 4h dimanche).
+- `RandomizedDelaySec=600` évite thundering herd si plusieurs repos prune en parallèle.
+- `Nice=10` → prune n'écrase pas la machine.
+- Perms 0o644 (systemd ignore les autres modes).
+
+**Restant Phase A** : A.4 E2E test full auto-session (4h) — dernier chunk avant Phase B (MCP server).
