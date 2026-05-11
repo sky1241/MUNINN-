@@ -346,6 +346,20 @@ def bootstrap_mycelium(repo_path: Path):
     living codebook from scratch on a new repo.
     """
     repo_path = repo_path.resolve()
+    # CRITICAL (2026-05-11 PM hotfix): propagate _REPO_PATH to the package
+    # namespace AND the local module global, then refresh TREE_DIR/TREE_META,
+    # BEFORE any tree write. Without this, the module-level TREE_DIR global
+    # (hardcoded to MUNINN_ROOT at import) wins, and bootstrap_mycelium called
+    # from a test with a tmp_path leaks into the source repo. Caught by
+    # tests/test_wire_observe_latex.py::test_bootstrap_picks_up_tex_files.
+    try:
+        import muninn as _pkg
+        _pkg._REPO_PATH = repo_path
+    except Exception:
+        pass
+    global _REPO_PATH
+    _REPO_PATH = repo_path
+    _refresh_tree_paths()
     print(f"=== MUNINN BOOTSTRAP: {repo_path.name} ===")
 
     if _CORE_DIR not in sys.path: sys.path.insert(0, _CORE_DIR)
@@ -560,11 +574,24 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
 
     content = "\n".join(lines)
 
-    # Write to tree (load_tree FIRST to avoid init_tree overwriting root.mn)
+    # Write to tree. CRITICAL (2026-05-11 PM hotfix): compute target paths
+    # from the `repo_path` argument directly — the legacy module global
+    # TREE_DIR is hardcoded to MUNINN_ROOT at import time and leaks the
+    # source repo when bootstrap_mycelium is called from a test with a
+    # tmp_path target. Propagate _REPO_PATH to the package namespace so
+    # downstream code (load_tree, save_tree) targets the same repo.
+    try:
+        import muninn as _pkg
+        _pkg._REPO_PATH = repo_path
+    except Exception:
+        pass
+    global _REPO_PATH
+    _REPO_PATH = repo_path
     _refresh_tree_paths()
-    TREE_DIR.mkdir(parents=True, exist_ok=True)
+    target_tree_dir = repo_path / ".muninn" / "tree"
+    target_tree_dir.mkdir(parents=True, exist_ok=True)
     tree = load_tree()
-    root_path = TREE_DIR / "root.mn"
+    root_path = target_tree_dir / "root.mn"
     import tempfile as _tmpmod
     _fd, _tmp = _tmpmod.mkstemp(dir=str(root_path.parent), suffix=".tmp")
     try:
@@ -2249,13 +2276,28 @@ def main():
         if not _REPO_PATH:
             _REPO_PATH = repo
             _refresh_tree_paths()
+        # CRITICAL (2026-05-11 PM hotfix): propagate _REPO_PATH to the package
+        # namespace so _m._REPO_PATH (used by _get_tree_dir/meta inside
+        # muninn_tree.py and init_tree's guard) sees the same value. In pip-
+        # install-e mode the package and the _engine module diverge — the
+        # E2E test test_e2e_pip_install_from_scratch leaked into the source
+        # repo because of this exact divergence. Belt-and-suspenders here:
+        # set the local global, mirror to the package, refresh paths, and
+        # compute tree_meta directly from `repo` (no globals at all).
+        try:
+            import muninn as _pkg
+            _pkg._REPO_PATH = repo
+        except Exception:
+            pass
+        _refresh_tree_paths()
         muninn_dir = repo / ".muninn"
         muninn_dir.mkdir(parents=True, exist_ok=True)
-        # Only init tree if it doesn't exist yet (protect existing branches)
-        if not TREE_META.exists():
+        tree_meta = repo / ".muninn" / "tree" / "tree.json"
+        tree_dir = repo / ".muninn" / "tree"
+        if not tree_meta.exists():
             init_tree()
         else:
-            print(f"  Tree already exists: {TREE_DIR} (skipped)")
+            print(f"  Tree already exists: {tree_dir} (skipped)")
         install_hooks(repo)
         print(f"  Muninn ready: {repo}")
         return

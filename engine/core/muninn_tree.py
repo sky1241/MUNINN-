@@ -160,6 +160,25 @@ def cleanup_tmp_files():
 
 
 def init_tree():
+    # Safety net (added 2026-05-11 PM after test_e2e_pip_install leak): refuse
+    # to init a tree under a path that does not belong to the currently bound
+    # _REPO_PATH. Pip-install-e + cwd-mismatch could otherwise have init_tree
+    # clobber the source repo when a downstream `muninn init` runs in a tmp
+    # repo. The check is generous (resolved-path prefix) to tolerate symlinks.
+    repo_path = getattr(_m, "_REPO_PATH", None)
+    if repo_path is not None:
+        try:
+            target = _m.TREE_DIR.resolve()
+            expected_root = Path(repo_path).resolve()
+            if not str(target).startswith(str(expected_root)):
+                raise RuntimeError(
+                    f"REFUSING init_tree: target {target} is outside "
+                    f"the bound repo {expected_root}. This guard catches "
+                    f"the test_e2e_pip_install_from_scratch class of leaks."
+                )
+        except (OSError, ValueError):
+            pass  # missing path resolves are fine — init will create them
+
     _m.TREE_DIR.mkdir(parents=True, exist_ok=True)
 
     tree = {
