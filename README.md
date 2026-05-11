@@ -95,6 +95,27 @@ Sites enforced (via `secure_perms()` from `engine/core/_secrets.py`):
 
 This addresses the production-grade requirement for tech-org installs on shared servers (commits `607f1a7`, `21b4cb3`, `008f9c7`).
 
+## Quickstart — Use Muninn on your own repo
+
+For the impatient : **see [`docs/QUICKSTART.md`](docs/QUICKSTART.md)** — 10 numbered steps from `git clone` to your first `mycelium_recall_local` call from Claude. Tested against a vanilla Linux box, ~5 min if pip is configured.
+
+In two lines :
+
+```bash
+pip install -e "<PATH_TO_MUNINN>[mcp,tokens]"
+cd <YOUR_REPO> && muninn init && muninn bootstrap . && muninn doctor
+```
+
+Then add the `muninn` MCP server to `~/.claude.json` and Claude will have 10 tools to actively query your project's memory during generation : `mycelium_recall_local`, `mycelium_recall_meta`, `mycelium_recall(scope="auto")`, `tree_get_root`, `tree_get_branch`, `tree_list_branches`, `bugs_list`, `bugs_get`, `runbook_list_sections`, `runbook_get`. Full cheatsheet in [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md).
+
+What happens automatically once installed (no further action required from you) :
+- **SessionStart hook** boots Claude with the current `root.mn` + 5 most recently-modified branches each new session.
+- **SessionEnd hook** flushes the local mycelium into the shared `~/.muninn/meta_mycelium.db` (federation across repos) ; guarded with a 60s budget so it never blocks session shutdown.
+- **PreCompact hook** compresses the transcript into a `.mn` file before Claude's context window resets.
+- **PreToolUse hooks** flag destructive `bash` commands, secret leaks, and hardcoded paths before they execute.
+- (Linux only) **Weekly cron timer** prunes stale branches every Sunday 04:00 — see Step 8 of the Quickstart.
+- (Phase B opt-in) **MCP server** exposes the 10 read-only memory tools to Claude during generation. Auto-calibrates the dual-mycelium router threshold on your data after ~30 queries (chunk C.0).
+
 ## Installation
 
 ```bash

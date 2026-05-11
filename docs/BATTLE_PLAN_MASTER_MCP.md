@@ -558,7 +558,23 @@ Même pattern que B.3 pour :
 
 **Commit** : `fix(mcp.C3): test_actr_activation_varies robust to all-zero access_counts`
 
-#### Chunk C.4 — Documentation utilisateur first-onboarding (5h)
+#### Chunk C.4 — Documentation utilisateur first-onboarding (5h) — ✅ DONE 2026-05-11 nuit
+
+**Livré** :
+- `docs/QUICKSTART.md` NEW (~180L) : 10 numbered steps de `git clone` au premier `mycelium_recall_local`. Placeholders `<PATH_TO_YOUR_REPO>` et `<OUTPUT_OF_WHICH_PYTHON>` partout. Section "When to call which MCP tool" avec table des 10 tools.
+- `README.md` : nouvelle section "Quickstart — Use Muninn on your own repo" placée entre Security et Installation. Liens vers QUICKSTART.md + MCP_SETUP.md. Liste explicite des 6 mécanismes auto (SessionStart, SessionEnd, PreCompact, PreToolUse, cron, MCP).
+- `docs/MCP_SETUP.md` : déjà à jour depuis B.5 (cheatsheet 10 tools intégrée).
+- `tests/test_chunk_mcp_c4_quickstart.py` NEW : 8 tests behavioural (existence, numbered steps, bash blocks, essential keywords, no /home/sky hardcode, README link, MCP_SETUP cheatsheet, "When to call" section).
+
+**Vérifications** (RULE 4) :
+- Test pin C.4 : 8/8 PASS en 0.35s.
+- Full regression : **2506 PASS, 42 skip, 0 fail** (+8 = test pin C.4).
+- Zéro touch code prod (docs only) → forge N/A.
+- `grep -c "/home/sky" docs/QUICKSTART.md` → 0 (placeholders only).
+
+**Phase C — état après C.4** : 15/22h livrées (68%). Reste C.5 RETRO + C.2 CI speedup.
+
+
 
 **Objectif** : Onboarding "first-user" lisible en 5min sans connaître le repo.
 
