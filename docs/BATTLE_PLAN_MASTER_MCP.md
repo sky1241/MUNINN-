@@ -4,6 +4,7 @@
 >
 > Issu de la session 2026-05-11 (Sky) — après livraison de :
 > 23 commits le 2026-05-10 (P3 split, BUG-104 fix, forge v1.2.2 bump),
+> + forge v1.3.0 bump le 2026-05-11 (Sky upload PyPI cycle 11+),
 > deep audit 3 agents sur MCP + Muninn current state + Claude Code hooks.
 >
 > Anciens battle plans archivés dans `docs/archive/`. Ce doc est **le seul**
@@ -24,7 +25,7 @@
 - PreCompact compresse session × x132 mesuré
 - 230 036 connexions mycelium local + 7.5M edges meta-mycelium
 - 2339 tests pytest PASS + 103 property tests
-- forge-shield v1.2.2 consommé en CI (forge_smoke matrix 17 modules)
+- forge-shield v1.3.0 consommé en CI (forge_smoke matrix 17 modules)
 - 22+ papers cités + 10 papers cross-validés (`sky1241/tree/CROSSVAL_REPORT.md`)
 
 ### Ce qui manque (gap MESURÉ pour "fully automatic")

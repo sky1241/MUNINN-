@@ -14,7 +14,7 @@
 > **Tests** : **2339 PASS / 47 skip / 0 fail** + **103 property tests** (17 modules)
 > **forge --modularity Q** : **0.664** (good ≥ 0.30)
 > **Bugs OPEN** : **0** depuis BUG-104 FIXED 2026-05-10 PM (spill-to-tree, V9A+ planère)
-> **forge-shield** : **v1.2.2** (PyPI, bumped 2026-05-10 PM)
+> **forge-shield** : **v1.3.0** (PyPI, bumped 2026-05-11 cycle 11+)
 > **Hooks Claude Code** : **9 wirés** au logger central (F5 fix 2026-05-10)
 > **Papers cités** : **22 directs + 10 cross-validation** (`sky1241/tree/CROSSVAL_REPORT`)
 > **CI HEAD** : vert sur 2 jobs (validate + forge_smoke matrix 17 modules)

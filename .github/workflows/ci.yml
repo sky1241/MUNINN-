@@ -141,9 +141,9 @@ jobs:
       - name: Install pytest + runtime deps
         run: |
           python3 -m pip install --upgrade pip
-          # forge-shield is on PyPI since 2026-05-10 v1.2.2 (Sky uploaded).
-          # Bumped from git+v1.1.1 → PyPI pin v1.2.2 (cycles 9-10 add
-          # --shield orchestration + hook installer + venv exclusion fix).
+          # forge-shield is on PyPI since 2026-05-11 v1.3.0 (Sky bump cycle 11+).
+          # Bumped from v1.2.2 → v1.3.0 (cycles 9-10 add --shield orchestration
+          # + hook installer + venv exclusion fix ; v1.3.0 cycle 11+ Sky bump).
           python3 -m pip install -c constraints.txt \
             pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
 

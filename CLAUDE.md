@@ -80,9 +80,9 @@ because primacy bias is real and these are the rules that actually matter.
   before claiming the work is done. Forge is the reality-check tool that
   catches BUG-101, BUG-102, BUG-105, BUG-106 before they hit production.
 
-  Required commands per touched module (forge-shield 1.1.0 PyPI binary
-  since 2026-05-09 — `pip install forge-shield`; legacy `python forge.py`
-  still works during the deprecation window):
+  Required commands per touched module (forge-shield 1.3.0 PyPI binary
+  since 2026-05-11 — `pip install forge-shield`; legacy `python forge.py`
+  was removed 2026-05-09 H1, PyPI is the single source of truth):
     forge --gen-props engine/core/<module>.py
     python3 -m pytest tests/test_props_<module>.py -q
 
@@ -202,10 +202,10 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
 
-## Etat du projet (mai 2026, post-P3 split + BUG-104 fix + forge v1.2.2)
+## Etat du projet (mai 2026, post-P3 split + BUG-104 fix + forge v1.3.0)
 - 43 features + 39 briques Cube, 12 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
 - Engine: **24 731 lignes, 26 fichiers core** (P3 split 2026-05-10 a découpé muninn_tree.py 3929→2179L en 4 modules : core + boot/prune/doctor)
-- forge-shield **v1.2.2** (PyPI) seule source de vérité — bumped 2026-05-10 PM
+- forge-shield **v1.3.0** (PyPI) seule source de vérité — bumped 2026-05-11 (cycle 11+)
 - mycelium federe, meta-mycelium cross-repo (7.5M edges sur 54 jours), spreading activation (Collins & Loftus 1975)
 - Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, forge_metrics integration UX
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API

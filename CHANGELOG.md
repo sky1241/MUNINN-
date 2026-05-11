@@ -1,10 +1,28 @@
 # MUNINN — Changelog
 
-Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 2179 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 501 + vault.py 551 = **24 819 lignes** (26 fichiers core post-P3 split + BUG-104 fix — muninn_tree 3929→2179L via 3 sous-modules doctor/prune/boot ; mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; budget_select 413→501L via BUG-104 spill-to-tree wrapper ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield **v1.2.2** source of truth)
+Engine: muninn.py 2187 + muninn_layers.py 1547 + muninn_tree.py 2179 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1817 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 501 + vault.py 551 = **24 819 lignes** (26 fichiers core post-P3 split + BUG-104 fix — muninn_tree 3929→2179L via 3 sous-modules doctor/prune/boot ; mycelium 3163→1415L via 4 mixins meta/zones/activation/dream ; budget_select 413→501L via BUG-104 spill-to-tree wrapper ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield **v1.3.0** source of truth)
 Tests: **2339 PASS, 47 skipped, 0 xfail, 0 fail** + **103 property tests** (forge --gen-props sur 17 modules) — post-BUG-104 spill fix (+5 brick12 nouveaux + 2 budget_select props).
-forge --modularity Q = **0.664** (stable post-bump v1.1.1 → v1.2.2).
+forge --modularity Q = **0.664** (stable post-bump v1.1.1 → v1.2.2 → v1.3.0).
 **0 BUG OPEN officiel** depuis BUG-104 FIXED 2026-05-10 PM.
 Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shimification 4 fichiers byte-identiques + cube + vault).
+
+---
+
+## 2026-05-11 (midi) — forge-shield v1.3.0 bump (PyPI cycle 11+)
+
+Sky a publié `forge-shield 1.3.0` sur PyPI (cycle 11+ — features publiées depuis MUNINN-/engine/core/forge.py).
+
+- `constraints.txt` : `forge-shield==1.2.2` → `forge-shield==1.3.0`
+- `.github/workflows/ci.yml` : commentaires + pin sync v1.3.0
+- `CLAUDE.md` : RULE 5 + section État synchronisés (v1.1.0 → v1.3.0)
+- `WINTER_TREE.md` header : v1.2.2 → v1.3.0
+- `docs/BATTLE_PLAN_MASTER_MCP.md` : §0 État mesuré sync v1.3.0
+- Smoke test : `forge --version` → `forge-shield 1.3.0` ✅
+
+Nouveautés visibles dans `forge --help` (v1.3.0 vs v1.2.2 mémoire) :
+`--fast-deep` (transitive impact BFS), `--modularity` (Newman Q),
+`--shield` (orchestration cycle 9), `--install-hook` / `--uninstall-hook`
+(git pre-commit). Toutes alignées avec engine/core/forge.py local.
 
 ---
 

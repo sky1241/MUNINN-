@@ -61,11 +61,11 @@ freezegun==1.5.5
 #   `python -m forge` (cycle 9 follow-up E2E catch).
 # v1.2.2 (2026-05-10) : find_tests excludes .venv/.tox/.eggs/.mypy_cache
 #   (cycle 10 E2E catch — forge crashed on its own repo on libcst tests).
+# v1.3.0 (2026-05-11) : Sky bump on PyPI (cycle 11+).
 #
 # H1 (2026-05-09) : the 3 legacy forge.py copies (root + engine/core +
 # muninn) were removed — PyPI forge-shield is the single source of truth.
 # cube_analysis.py and test_props_forge.py now `from forge`.
 #
-# v1.2.2 is on PyPI since 2026-05-10 (Sky uploaded after writing
-# docs/PYPI_UPLOAD_GUIDE.md). Bumped from git+v1.1.1 to PyPI pin.
-forge-shield==1.2.2
+# v1.3.0 is on PyPI since 2026-05-11 (Sky uploaded). Bumped v1.2.2 → v1.3.0.
+forge-shield==1.3.0
