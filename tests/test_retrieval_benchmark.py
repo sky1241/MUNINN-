@@ -569,7 +569,20 @@ def test_tfidf_relevance_meaningful():
 
 
 def test_actr_activation_varies():
-    """A2: ACT-R activation should vary across branches."""
+    """A2: ACT-R activation should vary across branches.
+
+    Hardened 2026-05-11 (chunk C.3): the previous version flagged
+    std=0 as a fail whenever access_counts had >1 distinct value.
+    But `_actr_activation` treats `reviews <= 1` (the `if`/`else` branch
+    at L113) identically for reviews=0 AND reviews=1 — both produce
+    `t_j = [total_days]`, same raw_sum, same activation. So access_counts
+    in {0, 1} *correctly* yield std=0, and the assertion was wrong.
+
+    New rule : the fail only fires when at least one branch has
+    `access_count >= 2` (which would make `_actr_activation` produce
+    multiple `t_j` terms and therefore a different value). Otherwise
+    std=0 is the expected output of the model, not a regression.
+    """
     _, nodes = _load_tree_and_nodes()
     acts = [_actr_activation(nd) for n, nd in nodes.items() if n != "root"]
     if len(acts) < 10:
@@ -578,14 +591,23 @@ def test_actr_activation_varies():
     mean = sum(acts) / len(acts)
     std = (sum((a - mean) ** 2 for a in acts) / len(acts)) ** 0.5
     print(f"  A2 ACT-R: mean={mean:.3f} std={std:.3f}")
-    # With uniform access patterns (e.g. all branches created same day), std can be 0
+    # With uniform-ish access patterns (all branches same access_count, or
+    # all branches with access_count <= 1), std can legitimately be 0 — the
+    # _actr_activation formula collapses both reviews=0 and reviews=1 to the
+    # same single-term sum.
     if std < 0.01:
-        # Check if all branches truly have same access pattern
-        access_counts = set(nd.get("access_count", 0) for n, nd in nodes.items() if n != "root")
-        if len(access_counts) <= 1:
-            print(f"  A2 NOTE: all branches have same access_count={access_counts}, std=0 expected")
+        access_counts = [nd.get("access_count", 0) for n, nd in nodes.items() if n != "root"]
+        unique_counts = set(access_counts)
+        max_count = max(access_counts) if access_counts else 0
+        if len(unique_counts) <= 1:
+            print(f"  A2 NOTE: all branches have same access_count={unique_counts}, std=0 expected")
+        elif max_count <= 1:
+            print(f"  A2 NOTE: all access_counts in {{0,1}} — _actr_activation collapses these to the same value, std=0 expected")
         else:
-            assert False, f"A2 FAIL: constant (std={std}) despite varied access_counts"
+            assert False, (
+                f"A2 FAIL: constant (std={std}) despite access_counts "
+                f"with max={max_count} (model should produce variance)"
+            )
 
 
 def test_v6b_valence_decay():
