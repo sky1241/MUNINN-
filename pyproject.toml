@@ -55,6 +55,7 @@ markers = [
     "scanner: Code scanners and analysis",
     "audit: Audit and hardening tests",
     "slow: Tests that hit external APIs or take >10s",
+    "e2e: End-to-end install + init tests (opt-in via MUNINN_RUN_E2E=1, ~60-120s)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -319,3 +319,28 @@ jobs:
       - name: Run all generated property tests (test_props_*.py)
         run: |
           pytest tests/test_props_*.py -q --tb=short
+
+  e2e:
+    # Chunk MCP A.4: E2E pip install from scratch + muninn init + doctor ALL GREEN.
+    # Push-only (not on PRs) — pip install -e takes 60-120s, would slow every PR.
+    # Validates that Phase A (SessionStart + SessionEnd sync + install-cron) works
+    # end-to-end from a vierge venv.
+    if: github.event_name == 'push'
+    needs: [validate]
+    runs-on: ubuntu-latest
+    name: E2E pip install from scratch (Phase A pin)
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install pytest in the runner Python
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest
+      - name: Run E2E pin (creates venv + pip install -e + muninn init + doctor)
+        env:
+          MUNINN_RUN_E2E: "1"
+        run: |
+          pytest tests/test_e2e_pip_install_from_scratch.py -v --tb=short

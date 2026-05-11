@@ -717,3 +717,40 @@ gravée AVANT B.3 :
 - Perms 0o644 (systemd ignore les autres modes).
 
 **Restant Phase A** : A.4 E2E test full auto-session (4h) — dernier chunk avant Phase B (MCP server).
+
+### État au 2026-05-11 (soir) — chunk A.4 DONE → Phase A 100% COMPLET
+
+**Phase A.4 — Test E2E "from scratch"** livré, **clôture de Phase A**.
+
+**Livré** :
+- `tests/test_e2e_pip_install_from_scratch.py` (~200L) — 7 tests behavioural avec fixture session-scoped (1 venv + pip install -e amorti) :
+  1. venv + pip install -e .[tokens] succeeds + entry point `muninn` créé
+  2. `muninn init` crée `.muninn/` + tree (root.mn)
+  3. `muninn init` registre tous les hooks (UserPromptSubmit, PreCompact, SessionEnd, Stop, PostToolUseFailure, SubagentStart, **SessionStart** A.1) dans `.claude/settings.local.json`
+  4. `.claude/hooks/session_start_hook.py` existe + structure valide (def main, hookSpecificOutput, SessionStart)
+  5. `muninn doctor` returns `ALL GREEN — N checks passed` (fail=0, WARN tolérés)
+  6. `install-cron` sub-command (A.3) bien registered (pas d'`invalid choice`)
+  7. `muninn --help` mentionne init / doctor / install-cron (anti-régression entry-point)
+- `pyproject.toml` : marker `e2e: ... (opt-in via MUNINN_RUN_E2E=1, ~60-120s)`.
+- `.github/workflows/ci.yml` : nouveau job `e2e` (push-only, needs validate, MUNINN_RUN_E2E=1).
+
+**Skip par défaut** : `@pytest.mark.e2e` + `skipif MUNINN_RUN_E2E != "1"` (~60-120s avec install pip, opt-in pour ne pas slow PR).
+
+**Vérifications** (RULE 4) :
+- Test pin A.4 sans opt-in : 7 skipped en 0.4s ✅
+- Test pin A.4 avec `MUNINN_RUN_E2E=1` : 7 PASS en 8.10s (fixture session-scoped efficace) ✅
+- Bug catché en cours : doctor reportait `[FAIL] tiktoken missing` parce que pyproject.toml met tiktoken en `[project.optional-dependencies]` `tokens`. Fix : test utilise `pip install -e .[tokens]` pour matcher l'install user réel `pip install muninn-memory[tokens]`.
+- Full regression locale : **2407 PASS, 36 skip** (+7 E2E skip par défaut), 0 fail.
+- Aucune modification engine/core/ → forge NON requis.
+
+**Phase A — Récap final** :
+| Chunk | Statut | Tests pin | Commit |
+|---|---|---|---|
+| A.1 SessionStart hook + auto-boot | ✅ DONE | 13/13 PASS | `c56245c` |
+| A.2 SessionEnd auto-sync guarded | ✅ DONE | 9/9 PASS | `0542581` |
+| A.3 systemd timer install-cron | ✅ DONE | 13/13 PASS | `d4feee6` |
+| A.4 E2E from scratch | ✅ DONE | 7/7 PASS (opt-in) | _ce commit_ |
+
+**Phase A totale** : 4 chunks, 42 tests pin, 2407 PASS local, 100% CI verte sur A.1+A.2+A.3 (A.4 inclura nouveau job e2e push-only).
+
+**Next : Phase B — MCP server core** (42h, 5 chunks, KILLER FEATURE). Le 1er chunk B.1 sera "scaffold + dependency mcp on PyPI". Voir §3 Phase B + §Dual-mycelium routing pour la spec gravée AVANT exécution.
