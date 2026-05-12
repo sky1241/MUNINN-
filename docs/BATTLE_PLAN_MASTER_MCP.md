@@ -610,27 +610,6 @@ Plus une note finale honnête sur le côté humain (Sky en gestion famille + dis
 
 **Phase C — état final partiel** : C.0 ✅ + C.1 ✅ + C.3 ✅ + C.4 ✅ + C.5 ✅ = 5/6 chunks livrés. **Reste UNIQUEMENT C.2 CI speedup** (3h, gardé pour quand Sky est réveillé car ça modifie `ci.yml` et c'est le seul chunk avec risque de casser la CI elle-même).
 
-#### Chunk C.2 — CI speedup ~40min → ~10min (3h plané, ~30min réel) — ✅ DONE 2026-05-12 matin
-
-**Livré** (commit `c7b15f5`) :
-- `.github/workflows/ci.yml` :
-  - Job `validate` : ajout de `pytest -n auto` + `pytest-xdist` dans la liste d'install.
-  - Job `forge_smoke` : transformation du `for f in engine/core/...; do forge --gen-props "$f"; done` séquentiel → `strategy.matrix` GitHub Actions sur 17 modules. `fail-fast: false`, `max-parallel: 10`, job names `forge_smoke (${{ matrix.module }})`.
-- `constraints.txt` : `pytest-xdist==3.6.1` pinned.
-- `tests/test_chunk_mcp_c2_ci_speedup.py` NEW : 8 tests behavioural qui pinnent la structure (pytest-xdist installé, `-n auto` présent, `strategy.matrix` + `fail-fast: false`, 17 modules listés par nom, plus de boucle shell legacy).
-
-**Audit pré-chunk 3-agents** :
-- Audit isolation pytest-xdist (Explore agent) : verdict "95%+ tests parallel-safe, deploy immediately". Conftest.py:91 (`_repo_path_isolate()` autouse, CHUNK B7 2026-05-08) snapshot/restore `_REPO_PATH` + `TREE_DIR` + `TREE_META` autour de chaque test, zéro fuite cross-worker.
-- Audit GHA matrix 2026 (claude-code-guide agent) : syntax confirmée, `needs: [validate]` compatible matrix, `max-parallel: 10` reste sous quota free-tier (20 concurrent).
-
-**Vérifications** (RULE 4) :
-- Test pin C.2 : 8/8 PASS en 0.34s.
-- Full pytest local avec `-n auto` (flags CI exacts) : **2507 passed, 41 skipped, 0 fail en 82.93s** (vs ~5min sans xdist).
-- Collection check : `2548 collected = 2507 + 41`. Aucun test masqué silencieusement par xdist.
-- YAML syntax : `python3 yaml.safe_load(ci.yml)` → OK, 3 jobs (validate / forge_smoke / e2e), 17 modules in matrix, `fail-fast: False`, `max-parallel: 10`.
-
-**Phase C — état final** : **6/6 chunks livrés (100%)**. C.0 ✅ + C.1 ✅ + C.2 ✅ + C.3 ✅ + C.4 ✅ + C.5 ✅. Phase C COMPLÈTE. ~22h de roadmap initiale livrées en ~12h effectives.
-
 
 
 **Objectif** : Capturer les apprentissages pour Phase D et au-delà.
