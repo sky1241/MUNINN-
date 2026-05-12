@@ -29,9 +29,9 @@ classifiers = [
 [project.optional-dependencies]
 tokens = ["tiktoken>=0.5"]
 llm = ["anthropic>=0.20"]
-quality = ["forge-shield>=1.1.0"]  # Phase 4 (2026-05-09): regression shield + carmack/locate/modularity for cube heatmap UX
+quality = ["forge-shield>=2.1.0"]  # Phase 4 (2026-05-09): regression shield + carmack/locate/modularity for cube heatmap UX
 mcp = ["mcp>=1.7.1,<2.0"]  # Phase B (2026-05-11): MCP server for Claude Code integration
-all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=1.1.0", "mcp>=1.7.1,<2.0"]
+all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=2.1.0", "mcp>=1.7.1,<2.0"]
 
 [project.urls]
 Homepage = "https://github.com/sky1241/MUNINN-"
