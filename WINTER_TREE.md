@@ -3,7 +3,37 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
-> ### 📍 SNAPSHOT 2026-05-12 (à jour — post-Phase D 4/5)
+> ### 📍 SNAPSHOT 2026-05-12 (soir — post-Phase E hardening 7/7 + F.1/F.2/F.3 + intégration MCP prouvée live)
+>
+> **Engine** : ~26 700 lignes / 33 fichiers core (+200L Phase E+F : argparse muninn-mcp-mem + uninstall_hooks + 25 nouveaux tests)
+> - `pyproject.toml` 1.0.1 → 1.0.2 → **1.0.3** (E.7 + F.1 bumps, 4 mirrors en sync)
+> - **Console scripts renommés** (E.3) : `muninn-mem` / `muninn-mycel` / `muninn-mcp-mem` (collision PyPI prod : `muninn` S&T data catalog, `mycelium` greenbyte, `muninn-mcp` Ilwon Yoon existaient déjà)
+> - `engine/core/muninn_install.py` : NEW `uninstall_hooks(repo, purge_data=False)` (F.1, ~120L) — companion à `install_hooks`, retire hooks .py + strip settings.local.json + delegate install_cron(uninstall=True), garde .muninn/ user data par défaut
+> - `muninn/mcp/server.py` : NEW argparse dans `main()` (E.4) → `--help` / `--version` / `--list-tools` exit cleanly avant stdio loop (était hang infini avant)
+> - `tests/test_chunk_mcp_e4_mcp_argparse.py` + `e5_doc_drift.py` + `e6_hardened.py` + `f1_uninstall.py` : 25 nouveaux tests (10 REAL + 12 MEDIUM + 3 LOW — honest classification post-audit)
+> - `.github/workflows/ci.yml` : ajouté `mcp` au pip install (F.2 root cause des 6 push rouges) — install line `pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield mcp`
+> - `constraints.txt` : pinned `mcp==1.27.1` (F.2)
+> - `tests/test_e2e_pip_install_from_scratch.py` : `bin/muninn` → `bin/muninn-mem` (F.3 régression E.3 rename)
+> - `.mcp.json` NEW (gitignored) : config muninn MCP pour Claude Code, pointe sur `/tmp/muninn_session_venv/bin/muninn-mcp-mem`
+> - `.claude/settings.local.json` : ajouté `permissions: {allow:[], deny:[]}` (orange warning resolved 2026-05-12 soir)
+>
+> **Tests** : **2546 PASS / 0 fail** + **18 property tests**
+> **forge --modularity Q** : **0.671** (stable, ↑ vs 0.664 du matin)
+> **Bugs OPEN** : **0** (mais **1 bug latent identifié** F.4 stopwords incomplète, fix planifié Phase G)
+> **PyPI release** : **muninn-memory 1.0.3 sur TestPyPI** (https://test.pypi.org/project/muninn-memory/1.0.3/). Prod 1.0.3 ready — décision Sky reportée à demain
+> **CI HEAD `107a0ad`** : **3/3 jobs GREEN** (validate + forge_smoke + E2E) — premier vert depuis E.3 commit
+>
+> **Intégration MCP prouvée live dans vraie session Claude Code** :
+> - Sky a lancé une nouvelle Claude Code session → Claude a appelé les 3 tools verbatim
+> - `recall_local("compression")` → tree(1.0), claude(0.16), branches(0.0096)
+> - `recall_meta("compression")` → pas(1.0), est(0.99), les(0.83) ⚠️ stopwords FR pollution (F.4 à fix)
+> - `recall(scope=auto, "forge")` → scope_used="auto→local", strength_local=5.0 > threshold_used=3.4497 (**auto-calibration C.0 visible LIVE en prod** — premier signal externe que ce chunk marche)
+>
+> **Phase state** : A 4/4 ✅ + B 6/6 ✅ + C 5/6 ✅ (C.2 reverted) + D 4/5 ✅ (D.3 pending) + E 7/7 ✅ + F.1+F.2+F.3 ✅ + 1 bug latent F.4 identifié pour Phase G
+>
+> **Battle plan demain (Phase G)** : `docs/BATTLE_PLAN_PHASE_G_2026-05-13.md` — compilation des findings deep audit 4-agents post Phase F
+>
+> ### 📍 SNAPSHOT 2026-05-12 (matin — post-Phase D 4/5)
 >
 > **Engine** : **26 499 lignes / 33 fichiers core** (post-Phase D + bug pre-existant pip-install fix)
 > - `pyproject.toml` 1.0.0 → **1.0.1** (D.1 + D.4/D.5 fixes inclus)

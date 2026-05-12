@@ -44,3 +44,4 @@ memory/*.lock
 
 # Claude Code runtime locks
 .claude/*.lock
+.mcp.json

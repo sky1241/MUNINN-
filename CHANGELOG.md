@@ -8,6 +8,70 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-12 (après-midi/soir) — Phase E hardening 7/7 + Phase F.1/F.2/F.3 + 1.0.3 sur TestPyPI + intégration MCP prouvée live
+
+### Vue d'ensemble Phase E
+
+Deep audit 4-agents (post Phase D) a révélé 4 blockers critiques + 6 issues importantes + 36 weak tests. Phase E = correction systématique en 7 chunks chunk-par-chunk avec explication ROOT CAUSE / WHO FAILED à chaque step (méthode demandée par Sky pour anti-bullshit).
+
+| Chunk | Commit | Status | Note |
+|---|---|---|---|
+| E.1 empty-repo guard re-verify | (pas de code) | ✅ | Faux positif de l'agent runtime — D.4 marche en pip-install 1.0.1 confirmé live |
+| E.2 mcp_recall_demo.py fix + runtime test | `e2fe646` | ✅ | Bug critique : script crashait avec `AttributeError`. Fix : utilise `_tree_get_root_impl` / `_recall_dual_impl` au module level. Nouveau test `test_d5_examples_scripts_run_without_attribute_errors` qui aurait dû exister en D.5 |
+| Chore version bump 1.0.0→1.0.1 | `9d56a1d` | ✅ | Le bump était LOCAL-ONLY pendant D.2bis re-upload TestPyPI. Découverte pendant push E.2. 4 mirrors maintenant en sync via commit |
+| E.3 console scripts rename | `4065b8b` | ✅ | Collision PyPI prod : `muninn` (S&T 7.2.1), `mycelium` (greenbyte 0.4.9), `muninn-mcp` (Ilwon Yoon 0.2.0) existaient déjà. Renommé : `muninn-mem` / `muninn-mycel` / `muninn-mcp-mem`. 10 fichiers touchés (pyproject + 5 docs + welcome banner code + 1 test) |
+| E.4 muninn-mcp-mem argparse | `3df1d90` | ✅ | `--help` hang infini en stdio loop. Fix : argparse intercepte `--help`/`--version`/`--list-tools` avant `app.run()`. Test pin 6 tests subprocess + timeout |
+| E.5 doc drift cleanup + regression tests | `0400300` | ✅ | 4 drifts fixés (README 2356→2561 tests + dead BATTLE_PLAN link + QUICKSTART 0.9.x→1.0.x + CLAUDE.md 9→10 hooks). NEW `tests/test_chunk_mcp_e5_doc_drift.py` (6 tests) avec link resolver permanent |
+| E.6 hardened tests | `31baa04` | ✅ | 6 nouveaux tests forts (sdist real-build extraction, shlex parse systemd, doctor live run, env var clamp via reload, top_k bounds negative + huge) en remplacement (parallèle) des 5 plus dangereux grep-presence |
+| Bump 1.0.1 → 1.0.2 | `0dd714a` | ✅ | 4 mirrors version. Upload TestPyPI 1.0.2 OK + end-to-end install validé |
+| Docs wrap-up Phase D | `4cc0de3` | ✅ | CHANGELOG + WINTER_TREE snapshot + `docs/TEST_PROTOCOL_PHASE_D_2026-05-12.md` (12 étapes manual) |
+
+### Vue d'ensemble Phase F (CI hotfixes)
+
+Sky a remonté que 6 push consécutifs (E.3→F.1) étaient ROUGES sur GitHub Actions et que j'avais continué sans regarder. Root cause unique + 2 régressions secondaires :
+
+| Chunk | Commit | Status | Note |
+|---|---|---|---|
+| F.1 muninn-mem uninstall + bump 1.0.3 | `a8c77e5` | ✅ | NEW sub-command `uninstall [--purge-data]` + new function `uninstall_hooks()`. Strip muninn entries de settings.local.json + delete hook .py files + delegate to `install_cron(uninstall=True)`. Default keeps `.muninn/` user data. Test pin 7 tests |
+| F.2 fix CI rouge — mcp install + skipif | `7e71cc3` | ✅ | Root cause : CI base install n'avait pas `mcp` package. Mes tests E.4/E.6 subprocess `python -m muninn.mcp.server` crashaient ImportError. Fix : ajouté `mcp` à ci.yml (2 install lines) + pinned `mcp==1.27.1` en constraints + `pytest.importorskip("mcp")` defense-in-depth dans E.4 et E.6 |
+| F.3 fix E2E test hardcoded bin/muninn | `107a0ad` | ✅ | Régression E.3 jamais détectée : `test_e2e_pip_install_from_scratch.py` hardcodait `venv_dir / "bin" / "muninn"`. Après rename, fichier inexistant. Fix : `bin/muninn` → `bin/muninn-mem`. Test E2E opt-in (MUNINN_RUN_E2E=1) jamais lancé en local |
+
+### État final 2026-05-12 soir
+
+**CI HEAD 107a0ad** : 3/3 jobs GREEN
+- Validate Engine + Mycelium + Tree : SUCCESS
+- forge --gen-props (smoke matrix) : SUCCESS
+- E2E pip install from scratch : SUCCESS
+
+**Premier vert depuis E.3 commit** (6 push intermédiaires rouges avant le diagnostic F.2).
+
+**TestPyPI 1.0.3 live** : https://test.pypi.org/project/muninn-memory/1.0.3/
+
+**Intégration MCP prouvée LIVE dans une vraie session Claude Code** (premier vrai consumer-side test) :
+- `mycelium_recall_local("compression", top_k=3)` retourne `tree(1.0)`, `claude(0.16)`, `branches(0.0096)` en 110ms
+- `mycelium_recall_meta("compression", top_k=3)` retourne `pas(1.0)`, `est(0.99)`, `les(0.83)` en 1.4ms — **stopwords français dominent** (cf. issue ouverte F.4 ci-dessous)
+- `mycelium_recall(scope="auto", "forge", top_k=5)` : smart router décide `auto→local` car `strength_local=5.0 > threshold_used=3.4497` (auto-calibration C.0 visible LIVE en prod), retourne 5 concepts du repo (valider, testé, obligatoire, confirme, commité)
+
+**Hooks Phase A (35 tests)** : auto-feed mycelium pendant Claude Code session — PASS.
+
+### Stats fin de journée
+
+- Engine : 26 499 → ~26 700 lignes (+200 L Phase E+F : argparse + uninstall + 18 tests)
+- Tests : 2546 PASS / 0 fail / +25 nouveaux Phase E+F
+- forge --modularity Q : 0.671 (stable)
+- Bugs OPEN : 0
+- PyPI : **muninn-memory 1.0.3 sur TestPyPI**, prod 1.0.3 ready (décision Sky reportée à demain)
+
+### Bug latent identifié (à fixer demain en Phase G) — F.4 stopwords
+
+`engine/core/mycelium.py:1252` `_STOPWORDS` set incomplete pour français. Manque : `pas, est, les, le, la, de, du, des, à, et, ou, un, une, je, tu, il, on, ce, que, qui, a` (verbe avoir). Conséquence : meta-mycelium pollué par stopwords (top concepts `pas/est/les` sur recall meta). Pas un blocker prod (smart router C.0 auto-évite meta quand local est fort), mais qualité user-facing dégradée. Plan F.4 ci-dessous.
+
+### Battle plan Phase G (demain) — voir [`docs/BATTLE_PLAN_PHASE_G_2026-05-13.md`](docs/BATTLE_PLAN_PHASE_G_2026-05-13.md)
+
+Compilation des findings deep audit 4-agents post Phase E+F. À attaquer chunk par chunk avec Sky reposé.
+
+---
+
 ## 2026-05-12 (journée) — Phase D 4/5 livré + 1.0.1 sur TestPyPI + C.2 reverted
 
 ### Vue d'ensemble
