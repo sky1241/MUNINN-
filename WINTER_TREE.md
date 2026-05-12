@@ -3,6 +3,27 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-12 (nuit — Phase G+H exec partiel via PROMPT_EXEC_PHASE_H.md)
+>
+> **22 chunks Phase G+H livrés** (G.1-G.10 sans G.7/G.9, H.0-H.8 sans H.6b).
+> Push 1/2 (HEAD `40f23db`, 11 commits) confirmé VERT par CI 3/3 jobs SUCCESS
+> verbatim. Reportés : H.6 migration settings live, H.6b vault crypto sur prod
+> (RULE 2 destructive), H.10 bump 1.1.0, I.1-I.5 Phase I.
+>
+> **CLI surface élargi** :
+> - `muninn-mem cube --cube-action {scan,run,status,god}` — 5597 LOC débloquées (H.1)
+> - `muninn-ui` console + `python -m muninn.ui` — 11712 LOC débloquées (H.2)
+> - `muninn-mem prune --include-dreams` — Sleep Consolidation 561 LOC (H.3)
+> - `muninn-mem metrics [--output PATH]` — forge_metrics 344 LOC (H.4)
+> - env `MUNINN_RECALL_STOPWORD_PERCENTILE` 0.05 default — filtre meta MCP (G.1)
+> - env `MUNINN_DEBUG` — bypass friendly error handler (G.3)
+> - env `MUNINN_L12_BUDGET` default 16000 (flipped opt-in→out, H.6c)
+>
+> **Garde-fous CI** :
+> - `test_h0_no_orphan.py` — 6 facettes anti-dormant (engine/UI/env vars/argparse/CLI/hooks)
+> - `test_h8_api_bloat_baseline.py` — ratchet MyceliumDB 52 / Mycelium 20 / Cube 4
+>
+
 > ### 📍 SNAPSHOT 2026-05-12 (nuit — post-cleanup seigneur dev + forge 2.1.2 + 5 audits compilés)
 >
 > **Cleanup seigneur dev commit `bd33f98` (LOCAL, non pushé)** :

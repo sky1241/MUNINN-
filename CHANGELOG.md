@@ -1,5 +1,51 @@
 # MUNINN — Changelog
 
+## 2026-05-12 (nuit) — Phase G+H exec partiel via PROMPT_EXEC_PHASE_H.md (22 chunks)
+
+### Split push 1/2 (CI vert 3/3 jobs verbatim)
+
+| Chunk | Commit | Note |
+|---|---|---|
+| chore CLAUDE.md cap | `bc62cf9`+`c845adb` | wire PROMPT_EXEC_PHASE_H.md actif + cap 300→320 |
+| G.1 stopword universel degré | `fb6739e` | filtre top 5% degree au query-time meta MCP (env var MUNINN_RECALL_STOPWORD_PERCENTILE) |
+| G.2 doc drift `muninn`→`muninn-mem` | `bcfaba3` | 40 sites 15 fichiers + RESOLVED header archived BUG_HOOKS |
+| G.3 friendly errors | `047cb0f` | wrapper FileNotFoundError/etc + MUNINN_DEBUG escape, mirror BUG-091 |
+| G.4 F.1 tests slow | `e353c56` | `pytestmark = pytest.mark.slow` |
+| G.5 ~/.pypirc security note | `82363ad` | README only, pas de git config global side-effect |
+| G.6 doctor pre-init | `19a03e4` | short-circuit no .muninn/ → 4 checks au lieu de 26 + D.5 install-health globaux |
+| G.8 + G.10 Python honest + audit recount | `263e07c` | `requires-python = ">=3.13"` + classifiers 3.10/3.11/3.12 retirés + CHANGELOG E.6 recount |
+| H.0 garde-fou anti-orphan | `59817e6` | 6 tests pin (engine/UI/env vars/argparse/CLI/hooks) — 2 xfail tempo H.2/H.6 |
+| H.1 wire muninn-mem cube CLI | `e45341c` | argparse + handler + mirror + JSON output (5597 LOC débloquées) |
+| sanity fixes G.1/G.6/G.8 régressions | `40f23db` | D.1/E.6/c10c11 alignés + xfail H.0 RED-par-design |
+
+### Split push 2/2 (chunks en cours / pendant cette session)
+
+| Chunk | Commit | Note |
+|---|---|---|
+| H.2 muninn-ui console script | `451dbf0` | pyproject scripts + extras ui + __main__.py (11 712 LOC débloquées) |
+| H.2b UI tests réactivés CI | `96b2365` | retire --ignore-glob, ajoute QT_QPA_PLATFORM offscreen + apt libs + PyQt6/pytest-qt pinned |
+| H.3 prune --include-dreams | `cf25a78` | wire Sleep Consolidation (Wilson & McNaughton 1994, 561 LOC débloquées) |
+| H.4 muninn-mem metrics CLI | `56e14ce` | wire forge_metrics + --output revive (344 LOC débloquées) |
+| H.5 + H.5b cleanup config | `5a661ec` | MUNINN_GL_SOFTWARE / --output déjà résolus ; memory/ legacy doc note |
+| H.6c L12 BudgetMem default 16000 | `43acd85` | flip opt-in→opt-out, backward compat sur petits inputs |
+| H.6 hooks défensifs test pin | `941a8e0` | install_hooks() registers déjà 3 défensifs, Sky doit re-init pour migrer settings.local.json |
+| H.7 sync_tls/watchdog banners | `fb4b616` | docstrings statut [EXPERIMENTAL]/[DORMANT] sans move (préserve imports) |
+| H.8 garde-fou API bloat | `51cef3e` | ratchet MyceliumDB 52 / Mycelium 20 / Cube 4 méthodes publiques |
+
+### Reportés à session ultérieure (RULE 2 destructive shared-state)
+- H.6b vault auto-lock — confirmation Sky nécessaire (crypto sur prod .muninn/mycelium.db)
+- H.6 migration settings.local.json live — Sky re-run `muninn-mem init` quand prêt
+- I.1-I.5 Phase I (wiring-check + zombie + final verify)
+- H.10 bump 1.1.0 + build sanity (faire après I.5 pour stabilité)
+
+### Stats fin de session
+- Engine touched : muninn.py, _engine.py (mirror), muninn_layers.py, muninn_tree_doctor.py, muninn_tree_prune.py, muninn/mcp/server.py
+- Tests ajoutés : G.1 (4), G.2 (2), G.3 (4), G.4 (1), G.6 (2), G.8 (1), H.0 (6 — 2 xfail), H.1 (6), H.2 (5), H.2b (4), H.3 (5), H.4 (5), H.6 (2), H.6c (3), H.8 (4) = **54 nouveaux tests**
+- CI push 1 (HEAD 40f23db) : 3/3 jobs SUCCESS verbatim — premier signal vert après tous les fixes Phase G
+- LOC débloquées en prod : ~17 800 (cube 5597 + UI 11712 + dream 561 + forge_metrics 344 + l12 default)
+
+
+
 Engine: muninn.py 2625 + muninn_layers.py 1547 + muninn_tree.py 2325 + muninn_tree_doctor.py 297 + muninn_tree_prune.py 678 + muninn_tree_boot.py 903 + muninn_feed.py 1962 + cube.py 1558 + cube_providers.py 2124 + cube_analysis.py 1915 + mycelium.py 1415 + mycelium_meta.py 428 + mycelium_zones.py 383 + mycelium_activation.py 545 + mycelium_dream.py 561 + mycelium_db.py 1401 + sync_backend.py 1149 + sync_tls.py 643 + forge_metrics.py 344 + wal_monitor.py 109 + tokenizer.py 48 + lang_lexicons.py 1007 + lexicons.py 285 + dedup.py 244 + budget_select.py 501 + vault.py 551 + muninn/mcp/server.py 225 (B.1) = **~25 273 lignes** (27 fichiers core post-Phase A + B.1 + BUG-111 hotfix — muninn_tree 3929→2325L incl. init_tree guard ; muninn_feed +145L for _sync_to_meta_guarded ; muninn.py +250L for install_cron + _generate_session_start_hook ; forge.py REMOVED 2026-05-09 H1 → PyPI forge-shield **v1.3.0** source of truth).
 Tests: **2421 PASS, 36 skipped, 0 xfail, 0 fail** + **104 property tests** (forge --gen-props sur 18 modules) — post-Phase A (A.1-A.4) + B.1 + BUG-111 hotfix (+13 A.1 + 9 A.2 + 13 A.3 + 7 E2E A.4 opt-in + 10 B.1 + 5 A.5 isolation).
 forge --modularity Q = **0.664** (stable).
