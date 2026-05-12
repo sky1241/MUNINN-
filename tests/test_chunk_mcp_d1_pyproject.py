@@ -128,8 +128,11 @@ def test_d1_console_script_targets_importable():
         except ImportError as e:
             # Expected if the [mcp] extra isn't installed — the mcp module
             # itself raises a clear "install with [mcp]" message at import.
+            # E.3 (2026-05-12) renamed cmd_name muninn-mcp → muninn-mcp-mem ;
+            # we match both for backward-compat with old branches/tags.
             msg = str(e).lower()
-            if cmd_name == "muninn-mcp" and "mcp" in msg and (
+            is_mcp_script = "mcp" in cmd_name  # matches muninn-mcp or muninn-mcp-mem
+            if is_mcp_script and "mcp" in msg and (
                 "requires" in msg or "no module named 'mcp'" in msg
             ):
                 continue  # expected, optional extra not installed
