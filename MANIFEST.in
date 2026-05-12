@@ -1,0 +1,28 @@
+# MANIFEST.in — controls what goes into the source distribution (sdist).
+#
+# CHUNK MCP D.1 (2026-05-12): added for first PyPI 1.0.0 release.
+# Setuptools' [tool.setuptools.packages.find] include=["muninn*"] picks
+# the Python tree, but it does NOT auto-exclude internal data dirs that
+# live INSIDE the package (e.g. muninn/.muninn/edits_log.jsonl).
+#
+# Without these prune directives, `python -m build` would ship Sky's
+# local debug state to every PyPI user. That's both useless data weight
+# and a privacy leak.
+
+# Top-level files PyPI needs visible
+include README.md LICENSE CHANGELOG.md
+
+# UI runtime assets (templates, fonts, scan presets) — needed by muninn/ui
+recursive-include muninn/ui *.json *.txt *.ttf *.png
+
+# Strip Sky-local debug state living inside the package tree
+prune muninn/.muninn
+prune muninn/ui/scans
+
+# Standard Python build artifacts and editor noise
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude .DS_Store
+global-exclude *.egg-info

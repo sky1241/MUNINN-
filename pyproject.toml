@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "muninn-memory"
-version = "0.9.2"
+version = "1.0.0"
 description = "LLM memory compression engine — compresses session transcripts into dense .mn files"
-readme = "README.md"
+readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
@@ -14,8 +14,9 @@ authors = [
 ]
 keywords = ["llm", "memory", "compression", "context-window", "ai"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -43,7 +44,13 @@ mycelium = "muninn.mycelium:main"
 muninn-mcp = "muninn.mcp.server:main"  # Phase B chunk B.1 (2026-05-11)
 
 [tool.setuptools.packages.find]
-include = ["muninn*"]
+# CHUNK MCP D.1 (2026-05-12): ship both muninn/ AND engine/ packages.
+# The shims in muninn/* (tokenizer, _secrets, vault, mycelium, etc.) do
+# `from X import *` (bare name) after injecting engine/core/ into sys.path
+# at import time. In a pip-installed wheel, that injection points to a
+# non-existent dir unless we also ship engine/core/. Confirmed broken at
+# 0.9.2 by venv install + `muninn --help` → ModuleNotFoundError 'tokenizer'.
+include = ["muninn*", "engine*"]
 
 [tool.setuptools.package-data]
 "muninn" = ["*.py"]
