@@ -70,7 +70,7 @@ pip install -e ".[mcp,tokens]"
 Verify :
 
 ```bash
-muninn-mem --version    # should print "muninn 0.9.x"
+muninn-mem --version    # should print "muninn 1.0.x"
 muninn-mcp-mem --help   # entry point installed by pip
 ```
 

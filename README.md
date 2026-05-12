@@ -7,7 +7,7 @@ LLM memory compression engine. Compresses session transcripts into dense `.mn` f
 **Measured results**:
 - **Compression**: x4.4 average on 230 files / 4 repos / 855K tokens (full pipeline including L9 LLM compression, tiktoken-counted). 92% fact retention (40-question benchmark). Without L9, the regex-only pipeline measures ~x1.7.
 - **Architecture**: Newman-Girvan **Q = 0.677** modularity over the import graph (Newman 2006 "good" threshold ≥ 0.30) — measured by `forge --modularity` across 368 source files / 110 import communities.
-- **Tests**: 2356 tests run on every push in CI (Phase P3, May 2026).
+- **Tests**: 2561 tests run on every push in CI (Phase P3, May 2026).
 
 ## The Problem
 
@@ -270,19 +270,19 @@ Coming next: `mycelium_recall_meta`, `mycelium_recall(scope="auto")`, `tree_get_
 1. Tree integrity check (no node exceeds its `max_lines` budget)
 2. Engine smoke commands (`status`, `prune`, `compress`, `boot`)
 3. Mycelium smoke commands (`simulate`, `bootstrap`)
-4. **Pytest suite — 2356 tests** (excludes Qt UI tests + 2 known-debt deselects)
+4. **Pytest suite — 2561 tests** (excludes Qt UI tests + 2 known-debt deselects)
 5. Factual retention benchmark (P35)
 6. Feed transcript parsing test
 
 CI Python: 3.13. forge-shield is installed from `git+https://github.com/sky1241/forge.git@v1.1.1` (PyPI 1.1.x not yet released).
 
-Latest run: `success` (2356 passed, 0 failed in 69s — commit `573555c`).
+Latest run: `success` (2561 passed, 0 failed in 69s — commit `573555c`).
 
 ## Recent Fixes (May 2026)
 
 | Phase | Commit | Fix |
 |-------|--------|-----|
-| P3 | `bf3858a`, `fdc343d`, `a782800` | CI pytest wiring — 2356 tests on every push (was 0) |
+| P3 | `bf3858a`, `fdc343d`, `a782800` | CI pytest wiring — 2561 tests on every push (was 0) |
 | F4 | `6ee1458` | conftest preload — 22 BUG-091 dual-tree skips killed |
 | EX5 | `7a663c5` | `_sleep_consolidate` dead-path in `feed_from_hook` (Sky-found bug) |
 | P0 | `3b70836` | `chmod 0o600` on Muninn-managed sensitive files (9 sites) |
@@ -292,7 +292,7 @@ Latest run: `success` (2356 passed, 0 failed in 69s — commit `573555c`).
 | P4 | `8a9b7be` | `forge.gen_props` split 212L → 96L (brick20 invariant restored) |
 | P4.1–4.4 | `0d88508`, `d85d12c`, `2770aa0`, `573555c` | forge-shield 1.1.0 wired as optional dep |
 
-See [docs/BATTLE_PLAN_2026-05-09.md](docs/BATTLE_PLAN_2026-05-09.md) for detailed timeline.
+See [docs/BATTLE_PLAN_MASTER_MCP.md](docs/BATTLE_PLAN_MASTER_MCP.md) for detailed timeline.
 
 ## Benchmarks (tiktoken, March 2026)
 
@@ -401,7 +401,7 @@ BUGS.md                   Bug tracker (108 fixed, 1 OPEN)
   hooks/*.py              9 hooks (see "Claude Code Hooks" section)
   settings.json           Claude Code config
 .github/
-  workflows/ci.yml        CI: tree + smoke + 2356 pytest on every push
+  workflows/ci.yml        CI: tree + smoke + 2561 pytest on every push
 constraints.txt           Pinned versions for reproducible builds
 pyproject.toml            Package metadata + optional extras [tokens] [llm] [quality] [all]
 ```
