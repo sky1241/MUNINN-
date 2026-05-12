@@ -116,7 +116,13 @@ def _l12_budget_pass(text, repo_path=None, source_id: str = ""):
     import re as _re
     if not _BUDGET_SELECT_AVAILABLE or not text:
         return text or ""
-    raw = _os.environ.get("MUNINN_L12_BUDGET")
+    # H.6c (2026-05-12): activated by default with conservative 16000-token
+    # budget. Was opt-in pre-H.6c (Sky never set the env var). Default
+    # value is large enough that small inputs pass through unchanged
+    # (BudgetMem optimal selection includes all chunks when budget > total
+    # tokens), so the existing "no-op on tiny text" contract still holds.
+    # Set MUNINN_L12_BUDGET=0 to fully disable.
+    raw = _os.environ.get("MUNINN_L12_BUDGET", "16000")
     if not raw:
         return text
     try:

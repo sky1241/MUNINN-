@@ -197,7 +197,7 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `ANTHROPIC_API_KEY` | Cle API pour L9 (compression LLM optionnelle) | unset (L9 desactivee) |
 | `MUNINN_META_PATH` | Chemin du meta-mycelium (federation cross-repo) | `~/.muninn/meta_mycelium.db` |
 | `MUNINN_CONTEXT_SIZE` | Budget tokens du boot adaptatif | `200000` |
-| `MUNINN_L12_BUDGET` | Active L12 BudgetMem (chunk selection opt-in) | unset (L12 = identity pass) |
+| `MUNINN_L12_BUDGET` | L12 BudgetMem chunk selection budget en tokens. H.6c (2026-05-12): default **activé** à 16000 tokens (passe-plat sur petits inputs, BudgetMem sélectionne tous les chunks quand budget > total). Mettre à `0` pour désactiver complètement. | `16000` (actif) |
 | `MUNINN_GL_SOFTWARE` | Force Qt OpenGL software (workaround GPU/Vulkan) | unset |
 | `MUNINN_MAX_COMPRESS_BYTES` | Override de la taille max d'un input pour `compress_file` (CHUNK C3) | `52428800` (50 MB) |
 | `MUNINN_SKIP_INTEGRITY` | Bypass le boot integrity_check de mycelium.db (CHUNK E6) | unset (check actif) |
