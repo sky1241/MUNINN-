@@ -26,9 +26,9 @@ try:
     try:
         __version__ = _pkg_version("muninn")
     except PackageNotFoundError:
-        __version__ = "1.0.2"  # checkout fallback (sync with pyproject.toml)
+        __version__ = "1.0.3"  # checkout fallback (sync with pyproject.toml)
 except Exception:
-    __version__ = "1.0.2"
+    __version__ = "1.0.3"
 
 import argparse
 import io
@@ -96,6 +96,7 @@ from muninn_install import (  # noqa: F401
     _generate_subagent_start_hook, _generate_session_start_hook,
     _install_pre_tool_use_hooks, _install_scaling_hooks,
     _copy_hooks_from_source,
+    uninstall_hooks,  # CHUNK MCP F.1 (2026-05-12)
 )
 from muninn_secrets import (  # noqa: F401
     scrub_secrets, purge_secrets_db,
@@ -924,7 +925,7 @@ def main():
     # CHUNK MCP D.4 (2026-05-12): nargs="?" makes the command optional so
     # `muninn` (no args) can show a welcome banner instead of argparse error.
     parser.add_argument("command", nargs="?", choices=[
-        "read", "compress", "tree", "status", "init",
+        "read", "compress", "tree", "status", "init", "uninstall",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "install-cron", "inject", "diagnose", "doctor",
         "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
@@ -942,6 +943,8 @@ def main():
     parser.add_argument("--password", help="Password for vault lock/unlock (AES-256)")
     parser.add_argument("--uninstall", action="store_true",
                         help="For install-cron: remove the systemd timer instead of installing")
+    parser.add_argument("--purge-data", action="store_true",
+                        help="For uninstall: ALSO remove .muninn/ user data (nuclear). Default: keep data.")
 
     args = parser.parse_args()
 
@@ -1030,6 +1033,39 @@ def main():
             print(f"  Tree already exists: {tree_dir} (skipped)")
         install_hooks(repo)
         print(f"  Muninn ready: {repo}")
+        return
+
+    if args.command == "uninstall":
+        # CHUNK MCP F.1 (2026-05-12): companion to `muninn init`. Removes
+        # everything install_hooks() created in .claude/ + the systemd
+        # timer. By default leaves .muninn/ user data alone — use
+        # --purge-data for the nuclear option.
+        repo = Path(args.repo or args.file or ".").resolve()
+        if not repo.exists():
+            print(f"ERROR: path does not exist: {repo}", file=sys.stderr)
+            sys.exit(1)
+        purge = getattr(args, "purge_data", False)
+        print(f"Uninstalling Muninn from: {repo}")
+        if purge:
+            print("  --purge-data: ALSO removing .muninn/ user data")
+        else:
+            print("  (keeping .muninn/ user data — use --purge-data to nuke)")
+        report = uninstall_hooks(repo, purge_data=purge)
+        print()
+        print(f"  Settings entries removed: {report['settings_entries_removed']}")
+        print(f"  Hook files removed: {len(report['hook_files_removed'])}")
+        for name in report['hook_files_removed']:
+            print(f"    - {name}")
+        print(f"  Systemd cron uninstalled: {report['cron_uninstalled']}")
+        if purge:
+            print(f"  .muninn/ user data purged: {report['data_purged']}")
+        if report['warnings']:
+            print(f"  Warnings ({len(report['warnings'])}):")
+            for w in report['warnings']:
+                print(f"    - {w}")
+        print()
+        print(f"  Muninn uninstalled from: {repo}")
+        print(f"  Now you can `pip uninstall muninn-memory` to remove the package itself.")
         return
 
     if args.command == "status":

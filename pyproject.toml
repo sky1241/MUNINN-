@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "muninn-memory"
-version = "1.0.2"
+version = "1.0.3"
 description = "LLM memory compression engine — compresses session transcripts into dense .mn files"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
