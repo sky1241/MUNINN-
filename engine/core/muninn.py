@@ -930,6 +930,8 @@ def main():
         "ingest", "recall", "bridge", "upgrade-hooks", "install-cron", "inject", "diagnose", "doctor",
         "lock", "unlock", "rekey", "trip", "think", "quarantine", "scrub", "purge-secrets",
         "sync", "zones",
+        # H.1 (2026-05-12): wire 5597 LOC of cube_analysis to the CLI.
+        "cube",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -945,6 +947,15 @@ def main():
                         help="For install-cron: remove the systemd timer instead of installing")
     parser.add_argument("--purge-data", action="store_true",
                         help="For uninstall: ALSO remove .muninn/ user data (nuclear). Default: keep data.")
+    # H.1 (2026-05-12): cube sub-action and tuning flags.
+    parser.add_argument("--cube-action",
+                        choices=["scan", "run", "status", "god"],
+                        default="status",
+                        help="For `cube` command: which action to run (default: status)")
+    parser.add_argument("--cycles", type=int, default=1,
+                        help="For `cube run`: number of destruction/reconstruction cycles")
+    parser.add_argument("--level", type=int, default=0,
+                        help="For `cube run`: which cube level to operate on (0=leaves)")
 
     args = parser.parse_args()
 
@@ -1407,6 +1418,25 @@ def main():
 
     if args.command == "zones":
         _handle_zones_command(args)
+        return
+
+    if args.command == "cube":
+        # H.1 (2026-05-12): wire 5597 LOC of engine/core/cube_*.py via the
+        # cli_{scan,run,status,god} delegates. Default action=status.
+        # NOTE: cube has no `file` positional — handled before the file check.
+        from cube_analysis import cli_scan, cli_run, cli_status, cli_god
+        repo = str(_REPO_PATH or args.file or Path.cwd())
+        action = getattr(args, "cube_action", "status")
+        if action == "scan":
+            result = cli_scan(repo)
+        elif action == "run":
+            result = cli_run(repo, cycles=args.cycles, level=args.level)
+        elif action == "god":
+            result = cli_god()
+        else:
+            result = cli_status()
+        import json as _json
+        print(_json.dumps(result, default=str, indent=2))
         return
 
     if not args.file:
