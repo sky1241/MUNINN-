@@ -226,12 +226,23 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 
 ## Plan de bataille en cours (référence unique)
 
+> **⚡ PROMPT EXÉCUTABLE ACTIF (lis CECI EN PREMIER si nouvelle session post-2026-05-12)** :
+> **[`docs/PROMPT_EXEC_PHASE_H.md`](docs/PROMPT_EXEC_PHASE_H.md)** — master prompt centralisé
+> Phase G (10 chunks bugs) + Phase H (15 chunks wire dormant features) + Phase I (5 chunks zéro-dormant garantie) = **27 chunks exécutables**, ~11h total.
+>
+> Workflow strict par chunk : READ → TEST PIN → RED → FIX → GREEN → WIRE → END-TO-END → CLEAN → FORGE → COMMIT (1 commit par chunk, PAS de push intermédiaire). Push final unique après les 27 chunks.
+>
+> **Si Sky te dit "exécute le prompt" ou "lance Phase H" → ouvre ce fichier et suis-le A→Z sans dévier.**
+>
+> ---
+>
 > **Tous les anciens battle plans sont archivés dans `docs/archive/`.**
-> Le SEUL battle plan vivant et référent est :
+> Battle plan historique (référence MCP roadmap initial) :
 > **[`docs/BATTLE_PLAN_MASTER_MCP.md`](docs/BATTLE_PLAN_MASTER_MCP.md)** — ~117h roadmap MCP integration + auto-setup.
 >
-> Phases : A (auto session 15h) + B (MCP server 40h, killer feature) + C (polish 20h) + D (PyPI release 17h, à la fin) + buffer 25h.
-> Append "État au YYYY-MM-DD" dans ce doc à chaque session, NE PAS créer de nouveau `BATTLE_PLAN_*.md`.
+> Phases livrées : A 4/4 ✅ + B 6/6 ✅ + C 5/6 ✅ (C.2 reverted) + D 4/5 ✅ (D.3 pending) + E 7/7 ✅ + F 3/3 ✅.
+> Phases à exécuter via PROMPT_EXEC_PHASE_H.md : G + H + I.
+> Append "État au YYYY-MM-DD" dans MASTER_MCP à chaque session, NE PAS créer de nouveau `BATTLE_PLAN_*.md` au root.
 
 ## Memo pour mon cousin — ce que Sky a construit pour nous
   probleme Sky resolu nous:MEMORY.md
