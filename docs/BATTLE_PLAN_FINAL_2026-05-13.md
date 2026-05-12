@@ -1,11 +1,70 @@
 # Battle Plan FINAL — Light Up Everything (2026-05-13)
 
-> **Verdict des 4e deep audit (12 mai soir)** : tout est trouvé, listé, chiffré.
+> **Verdict des 5 deep audits successifs (12 mai journée + soir)** : tout est trouvé, listé, chiffré.
 > Sky ne doit plus oublier aucune feature.
 >
 > **Total dormant identifié et confirmé** : ~17 800 LOC code shipped + 3 hooks Claude Code + 1 env var + 1 flag + 2 TODO stubs vides.
 >
 > **Effort total pour TOUT brancher + garde-fou anti-régression** : **5h30**.
+
+---
+
+## 🆕 ÉTAT AU 12 MAI 19:00 — Cleanup "seigneur dev" PARTIEL livré (commit local `bd33f98`)
+
+Avant que la compaction arrive, voici exactement ce qui a été fait CE SOIR et ce qui reste :
+
+### ✅ DÉJÀ LIVRÉ (commit `bd33f98`, LOCAL, pas pushé)
+
+| Item | Action |
+|---|---|
+| **Forge 1.3.0 → 2.1.2** | constraints.txt + pyproject.toml extras `>=2.1.0` + CLAUDE.md 4 mentions à jour |
+| **API forge 2.x compat** | Verifié live : `--gen-props`, `--modularity` (Q=0.671), `--carmack`, `--locate`, `--predict`, `--anomaly`, `--mutate` tous présents. **0 breaking change pour nous**. Nouveau : `--shield`, `--bisect`, `--snapshot`, `--add/--close BUG-ID`, `--full-cycle` |
+| **MUNINN_test_cube supprimé** | Était duplicate de `tests/cube_corpus/btree_google.go` |
+| **2 .broken files supprimés** | Résidus BUG-111 hotfix (`.muninn/tree/*.broken.20260511_163630`) |
+| **5 root files archivés** | docs/archive/ : BUG_HOOKS_UNIVERSELS.md, CUBE_YGG_QUERY.md, PLAN_PHASE0_TO_8.md, changelog_before/after.txt |
+| **Root du repo CLEAN** | 6 .md/.txt seulement : BUGS, CHANGELOG, CLAUDE, README, WINTER_TREE, constraints (+ pyproject.toml, LICENSE, MANIFEST.in, index.html GitHub Pages) |
+| **test_chunk_c8 version_sync** | 3/3 PASS confirmé après bump |
+
+### 📦 6 COMMITS LOCAUX NON PUSHÉS (en attente Sky go)
+
+```
+bd33f98 chore(archi): cleanup seigneur dev — forge 2.1.2 + root tidy
+06f99f5 docs(plan-final): battle plan béton armé "Light Up Everything"
+894bec5 docs(phase-H): Light Up Everything 5h30 wire 20K+ LOC
+035931e docs(phase-G+H): deep audit findings — 25% engine dormant
+83cc0bf docs(phase-F-wrap + G-plan)
+107a0ad fix(mcp.F3): E2E test (CI 3/3 GREEN sur origin/main)
+```
+
+### 🎯 ITEMS PENDING APRÈS LE BD33F98
+
+#### Cleanup non urgent (à clarifier post-Phase H si Sky veut) :
+
+1. **`memory/` legacy folder** : encore référencé dans `muninn_tree.py:64` + `:2234` comme fallback path "if .muninn/tree/ missing → fallback to memory/tree.json". Options :
+   - (A) Retirer le fallback du code, supprimer le folder (1h)
+   - (B) Garder comme legacy intentionnel, doc-only mention dans CLAUDE.md (15min)
+   - (C) Migrer le contenu memory/*.mn dans .muninn/tree/ (30min)
+
+2. **16 git tags `pre-*`** (pre-BUG-104, pre-P3-split, pre-CRIT1-fix, etc.) : safety nets pré-refactor du 9-10 mai. Options :
+   - (A) Garder tous (safety net actif)
+   - (B) Garder les 5 plus récents, supprimer les 11 autres
+   - (C) Tous supprimer (Phase E+F + Phase H suffisent comme rollback points)
+
+3. **`.forge/forge_log.txt` silence depuis 7 mai** : test runner forge n'a rien loggé depuis 5 jours. À investiguer :
+   - Forge --baseline jamais run depuis ? → `.forge/baseline.json` last update ?
+   - Kalman state locked → besoin nouveau --baseline pour reset ?
+
+4. **`index.html` à la racine** : GitHub Pages render. **OK comme c'est**, intentionnel.
+
+5. **`__pycache__/` + `muninn_memory.egg-info/`** : gitignored, regenerated local. Pas urgent.
+
+#### Pas oublié mais reporté plus tard :
+
+6. **102 méthodes publiques inutilisées dans MyceliumDB (81% API mort)** — refactor en Phase I, **PAS** dans Phase H actuelle (trop gros, 3-4h dédié).
+
+7. **Cube system 5500 LOC + UI 11700 LOC** : seront wired en Phase H chunks H.1 + H.2.
+
+8. **Push 6 commits locaux** : décision Sky avant push (battle plan G/H va trigger CI runs).
 
 ---
 

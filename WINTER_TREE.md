@@ -3,6 +3,35 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-12 (nuit — post-cleanup seigneur dev + forge 2.1.2 + 5 audits compilés)
+>
+> **Cleanup seigneur dev commit `bd33f98` (LOCAL, non pushé)** :
+> - Forge 1.3.0 → **2.1.2** bumped (constraints + pyproject + CLAUDE.md). API rétrocompat verified : `--gen-props`, `--modularity` (Q=0.671), `--carmack`, `--locate`, `--predict`, `--anomaly`, `--mutate` tous présents. Nouveau 2.x : `--shield`, `--bisect`, `--snapshot`, `--add/--close BUG-ID`, `--full-cycle`.
+> - MUNINN_test_cube supprimé (duplicate de `tests/cube_corpus/btree_google.go`).
+> - 2 résidus BUG-111 supprimés (`.muninn/tree/*.broken.20260511_163630`).
+> - 5 root files archivés vers `docs/archive/` : BUG_HOOKS_UNIVERSELS, CUBE_YGG_QUERY, PLAN_PHASE0_TO_8, changelog_before/after.txt.
+> - **Root du repo CLEAN** : 6 fichiers .md/.txt (BUGS, CHANGELOG, CLAUDE, README, WINTER_TREE, constraints) + pyproject + LICENSE + MANIFEST.in + index.html.
+>
+> **5 deep audits compilés (12 mai journée + soir)** → battle plan FINAL :
+> - [`docs/BATTLE_PLAN_FINAL_2026-05-13.md`](docs/BATTLE_PLAN_FINAL_2026-05-13.md) — Phase H "Light Up Everything" 5h30 en 10 chunks
+> - Verdict : ~17 800 LOC dormantes mais codées+testées (Cube 5597 LOC, UI PyQt6 11712 LOC, dream 561 LOC, forge_metrics 344 LOC, sync_tls 643 LOC) + faux positifs MCP filtrés (MCP IS wired, prouvé live aujourd'hui)
+>
+> **6 commits locaux non pushés** :
+> ```
+> bd33f98 chore(archi): cleanup seigneur dev + forge 2.1.2
+> 06f99f5 docs(plan-final): battle plan béton armé
+> 894bec5 docs(phase-H): Light Up Everything
+> 035931e docs(phase-G+H): deep audit findings
+> 83cc0bf docs(phase-F-wrap + G-plan)
+> 107a0ad fix(mcp.F3): E2E test ← origin/main (CI 3/3 GREEN)
+> ```
+>
+> **Items pending demain matin** :
+> - Phase H Light Up Everything 5h30 (10 chunks)
+> - 5 décisions Sky : scope H, UI name, metrics name, hooks orphans, sync_tls fate
+> - Décision push 6 commits locaux
+> - Items mineurs : `memory/` legacy fallback à clarifier, 16 git tags pre-* à décider, `.forge/forge_log.txt` silence 5 jours à investiguer
+>
 > ### 📍 SNAPSHOT 2026-05-12 (soir — post-Phase E hardening 7/7 + F.1/F.2/F.3 + intégration MCP prouvée live)
 >
 > **Engine** : ~26 700 lignes / 33 fichiers core (+200L Phase E+F : argparse muninn-mcp-mem + uninstall_hooks + 25 nouveaux tests)

@@ -8,6 +8,72 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-12 (nuit) — Cleanup seigneur dev + forge 2.1.2 bump + 5 audits compilés (`bd33f98` LOCAL)
+
+Sky : "ramène moi tout ici proprement, archi de seigneur dev, mettre forge à jour (latest 2.1.2 sortie aujourd'hui)". 5 actions exécutées en commit local `bd33f98` (pas pushé) :
+
+### `bd33f98` — chore(archi): cleanup seigneur dev + forge 2.1.2
+
+1. **Forge 1.3.0 → 2.1.2** (MAJOR version jump sorti par Sky aujourd'hui sur PyPI)
+   - constraints.txt : `forge-shield==2.1.2`
+   - pyproject.toml : extras `quality = ["forge-shield>=2.1.0"]` + `all` mis à jour
+   - CLAUDE.md : 4 mentions v1.3.0 → v2.1.2 avec note des nouveautés 2.x
+   - **Compat live verified** : `--modularity` Q=0.671 ✓ + `--gen-props` ✓ + test_chunk_c8 3/3 PASS ✓
+   - Nouveau 2.x : `--shield` (orchestrate carmack→gen-props→fast-deep), `--bisect TEST`, `--snapshot`, `--add/--close BUG-ID`, `--full-cycle`. API rétrocompat pour notre usage (--gen-props, --modularity, --carmack, --locate)
+
+2. **MUNINN_test_cube supprimé** : était duplicate de `tests/cube_corpus/btree_google.go` (27076 bytes identiques)
+
+3. **Résidus BUG-111 supprimés** : `.muninn/tree/b01.mn.broken.20260511_163630` + `root.mn.broken.20260511_163630`
+
+4. **Root files archivés vers docs/archive/** :
+   - `BUG_HOOKS_UNIVERSELS.md` (bug report résolu en E.3)
+   - `CUBE_YGG_QUERY.md` (16K archive)
+   - `PLAN_PHASE0_TO_8.md` (ancien phase marker)
+   - `changelog_before.txt` + `changelog_after.txt` (snapshot artifacts)
+
+5. **Root du repo CLEAN** : 6 fichiers .md/.txt seulement (BUGS, CHANGELOG, CLAUDE, README, WINTER_TREE, constraints) + pyproject.toml + LICENSE + MANIFEST.in + index.html (GitHub Pages)
+
+### 5 deep audits compilés en battle plan FINAL
+
+Sky a demandé 5 deep audits successifs pendant cette journée pour traquer TOUT le code dormant. Compilation dans :
+- [`docs/BATTLE_PLAN_FINAL_2026-05-13.md`](docs/BATTLE_PLAN_FINAL_2026-05-13.md) — Phase H "Light Up Everything" 5h30, 10 chunks ordonnés
+- [`docs/BATTLE_PLAN_PHASE_H_2026-05-13.md`](docs/BATTLE_PLAN_PHASE_H_2026-05-13.md) — détails par chunk
+- [`docs/BATTLE_PLAN_PHASE_G_2026-05-13.md`](docs/BATTLE_PLAN_PHASE_G_2026-05-13.md) — bug fixes G.1-G.10 + Annexe Phase H
+
+**Verdict final** : ~17 800 LOC dormantes confirmées + faux positifs MCP filtrés (MCP IS wired, prouvé live aujourd'hui via vraie session Claude Code).
+
+### Items pending pour Phase H demain (~5h30)
+
+| Chunk | Effort | Ce que ça débloque |
+|---|---|---|
+| H.0 garde-fou anti-orphan (système immunitaire CI) | 30min | Empêche TOUT futur orphan |
+| H.1 muninn-mem cube CLI | 45min | 5597 LOC + 39 bricks |
+| H.2 muninn-ui console script | 30min | 11 712 LOC PyQt6 |
+| H.3 --include-dreams flag | 15min | 561 LOC dream() |
+| H.4 muninn-mem metrics CLI | 30min | 344 LOC forge_metrics |
+| H.5 cleanup dead config (1 env var + 1 flag + 2 TODO stubs) | 15min | — |
+| H.6 wire 5 hooks Claude Code orphans (décision Sky) | 30min | ~750 LOC |
+| H.7 sync_tls + watchdog (drop/experimental) | 15min | 709 LOC |
+| H.8 garde-fou API bloat (MyceliumDB 81% API mort) | 30min | Phase I plus tard |
+| H.9 docs + CHANGELOG + WINTER_TREE | 15min | — |
+| H.10 bump 1.0.3 → 1.1.0 + TestPyPI release | 15min | — |
+
+### Garantie post-Phase H
+
+**Plus jamais une feature codée mais pas en prod sans que CI le détecte.** Le chunk H.0 (`test_wiring_no_orphan_engine_module` + 5 cousins) fait le travail automatique.
+
+### 5 décisions Sky avant kick-off demain matin
+
+1. Phase H complète 5h30 OU réduite à H.0+H.1+H.2+H.3 (2h critiques) ?
+2. UI : `muninn-ui` séparé OU `muninn-mem ui` sub-command ?
+3. Metrics : `muninn-mem forge` (risque confusion forge-shield) OU `muninn-mem metrics` ?
+4. Hooks orphans (H.6) : activer 5 défensifs OU laisser dormants documentés ?
+5. sync_tls + watchdog : drop / experimental folder / opt-in ?
+
+Plus : décision push des 6 commits locaux (`bd33f98` ... `83cc0bf`) vers origin/main.
+
+---
+
 ## 2026-05-12 (après-midi/soir) — Phase E hardening 7/7 + Phase F.1/F.2/F.3 + 1.0.3 sur TestPyPI + intégration MCP prouvée live
 
 ### Vue d'ensemble Phase E
