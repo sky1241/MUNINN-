@@ -79,6 +79,18 @@ jobs:
           python3 - <<'EOF'
           import subprocess, sys
 
+          # CHUNK MCP D.4 hotfix (2026-05-12): on a fresh CI checkout there's
+          # no .muninn/ yet. Pre-D.4 `muninn status` silently auto-init'd a
+          # tree in MUNINN_ROOT (RULE 1 violation). D.4 fixed that by
+          # short-circuiting to "No .muninn/ found, run muninn init". We now
+          # run `muninn init` first to bring the dir into a valid state
+          # before exercising the read commands.
+          r = subprocess.run(["python3", "engine/core/muninn.py", "init"],
+                             capture_output=True, text=True)
+          assert r.returncode == 0, f"init failed: {r.stderr}"
+          assert "Muninn ready" in r.stdout, f"init missing 'Muninn ready':\n{r.stdout}"
+          print(r.stdout)
+
           # Test status
           r = subprocess.run(["python3", "engine/core/muninn.py", "status"],
                              capture_output=True, text=True)

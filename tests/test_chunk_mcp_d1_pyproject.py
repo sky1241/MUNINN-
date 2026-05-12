@@ -23,12 +23,19 @@ def _load_pyproject():
     return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
 
 
-def test_d1_version_is_1_0_0():
-    """Bump from 0.9.2 → 1.0.0 for first stable PyPI release."""
+def test_d1_version_is_production_semver():
+    """Version must be 1.x.y semver — production stable, no 0.x or alpha/rc.
+
+    D.1 bumped 0.9.2 → 1.0.0 ; subsequent patch releases (1.0.1, 1.0.2, …)
+    or minor bumps (1.1.0, 1.2.0, …) keep the production semver.
+    Pre-release suffixes like `-rc1`, `a1`, `b2`, `.dev0` are NOT accepted
+    here (use a separate test if you want a pre-release branch).
+    """
+    import re
     data = _load_pyproject()
-    assert data["project"]["version"] == "1.0.0", (
-        f"Expected version 1.0.0 for first stable release, "
-        f"got {data['project']['version']}"
+    version = data["project"]["version"]
+    assert re.fullmatch(r"1\.\d+\.\d+", version), (
+        f"Expected production semver 1.x.y (no pre-release suffix), got {version!r}"
     )
 
 
@@ -101,6 +108,12 @@ def test_d1_console_script_targets_importable():
 
     Catches broken shims (e.g. muninn.mycelium:main depending on dev-only
     engine/core/ being on sys.path — would crash at first invocation).
+
+    Special case: muninn-mcp lives behind the [mcp] optional extra. If the
+    `mcp` package isn't installed (which is normal in base CI without
+    [mcp]), the import raises ImportError("muninn.mcp requires the 'mcp'
+    package..."). That's intentional — not a real script breakage. We
+    only fail on UNEXPECTED imports errors.
     """
     data = _load_pyproject()
     scripts = data["project"]["scripts"]
@@ -112,6 +125,15 @@ def test_d1_console_script_targets_importable():
             func = getattr(module, attr, None)
             if not callable(func):
                 failures.append(f"{cmd_name}: {target} → {attr} is not callable")
+        except ImportError as e:
+            # Expected if the [mcp] extra isn't installed — the mcp module
+            # itself raises a clear "install with [mcp]" message at import.
+            msg = str(e).lower()
+            if cmd_name == "muninn-mcp" and "mcp" in msg and (
+                "requires" in msg or "no module named 'mcp'" in msg
+            ):
+                continue  # expected, optional extra not installed
+            failures.append(f"{cmd_name}: {target} import failed: {e!r}")
         except Exception as e:
             failures.append(f"{cmd_name}: {target} import failed: {e!r}")
     assert not failures, (
