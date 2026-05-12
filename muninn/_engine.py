@@ -1512,5 +1512,32 @@ def main():
         build_tree(filepath)
 
 
+# G.3 (2026-05-12): friendly error handler at the CLI boundary. Mirror of
+# engine/core/muninn.py — catches common filesystem/lookup errors and prints
+# a one-liner hint instead of a raw Python traceback. MUNINN_DEBUG=1 re-raises.
+_FRIENDLY_EXCEPTIONS = (
+    FileNotFoundError, PermissionError, IsADirectoryError, NotADirectoryError,
+)
+
+
+def _friendly_run(fn):
+    if os.environ.get("MUNINN_DEBUG"):
+        fn()
+        return
+    try:
+        fn()
+    except _FRIENDLY_EXCEPTIONS as exc:
+        kind = type(exc).__name__
+        path = getattr(exc, "filename", None) or str(exc)
+        print(f"muninn-mem: {kind}: {path} — not found or inaccessible.",
+              file=sys.stderr)
+        print("  Hint: set MUNINN_DEBUG=1 to see the full traceback.",
+              file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nmuninn-mem: interrupted.", file=sys.stderr)
+        sys.exit(130)
+
+
 if __name__ == "__main__":
-    main()
+    _friendly_run(main)
