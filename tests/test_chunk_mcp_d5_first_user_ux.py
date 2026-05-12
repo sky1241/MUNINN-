@@ -62,6 +62,67 @@ def test_d5_examples_scripts_parseable():
             pytest.fail(f"{s.name}: syntax error {e}")
 
 
+def test_d5_examples_scripts_run_without_attribute_errors(tmp_path):
+    """E.2 (2026-05-12): every example script must RUN end-to-end without
+    AttributeError / NameError / ImportError-for-required-deps.
+
+    Catches the regression we hit in D.5 where mcp_recall_demo.py called
+    `mcp_server.tree_get_root(...)` — a function that doesn't exist at the
+    module level (it lives inside create_server() via @app.tool() decorator).
+    Pre-E.2, only ast.parse() was tested → bug shipped silently.
+
+    Strategy: subprocess.run each example with MUNINN_DEMO_REPO pointing at
+    an initialized tmp_path repo. Allow ImportError-for-mcp-extras as a
+    skip signal (the example handles it gracefully with sys.exit(1)).
+    """
+    import os
+    import subprocess
+    import sys
+
+    # Initialize tmp_path so the demo can find a .muninn/ dir
+    env = os.environ.copy()
+    env["MUNINN_DEMO_REPO"] = str(tmp_path)
+    init_r = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "engine" / "core" / "muninn.py"), "init"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**env, "PYTHONPATH": str(REPO_ROOT / "engine" / "core")},
+    )
+    assert init_r.returncode == 0, f"setup failed: {init_r.stderr}"
+
+    failures = []
+    for s in sorted(EXAMPLES.glob("*.py")):
+        r = subprocess.run(
+            [sys.executable, str(s)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        out = r.stdout + r.stderr
+        # AttributeError / NameError = a real bug (missing module attribute).
+        # ImportError specifically for the mcp/anthropic/tiktoken extras = an
+        # opt-in dep absent in CI — we accept those because the script handles
+        # them with a helpful "pip install [mcp]" message and exit(1).
+        if "AttributeError" in out or "NameError" in out:
+            failures.append(f"{s.name}: {out[-300:]}")
+        elif r.returncode != 0:
+            # Other non-zero exit: accept if it's a documented graceful exit
+            # (the script printed a clear "install with [mcp]" hint).
+            if "pip install" in out and "muninn-memory[" in out:
+                continue  # acceptable graceful failure
+            # Otherwise treat as a real crash
+            if "Traceback" in out:
+                failures.append(f"{s.name} crashed: {out[-300:]}")
+
+    assert not failures, (
+        "Example scripts have runtime bugs (E.2 strengthened test):\n  "
+        + "\n  ".join(failures)
+    )
+
+
 def test_d5_quickstart_has_pip_install_section():
     """A 'pip install muninn-memory' section must be in the first 100 lines."""
     text = QUICKSTART.read_text(encoding="utf-8")
