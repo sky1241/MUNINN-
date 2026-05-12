@@ -175,22 +175,25 @@ def test_claude_md_still_has_3_rules():
     )
 
 
-def test_claude_md_still_under_300_lines():
+def test_claude_md_still_under_320_lines():
     """CLAUDE.md size cap.
 
     Originally 200 (Anthropic's chunk-9 recommendation). Bumped to 300
     in brick 22 (2026-04-11) after RULE 4 (no claim w/o output, brick 8)
     and RULE 5 (forge mandatory, brick 16) were added — both written
-    under fire after real bugs and required by the battle plan. The
-    extra ~50 lines per rule is deliberate primacy-bias front-loading
-    that pays for itself in fewer lies per session.
+    under fire after real bugs and required by the battle plan.
+
+    Bumped to 320 (2026-05-12) to fit the PROMPT_EXEC_PHASE_H.md wire
+    encart (~14 lines) — same primacy-bias logic as RULE 4/5: a new
+    session must know which master prompt is active before it starts
+    executing, otherwise it re-plans instead of running.
 
     Cap stays binding so the file doesn't grow without intent.
     """
     text = CLAUDE_MD.read_text(encoding="utf-8")
     line_count = len(text.splitlines())
-    assert line_count <= 300, (
-        f"CLAUDE.md should stay under 300 lines, got {line_count}. "
+    assert line_count <= 320, (
+        f"CLAUDE.md should stay under 320 lines, got {line_count}. "
         f"If you added content, justify it in the test docstring before "
         f"bumping the cap."
     )
