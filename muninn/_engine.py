@@ -960,11 +960,50 @@ def _handle_zones_command(args) -> None:
 
 # ── MAIN ──────────────────────────────────────────────────────────
 
+def _print_welcome():
+    """CHUNK MCP D.4 (2026-05-12): first-run welcome banner.
+
+    Shown when user runs `muninn` with no subcommand — typical flow after
+    `pip install muninn-memory`. Pre-D.4 this gave a cryptic argparse error.
+    """
+    print(f"Welcome to Muninn {__version__} — LLM memory compression engine.")
+    print()
+    print("First time? Here are the 3 commands to know:")
+    print()
+    print("  muninn init       Set up Muninn in the current repo")
+    print("                    (creates .muninn/, installs Claude Code hooks)")
+    print()
+    print("  muninn status     Show tree state + mycelium growth")
+    print()
+    print("  muninn doctor     Diagnose install + check all dependencies")
+    print()
+    print("Full command list: muninn --help")
+    print("Quickstart: https://github.com/sky1241/MUNINN-/blob/main/docs/QUICKSTART.md")
+
+
+def _print_empty_repo_hint(cwd):
+    """CHUNK MCP D.4 (2026-05-12): friendly hint when status/diagnose is run
+    in a dir without `.muninn/`. Pre-D.4 fell through to MUNINN_ROOT default
+    which on a pip-installed wheel = site-packages/.muninn/ (RULE 1 violation).
+    """
+    print(f"No .muninn/ found in: {cwd}")
+    print()
+    print("This directory isn't a Muninn-initialized repo yet.")
+    print("Run `muninn init` here to set it up:")
+    print()
+    print(f"  cd {cwd}")
+    print("  muninn init")
+    print()
+    print("Or run `muninn doctor` to diagnose the install itself.")
+
+
 def main():
     global _REPO_PATH
 
-    parser = argparse.ArgumentParser(description="Muninn v0.9 — Universal memory compression")
-    parser.add_argument("command", choices=[
+    parser = argparse.ArgumentParser(description="Muninn — Universal memory compression")
+    # CHUNK MCP D.4 (2026-05-12): nargs="?" → `muninn` (no args) shows welcome
+    # banner instead of argparse "required: command" error.
+    parser.add_argument("command", nargs="?", choices=[
         "read", "compress", "tree", "status", "init",
         "boot", "decode", "prune", "scan", "bootstrap", "feed", "verify",
         "ingest", "recall", "bridge", "upgrade-hooks", "install-cron", "inject", "diagnose", "doctor",
@@ -985,6 +1024,12 @@ def main():
                         help="For install-cron: remove the systemd timer instead of installing")
 
     args = parser.parse_args()
+
+    # CHUNK MCP D.4 (2026-05-12): no-command → welcome banner for first-time
+    # users (typical post-`pip install muninn-memory` flow).
+    if args.command is None:
+        _print_welcome()
+        return
 
     # Global flag to skip L9
     global _SKIP_L9
@@ -1066,6 +1111,12 @@ def main():
             if (cwd / ".muninn").exists():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
+            else:
+                # CHUNK MCP D.4 (2026-05-12): mirror of engine/core/muninn.py.
+                # Empty repo → hint instead of silently using MUNINN_ROOT
+                # (which on a pip-installed wheel = site-packages, RULE 1).
+                _print_empty_repo_hint(cwd)
+                return
         show_status()
         return
 
@@ -1075,6 +1126,9 @@ def main():
             if (cwd / ".muninn").exists():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
+            else:
+                _print_empty_repo_hint(cwd)
+                return
         diagnose()
         return
 
