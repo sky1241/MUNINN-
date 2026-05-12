@@ -8,6 +8,35 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-12 (matin) — Phase C complète (6/6) : C.2 CI speedup livré
+
+### `c7b15f5` — Phase C.2 pytest-xdist + forge_smoke matrix parallel (3h plané, ~30min réel)
+
+Dernier chunk Phase C. Deux fronts de parallélisation pour faire descendre le wall-time CI ~40min → ~10min :
+
+**1) Job `validate`** : ajout de `pytest -n auto` (pytest-xdist 3.6.1, pinned dans `constraints.txt`). Distribué automatiquement sur tous les CPUs du runner GitHub. Safe grâce à l'autouse fixture `_repo_path_isolate()` ajoutée le 2026-05-08 dans `tests/conftest.py:91` (CHUNK B7) qui snapshot/restaure `muninn._REPO_PATH` + `TREE_DIR` + `TREE_META` autour de chaque test → zéro fuite cross-worker même sur crash mid-test.
+
+**2) Job `forge_smoke`** : la boucle shell `for f in engine/core/...; do forge --gen-props "$f"; done` (17 modules séquentiels, ~15min total) devient un `strategy.matrix` GitHub Actions :
+- `fail-fast: false` → tous les 17 jobs run même si un échoue (debug complet).
+- `max-parallel: 10` → reste sous le quota free-tier GitHub (20 concurrent).
+- Job names montrent `${{ matrix.module }}` dans l'UI (clair vs index 1/17).
+
+**Audit pré-chunk 3-agents** :
+- Audit isolation pytest-xdist : 95%+ tests parallel-safe (380 tests `tmp_path`, conftest.py B7 bulletproof, 0 hardcoded `.muninn/` writes sans isolation).
+- Audit GHA matrix 2026 : syntax confirmée, max-parallel: 10 conservateur, `needs: [validate]` compatible matrix.
+
+**Vérifications RULE 4** :
+- Test pin local (`tests/test_chunk_mcp_c2_ci_speedup.py`, 8 tests) : 8/8 PASS en 0.34s.
+- Full pytest avec `-n auto` (flags CI exacts) : **2507 passed, 41 skipped, 0 fail en 82.93s** (vs ~5min sans xdist).
+- Collection check : `2548 collected = 2507 + 41`. Aucun test silencieusement masqué par xdist.
+- YAML syntax : `python3 -c "import yaml; yaml.safe_load(open('ci.yml'))"` → OK, 3 jobs, 17 modules in matrix.
+
+**Phase C — état final** : C.0 ✅ + C.1 ✅ + C.2 ✅ + C.3 ✅ + C.4 ✅ + C.5 ✅ = **6/6 chunks livrés (100%)**. Phase C COMPLÈTE. ~22h de roadmap initiale livrées en ~12h effectives.
+
+**Prochaine étape** : Phase D PyPI release (17h, 5 sous-chunks D.1-D.5). Sky doit créer compte PyPI avant D.2 (TestPyPI upload).
+
+---
+
 ## 2026-05-11 (nuit) — Phase A + B complète + 5/6 chunks Phase C livrés
 
 Journée monstre. **23 commits** poussés, tous CI verts au final. Phase A 4/4 + Phase B 6/6 + Phase C C.0/C.1/C.3/C.4/C.5 = ~62h de roadmap initiale livrées en ~11h effectives (méthodologie 3-agents + TDD strict + pre-chunk parallèle).
