@@ -3,7 +3,29 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
-> ### 📍 SNAPSHOT 2026-05-11 (à jour)
+> ### 📍 SNAPSHOT 2026-05-12 (à jour — post-Phase D 4/5)
+>
+> **Engine** : **26 499 lignes / 33 fichiers core** (post-Phase D + bug pre-existant pip-install fix)
+> - `pyproject.toml` 1.0.0 → **1.0.1** (D.1 + D.4/D.5 fixes inclus)
+> - `[tool.setuptools.packages.find].include = ["muninn*", "engine*"]` — D.1 fix critical : ship engine/* dans le wheel (sans ça, tous les shims muninn/* crash en pip-install)
+> - `MANIFEST.in` NEW (D.1) : prune `muninn/.muninn/` + `muninn/ui/scans/`, global-exclude `__pycache__/*.pyc`
+> - Nouveau dossier `examples/` (D.5) : `quickstart_local.py`, `mcp_recall_demo.py`, `README.md`
+> - `engine/core/muninn_tree_doctor.py` : 22 → 25 checks (D.5 ajout `console_scripts`, `engine.core shipped`, `mcp extras` — tous dev-mode-aware WARN/FAIL)
+> - `engine/core/muninn.py` + `muninn/_engine.py` : ajouté `_print_welcome()` + `_print_empty_repo_hint()` (D.4) — `muninn` (no args) montre welcome au lieu d'argparse error, `muninn status` en repo vierge guide vers `muninn init` au lieu d'auto-init dans site-packages
+>
+> **Tests** : **2563 collected / 2 deselected = 2561 actifs** + **18 property tests** (forge --gen-props)
+> **forge --modularity Q** : **0.671** (good ≥ 0.30, ↑ vs 0.664 sur snapshot précédent)
+> **Bugs OPEN** : **0** (BUG-104 fixed 2026-05-10, BUG-111 fixed 2026-05-11)
+> **forge-shield** : **v1.3.0** (PyPI, inchangé)
+> **PyPI release** : **muninn-memory 1.0.1 sur TestPyPI** (https://test.pypi.org/project/muninn-memory/1.0.1/). Prod upload en attente validation Sky.
+> **CI HEAD** : run en cours suite hotfix `dfe4b28` (fix ci.yml Test Engine Commands + D.1 mcp optional). 3 runs D.1/D.4/D.5 rouges → fix root-cause poussé.
+>
+> **Phase D state** : **4/5 chunks livrés** (D.1 ✅ + D.2 ✅ + D.4 ✅ + D.5 ✅) + 1 hotfix CI. Reste D.3 (PyPI prod upload).
+>
+> **Battle plan vivant unique** : `docs/BATTLE_PLAN_MASTER_MCP.md`
+> **Protocole de test fin de Phase D** : `docs/TEST_PROTOCOL_PHASE_D_2026-05-12.md`
+>
+> ### 📍 SNAPSHOT 2026-05-11 (historique — pre-Phase D)
 >
 > **Engine** : **24 819 lignes / 26 fichiers core** (post-P3 split + H6 mixins + BUG-104 fix)
 > - muninn_tree.py : 3929 → **2179L** post-P3 split (-1750L = -45%)

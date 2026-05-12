@@ -8,6 +8,92 @@ Post-B1 : muninn/* = 2 982 lignes (vs ~7 700 pré-B1 = **-4 718L brute** via shi
 
 ---
 
+## 2026-05-12 (journée) — Phase D 4/5 livré + 1.0.1 sur TestPyPI + C.2 reverted
+
+### Vue d'ensemble
+
+| Chunk | Commit | Status | Note |
+|---|---|---|---|
+| C.2 CI speedup | `c7b15f5` puis revert `8199f18`+`40db681` | ❌ REVERTED | Bug latent vault.py circular import exposé par xdist ; ratio risque/gain trop faible, décision Sky |
+| D.1 pyproject finalisation | `7c1e5b2` | ✅ | Découverte critique : package broken en pip-install à 0.9.2 (pre-existing). Fix : ship engine/* dans le wheel |
+| D.2 TestPyPI upload 1.0.0 | (manuel twine) | ✅ | https://test.pypi.org/project/muninn-memory/1.0.0/ ; install end-to-end validé en venv vierge |
+| D.4 muninn init post-install UX | `ed36f74` | ✅ | Welcome banner sur no-args + empty-repo guard (fixe RULE 1 violation latente : status auto-init dans site-packages) |
+| D.5 first-user UX | `ad7c2b9` | ✅ | examples/ gallery (2 scripts + README) + section pip-install en tête QUICKSTART + 3 doctor checks |
+| 1.0.1 bump + CI hotfix | `dfe4b28` | ✅ | Fix CI rouge sur D.4/D.5 (ci.yml step "Test Engine Commands" présupposait l'ancien bug) + D.1 test tolère [mcp] non installé |
+| D.2bis TestPyPI upload 1.0.1 | (manuel twine) | ✅ | https://test.pypi.org/project/muninn-memory/1.0.1/ inclut D.4/D.5 fixes |
+| D.3 PyPI prod upload | — | ⏳ | En attente validation TestPyPI 1.0.1 par Sky + son token prod |
+
+### `c7b15f5` puis `8199f18`+`40db681` — C.2 attempted then REVERTED
+
+Tentative speedup CI via pytest-xdist `-n auto` + matrix forge_smoke parallel 17 modules. Implémenté, testé local 2507/0 fail en 82s, pushé. CI rouge avec **1 fail** : `tests/test_vault.py::test_v1_6_pbkdf2_deterministic` → `ImportError: cannot import name '_SALT_FILE' from partially initialized module 'vault'` (circular import dans le shim BUG-091 exposé par xdist parallel workers).
+
+Diagnostic honnête : speedup réel attendu = ~6min sur 44min CI total (le vrai bottleneck = step "Test Mycelium" 41min, intouché par C.2). Claim original "40min→10min" était overcounté.
+
+Décision Sky : revert. Phase C reste 5/6.
+
+### `7c1e5b2` — Phase D.1 pyproject finalisation pour 1.0.0 PyPI release
+
+**Bug pré-existant critique découvert** : à 0.9.2 le package crashait en pip-install. `muninn --help` → `ModuleNotFoundError: tokenizer`. Cause : les shims `muninn/*.py` (BUG-091 mirror) font `from <name> import *` (bare) qui s'appuie sur `engine/core/` ajouté à sys.path par eux-mêmes. Mais `engine/*` n'était PAS shipped dans le wheel.
+
+Fix racine : `[tool.setuptools.packages.find].include = ["muninn*", "engine*"]`. Le wheel ship maintenant `muninn/` + `engine/` + `engine/core/` + `engine/core/scanner/`.
+
+Autres changes :
+- Version 0.9.2 → 1.0.0 (4 mirrors en sync)
+- Classifier "Beta" → "Production/Stable" + PEP 639 (license SPDX expression)
+- `readme` en dict form avec content-type explicite
+- NEW `MANIFEST.in` : prune muninn/.muninn/ (Sky local debug data leak) + muninn/ui/scans/
+
+Test pin : 9 tests dans `tests/test_chunk_mcp_d1_pyproject.py`.
+
+### D.2 — Upload TestPyPI 1.0.0 (manuel twine)
+
+- Build clean : wheel 43MB + sdist 43.5MB (12 PNG UI templates ~3MB chacun).
+- `twine check dist/*` PASSED both.
+- Token TestPyPI scope "Entire account" via `TWINE_PASSWORD` env var (jamais exposé en chat per RULE 3).
+- **End-to-end validation venv vierge** : `pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ muninn-memory==1.0.0` → muninn/mycelium console scripts OK, version 1.0.0 confirmée.
+
+### `ed36f74` — Phase D.4 post-install first-run UX
+
+2 bad-UX walls fixés sur la pip-installed binary :
+
+1. `muninn` (no args) : argparse error → welcome banner avec version + 3 starter commands + lien QUICKSTART.
+2. `muninn status` / `muninn diagnose` dans repo sans `.muninn/` : auto-init dans site-packages (RULE 1 violation latente!) → empty-repo guard `_print_empty_repo_hint(cwd)` qui suggère `muninn init`.
+
+Mirror BUG-091 dans muninn/_engine.py. Test pin : 4 tests dans `tests/test_chunk_mcp_d4_post_install.py`.
+
+### `ad7c2b9` — Phase D.5 first-user UX + examples gallery
+
+3 surfaces :
+- **examples/** (NEW) : quickstart_local.py + mcp_recall_demo.py + README.md
+- **docs/QUICKSTART.md** : section "0. 5-second install (from PyPI)" en tête
+- **muninn doctor** : 3 nouveaux checks (#20-22) pour pip-install health (console scripts, engine.core shipped, mcp extras). Dev-mode aware (WARN vs FAIL).
+
+Test pin : 10 tests dans `tests/test_chunk_mcp_d5_first_user_ux.py`. CLAUDE.md : MUNINN_DEMO_REPO documenté.
+
+### `dfe4b28` — Hotfix CI rouge sur D.1/D.4/D.5
+
+3 runs CI rouges → root cause + fix :
+
+1. **D.4/D.5** cassent ci.yml step "Test Engine Commands" qui call `muninn status` sur repo CI vierge (présupposait l'ancien bug d'auto-init). Fix : prepend `muninn init`.
+2. **D.1** test `console_script_targets_importable` exigeait `mcp` package qui n'est pas dans base CI install. Fix : tolère cette ImportError optionnelle.
+3. Test version trop rigide (1.0.0 exact) → renommé `test_d1_version_is_production_semver` accepte 1.x.y.
+
+Bump 1.0.0 → 1.0.1 (4 mirrors) + rebuild + re-upload TestPyPI = https://test.pypi.org/project/muninn-memory/1.0.1/
+
+### Stats fin de journée
+
+- Engine : **26 499 lignes / 33 fichiers core** (vs 24 819L / 26 fichiers 2026-05-11)
+- Tests : **2561 actifs** + 18 property tests
+- forge --modularity Q : **0.671** (↑ vs 0.664)
+- Bugs OPEN : **0**
+- PyPI : **muninn-memory 1.0.1 sur TestPyPI**, prod upload pending
+
+### Protocole de test fin de Phase D
+
+Voir [`docs/TEST_PROTOCOL_PHASE_D_2026-05-12.md`](docs/TEST_PROTOCOL_PHASE_D_2026-05-12.md) — 12 étapes manuelles pour valider que tout est en production sans bug avant l'upload PyPI prod.
+
+---
+
 ## 2026-05-11 (nuit) — Phase A + B complète + 5/6 chunks Phase C livrés
 
 Journée monstre. **23 commits** poussés, tous CI verts au final. Phase A 4/4 + Phase B 6/6 + Phase C C.0/C.1/C.3/C.4/C.5 = ~62h de roadmap initiale livrées en ~11h effectives (méthodologie 3-agents + TDD strict + pre-chunk parallèle).
