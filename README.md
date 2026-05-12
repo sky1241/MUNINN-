@@ -95,6 +95,27 @@ Sites enforced (via `secure_perms()` from `engine/core/_secrets.py`):
 
 This addresses the production-grade requirement for tech-org installs on shared servers (commits `607f1a7`, `21b4cb3`, `008f9c7`).
 
+### Publishing credentials — `~/.pypirc` discipline
+
+When publishing to PyPI / TestPyPI, your authentication token lives in
+`~/.pypirc`. **Never commit this file**, anywhere, ever — a PyPI token is
+a publishing credential with full write access to your namespace.
+
+Apply the same hygiene Sky used on his workstation:
+
+```bash
+# 1) Restrict file mode to owner-only
+chmod 600 ~/.pypirc
+
+# 2) Add it to your global git ignore (so no repo can ever accidentally
+#    stage it — even with `git add -A`)
+echo '.pypirc' >> ~/.gitignore_global
+git config --global core.excludesfile ~/.gitignore_global
+```
+
+If `git config --global` is already set, this is a no-op idempotent
+operation. The file is then ignored in every repo of every project.
+
 ## Quickstart — Use Muninn on your own repo
 
 For the impatient : **see [`docs/QUICKSTART.md`](docs/QUICKSTART.md)** — 10 numbered steps from `git clone` to your first `mycelium_recall_local` call from Claude. Tested against a vanilla Linux box, ~5 min if pip is configured.
