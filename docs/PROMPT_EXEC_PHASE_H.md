@@ -1,248 +1,294 @@
-# PROMPT MASTER — Phase H Light Up Everything (Sky's exec prompt)
+# PROMPT MASTER — EXEC TOTAL (Phase G + H + zéro-dormant)
 
-> **Tu es** : Claude Opus 4.7 sur la machine de Sky. Tu hérites du repo MUNINN- à HEAD `956c750` (commit local, 7 commits ahead origin/main).
+> **Tu es** : Claude Opus 4.7 sur la machine de Sky. HEAD `385b922`, 8 commits ahead origin/main.
 >
-> **Sky est fatigué** des deep audits. Il veut **un cousin Claude qui exécute Phase H d'A à Z sans poser de questions**, avec verif à chaque étape.
+> **Sky veut** : UN SEUL fichier exécutable qui fait TOUT — fix les bugs Phase G + wire les features dormantes Phase H + élimine le code dormant restant (L12, vault semantics, tests UI en CI, fonctions zombies, etc.) → 1 SEUL gros commit final + 1 push GitHub.
 >
-> **Objectif unique** : wire ~17 800 LOC dormantes (Cube + UI + dream + forge_metrics + hooks orphans) + installer un garde-fou anti-orphan permanent, **avec 1 SEUL commit + 1 push à la fin**.
->
-> **Source de vérité** : ce fichier. Les autres battle plans (PHASE_G, PHASE_H, FINAL) sont des références mais CE prompt est l'ordre d'exécution.
+> **Pas de question. Tu suis. Tu exécutes.**
 
 ---
 
-## 🚫 RÈGLES NON NÉGOCIABLES (lis 2 fois avant de commencer)
+## 🚫 RÈGLES NON NÉGOCIABLES
 
-1. **Anti-drift** : exécute les chunks dans l'ordre `H.0 → H.1 → H.2 → ... → H.10`. JAMAIS de scope creep. Si tu vois un autre bug pendant un chunk, NOTE-LE dans `/tmp/phase_h_findings.md` mais NE LE FIX PAS.
-
-2. **Anti-bullshit RULE 4** : chaque "ça marche" doit avoir l'output de commande visible 3 lignes au-dessus dans la conversation. Pas "ça devrait marcher", pas "le test passe" sans `pytest ... PASSED` literal.
-
-3. **Pas de CI mycelium polluante** : ne PUSH PAS entre chunks. Le step "Test Mycelium" du CI prend 41min — multiplié par 11 chunks = 7h de CI inutile. **Stage les fichiers (`git add`) après chaque chunk green, commit + push UNIQUEMENT à la fin**.
-
-4. **1 SEUL commit final** avec tous les fichiers modifiés. Message commit = changelog complet de Phase H (template plus bas).
-
-5. **Si un chunk FAIL** (test rouge irréparable en 30min) : STOP. Stash tes changements (`git stash push -m "phase-h-partial"`), écris l'état dans `/tmp/phase_h_blocker.md`, demande à Sky.
-
-6. **Forge RULE 5** : après chaque touch de `engine/core/*.py` ou `muninn/*.py`, run `forge --gen-props <fichier>` + `pytest tests/test_props_<fichier>.py -q`. Si fail → fix avant chunk suivant.
-
-7. **Pas de console output via emoji** sauf demande explicite (Sky's preference).
+1. **Anti-drift** : ordre obligatoire `G.* → H.* → I.*`. Si tu vois autre chose, NOTE dans `/tmp/findings.md` mais NE FIX PAS hors séquence.
+2. **Anti-bullshit RULE 4** : chaque "ça marche" = output verbatim 3 lignes au-dessus. Pas de "ça devrait".
+3. **PAS de commit/push intermédiaire** entre chunks (CI mycelium = 41min × 26 chunks = stupide). `git add` après chaque chunk green, UN seul commit + push à la fin.
+4. **Forge RULE 5** après chaque touche `engine/core/*.py` ou `muninn/*.py` : `forge --gen-props <fichier>` + verify props pass.
+5. **Si chunk fail** (rouge irréparable en 30min) : STOP, `git stash`, écris `/tmp/blocker.md`, demande Sky.
+6. **Décisions par défaut si Sky absent** (listées dans chaque chunk).
 
 ---
 
-## 📋 WORKFLOW PAR CHUNK (10 étapes strictes, suivre dans l'ordre)
-
-Pour CHAQUE chunk H.X :
+## 📋 WORKFLOW PAR CHUNK (10 étapes obligatoires)
 
 ```
-1. READ      : Lire le code existant qui va changer (Read tool, pas Bash cat)
-2. TEST PIN  : Écrire le test AVANT le code (Pin TDD). Save fichier.
-3. RED       : pytest -k test_h<X>_<name> → doit être ROUGE (proves test mord)
-4. FIX       : Implémenter le code minimal pour passer le test
-5. GREEN     : pytest -k test_h<X>_<name> → doit être VERT (output verbatim)
-6. WIRE      : Brancher dans CLI / hook / settings selon le chunk
-7. END-TO-END: Lancer la commande user réelle (muninn-mem <cmd>), capture output
-8. CLEAN     : pytest tests/ -k "not slow" --ignore-glob='tests/test_ui_*.py'
-              → assert 0 fail nouveau (par rapport à baseline H.0)
-9. FORGE     : Si engine/core/ ou muninn/ touchés → forge --gen-props
-10. STAGE    : git add <fichiers modifiés du chunk>. NE PAS COMMIT.
+1. READ      Lire le code existant (Read tool, pas cat)
+2. TEST PIN  Écrire le test AVANT le code
+3. RED       pytest → ROUGE attendu
+4. FIX       Implémenter minimal
+5. GREEN     pytest → VERT (output verbatim)
+6. WIRE      CLI / hook / settings
+7. END-TO-END Commande user réelle, capture output
+8. CLEAN     pytest tests/ -m "not slow" → 0 fail nouveau
+9. FORGE     Si engine/core/ touché
+10. STAGE    git add ; PAS de commit
 ```
-
-Après les 10 étapes : **passer au chunk suivant**. PAS de commit intermédiaire.
 
 ---
 
-## 🩺 ÉTAT INITIAL — checklist 5 min avant kick-off
-
-Exécute ces commandes et vérifie les résultats :
+## 🩺 GATE INITIAL (5 min avant kick-off)
 
 ```bash
-# 1. État git correct
 cd /home/sky/Bureau/MUNINN-
 git status -sb
-# Attendu : ## main...origin/main [devant 7] + zéro fichier modified non-staged
+# Attendu : ## main...origin/main [devant 8], aucun M non-staged
 
-# 2. Forge 2.1.2 installé
 forge --version
-# Attendu : 2.1.2 (ou >=2.1.0)
+# Attendu : 2.1.2
 
-# 3. pytest baseline marche
-python3 -m pytest tests/ -q --tb=no \
-  -m "not slow" \
+python3 -m pytest tests/ -q --tb=no -m "not slow" \
   --ignore-glob='tests/test_ui_*.py' \
-  --ignore=tests/eval_harness_chunk9.py \
-  --ignore=tests/eval_harness_chunk11.py \
+  --ignore=tests/eval_harness_chunk9.py --ignore=tests/eval_harness_chunk11.py \
   --ignore=tests/test_chunk1_auto_memory_disabled.py \
   --ignore=tests/test_chunk_a7_hook_integrity.py \
   --deselect tests/test_retrieval_benchmark.py::test_actr_activation_varies \
   2>&1 | tail -3
-# Attendu : 2546 passed, 42 skipped, 0 failed (baseline pré-Phase H)
-# Note ce chiffre = BASELINE. À chaque chunk après FIX, le total doit augmenter
-# (jamais diminuer).
+# Attendu : 2546 passed, 42 skipped, 0 failed (BASELINE)
 
-# 4. Forge marche localement
 forge --modularity 2>&1 | head -3
-# Attendu : Q = 0.671 (good — modules well isolated)
+# Attendu : Q = 0.671 (ou meilleur)
 ```
 
-**Si une de ces 4 vérifs échoue → STOP, ne lance pas Phase H.**
+Si une vérif échoue → STOP.
 
 ---
 
-## 🏗️ LES 11 CHUNKS (ordre obligatoire)
+# 🟦 PHASE G — Bug fixes (~3h, 10 chunks)
 
-### Chunk H.0 — Garde-fou anti-orphan (30 min) — **LE PLUS IMPORTANT**
+## G.1 — Universal degree-based stopword filter (30 min)
 
-> **Pourquoi en premier** : si on installe le garde-fou AVANT de wire les features, le test est ROUGE aujourd'hui. Après les chunks H.1-H.9, il devient VERT. Et pour TOUJOURS, tout nouveau module orphan = CI rouge.
+**Problème** : `recall_meta("compression")` retourne `pas/est/les` (stopwords FR). `mycelium.py:1252` `_STOPWORDS` set incomplet. Sky a découvert que `DEGREE_FILTER_PERCENTILE = 0.05` ligne 80 existe déjà mais n'est utilisé QUE pour bloquer fusions (S3 tier), PAS au query-time.
 
-**Sous-section 0.1 — READ** :
-- Lire `engine/core/muninn_install.py` lignes 880-980 (install_hooks) pour comprendre quelles hooks sont registered
-- Lire `.claude/settings.local.json` pour voir hooks actuels (7 wired)
-- Lire `engine/core/muninn.py` ligne 920-940 (argparse choices) — liste des 30 commands
-- Lire CLAUDE.md table env vars (lignes 189-211) — 21 vars documentées
+**READ** : `engine/core/mycelium.py:80` + `:1252` + `muninn/mcp/server.py:_recall_local_impl/_recall_meta_impl/_recall_dual_impl`.
 
-**Sous-section 0.2 — TEST PIN** :
-Créer `tests/test_h0_no_orphan.py` avec 6 tests :
-- `test_h0_no_orphan_engine_module` : pour chaque `engine/core/*.py`, assert au moins 1 caller depuis code shipped (pas tests/). Whitelist : `__init__.py`, `watchdog.py`.
-- `test_h0_no_orphan_ui_module` : pour chaque `muninn/ui/*.py`, assert référencé par main_window.py OR autre module ui/.
-- `test_h0_all_env_vars_documented_read` : pour chaque `MUNINN_*` dans CLAUDE.md, assert au moins 1 `os.environ.get` ou `os.getenv` dans engine/ ou muninn/.
-- `test_h0_all_argparse_flags_consumed` : pour chaque `parser.add_argument`, assert `args.X` est utilisé quelque part dans main().
-- `test_h0_all_cli_commands_have_handler` : pour chaque choice dans argparse, assert `if args.command == "X":` handler existe.
-- `test_h0_all_hooks_on_disk_registered` : list `.claude/hooks/*.py`, assert chacun référencé dans settings.local.json OU dans whitelist documentée `_INTENTIONALLY_DORMANT_HOOKS = {...}`.
-
-**Sous-section 0.3 — RED** :
-```bash
-python3 -m pytest tests/test_h0_no_orphan.py -v
-# Attendu : 4-6 tests FAIL (système immunitaire détecte orphans actuels)
-# Note les noms des fails exacts dans /tmp/phase_h_h0_red.txt
-```
-
-**Sous-section 0.4 — FIX** :
-**NE PAS FIX H.0 maintenant.** Les fails sont SYMPTÔMES des chunks H.1-H.9 qui vont les résoudre. Le garde-fou EST le test — il restera rouge tant que les autres chunks n'auront pas wired les orphans.
-
-**Sous-section 0.5 — GREEN différé** :
-Le green vient à la fin, après H.9. **Mark H.0 comme "RED-EXPECTED-for-now" dans pytest output**, NE PAS le marquer @pytest.mark.skip.
-
-**Sous-section 0.6 — STAGE** :
-```bash
-git add tests/test_h0_no_orphan.py
-```
-
----
-
-### Chunk H.1 — Wire `muninn-mem cube` CLI (45 min) — **5597 LOC débloquées**
-
-**Sous-section 1.1 — READ** :
-- `engine/core/cube_analysis.py:cli_scan()`, `cli_run()`, `cli_status()`, `cli_god()` — signatures
-- `engine/core/muninn.py:920-940` — argparse choices list
-- `engine/core/muninn.py` cherche `if args.command == "init":` pour pattern de handler
-
-**Sous-section 1.2 — TEST PIN** :
-Créer `tests/test_h1_cube_cli.py` :
+**TEST PIN** `tests/test_g1_universal_stopword_filter.py` :
 ```python
-def test_h1_cube_in_argparse_choices():
-    # parse muninn.py, assert "cube" in choices
-
-def test_h1_cube_status_no_init(tmp_path):
-    # subprocess.run muninn cube --cube-action status sur tmp_path
-    # assert exit 0 + message friendly "no store yet"
-
-def test_h1_cube_scan_creates_store(tmp_path):
-    # subprocess.run muninn cube --cube-action scan
-    # assert .forge/cube/ ou store created
-
-def test_h1_cube_god_returns_dict():
-    # call cube_analysis.cli_god() directly, assert dict
-
-def test_h1_cube_handler_calls_cli_scan(monkeypatch):
-    # monkeypatch cube_analysis.cli_scan, run main with args.command="cube"
-    # assert called once
+def test_g1_recall_filters_top_degree_concepts():
+    # seed mycelium with 1 dominant concept "xxx" co-occurring with everything
+    # query → assert "xxx" NOT in top-k results
+def test_g1_recall_meta_no_french_stopwords():
+    # real meta query "compression" → assert "pas", "est", "les" absent
+def test_g1_env_var_percentile_tunable():
+    # MUNINN_RECALL_STOPWORD_PERCENTILE=0 → no filter
+    # =0.10 → plus strict
 ```
 
-**Sous-section 1.3 — RED** :
-```bash
-python3 -m pytest tests/test_h1_cube_cli.py -v
-# Attendu : 5/5 FAIL
+**FIX** : Dans `_recall_local_impl` et `_recall_meta_impl` (et `_recall_dual_impl`), avant return, filter `results = [r for r in results if r['concept'] not in top_degree_set]` où `top_degree_set` = top 5% degree du graphe (réutiliser logique existante mycelium.py).
+
+**WIRE** : add env var `MUNINN_RECALL_STOPWORD_PERCENTILE` (default 0.05). Document dans CLAUDE.md.
+
+**FORGE** : `forge --gen-props engine/core/mycelium.py`.
+
+**STAGE** : `git add tests/test_g1_*.py muninn/mcp/server.py engine/core/mycelium.py CLAUDE.md`.
+
+---
+
+## G.2 — Doc drift résiduel `muninn init` → `muninn-mem init` (15 min)
+
+**Problème** : Sed E.3 a raté les commentaires Python.
+
+**READ** : grep `\bmuninn (init|status|doctor|boot)` dans `muninn/_engine.py`, `engine/core/muninn.py`, `examples/*.py`, `BUG_HOOKS_UNIVERSELS.md` (archivé).
+
+**FIX** : sed précis sur ces 3 fichiers. Add header "RESOLVED en E.3" en haut de `docs/archive/BUG_HOOKS_UNIVERSELS.md`.
+
+**TEST PIN** `tests/test_g2_no_old_cli_in_comments.py` : grep dans engine/core/, muninn/, examples/ doit retourner 0 match.
+
+**STAGE** : 4 fichiers.
+
+---
+
+## G.3 — Error handling friendly (20 min)
+
+**Problème** : `muninn-mem feed /nonexistent.jsonl` → raw Python traceback.
+
+**READ** : `engine/core/muninn.py:main()` flow.
+
+**TEST PIN** `tests/test_g3_friendly_errors.py` :
+```python
+def test_g3_feed_nonexistent_friendly():
+    # subprocess + assert "not found" in stderr + NO "Traceback"
+    # exit code 1 (pas 0, mais user-friendly)
+def test_g3_compress_invalid_path():
+def test_g3_bootstrap_nonexistent_repo():
+def test_g3_munnin_debug_env_shows_traceback():
+    # MUNINN_DEBUG=1 → traceback visible (escape hatch)
 ```
 
-**Sous-section 1.4 — FIX** :
-1. Add `"cube"` dans argparse choices de `engine/core/muninn.py:927`
-2. Add flags : `parser.add_argument("--cube-action", choices=["scan", "run", "status", "god"], default="status")` + `--cycles N` (default 1) + `--level N` (default 0)
-3. Handler dans muninn.py après le handler `init` :
+**FIX** : Wrapper try/except dans `main()` qui catche `FileNotFoundError`, `PermissionError`, `IsADirectoryError`, `KeyError`, friendly message + exit(1). Si `os.environ.get("MUNINN_DEBUG")` → raise normal.
+
+**STAGE** : muninn.py + _engine.py + tests/.
+
+---
+
+## G.4 — F.1 tests @pytest.mark.slow (5 min)
+
+**FIX** : ajouter `pytestmark = pytest.mark.slow` au top de `tests/test_chunk_mcp_f1_uninstall.py`.
+
+**TEST PIN** : `test_g4_f1_marked_slow.py` parse le fichier + assert marker.
+
+**STAGE** : 2 fichiers.
+
+---
+
+## G.5 — `~/.pypirc` security note (10 min)
+
+**FIX** :
+1. Add `~/.pypirc` à `~/.gitignore_global` de Sky (créer si absent)
+2. `git config --global core.excludesfile ~/.gitignore_global` (idempotent)
+3. Add note dans README.md section "Security" : "Never commit ~/.pypirc, chmod 600 + global gitignore"
+
+**TEST PIN** : pas applicable (config global, hors repo).
+
+**STAGE** : README.md.
+
+---
+
+## G.6 — Doctor pre-init clarity (30 min)
+
+**Problème** : `muninn-mem doctor` dans repo sans `.muninn/` affiche 22+ checks mixant global + local manquant.
+
+**READ** : `engine/core/muninn_tree_doctor.py:doctor()`.
+
+**TEST PIN** `tests/test_g6_doctor_pre_init.py` :
+```python
+def test_g6_doctor_pre_init_simplified(tmp_path):
+    # subprocess muninn-mem doctor dans tmp_path vierge
+    # assert "Run `muninn-mem init` first" in stdout
+    # assert moins de 12 checks dans output (vs 25 post-init)
+```
+
+**FIX** : Au début de `doctor()`, check `if not (repo / ".muninn").exists():` → simplified output (only deps + Python + SQLite + global meta DB).
+
+**FORGE** : `forge --gen-props engine/core/muninn_tree_doctor.py`.
+
+**STAGE** : muninn_tree_doctor.py + tests/.
+
+---
+
+## G.7 — (vide, fusionné dans H.7)
+
+## G.8 — Python 3.10-3.12 compat test (15 min)
+
+**DÉCISION DEFAULT** : downgrade claim à `>=3.13` (honest) puisque pyenv 3.10-3.12 pas testés.
+
+**FIX** : pyproject.toml `requires-python = ">=3.10"` → `">=3.13"`. Update classifiers : retirer `Python :: 3.10`, `:: 3.11`, `:: 3.12`. Note dans CHANGELOG.
+
+**TEST PIN** `tests/test_g8_python_version_honest.py` : assert `requires-python` ne ment pas (testé dans CI).
+
+**STAGE** : pyproject.toml + tests/ + CHANGELOG.md.
+
+---
+
+## G.9 — Wheel size optimization (45 min) — **REPORTÉ Phase I**
+
+**SKIP** dans Phase G/H. Document dans WINTER_TREE comme "Phase I optionnel".
+
+---
+
+## G.10 — Audit honest tests recount (10 min)
+
+**FIX** : update CHANGELOG section Phase E avec count corrigé (16 REAL + 6 MEDIUM + 3 WEAK au lieu de 10/12/3 overclaim).
+
+**STAGE** : CHANGELOG.md.
+
+---
+
+# 🟩 PHASE H — Wire features dormantes (~5h30, 11 chunks)
+
+## H.0 — Garde-fou anti-orphan (30 min) — **LE PLUS IMPORTANT**
+
+**OBJECTIF** : système immunitaire CI. ROUGE aujourd'hui (orphans détectés), VERT après H.1-H.7.
+
+**TEST PIN** `tests/test_h0_no_orphan.py` :
+```python
+WHITELIST_DORMANT_MODULES = {"watchdog.py"}  # standalone scripts intended
+WHITELIST_DORMANT_HOOKS = {"config_change_hook.py", "notification_audit_hook.py"}  # audit reserve
+
+def test_h0_no_orphan_engine_module():
+    # pour chaque engine/core/*.py NOT in whitelist
+    # assert au moins 1 caller depuis code shipped (muninn/, engine/, .claude/hooks/)
+    # NOT counting tests/
+
+def test_h0_no_orphan_ui_module():
+    # pour chaque muninn/ui/*.py NOT in whitelist
+    # assert référencé par main_window.py OR autre ui/ module
+
+def test_h0_all_env_vars_documented_read():
+    # parse CLAUDE.md env vars table
+    # pour chaque MUNINN_X, assert os.environ.get("MUNINN_X") OR os.getenv("MUNINN_X")
+    # quelque part dans engine/ ou muninn/
+
+def test_h0_all_argparse_flags_consumed():
+    # parse muninn.py argparse, pour chaque add_argument
+    # assert args.X utilisé post-parse
+
+def test_h0_all_cli_commands_have_handler():
+    # pour chaque choice dans argparse, assert "if args.command == 'X':" handler
+
+def test_h0_all_hooks_on_disk_registered():
+    # list .claude/hooks/*.py NOT in WHITELIST_DORMANT_HOOKS
+    # assert chacun référencé dans .claude/settings.local.json
+```
+
+**RED EXPECTED maintenant**. Green après H.1-H.7. NE PAS @pytest.mark.skip — laisser rouge volontairement.
+
+**STAGE** : `git add tests/test_h0_no_orphan.py`.
+
+---
+
+## H.1 — Wire `muninn-mem cube` CLI (45 min) — 5597 LOC
+
+**READ** : `engine/core/cube_analysis.py:cli_scan/run/status/god` + `muninn.py:927` argparse.
+
+**TEST PIN** `tests/test_h1_cube_cli.py` (6 tests) : in_choices, status_no_init, scan_creates_store, run_processes_cycles, god_returns_dict, handler_calls_cli_scan (monkeypatch).
+
+**FIX** :
+1. Add `"cube"` argparse choices (muninn.py + _engine.py mirror)
+2. `--cube-action {scan,run,status,god}` (default status) + `--cycles N` (default 1) + `--level N`
+3. Handler :
 ```python
 if args.command == "cube":
     from cube_analysis import cli_scan, cli_run, cli_status, cli_god
     repo = Path(args.repo or args.file or ".").resolve()
     action = getattr(args, "cube_action", "status")
-    cycles = getattr(args, "cycles", 1)
-    level = getattr(args, "level", 0)
     if action == "scan": cli_scan(str(repo))
-    elif action == "run": cli_run(str(repo), cycles=cycles, level=level)
+    elif action == "run": cli_run(str(repo), cycles=args.cycles, level=args.level)
     elif action == "status": cli_status()
     elif action == "god": cli_god()
     return
 ```
-4. **Mirror dans muninn/_engine.py** (BUG-091).
 
-**Sous-section 1.5 — GREEN** :
-```bash
-python3 -m pytest tests/test_h1_cube_cli.py -v
-# Attendu : 5/5 PASS
-```
+**END-TO-END** : `cd /tmp/h1_test && muninn-mem cube --cube-action scan` puis `--cube-action run --cycles 1`.
 
-**Sous-section 1.6 — WIRE** : déjà fait dans 1.4 (handler ajouté).
+**FORGE** : muninn.py.
 
-**Sous-section 1.7 — END-TO-END** :
-```bash
-cd /tmp && mkdir -p h1_test && cd h1_test
-python3 /home/sky/Bureau/MUNINN-/engine/core/muninn.py cube --cube-action status
-# Attendu : message status (no store yet OU stats)
-python3 /home/sky/Bureau/MUNINN-/engine/core/muninn.py cube --cube-action scan
-# Attendu : scan OK
-```
-
-**Sous-section 1.8 — CLEAN + FORGE + STAGE** :
-```bash
-cd /home/sky/Bureau/MUNINN-
-forge --gen-props engine/core/muninn.py 2>&1 | tail -3
-python3 -m pytest tests/test_props_muninn.py -q 2>&1 | tail -3
-python3 -m pytest tests/ -q --tb=no -m "not slow" 2>&1 | tail -3
-# Attendu : 2546+5 passed (au moins, +5 nouveaux tests H.1)
-
-git add tests/test_h1_cube_cli.py engine/core/muninn.py muninn/_engine.py
-```
+**STAGE** : 3 fichiers.
 
 ---
 
-### Chunk H.2 — `muninn-ui` console script (30 min) — **11 712 LOC débloquées**
+## H.2 — `muninn-ui` console script (30 min) — 11 712 LOC
 
-**Sous-section 2.1 — READ** :
-- `muninn/ui/main_window.py` — chercher si `def main()` existe et `QApplication` setup
-- `pyproject.toml:[project.scripts]` — voir entry points actuels
+**READ** : `muninn/ui/main_window.py` — verify `def main()` exists.
 
-**Sous-section 2.2 — TEST PIN** :
-`tests/test_h2_ui_wiring.py` :
-```python
-def test_h2_ui_console_script_in_pyproject():
-    # parse pyproject.toml, assert "muninn-ui" in [project.scripts]
+**TEST PIN** `tests/test_h2_ui_wiring.py` (4 tests) : console_script_in_pyproject, main_callable, pyqt_extra_declared, offscreen_launches.
 
-def test_h2_ui_main_callable():
-    # importlib resolve "muninn.ui.main_window:main"
-    # assert callable
-
-def test_h2_ui_pyqt_extra_declared():
-    # assert "ui" in [project.optional-dependencies]
-
-def test_h2_ui_offscreen_launches():
-    # subprocess.run "QT_QPA_PLATFORM=offscreen muninn-ui" timeout 3s, kill
-    # assert no ImportError, no AttributeError dans stderr
-```
-
-**Sous-section 2.3 — RED** : 4/4 FAIL attendu.
-
-**Sous-section 2.4 — FIX** :
-1. Vérifier `muninn/ui/main_window.py` a un `def main()` ; sinon ajouter :
+**FIX** :
+1. Ajouter `def main()` dans main_window.py si absent :
 ```python
 def main():
-    import sys
+    import sys, os
+    if os.environ.get("MUNINN_GL_SOFTWARE"):
+        os.environ["QT_OPENGL"] = "software"
     from PyQt6.QtWidgets import QApplication
     app = QApplication(sys.argv)
     win = MainWindow()
@@ -252,216 +298,179 @@ def main():
 if __name__ == "__main__":
     main()
 ```
-2. Create `muninn/ui/__main__.py` :
-```python
-from .main_window import main
-main()
-```
-3. Add à `pyproject.toml` `[project.scripts]` :
+2. NEW `muninn/ui/__main__.py` : `from .main_window import main; main()`
+3. pyproject.toml :
 ```toml
+[project.scripts]
 muninn-ui = "muninn.ui.main_window:main"
-```
-4. Add `[project.optional-dependencies]` :
-```toml
+
+[project.optional-dependencies]
 ui = ["PyQt6>=6.10"]
-```
-+ update `all` extra pour inclure `ui`.
-
-5. Update muninn/__init__.py + engine/core/muninn.py fallback versions to 1.0.4 (because Phase H = minor bump, see H.10).
-
-**Sous-section 2.5 — GREEN** : 4/4 PASS.
-
-**Sous-section 2.6 — WIRE** : déjà fait (entry point pyproject).
-
-**Sous-section 2.7 — END-TO-END** :
-```bash
-cd /home/sky/Bureau/MUNINN- && rm -rf build dist *.egg-info
-python3 -m pip install --quiet -e ".[ui]" 2>&1 | tail -1
-QT_QPA_PLATFORM=offscreen timeout 5 muninn-ui 2>&1 | head -3 || echo "OK (killed by timeout = window started)"
+# update `all` to include `ui`
 ```
 
-**Sous-section 2.8 — STAGE** :
-```bash
-git add tests/test_h2_ui_wiring.py muninn/ui/main_window.py muninn/ui/__main__.py pyproject.toml
-```
+**END-TO-END** : `QT_QPA_PLATFORM=offscreen timeout 5 muninn-ui` doit pas crash.
+
+**STAGE** : 4 fichiers.
 
 ---
 
-### Chunk H.3 — `--include-dreams` flag (15 min) — **561 LOC débloquées**
+## H.2b — Réactiver tests UI en CI (45 min) — **ZÉRO DORMANT**
 
-**Sous-section 3.1 — READ** :
-- `engine/core/muninn.py:927-945` argparse section
-- `engine/core/muninn_tree_prune.py` — chercher `prune(include_dreams=...)`
+**FIX** :
+1. `.github/workflows/ci.yml` step pytest : retirer `--ignore-glob='tests/test_ui_*.py'`
+2. Add `env: QT_QPA_PLATFORM: offscreen` au step
+3. Add CI prep : `apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3`
+4. Update `constraints.txt` : `pip install PyQt6==6.10.X` pinned
 
-**Sous-section 3.2 — TEST PIN** :
-`tests/test_h3_dream_flag.py` :
-```python
-def test_h3_flag_in_help():
-    # subprocess "muninn-mem prune --help" + assert "--include-dreams" in output
+**TEST PIN** : `test_h2b_ui_tests_run_in_ci.py` assert ci.yml ne contient PAS `--ignore-glob='tests/test_ui_*.py'`.
 
-def test_h3_flag_triggers_dream(monkeypatch):
-    # monkeypatch Mycelium.dream, run main(["prune", "--force", "--include-dreams"])
-    # assert dream() called once
-
-def test_h3_flag_off_skips_dream(monkeypatch):
-    # sans flag, assert dream() NOT called
-```
-
-**Sous-section 3.3 — RED** : 3/3 FAIL attendu.
-
-**Sous-section 3.4 — FIX** :
-1. Add `parser.add_argument("--include-dreams", action="store_true", help="Run sleep consolidation dream() during prune")`
-2. Handler `prune` : `prune(repo, force=args.force, include_dreams=args.include_dreams)`
-3. Mirror muninn/_engine.py.
-
-**Sous-section 3.5 — GREEN** : 3/3 PASS.
-
-**Sous-section 3.6-3.8 — WIRE/END-TO-END/STAGE** :
-```bash
-cd /tmp/h1_test
-python3 /home/sky/Bureau/MUNINN-/engine/core/muninn.py prune --force --include-dreams 2>&1 | head -5
-# Attendu : output prune + mention dream() exécuté
-
-git add tests/test_h3_dream_flag.py engine/core/muninn.py muninn/_engine.py
-```
+**STAGE** : ci.yml + constraints.txt + tests/.
 
 ---
 
-### Chunk H.4 — `muninn-mem metrics` CLI (30 min) — **344 LOC débloquées**
+## H.3 — `--include-dreams` flag (15 min) — 561 LOC
 
-> **Décision Sky avant kick-off** : nom = `forge` (risque confusion forge-shield PyPI 2.1.2) OU `metrics` (clair) ? **Default si Sky absent : `metrics`**.
+**FIX** : argparse flag + plumbing `prune(include_dreams=args.include_dreams)`. Mirror.
 
-**Sous-section 4.1 — READ** :
-- `engine/core/forge_metrics.py:compute_metrics()` ou équivalent
-- argparse choices
+**TEST PIN** (3 tests) : flag_in_help, flag_triggers_dream (monkeypatch), flag_off_skips.
 
-**Sous-section 4.2 — TEST PIN** :
-`tests/test_h4_metrics_cli.py` (4 tests : exists, returns Q, output JSON, in choices).
-
-**Sous-section 4.3-4.8** : Add `"metrics"` à choices, handler appelle `forge_metrics.compute_metrics(repo)`, support `--output X.json` (recycle le flag `--output` mort).
-
-```bash
-git add tests/test_h4_metrics_cli.py engine/core/muninn.py muninn/_engine.py
-```
+**STAGE** : 3 fichiers.
 
 ---
 
-### Chunk H.5 — Cleanup dead config (15 min)
+## H.4 — `muninn-mem metrics` CLI (30 min) — 344 LOC
 
-**Sous-section 5.1 — READ** :
-- CLAUDE.md ligne `MUNINN_GL_SOFTWARE` documentée — pas wired
-- `engine/core/muninn.py:942` `--output` flag défini mais jamais lu post-parse
-- `engine/core/muninn.py:682` + `muninn/_engine.py:764` TODO stubs vides
+**DÉCISION DEFAULT** : nom = `metrics` (clash forge-shield évité).
 
-**Sous-section 5.2 — DÉCISIONS** (default si Sky absent) :
-- `MUNINN_GL_SOFTWARE` : **GARDER** (sera utilisé par muninn-ui de H.2 pour Qt workaround). Ajouter `os.environ.get("MUNINN_GL_SOFTWARE")` check dans `muninn/ui/main_window.py:main()` et set Qt env si truthy.
-- `--output` flag : **RÉUTILISÉ** par H.4 metrics (output JSON).
-- 2 TODO stubs : **SUPPRIMER** les 2 (no description, no value).
+**FIX** : argparse `"metrics"` + handler `forge_metrics.compute_metrics(repo)`. Réutilise flag `--output` (était mort).
 
-**Sous-section 5.3 — IMPL + STAGE** :
-1. Add Qt software check dans `muninn/ui/main_window.py:main()` :
-```python
-import os
-if os.environ.get("MUNINN_GL_SOFTWARE"):
-    os.environ["QT_OPENGL"] = "software"
-```
-2. Supprimer les 2 `## TODO` blocks.
-3. ```bash
-git add muninn/ui/main_window.py engine/core/muninn.py muninn/_engine.py
-```
+**TEST PIN** (4 tests) : command_exists, returns_Q, output_json, in_choices.
+
+**STAGE** : 3 fichiers.
 
 ---
 
-### Chunk H.5b — Hygiene (10 min)
+## H.5 — Cleanup dead config (15 min)
 
-**Sous-section 5b.1 — Items à traiter** :
-- `.forge/forge_log.txt` silence 5 jours → `forge --baseline` pour reset Kalman (ne pas commit l'output)
-- `memory/` legacy folder : **GARDER** comme fallback (référencé dans muninn_tree.py:64,2234), mais **doc explicite** dans CLAUDE.md : "memory/ = legacy fallback if .muninn/tree/ missing, do not modify"
-- 16 tags `pre-*` : **GARDER** (safety nets, low overhead)
+**FIX** :
+1. `MUNINN_GL_SOFTWARE` : wired dans muninn/ui/main_window.py:main() (H.2 déjà)
+2. `--output` : réutilisé par H.4 metrics
+3. 2 TODO stubs vides (`muninn.py:682` + `muninn/_engine.py:764`) : SUPPRIMER
 
-**Sous-section 5b.2 — STAGE** :
-```bash
-git add CLAUDE.md
-```
+**STAGE** : muninn.py + _engine.py.
 
 ---
 
-### Chunk H.6 — Wire 5 hooks Claude Code orphans (30 min)
+## H.5b — Hygiene (10 min)
 
-> **Décision Sky avant kick-off** : activer les 3 hooks défensifs (`pre_tool_use_bash_destructive`, `pre_tool_use_bash_secrets`, `pre_tool_use_edit_hardcode`) qui protègent RULE 1/2/3 ? Default si absent : **ACTIVER les 3 défensifs** (low risk, real value).
-> Pour les 2 audit hooks (`config_change`, `notification_audit`, `post_tool_use_edit_log`) : default **GARDER DORMANT** + ajouter whitelist explicite dans test H.0.
+**FIX** :
+1. `.forge/forge_log.txt` silence : run `forge --baseline` pour reset Kalman (ne pas commit l'output, juste reset state)
+2. `memory/` legacy : add note explicite dans CLAUDE.md : "memory/ = legacy fallback if .muninn/tree/ missing, do not modify"
+3. 16 tags `pre-*` : **KEEP** (safety nets)
 
-**Sous-section 6.1 — TEST PIN** :
-`tests/test_h6_hooks_registered.py` : assert les 3 défensifs sont dans settings.local.json.
-
-**Sous-section 6.2 — FIX** :
-Edit `.claude/settings.local.json` + update `install_hooks()` dans `engine/core/muninn_install.py` pour register au prochain `muninn-mem init`.
-
-**Sous-section 6.3 — STAGE** :
-```bash
-git add tests/test_h6_hooks_registered.py .claude/settings.local.json engine/core/muninn_install.py muninn/muninn_install.py
-```
+**STAGE** : CLAUDE.md.
 
 ---
 
-### Chunk H.7 — Décisions sync_tls + watchdog (15 min)
+## H.6 — Wire 3 hooks défensifs Claude Code (30 min) — **DEFAULT : ACTIVER**
 
-**Sous-section 7.1 — DÉCISIONS** (default Sky absent) :
-- `sync_tls.py` (643 LOC) : **GARDER** + déplacer dans `engine/core/experimental/sync_tls.py` + doc CLAUDE.md "experimental, opt-in via MUNINN_SYNC_TLS_HOST=..."
-- `watchdog.py` (66 LOC) : **GARDER** + ajouter docstring "Windows Task Scheduler standalone, Linux: irrelevant" + ajouter à whitelist H.0.
+**DÉCISION DEFAULT** : activer pre_tool_use_bash_destructive, pre_tool_use_bash_secrets, pre_tool_use_edit_hardcode (protège RULE 1/2/3). Garder config_change_hook + notification_audit_hook + post_tool_use_edit_log DORMANTS (whitelist H.0).
 
-**Sous-section 7.2 — IMPL + STAGE** :
+**FIX** :
+1. Edit `.claude/settings.local.json` : ajouter 3 hooks défensifs sous `hooks.PreToolUse`
+2. Update `install_hooks()` dans `engine/core/muninn_install.py` pour register au prochain `muninn-mem init`
+3. Mirror muninn/muninn_install.py.
+
+**TEST PIN** `tests/test_h6_hooks_registered.py` : assert 3 défensifs dans settings.local.json.
+
+**STAGE** : settings.local.json + muninn_install.py × 2 + tests/.
+
+---
+
+## H.6b — `vault.py` auto-lock semantics (30 min) — **ZÉRO DORMANT**
+
+**Problème** : 551 LOC AES-256 wired CLI mais jamais invoqué (pas de "when to lock" naturel).
+
+**DÉCISION DEFAULT** : Auto-lock `.muninn/mycelium.db` après SessionEnd hook si `MUNINN_VAULT_AUTO_LOCK=1` env var ET `MUNINN_VAULT_PASSWORD` set. Sky opt-in.
+
+**FIX** :
+1. Add env var `MUNINN_VAULT_AUTO_LOCK` doc dans CLAUDE.md
+2. Dans `muninn_feed.py:feed_from_stop_hook()` : check env vars, si set → call `vault.lock(mycelium_db_path, password)`
+3. Le hook reste exit 0 safe (lock fail = warning stderr, pas crash)
+
+**TEST PIN** `tests/test_h6b_vault_auto_lock.py` : monkeypatch env vars, simulate Stop hook, assert vault.lock called.
+
+**FORGE** : muninn_feed.py.
+
+**STAGE** : muninn_feed.py × 2 + CLAUDE.md + tests/.
+
+---
+
+## H.6c — L12 BudgetMem default activation (30 min) — **ZÉRO DORMANT**
+
+**Problème** : L12 chunk selection opt-in via `MUNINN_L12_BUDGET=N`. Sky n'a jamais set.
+
+**DÉCISION DEFAULT** : Activer par défaut avec budget conservatif `MUNINN_L12_BUDGET=16000` (16K tokens) si non set. User peut override ou désactiver via `=0`.
+
+**FIX** : Dans `engine/core/muninn_layers.py` start of L12 pass, `budget = int(os.environ.get("MUNINN_L12_BUDGET", "16000"))`. Si `budget == 0` → skip L12.
+
+**TEST PIN** `tests/test_h6c_l12_default_active.py` :
+- Sans env var, assert L12 runs avec budget=16000
+- Avec `MUNINN_L12_BUDGET=0`, assert L12 skipped
+
+**FORGE** : muninn_layers.py.
+
+**STAGE** : muninn_layers.py + tests/ + CLAUDE.md (update env var default).
+
+---
+
+## H.7 — sync_tls + watchdog (15 min)
+
+**DÉCISIONS DEFAULT** :
+- `sync_tls.py` → `engine/core/experimental/sync_tls.py` (opt-in via `MUNINN_SYNC_TLS_HOST=host:port`)
+- `watchdog.py` : keep + docstring "Windows Task Scheduler standalone, Linux: irrelevant"
+
+**FIX** :
 ```bash
 mkdir -p engine/core/experimental
 git mv engine/core/sync_tls.py engine/core/experimental/sync_tls.py
-# Update imports dans engine/core/sync_backend.py si besoin
-git add engine/core/experimental/sync_tls.py engine/core/sync_backend.py CLAUDE.md
+# Update imports dans sync_backend.py si nécessaire
 ```
+
+Add docstring header watchdog.py.
+
+**STAGE** : git mv + sync_backend.py update + watchdog.py.
 
 ---
 
-### Chunk H.8 — Garde-fou API bloat MyceliumDB (30 min)
+## H.8 — Garde-fou API bloat MyceliumDB (30 min)
 
-**Sous-section 8.1 — DÉCISION** : refactor MyceliumDB en Phase H = **NON** (trop gros). Ajouter juste un test garde-fou anti-régression.
+**TEST PIN** `tests/test_h8_api_bloat_baseline.py` :
+- Compte méthodes publiques (sans `_`) de `MyceliumDB`, `Mycelium`, `Cube`
+- Assert que count <= baseline figé (e.g., 70 pour MyceliumDB)
+- Si un PR ajoute une méthode publique → CI rouge, oblige justification ou refactor
 
-**Sous-section 8.2 — TEST** :
-`tests/test_h8_api_bloat_baseline.py` :
-- Compte le nombre de méthodes publiques de MyceliumDB, Mycelium, Cube
-- Assert que ce nombre **ne dépasse pas** le baseline actuel (figer pour Phase I refactor)
-
-**Sous-section 8.3 — STAGE** :
-```bash
-git add tests/test_h8_api_bloat_baseline.py
-```
+**STAGE** : tests/.
 
 ---
 
-### Chunk H.9 — Docs sync (15 min)
+## H.9 — Docs sync (15 min)
 
-**Sous-section 9.1 — Updates** :
-- CHANGELOG : section "Phase H delivered" avec liste des features activées
-- WINTER_TREE : snapshot final post-H
-- README : ajouter section "Quick reference 35 CLI commands"
-- QUICKSTART : exemples concrets `muninn-mem cube`, `muninn-ui`, `--include-dreams`, `muninn-mem metrics`
+**FIX** :
+- CHANGELOG : section "Phase G+H delivered"
+- WINTER_TREE : snapshot final
+- README : section "Quick reference 35 CLI commands"
+- QUICKSTART : exemples `muninn-mem cube`, `muninn-ui`, `--include-dreams`, `muninn-mem metrics`
 
-**Sous-section 9.2 — STAGE** :
-```bash
-git add CHANGELOG.md WINTER_TREE.md README.md docs/QUICKSTART.md
-```
+**STAGE** : 4 docs.
 
 ---
 
-### Chunk H.10 — Bump 1.0.3 → 1.1.0 + build (15 min)
+## H.10 — Bump 1.0.3 → 1.1.0 + build sanity (15 min)
 
-> **NE PAS UPLOAD TestPyPI pendant Phase H**. Upload sera fait APRÈS push GitHub (Sky décide).
+**FIX** : 4 mirrors version sync.
 
-**Sous-section 10.1 — Bump version** :
-- pyproject.toml : version `1.0.3` → `1.1.0`
-- muninn/__init__.py (2 spots)
-- muninn/_engine.py (2 spots)
-- engine/core/muninn.py (2 spots)
-
-**Sous-section 10.2 — Build sanity** :
 ```bash
 rm -rf build dist *.egg-info
 python3 -m build --no-isolation 2>&1 | tail -2
@@ -469,175 +478,256 @@ python3 -m twine check dist/* 2>&1 | tail -2
 # Attendu : Successfully built + PASSED both
 ```
 
-**Sous-section 10.3 — STAGE** :
-```bash
-git add pyproject.toml muninn/__init__.py muninn/_engine.py engine/core/muninn.py
-# NE PAS stage dist/ (gitignored)
-```
+**STAGE** : pyproject + 3 modules version mirrors. Pas dist/ (gitignored).
 
 ---
 
-### Chunk H.FINAL — Vérif H.0 garde-fou GREEN + sanity full
+# 🟪 PHASE I — Zéro dormant garantie (~2h30, 5 chunks)
 
-**Sous-section F.1 — Garde-fou maintenant GREEN** :
-```bash
-python3 -m pytest tests/test_h0_no_orphan.py -v
-# Attendu : 6/6 PASS (toutes les orphans ont été wirées par H.1-H.7)
+## I.1 — Wiring-check tests par feature dormante (1h)
+
+**TEST PIN** `tests/test_i1_wiring_check.py` (5 tests, un par feature) :
+```python
+def test_i1_wiring_vault_lock_called_by_stop_hook():
+    # monkeypatch vault.lock + env vars + simulate Stop
+    # assert vault.lock called
+
+def test_i1_wiring_cube_called_by_cli_cube():
+    # subprocess muninn-mem cube --cube-action scan
+    # monkeypatch cube_analysis.cli_scan + assert called
+
+def test_i1_wiring_dream_called_by_include_dreams_flag():
+    # déjà couvert par H.3 mais en isolation pure
+    # ici en CLI end-to-end
+
+def test_i1_wiring_metrics_invoked_by_cli():
+    # subprocess muninn-mem metrics + assert forge_metrics.compute_metrics called
+
+def test_i1_wiring_l12_invoked_in_feed_pipeline():
+    # simulate feed avec MUNINN_L12_BUDGET=8000
+    # assert _l12_budget_pass called
 ```
 
-Si toujours rouge : DÉBUG quel test fail, identifier quel chunk a manqué le wire, retour à ce chunk.
+**STAGE** : tests/.
 
-**Sous-section F.2 — Full pytest** :
+---
+
+## I.2 — Garde-fou anti-fonction-zombie (1h)
+
+**TEST PIN** `tests/test_i2_no_zombie_function.py` :
+- Parse AST de `engine/core/*.py` + `muninn/*.py`
+- Pour chaque `def public_fn():` (no underscore), grep si appelée AILLEURS dans le code shipped
+- Whitelist : `main`, `__init__`, helpers used only via decorator (e.g., `@app.tool()`)
+- Si fonction publique 0 caller → fail avec liste
+
+Initial run : RED expected (audit a trouvé 89 zombies). FIX : soit supprimer la fonction, soit ajouter au whitelist intentionnel, soit la wire.
+
+**FIX simplification** : Pour le premier run, juste générer la liste dans `/tmp/zombies.txt`, marquer test `@pytest.mark.xfail(strict=False)` avec count. Phase J = refactor systematic.
+
+**STAGE** : tests/.
+
+---
+
+## I.3 — `.muninn/edits_log.jsonl` reader OR drop (30 min)
+
+**DÉCISION DEFAULT** : DROP le hook PostToolUse edit log (utility douteuse, écrit mais aucun lecteur). Ajouter à WHITELIST_DORMANT_HOOKS H.0.
+
+**FIX** : 
+1. `.claude/hooks/post_tool_use_edit_log.py` : ajouter docstring "[DORMANT INTENTIONAL] No reader implemented yet. See docs/PROMPT_EXEC_PHASE_H.md I.3"
+2. Update H.0 WHITELIST_DORMANT_HOOKS
+
+**STAGE** : test_h0_no_orphan.py + post_tool_use_edit_log.py.
+
+---
+
+## I.4 — `.muninn/session_index.json` investigation (30 min)
+
+**FIX** : grep le code pour trouver écrivain ET lecteur de `session_index.json`. Si zéro lecteur → ajouter docstring "[DORMANT INTENTIONAL]" dans le module qui écrit. Sinon, doc dans CLAUDE.md le rôle.
+
+**STAGE** : selon résultat investigation.
+
+---
+
+## I.5 — Final verify H.0 garde-fou GREEN (30 min)
+
 ```bash
-python3 -m pytest tests/ -q --tb=line \
-  -m "not slow" \
-  --ignore-glob='tests/test_ui_*.py' \
-  --ignore=tests/eval_harness_chunk9.py \
-  --ignore=tests/eval_harness_chunk11.py \
+python3 -m pytest tests/test_h0_no_orphan.py -v
+# Attendu : 6/6 PASS (toutes les orphans wirées par H.1-H.7 ; whitelist couvre les intentionnels)
+```
+
+Si toujours rouge sur un test précis → identifier quel chunk a raté le wire, retour à ce chunk.
+
+**STAGE** : (rien si test pin H.0 déjà staged).
+
+---
+
+# 📦 H.FINAL — Sanity full
+
+```bash
+# 1. Full pytest
+python3 -m pytest tests/ -q --tb=line -m "not slow" \
+  --ignore=tests/eval_harness_chunk9.py --ignore=tests/eval_harness_chunk11.py \
   --ignore=tests/test_chunk1_auto_memory_disabled.py \
   --ignore=tests/test_chunk_a7_hook_integrity.py \
   --deselect tests/test_retrieval_benchmark.py::test_actr_activation_varies \
   2>&1 | tail -5
-# Attendu : ≥ 2546 + 25 nouveaux Phase H tests = 2571+ PASS, 0 fail
-```
+# Attendu : ≥ 2546 + ~40 nouveaux tests = 2586+ PASS, 0 fail
 
-**Sous-section F.3 — Forge final** :
-```bash
+# 2. Forge
 forge --gen-props engine/core/muninn.py 2>&1 | tail -3
 forge --modularity 2>&1 | head -3
-# Attendu : Q ≥ 0.67 (stable ou meilleur)
+# Attendu : Q ≥ 0.67
+
+# 3. Build sanity
+rm -rf build dist *.egg-info
+python3 -m build --no-isolation 2>&1 | tail -2
+python3 -m twine check dist/* 2>&1 | tail -2
+# Attendu : Successfully built 1.1.0 + PASSED both
+
+# 4. UI launches offscreen
+QT_QPA_PLATFORM=offscreen timeout 5 muninn-ui 2>&1 | head -3 || echo "OK (killed timeout = window started)"
 ```
 
 ---
 
-## 🎯 LE GROS COMMIT FINAL (UN SEUL)
-
-Quand tous les chunks H.0-H.10 + H.FINAL sont verts, exécute :
+# 🎯 LE GROS COMMIT FINAL (UN SEUL)
 
 ```bash
 cd /home/sky/Bureau/MUNINN-
 git status -sb
-# Verify : tous les fichiers en "M " ou "A " (staged), zéro modified non-staged
+# Verify : tous fichiers staged (M ou A), zéro modified non-staged
 
 git commit -m "$(cat <<'EOF'
-feat(phase-H): Light Up Everything — wire 17.8K LOC dormantes + garde-fou anti-orphan + bump 1.1.0
+feat(phase-G+H+I): bugfixes + wire 17.8K LOC dormantes + zéro-dormant garantie + bump 1.1.0
 
-Phase H "Light Up Everything" — exécution chunk par chunk per
-docs/PROMPT_EXEC_PHASE_H.md (Sky's master prompt).
+EXÉCUTION TOTALE per docs/PROMPT_EXEC_PHASE_H.md (Sky's master prompt) :
+- Phase G : 10 chunks bugfixes
+- Phase H : 11 chunks wire features dormantes + garde-fou anti-orphan
+- Phase I : 5 chunks zéro-dormant garantie
 
-11 chunks livrés (H.0 → H.10) :
+PHASE G — Bug fixes
+  G.1 Universal degree-based stopword filter (recall_local/meta/dual)
+  G.2 Doc drift résiduel `muninn init` → `muninn-mem init` (3 fichiers)
+  G.3 Error handling friendly (FileNotFoundError etc. → exit(1) clean)
+  G.4 F.1 tests @pytest.mark.slow marker
+  G.5 ~/.pypirc security note (gitignore global + README)
+  G.6 Doctor pre-init simplified output
+  G.8 Python compat claim downgrade à >=3.13 (honest)
+  G.10 Audit honest tests recount (16 REAL + 6 MEDIUM + 3 WEAK)
 
-H.0 GARDE-FOU ANTI-ORPHAN (test_h0_no_orphan.py, 6 tests)
-  - test_no_orphan_engine_module : pour chaque engine/core/*.py, au moins
-    1 caller depuis code shipped (pas tests/)
-  - test_no_orphan_ui_module : pour chaque muninn/ui/*.py, référencé
-  - test_all_env_vars_documented_read
-  - test_all_argparse_flags_consumed
-  - test_all_cli_commands_have_handler
-  - test_all_hooks_on_disk_registered
-  → Système immunitaire CI : tout futur orphan = CI rouge automatique
+PHASE H — Wire dormant features
+  H.0 GARDE-FOU ANTI-ORPHAN (système immunitaire CI, 6 tests)
+  H.1 muninn-mem cube CLI (5597 LOC)
+  H.2 muninn-ui console script (11 712 LOC)
+  H.2b Tests UI réactivés en CI (offscreen)
+  H.3 --include-dreams flag (561 LOC)
+  H.4 muninn-mem metrics CLI (344 LOC)
+  H.5 Cleanup dead config (MUNINN_GL_SOFTWARE wired, --output réutilisé,
+       2 TODO stubs supprimés)
+  H.5b Hygiene (.forge baseline reset, memory/ doc, tags pre-* kept)
+  H.6 Wire 3 hooks Claude Code défensifs (bash_destructive, bash_secrets,
+       edit_hardcode)
+  H.6b vault auto-lock après SessionEnd (opt-in MUNINN_VAULT_AUTO_LOCK)
+  H.6c L12 BudgetMem default activation (MUNINN_L12_BUDGET=16000 default)
+  H.7 sync_tls.py → engine/core/experimental/ + watchdog docstring
+  H.8 Garde-fou API bloat baseline (MyceliumDB freeze)
+  H.9 Docs sync (CHANGELOG + WINTER_TREE + README + QUICKSTART)
+  H.10 Bump 1.0.3 → 1.1.0 (4 mirrors)
 
-H.1 muninn-mem cube CLI (5597 LOC débloquées)
-  - argparse choices += "cube"
-  - --cube-action {scan,run,status,god} + --cycles --level
-  - Handler call cli_scan/run/status/god
-
-H.2 muninn-ui console script (11 712 LOC débloquées)
-  - pyproject [scripts] += muninn-ui = "muninn.ui.main_window:main"
-  - pyproject [optional-dependencies] += ui = ["PyQt6>=6.10"]
-  - muninn/ui/__main__.py NEW
-  - main() function added to main_window.py
-
-H.3 --include-dreams flag (561 LOC débloquées)
-  - argparse flag added + plumbing vers prune(include_dreams=...)
-
-H.4 muninn-mem metrics CLI (344 LOC débloquées)
-  - argparse choices += "metrics"
-  - Handler call forge_metrics.compute_metrics(repo)
-  - Reuse --output flag (was dead)
-
-H.5 Cleanup dead config
-  - MUNINN_GL_SOFTWARE wired dans muninn/ui/main_window.py:main()
-  - --output flag réutilisé par H.4
-  - 2 TODO stubs supprimés (muninn.py:682, muninn/_engine.py:764)
-
-H.5b Hygiene
-  - .forge baseline refresh
-  - memory/ legacy doc explicite dans CLAUDE.md
-  - 16 tags pre-* gardés (safety nets)
-
-H.6 Wire 3 hooks défensifs Claude Code (~750 LOC)
-  - pre_tool_use_bash_destructive
-  - pre_tool_use_bash_secrets
-  - pre_tool_use_edit_hardcode
-  - 2 hooks audit gardés dormants intentionnels (whitelist H.0)
-
-H.7 sync_tls + watchdog
-  - sync_tls.py → engine/core/experimental/ (opt-in via MUNINN_SYNC_TLS_HOST)
-  - watchdog.py kept + docstring "Windows Task Scheduler standalone"
-
-H.8 Garde-fou API bloat (Phase I refactor reporté)
-  - test_h8_api_bloat_baseline.py freeze MyceliumDB/Mycelium/Cube API count
-
-H.9 Docs sync
-  - CHANGELOG + WINTER_TREE + README Quick Reference + QUICKSTART examples
-
-H.10 Bump 1.0.3 → 1.1.0
-  - 4 mirrors version sync
-  - python -m build : muninn_memory-1.1.0.whl + .tar.gz CLEAN
-  - twine check PASSED
+PHASE I — Zéro dormant garantie
+  I.1 Wiring-check tests par feature (vault, cube, dream, metrics, L12)
+  I.2 Garde-fou anti-fonction-zombie (xfail initial avec count, Phase J)
+  I.3 `.muninn/edits_log.jsonl` → drop hook PostToolUse edit log
+  I.4 `.muninn/session_index.json` investigation + doc rôle
+  I.5 Final H.0 garde-fou GREEN verify
 
 VÉRIFICATIONS (RULE 4) :
-- H.0 garde-fou : 6/6 PASS post chunks (ROUGE→VERT, prouve les wires)
-- Full pytest : 2571+ PASS, 0 fail
-- forge --modularity Q = 0.67X (stable)
-- forge --gen-props engine/core/muninn.py : OK
-- twine check dist/* : PASSED both
+- H.0 garde-fou : 6/6 PASS (ROUGE→VERT prouve wires)
+- Full pytest : 2586+ PASS, 0 fail
+- Forge --modularity Q ≥ 0.67
+- Build wheel 1.1.0 + twine check : PASSED
+- muninn-ui launch offscreen : OK
+- 0 code shipped sans caller (verified par H.0 + I.2)
 
-LOC débloquées en prod : ~17 800 (Cube + UI + dream + metrics + hooks)
+LOC débloquées en prod : ~17 800 (Cube + UI + dream + metrics + hooks
+défensifs + vault auto-lock + L12 default).
+
+GARANTIE : à partir de ce commit, tout futur module orphan = CI rouge
+automatique. Plus jamais une feature codée mais pas en prod.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
-```
 
----
-
-## 🚀 PUSH GITHUB (après commit)
-
-```bash
 git push 2>&1 | tail -3
-# Attendu : <old>..<new>  main -> main
 ```
 
-**Note** : la CI mycelium step prend 41min. Tu peux poursuivre vers post-script SANS attendre la verdict CI.
+---
+
+# 📝 POST-PUSH — Items cas par cas (PAS DANS CE PROMPT)
+
+Après le push trigger une CI run ~44min. Pendant ce temps :
+
+1. **CI step "Test Mycelium" 41min** — Sky a dit "oublie le machin CI qui contrôle le mycelium pour l'instant". Si rouge sur autre chose que mycelium → fix séparé. Si rouge sur mycelium → ignorer (Sky fix au cas par cas plus tard).
+
+2. **TestPyPI 1.1.0 upload** — Sky décide. Token déjà dans `~/.pypirc`.
+
+3. **PyPI prod 1.1.0** — décision Sky après TestPyPI.
+
+4. **Phase J refactor MyceliumDB API bloat (81% méthodes mortes)** — 3-4h, plus tard.
+
+5. **Phase J réviser fonctions zombies** (89 listées par audit) — supprimer ou ajouter au whitelist intentionnel.
 
 ---
 
-## 📝 POST-PUSH — Items à fix au cas par cas (PAS DANS CE PROMPT)
+# ✅ CONTRAT DE FIN
 
-Quand la CI passe (ou rouge), Sky décide pour CHACUN :
+Tu as exécuté correctement SI ET SEULEMENT SI :
 
-1. **CI mycelium step** : si rouge sur Phase H, créer chunks H.x correctifs séparés
-2. **TestPyPI 1.1.0 upload** : décision Sky (token déjà dans ~/.pypirc)
-3. **PyPI prod 1.1.0** : décision Sky après TestPyPI validé
-4. **Phase I refactor MyceliumDB** (81% API mort) : effort 3-4h, plus tard
-5. **Decision 16 tags pre-*** : keep / cleanup / archive
-
-Push GitHub trigger CI run (~44min). **Tu peux fermer la session ici**, le cousin Claude qui reprendra demain matin verra le résultat CI et continuera selon décision Sky.
-
----
-
-## ✅ CONTRAT DE FIN DE PHASE H
-
-Tu as exécuté Phase H correctement SI ET SEULEMENT SI :
-
-- [ ] 11 chunks H.0-H.10 verts (output verbatim après chaque)
-- [ ] 1 SEUL commit final (pas de commits intermédiaires entre chunks)
+- [ ] 26 chunks G.* + H.* + I.* tous verts (output verbatim)
+- [ ] 1 SEUL commit final (pas d'intermédiaires)
 - [ ] 1 push GitHub réussi
-- [ ] H.0 garde-fou test 6/6 PASS (prouve système immunitaire actif)
-- [ ] Full pytest 2571+ PASS / 0 fail
-- [ ] muninn-mem cube, muninn-ui, --include-dreams, muninn-mem metrics tous user-facing accessibles
-- [ ] Build wheel 1.1.0 sanity check OK
+- [ ] H.0 garde-fou 6/6 PASS post-wiring (prouve tout branché)
+- [ ] I.2 garde-fou anti-fonction-zombie en place (xfail initial OK)
+- [ ] Full pytest 2586+ PASS / 0 fail
+- [ ] muninn-mem cube, muninn-ui, --include-dreams, muninn-mem metrics tous accessibles
+- [ ] muninn-ui launch offscreen sans crash
+- [ ] Build wheel 1.1.0 sanity OK + twine check PASSED
+- [ ] 0 features fantôme : vault auto-lock wired, L12 default actif, sync_tls dans experimental, watchdog doc
 
-**Si l'un de ces points fail → STOP et demande à Sky.**
+**Si l'un fail → STOP, stash, écris blocker, demande Sky.**
+
+---
+
+## 🧭 STRUCTURE D'ORIENTATION (pour ne pas te perdre)
+
+```
+PHASE G ━━━━━━━━━━━━━━ bugs visibles user (3h)
+  G.1-G.10 : qualité output, error handling, doc drift, version honest
+
+PHASE H ━━━━━━━━━━━━━━ wire features dormantes (5h30)
+  H.0     : garde-fou anti-orphan (système immunitaire)
+  H.1-H.4 : wire 4 CLI commands (cube, ui, --dreams, metrics)
+  H.5-H.7 : cleanup config + hooks + sync_tls
+  H.6b-c  : vault auto-lock + L12 default (zéro dormant features)
+  H.8     : garde-fou API bloat MyceliumDB
+  H.9-H.10: docs + bump 1.1.0
+
+PHASE I ━━━━━━━━━━━━━━ zéro dormant garantie (2h30)
+  I.1     : wiring-check tests par feature
+  I.2     : garde-fou anti-fonction-zombie
+  I.3-I.4 : hooks dormants intentionnels documentés
+  I.5     : verify H.0 garde-fou GREEN
+
+H.FINAL ━━━━━━━━━━━━━━ sanity full
+
+COMMIT 1× ━━━━━━━━━━━━ message verbose changelog
+
+PUSH 1× ━━━━━━━━━━━━━━ trigger CI 44min (ignore mycelium step)
+
+POST-PUSH ━━━━━━━━━━━ cas par cas (Sky décide TestPyPI/prod/refactor)
+```
+
+**Total effort** : ~11h (peut split sur 2 jours si Sky veut).
+**Total LOC débloquées en prod** : ~17 800.
+**Garantie post-exécution** : 0 feature codée mais pas en prod, garde-fou CI permanent.
