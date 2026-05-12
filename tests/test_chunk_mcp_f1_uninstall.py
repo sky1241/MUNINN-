@@ -25,6 +25,14 @@ from pathlib import Path
 
 import pytest
 
+# G.4 (2026-05-12): F.1 tests spawn real subprocesses + write to the live
+# repo's .claude/settings.local.json — they shell out to engine/core/muninn.py,
+# trigger hook installation, and uninstall. Each test is ~3-5s, and they hit
+# the user's home dir for the systemd timer side-effects. Default CI run
+# (-m "not slow") skips them; F.1 surface is still covered by the unit-level
+# helpers exercised in test_chunk_mcp_f1_*_helpers.py.
+pytestmark = pytest.mark.slow
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MUNINN_CLI = REPO_ROOT / "engine" / "core" / "muninn.py"
 
