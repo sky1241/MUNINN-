@@ -685,9 +685,11 @@ def prune(dry_run: bool = True, include_dreams: bool = False):
 
     # H.3 (2026-05-12): Sleep Consolidation pass (Wilson & McNaughton 1994).
     # 561 LOC of mycelium_dream.py were dormant before this wire.
+    # NB: do NOT re-import `_m` here — it's imported at module level
+    # (line 24). A local re-import would shadow the global for the entire
+    # function and trigger UnboundLocalError at line 450 (`_m.TREE_DIR`).
     if include_dreams and not dry_run:
         try:
-            from muninn_tree import _m  # late import to avoid circular
             from mycelium import Mycelium
             repo = _m._REPO_PATH or Path.cwd()
             myc = Mycelium(repo)
