@@ -69,3 +69,10 @@ freezegun==1.5.5
 #
 # v1.3.0 is on PyPI since 2026-05-11 (Sky uploaded). Bumped v1.2.2 → v1.3.0.
 forge-shield==1.3.0
+
+# CHUNK MCP C.2 (2026-05-12): pytest-xdist enables parallel test execution
+# (`pytest -n auto` spawns one worker per CPU). Cuts validate job wall-time
+# ~40min → ~10min. Safe because tests/conftest.py:91 already has an autouse
+# _repo_path_isolate() fixture (CHUNK B7) preventing cross-worker _REPO_PATH
+# leakage. 3.6.1 currently tested.
+pytest-xdist==3.6.1
