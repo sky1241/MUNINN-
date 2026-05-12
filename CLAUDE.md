@@ -163,13 +163,19 @@ Fichier `.muninn/mycelium.json` — reseau vivant de co-occurrences.
 - C'est le codebook — mais vivant, pas statique
 
 ## L'arbre (la structure)
-Fichier `memory/tree.json` — arbre fractal L-system.
+Fichier `.muninn/tree/tree.json` — arbre fractal L-system.
 - Racine (100 lignes, toujours chargee)
 - Branches (150 lignes, chargees si pertinentes)
 - Feuilles (200 lignes, chargees si necessaires)
 - Temperature par noeud: chaud=lu souvent, froid=oublie
 - R4: ce qui est chaud remonte, ce qui est froid descend et meurt
 - Budget: 30K tokens max charges = 15% du contexte
+
+> **H.5b note (2026-05-12)** : le dossier `memory/` au root est un legacy
+> fallback lu seulement si `.muninn/tree/` est absent (muninn_tree.py
+> `_resolve_tree_path()`). Ne pas modifier manuellement : la source
+> canonique est `.muninn/tree/`. Garder le legacy en place jusqu'à ce
+> qu'une migration de tous les repos installés soit faite.
 
 ## Commandes
 ```
