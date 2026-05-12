@@ -932,6 +932,8 @@ def main():
         "sync", "zones",
         # H.1 (2026-05-12): wire 5597 LOC of cube_analysis to the CLI.
         "cube",
+        # H.4 (2026-05-12): wire 344 LOC of forge_metrics to the CLI.
+        "metrics",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")
@@ -1442,6 +1444,21 @@ def main():
             result = cli_status()
         import json as _json
         print(_json.dumps(result, default=str, indent=2))
+        return
+
+    if args.command == "metrics":
+        # H.4 (2026-05-12): wire 344 LOC of engine/core/forge_metrics.py.
+        # Prints Q-modularity + carmack + locate + fused risk scores as JSON.
+        # Reuses the --output flag (previously dormant) to also write to file.
+        from forge_metrics import get_repo_risk
+        repo = Path(_REPO_PATH or args.file or Path.cwd()).resolve()
+        report = get_repo_risk(repo)
+        import json as _json
+        payload = _json.dumps(report.to_json(), default=str, indent=2)
+        print(payload)
+        if getattr(args, "output", None):
+            Path(args.output).write_text(payload + "\n", encoding="utf-8")
+            print(f"# metrics also written to {args.output}", file=sys.stderr)
         return
 
     if not args.file:
