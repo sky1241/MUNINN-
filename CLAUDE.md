@@ -176,6 +176,13 @@ Fichier `.muninn/tree/tree.json` — arbre fractal L-system.
 > `_resolve_tree_path()`). Ne pas modifier manuellement : la source
 > canonique est `.muninn/tree/`. Garder le legacy en place jusqu'à ce
 > qu'une migration de tous les repos installés soit faite.
+>
+> **I.4 note (2026-05-12)** : `.muninn/session_index.json` = registre des
+> sessions compressées. Writer unique : `muninn_feed._update_session_index`
+> (appelé par feed_from_transcript après chaque .mn écrit). 4 readers
+> dans `muninn_tree.py` (lignes ~1248/1628/1706/1782) pour la query
+> expansion au boot (Park et al. 2023 style). Modification manuelle = ne
+> pas le faire.
 
 ## Commandes
 ```
