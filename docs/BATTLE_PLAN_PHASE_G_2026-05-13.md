@@ -42,30 +42,34 @@ Phase E a montré que push sans watch CI = 6 push rouges en série. **Discipline
 
 ## Chunks G.X (ordonnés par sévérité décroissante)
 
-### Chunk G.1 — F.4 Stopwords filter (45min) — **BLOCKER qualité**
+### Chunk G.1 — Universal degree-based stopword filter (30min) — **BLOCKER qualité**
 
-**Problème** : `recall_meta("compression")` retourne `pas(1.0), est(0.99), les(0.83)` — stopwords français dominent, pas du signal sémantique.
+> **Version v2 (2026-05-12 soir)** : Sky a fait remarquer que hardcoder
+> les stopwords français est mauvais design — les users parlent toutes
+> les langues. **Sky a aussi pointé que la solution existe DÉJÀ dans
+> son code** : `DEGREE_FILTER_PERCENTILE = 0.05` ligne 80 de mycelium.py.
+> Ce plan v2 utilise CETTE solution universelle au lieu de hardcoder FR.
 
-**POURQUOI** : `engine/core/mycelium.py:1252` `_STOPWORDS` set manque les stopwords FR les plus fréquents :
-```
-pas, est, les, le, la, de, du, des, à, et, ou, un, une, je, tu,
-il, on, ce, que, qui, a, ai, as, avons, avez, ont,
-l', d', n', s', m', t', qu', c'
-```
-La liste avait été commencée en EN puis traduite partiellement, les plus fréquents (donc les plus importants à filtrer) ont été oubliés.
+**Problème** : `recall_meta("compression")` retourne `pas(1.0), est(0.99), les(0.83)` — stopwords français dominent. Mais le vrai problème est plus large : N'IMPORTE QUELLE langue va avoir le même souci (anglais "the/of/and", espagnol "el/de/la", etc.).
 
-**QUI a foiré** : Claude original (probablement Phase initiale du mycelium, pas Phase E+F).
+**POURQUOI** : `engine/core/mycelium.py:80` définit `DEGREE_FILTER_PERCENTILE = 0.05` (top 5% degree concepts = universal stopwords). Mais ce filtre est utilisé **SEULEMENT pour bloquer les FUSIONS** (S3 tier), **PAS au query-time** du recall. Donc les stopwords passent au top des résultats même s'ils sont déjà identifiés comme tels.
 
-**Fix proposé (2 layers defense)** :
-1. **Layer 1 (ingest)** : ajouter ~25 stopwords FR à `_STOPWORDS` set
-2. **Layer 2 (query-time)** : filter results in `_recall_local_impl` + `_recall_meta_impl` + `_recall_dual_impl` qui exclut concepts dans `_STOPWORDS` du résultat
-3. **NE PAS** purger le meta_mycelium existant (risqué, 1.3GB DB)
+**QUI a foiré** : Claude original (Phase initiale du mycelium) a implémenté le degree filter pour les fusions mais a oublié de l'appliquer au query-time. Mon plan G.1 v1 initial (hardcoder FR) était aussi mauvais — Sky m'a corrigé.
+
+**Fix v2 (universal, multi-langues gratis)** :
+1. Dans `_recall_local_impl` (mycelium.server) + `_recall_meta_impl` : à la fin du calcul, exclure du top-k tout concept dans le top 5% degree du graphe.
+2. Le `Mycelium` instance a déjà la méthode pour calculer ça (utilisée par S3 fusion block). Réutiliser.
+3. **Pas de liste hardcodée par langue.** Pas de maintenance future. Marche pour FR, EN, ES, ZH, code, tout ce qui domine en degree.
+4. Bonus : `MUNINN_RECALL_STOPWORD_PERCENTILE` env var (default 0.05) → Sky peut tuner si trop strict ou trop laxe.
 
 **Test pin** :
-- `test_g1_recall_meta_no_french_stopwords_in_top10` : query "compression" + assert `pas`, `est`, `les` absent des 10 premiers résultats
-- `test_g1_stopwords_set_complete_french` : liste les ~25 stopwords requis et assert tous dans `_STOPWORDS`
+- `test_g1_recall_universal_stopword_filter_active` : seed mycelium avec mots fréquents synthétiques ("xxx" partout) → assert "xxx" absent du top-k recall même si haut activation
+- `test_g1_recall_meta_no_french_stopwords_in_top10` : query "compression" sur le vrai meta de Sky + assert `pas`, `est`, `les` absent (incidental, vu que ces concepts sont en top degree)
+- `test_g1_env_var_percentile_tunable` : MUNINN_RECALL_STOPWORD_PERCENTILE=0.0 → no filter ; =0.10 → plus strict ; verify behavior different
 
 **Forge** : RULE 5 → forge --gen-props sur mycelium.py + verify property tests pass.
+
+**Bonus credit** : commit message dira `Sky pointed the universal solution (DEGREE_FILTER_PERCENTILE already exists in mycelium.py:80). Co-Authored-By: Sky.`
 
 ---
 
@@ -244,3 +248,85 @@ Si seulement G.1+G.3 verts → ship 1.0.4 quand même (les 2 blockers fixés, le
 Phase E+F a livré l'intégration MCP **prouvée live en vrai consumer Claude Code session**. C'est le **premier vrai signal externe** que tout l'effort A→F était utile, pas du theater. La fatigue actuelle de Sky est légitime : 25+ commits en 24h + 2 phases de hardening découvertes en cours de route. Phase G = finir proprement, pas tout casser.
 
 Demain on attaque chunk par chunk, explication ROOT CAUSE / WHO FAILED à chaque step, watch CI green avant suivant. Pas de stack push, pas d'overclaim.
+
+---
+
+# ANNEXE — PHASE H (Architecture cleanup, audit 2026-05-12 soir)
+
+Sky a demandé un deep audit "y a des trucs pas branchés en production de partout, je vois arriver gros comme une maison". 4 agents lancés en parallèle ont confirmé. Findings :
+
+## Dégâts mesurés
+
+| Surface | Vivant prod | Orphan / Dormant | % dette |
+|---|---|---|---|
+| Tests (268 fichiers) | 210 actifs | 12 morts + 22 héritage skip | 10% |
+| Engine code (26 700 LOC) | ~20 000 actif | **~6 700 dormants** | **25%** |
+| Docs (78 .md) | **5** actifs | 73 orphans/archive | **93%** |
+| Features claim (43) | 26 vivantes | **5 fantômes + 12 dormantes** | **40%** |
+| CLI sub-commands (30) | 22 vivantes | 8 stub/orphan | 27% |
+
+## Top 5 features fantômes (CODE ÉCRIT POUR RIEN)
+
+| # | Feature | LOC | Tests | Activations prod |
+|---|---|---|---|---|
+| 1 | `vault.py` (AES-256-GCM) | 551 | 12 PASS | **0** — jamais `muninn lock` |
+| 2 | `sync_tls.py` (TLS sync distant) | 643 | 8 PASS | **0** — pas de serveur |
+| 3 | `mycelium_zones.py` (Laplacian) | 383 | 6 PASS | **0** — `zones` jamais run |
+| 4 | `mycelium_dream.py:dream()` | 561 | indirect | **0** — `--include-dreams` jamais set |
+| 5 | `think` command | 30 | 1 | **0** — `raise NotImplementedError` |
+
+**Total : ~1 600 LOC crypto/sync + 561 LOC dream + 5500 LOC Cube system barely wired**
+
+## Cube system findings (critical)
+
+- 5500 LOC total (cube.py + cube_providers.py + cube_analysis.py)
+- 39 bricks B1-B39
+- Appelé UNIQUEMENT via `muninn scan` → **JAMAIS exécuté par Sky**
+- Tests passent mais aucun call en prod observé dans hook_log (600+ entries depuis Phase A)
+- Verdict honnête : système Cube = sandbox expérimentale, pas feature shipped
+
+## Plans pour Phase H
+
+### Option A — PRUNE TOTAL (recommandé si Sky veut alléger)
+
+Supprimer le code orphan + tests associés + docs orphans + commandes CLI inutiles.
+
+| Chunk H.X | Effort | Gain LOC |
+|---|---|---|
+| H.1 Remove vault.py + tests + CLI commands | 30min | -551 |
+| H.2 Remove sync_tls.py + tests | 20min | -643 |
+| H.3 Remove mycelium_dream.py.dream() + dead code | 30min | -300 (keep mixin shell) |
+| H.4 Remove "think" stub + clean argparse | 5min | -30 |
+| H.5 Remove "scan" + "trip" + "quarantine" CLI handlers if confirmed unused | 20min | -200 |
+| H.6 Archive 30 orphan docs to `docs/archive/` | 30min | docs cleanup |
+| H.7 Remove `test_ui_*.py` (15 fichiers jamais run) | 10min | -15 fichiers |
+| H.8 Decision Cube system : prune complet OU déclarer `[experimental]` extra | 1-3h | -5500 OR doc-only |
+
+**Total Option A** : ~3-5h, -7700 LOC, plus de clarté
+
+### Option B — DOCUMENT + DEFER
+
+Garder le code mais ajouter section CLAUDE.md "Future / Experimental Features" qui liste honnêtement :
+- Vault : code complet, opt-in si jamais besoin AES-256-GCM
+- Sync TLS : pilot, attente serveur distant config
+- Zones : labo Laplacian clustering, run manuel
+- Cube system : sandbox 39 bricks, jamais en prod
+- Think : TODO stub
+
+Plus : ajouter un test `test_features_claim_honest.py` qui pour chaque feature claimée dans CLAUDE.md verify qu'elle a au moins 1 appel en prod (via hook_log ou code path actif).
+
+**Total Option B** : ~1h, 0 LOC supprimées, claim honnête.
+
+### Option C — STATUS QUO
+
+Laisser. Test coverage assure que rien ne casse. Coût = +7700 LOC dans le wheel, claims surfacés mais inutiles.
+
+**Pas recommandé** — Sky veut clarté, pas accumulation.
+
+## Recommandation finale
+
+**Option B en priorité** (1h, honest claim, zéro risque) → puis **Option A par chunks** sur les semaines suivantes selon ce qu'il garde activer.
+
+Mon avis : **vault.py + sync_tls.py + think** = vraiment morts, **PRUNE**. **Cube system + zones** = sandbox utile pour R&D, **DOCUMENT + extra**. **dream** = à discuter (peut servir à sleep consolidation futur).
+
+À décider avec Sky demain matin tête fraîche après Phase G core (G.1+G.3 stopwords + error handling). Phase H = optionnel mais SOULAGE.
