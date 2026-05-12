@@ -1598,11 +1598,57 @@ def create_server() -> FastMCP:
 
 
 def main() -> None:
-    """Entry point for the `muninn-mcp` console_script and `python -m muninn.mcp`.
+    """Entry point for the `muninn-mcp-mem` console_script and `python -m muninn.mcp`.
 
-    Runs the FastMCP server over stdio (Claude Code spawns the process and
-    talks JSON-RPC over stdin/stdout).
+    Default behavior: run the FastMCP server over stdio (Claude Code spawns
+    the process and talks JSON-RPC over stdin/stdout).
+
+    CHUNK MCP E.4 (2026-05-12): added argparse so `--help` / `--version` /
+    `--list-tools` are intercepted and exit cleanly instead of starting the
+    stdio loop (which would hang waiting for JSON-RPC input).
     """
+    import argparse
+    from muninn import __version__
+
+    parser = argparse.ArgumentParser(
+        prog="muninn-mcp-mem",
+        description="Muninn MCP server — exposes 10 read-only tools "
+                    "(mycelium recall, tree, bugs, runbook) to Claude Code via stdio.",
+        epilog="With no arguments, runs the stdio MCP server (default). "
+               "Claude Code spawns this process automatically — you typically "
+               "do NOT invoke it directly.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"muninn-mcp-mem {__version__} (muninn-memory)",
+    )
+    parser.add_argument(
+        "--list-tools",
+        action="store_true",
+        help="Print the 10 registered MCP tool names and exit (useful for sanity-check).",
+    )
+    args = parser.parse_args()
+
+    if args.list_tools:
+        # Create the app to introspect registered tools without entering stdio loop.
+        app = create_server()
+        # FastMCP keeps tools in app._tool_manager (internal); fall back to a hardcoded
+        # known list if the internal API changes.
+        try:
+            tools = sorted(app._tool_manager._tools.keys())
+        except AttributeError:
+            tools = [
+                "mycelium_recall_local", "mycelium_recall_meta", "mycelium_recall",
+                "tree_get_root", "tree_get_branch", "tree_list_branches",
+                "bugs_list", "bugs_get",
+                "runbook_list_sections", "runbook_get",
+            ]
+        print(f"muninn-mcp-mem {__version__} — {len(tools)} tool(s):")
+        for t in tools:
+            print(f"  {t}")
+        return
+
     _log.info("Muninn MCP server starting (stdio transport)")
     app = create_server()
     app.run(transport="stdio")
