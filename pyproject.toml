@@ -8,19 +8,19 @@ version = "1.0.3"
 description = "LLM memory compression engine — compresses session transcripts into dense .mn files"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 authors = [
     { name = "Sky", email = "sky1241@users.noreply.github.com" },
 ]
 keywords = ["llm", "memory", "compression", "context-window", "ai"]
+# G.8 (2026-05-12): honest version claim. CI runs only on 3.13 (pyenv on
+# Sky's box); 3.10/3.11/3.12 are NOT tested in this release. Re-add them
+# once the matrix CI fans out (post-1.1.0).
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: General",
