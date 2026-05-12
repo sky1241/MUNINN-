@@ -15,7 +15,13 @@ from muninn_tree import _m, cleanup_tmp_files
 
 
 def doctor():
-    """Pre-flight environment check — runs in <5s, green/red per check."""
+    """Pre-flight environment check — runs in <5s, green/red per check.
+
+    G.6 (2026-05-12): when the target repo has no `.muninn/`, short-circuit
+    to a 5-check pre-init smoke test (Python, SQLite, tiktoken, plus the
+    "you haven't run init yet" hint). The full 25+ check sweep only fires
+    once the repo is bootstrapped.
+    """
     print("=== MUNINN DOCTOR ===\n")
     ok_count = 0
     fail_count = 0
@@ -32,6 +38,46 @@ def doctor():
 
     def _warn(label, detail=""):
         print(f"  [WARN] {label}" + (f" — {detail}" if detail else ""))
+
+    # G.6: pre-init short-circuit. If no .muninn/, run only the global deps
+    # checks and tell the user to `muninn-mem init` first.
+    repo_for_preinit = _m._REPO_PATH or Path(".").resolve()
+    if not (repo_for_preinit / ".muninn").exists():
+        # 1. Python
+        v = sys.version_info
+        if v >= (3, 10):
+            _ok(f"Python {v.major}.{v.minor}.{v.micro}")
+        else:
+            _fail(f"Python {v.major}.{v.minor}.{v.micro}", "need >= 3.10")
+        # 2. SQLite
+        try:
+            import sqlite3
+            sv = sqlite3.sqlite_version
+            if tuple(int(x) for x in sv.split(".")) >= (3, 24):
+                _ok(f"SQLite {sv}")
+            else:
+                _fail(f"SQLite {sv}", "need >= 3.24 for WAL/UPSERT")
+        except Exception as e:
+            _fail("SQLite", str(e))
+        # 3. tiktoken
+        try:
+            import tiktoken  # noqa: F401
+            _ok("tiktoken installed")
+        except ImportError:
+            _fail("tiktoken missing", "pip install tiktoken")
+        # 4. Anchor message — this is the action item
+        _fail(
+            f".muninn/ missing in {repo_for_preinit}",
+            "Run `muninn-mem init` first to bootstrap this repo, then "
+            "re-run doctor for the full sweep.",
+        )
+        print()
+        print("  ====================")
+        print(f"  Pre-init mode: {ok_count} deps OK, {fail_count} blocker(s).")
+        print("  Once you've run `muninn-mem init`, re-run `muninn-mem doctor`")
+        print("  for the full 22-check repo health sweep.")
+        print("  ====================")
+        return {"ok": ok_count, "fail": fail_count}
 
     # 1. Python version (>= 3.10)
     v = sys.version_info
