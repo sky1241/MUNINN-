@@ -24,9 +24,9 @@ try:
     try:
         __version__ = _pkg_version("muninn")
     except PackageNotFoundError:
-        __version__ = "1.0.1"  # checkout fallback (sync with pyproject.toml)
+        __version__ = "1.0.2"  # checkout fallback (sync with pyproject.toml)
 except Exception:
-    __version__ = "1.0.1"
+    __version__ = "1.0.2"
 
 import argparse
 import hashlib
