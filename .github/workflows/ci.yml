@@ -150,6 +150,16 @@ jobs:
           print("OK Mycelium tests pass")
           EOF
 
+      - name: Install Qt system libs (H.2b — UI tests need headless EGL/X11 stubs)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3 \
+            libfontconfig1 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0
+
       - name: Install pytest + runtime deps
         run: |
           python3 -m pip install --upgrade pip
@@ -161,8 +171,11 @@ jobs:
           # don't crash with ImportError. Was the root cause of 6 consecutive
           # red CI runs (E.3→F.1). Tests also got `pytest.importorskip("mcp")`
           # as defense-in-depth for environments without [mcp] extra.
+          # H.2b (2026-05-12): added PyQt6 + pytest-qt so the 173 UI tests
+          # can run in QT_QPA_PLATFORM=offscreen mode (no X server needed).
           python3 -m pip install -c constraints.txt \
-            pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield mcp
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun \
+            forge-shield mcp PyQt6 pytest-qt
 
       - name: Configure git identity (required by sync_backend tests)
         run: |
@@ -177,14 +190,17 @@ jobs:
           # Cleaning gives us a deterministic starting point.
           rm -rf .muninn
 
-      - name: Pytest suite (excludes UI Qt tests + CI-env-only failures)
+      - name: Pytest suite (UI tests included via QT_QPA_PLATFORM=offscreen)
         env:
           # CHUNK C12 (H4.1): explicit opt-out from real-API tests in CI.
           MUNINN_RUN_REAL_API_TESTS: "0"
           MUNINN_RUN_REAL_LLM_TESTS: "0"
+          # H.2b (2026-05-12): UI tests now run on the headless runner via
+          # Qt's offscreen platform plugin. Requires libegl1/libxkbcommon0
+          # apt deps installed in the previous step.
+          QT_QPA_PLATFORM: offscreen
         run: |
           # Excludes:
-          #   - tests/test_ui_*.py: need PyQt5 + X11 display (not in CI)
           #   - eval_harness_*: cost money (Anthropic API), opt-in only
           # Deselected (real, tracked debt):
           #   - test_retrieval_benchmark::test_tfidf_relevance_meaningful
@@ -199,11 +215,11 @@ jobs:
           #     git checkout normalises perms (0o644) + line endings,
           #     breaking the local sha256 manifest. Sky's local repo has
           #     chmod 0600 + native LF.
-          # Resolved (P4 — 2026-05-09): forge.gen_props split into 5 helpers,
-          # all <100L. test_no_new_oversized_functions now passes in CI.
+          # H.2b (2026-05-12): test_ui_*.py REACTIVATED in CI — 173 tests
+          # now run in QT_QPA_PLATFORM=offscreen. Were ignored pre-H.2b
+          # because PyQt6 + pytest-qt + apt libs were missing in CI.
           python3 -m pytest tests/ -q --tb=short \
             -m "not slow" \
-            --ignore-glob='tests/test_ui_*.py' \
             --ignore=tests/eval_harness_chunk9.py \
             --ignore=tests/eval_harness_chunk11.py \
             --ignore=tests/test_chunk1_auto_memory_disabled.py \

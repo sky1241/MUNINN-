@@ -76,3 +76,11 @@ forge-shield==2.1.2
 # before argparse can run. 1.27.1 = currently published, in pyproject
 # range `mcp>=1.7.1,<2.0`.
 mcp==1.27.1
+
+# H.2 + H.2b (2026-05-12) : muninn-ui desktop console script (11 712 LOC
+# débloquées). PyQt6 6.10.x is the Qt binding (>= 6.10 from
+# pyproject.optional-dependencies.ui). pytest-qt 4.4.x provides the
+# `qtbot` fixture consumed by the 173 tests/test_ui_*.py. Both are
+# required so CI can exercise the UI in QT_QPA_PLATFORM=offscreen mode.
+PyQt6==6.10.0
+pytest-qt==4.5.0
