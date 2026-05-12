@@ -156,8 +156,13 @@ jobs:
           # forge-shield is on PyPI since 2026-05-11 v1.3.0 (Sky bump cycle 11+).
           # Bumped from v1.2.2 → v1.3.0 (cycles 9-10 add --shield orchestration
           # + hook installer + venv exclusion fix ; v1.3.0 cycle 11+ Sky bump).
+          # CHUNK MCP F.2 (2026-05-12): added mcp to base CI install so the
+          # E.4/E.6/F.1 tests that subprocess `python -m muninn.mcp.server`
+          # don't crash with ImportError. Was the root cause of 6 consecutive
+          # red CI runs (E.3→F.1). Tests also got `pytest.importorskip("mcp")`
+          # as defense-in-depth for environments without [mcp] extra.
           python3 -m pip install -c constraints.txt \
-            pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield mcp
 
       - name: Configure git identity (required by sync_backend tests)
         run: |
@@ -297,7 +302,7 @@ jobs:
       - name: Install forge-shield + deps
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
+          python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield mcp
       - name: Generate property tests for every engine/core module (forge --gen-props)
         run: |
           # CHUNK D8 (H4.2): smoke-run forge --gen-props on every critical

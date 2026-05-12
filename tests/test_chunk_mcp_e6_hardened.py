@@ -24,6 +24,12 @@ from pathlib import Path
 
 import pytest
 
+# CHUNK MCP F.2 (2026-05-12): 3 of the 6 hardened tests (env_var_top_k,
+# recall_clamps_negative, recall_clamps_huge) import muninn.mcp.server
+# which requires the `mcp` package. Skip the whole module if mcp absent
+# so CI base install (without [mcp] extra) doesn't see false failures.
+pytest.importorskip("mcp", reason="muninn-memory[mcp] extra not installed")
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 

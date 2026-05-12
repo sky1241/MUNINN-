@@ -15,6 +15,13 @@ from pathlib import Path
 
 import pytest
 
+# CHUNK MCP F.2 (2026-05-12): skip the whole module if `mcp` is not
+# installed. The tests subprocess `python -m muninn.mcp.server` which
+# raises ImportError("muninn.mcp requires the 'mcp' package") before
+# argparse runs, making every assertion fail with exit code 1 instead
+# of the expected 0/2. Was the root cause of E.4/E.5/E.6/E.7/F.1 CI red.
+pytest.importorskip("mcp", reason="muninn-memory[mcp] extra not installed")
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
