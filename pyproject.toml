@@ -31,7 +31,8 @@ tokens = ["tiktoken>=0.5"]
 llm = ["anthropic>=0.20"]
 quality = ["forge-shield>=2.1.0"]  # Phase 4 (2026-05-09): regression shield + carmack/locate/modularity for cube heatmap UX
 mcp = ["mcp>=1.7.1,<2.0"]  # Phase B (2026-05-11): MCP server for Claude Code integration
-all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=2.1.0", "mcp>=1.7.1,<2.0"]
+ui = ["PyQt6>=6.10"]  # H.2 (2026-05-12): muninn-ui desktop console script
+all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=2.1.0", "mcp>=1.7.1,<2.0", "PyQt6>=6.10"]
 
 [project.urls]
 Homepage = "https://github.com/sky1241/MUNINN-"
@@ -48,6 +49,9 @@ Issues = "https://github.com/sky1241/MUNINN-/issues"
 muninn-mem = "muninn._engine:main"
 muninn-mycel = "muninn.mycelium:main"
 muninn-mcp-mem = "muninn.mcp.server:main"
+# H.2 (2026-05-12): muninn-ui = PyQt6 desktop (11 712 LOC débloquées).
+# Requires `pip install 'muninn-memory[ui]'`.
+muninn-ui = "muninn.ui.main_window:main"
 
 [tool.setuptools.packages.find]
 # CHUNK MCP D.1 (2026-05-12): ship both muninn/ AND engine/ packages.

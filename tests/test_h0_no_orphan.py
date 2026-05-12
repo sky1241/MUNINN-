@@ -34,6 +34,16 @@ WHITELIST_DORMANT_MODULES = {
     # Files in `experimental/` are auto-whitelisted (see _is_experimental).
 }
 
+# UI modules dormant by design (Phase J refactor will decide wire vs delete).
+WHITELIST_DORMANT_UI_MODULES = {
+    "_tree_engine.py",     # legacy tree rendering helpers, kept while tree_view stabilizes
+    "_tree_renderer.py",   # same family, marked underscore-private to signal "internal/dormant"
+    "about_dialog.py",     # main_window references `self._about_dialog` but never imports —
+                           # planned Help menu integration in Phase J
+    "__init__.py",
+    "__main__.py",
+}
+
 # Hooks NOT required to be wired in settings.local.json (audit reserves).
 WHITELIST_DORMANT_HOOKS = {
     "config_change_hook.py",        # config drift audit, opt-in
@@ -111,17 +121,15 @@ def test_h0_no_orphan_engine_module() -> None:
         )
 
 
-@pytest.mark.xfail(
-    reason="RED-by-design until H.2 wires muninn-ui console script + __main__.py. "
-           "Push split (2026-05-12 nuit) : Phase G+H.0+H.1 first, H.2+H.6 next session. "
-           "I.5 will remove this @xfail when full Phase H lands.",
-    strict=False,
-)
 def test_h0_no_orphan_ui_module() -> None:
-    """Each muninn/ui/*.py must be referenced by main_window.py or another ui/ file."""
+    """Each muninn/ui/*.py must be referenced by main_window.py or another ui/ file.
+
+    H.2 (2026-05-12) wired the entry point. Truly dormant UI helpers are in
+    WHITELIST_DORMANT_UI_MODULES with rationale.
+    """
     ui_dir = REPO_ROOT / "muninn" / "ui"
     if not ui_dir.exists():
-        pytest.skip("muninn/ui/ missing — H.2 not yet wired")
+        pytest.skip("muninn/ui/ missing")
     # Cat all UI source
     ui_text = ""
     for f in ui_dir.rglob("*.py"):
@@ -130,7 +138,7 @@ def test_h0_no_orphan_ui_module() -> None:
         ui_text += f.read_text(encoding="utf-8", errors="ignore") + "\n"
     orphans: list[str] = []
     for py in ui_dir.rglob("*.py"):
-        if py.name in WHITELIST_DORMANT_MODULES:
+        if py.name in WHITELIST_DORMANT_UI_MODULES:
             continue
         if py.name == "main_window.py":
             continue  # the entry point itself
@@ -142,6 +150,7 @@ def test_h0_no_orphan_ui_module() -> None:
     if orphans:
         pytest.fail(
             f"{len(orphans)} UI orphan module(s):\n  " + "\n  ".join(orphans)
+            + "\n\nAdd to WHITELIST_DORMANT_UI_MODULES (with rationale) or wire them in."
         )
 
 
