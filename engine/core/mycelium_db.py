@@ -133,7 +133,7 @@ class MyceliumDB:
         on corruption. Caller decides whether to raise, warn, or rebuild.
 
         Cost: ~100-500ms on a 1.2 GB DB. Recommended at boot or via
-        `muninn doctor`. NOT called automatically in __init__ to keep
+        `muninn-mem doctor`. NOT called automatically in __init__ to keep
         startup fast for tests and CI.
 
         Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §A3

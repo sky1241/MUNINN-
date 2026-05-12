@@ -12,7 +12,7 @@ Owns:
     _install_scaling_hooks, _copy_hooks_from_source).
   - install_hooks orchestrator — wires .claude/settings.local.json.
   - install_cron + _detect_init_system — systemd-user timer for weekly
-    `muninn prune`.
+    `muninn-mem prune`.
 
 This module is read-only of muninn package globals via `import muninn as _m`
 inside function bodies (anti-circular). Top-level imports stay minimal.
@@ -1055,7 +1055,7 @@ def install_hooks(repo_path: Path):
     _register_repo(repo_path)
 
 
-# ── INSTALL-CRON — weekly systemd-user timer for `muninn prune` ────
+# ── INSTALL-CRON — weekly systemd-user timer for `muninn-mem prune` ────
 
 
 def _detect_init_system() -> str:
@@ -1070,7 +1070,7 @@ def _detect_init_system() -> str:
 
 
 def install_cron(repo_path: Path, uninstall: bool = False) -> dict:
-    """Install (or uninstall) a systemd-user weekly timer for `muninn prune`.
+    """Install (or uninstall) a systemd-user weekly timer for `muninn-mem prune`.
 
     Chunk MCP A.3 of docs/BATTLE_PLAN_MASTER_MCP.md.
 

@@ -110,7 +110,7 @@ HELP_TEXTS = {
     "first_launch": "Hey! Scanne un repo\npour commencer!",
     "no_data": "Pas de donnees chargees.\nScanne un repo!",
     "neuron_loaded": "Repo charge! Clique un neurone\npour explorer. Ctrl+F pour chercher.",
-    "no_forest": "Pas de meta-mycelium.\nLance 'muninn feed' sur plusieurs repos.",
+    "no_forest": "Pas de meta-mycelium.\nLance 'muninn-mem feed' sur plusieurs repos.",
 }
 
 

@@ -1,5 +1,11 @@
 # BUG REPORT — Les hooks Muninn ne sont PAS universels
 
+> **STATUS : RESOLVED en E.3** (2026-05-12). Renomination CLI
+> `muninn` → `muninn-mem`, hooks universalisés via `bridge_hook.py` qui
+> récupère `cwd` du payload Claude Code, auto-install via `muninn-mem init`
+> dans chaque repo cible. Document archivé pour mémoire. Voir CHANGELOG
+> phase MCP E.3 et docs/PROMPT_EXEC_PHASE_H.md G.2.
+
 ## Probleme
 
 Quand Muninn est installe sur un nouveau repo (ex: `c:\Users\ludov\drugs`), les hooks Claude Code ne sont **pas configures automatiquement**. Resultat : Muninn ne capture aucune conversation de ce repo. Toute la data est perdue.

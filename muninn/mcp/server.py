@@ -220,7 +220,7 @@ def _resolve_repo_path(repo_path: str | None) -> Path:
 def _tokenize_query(query: str) -> list[str]:
     """Extract word-like tokens (>=3 chars) from the free-text query.
 
-    Same heuristic as muninn boot's query expansion (Park et al. 2023 style).
+    Same heuristic as muninn-mem boot's query expansion (Park et al. 2023 style).
     """
     return [w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]{3,}", query or "")]
 
@@ -259,7 +259,7 @@ def _recall_local_impl(
     if not (repo / ".muninn").exists():
         raise ValueError(
             f"{repo} is not a Muninn-bootstrapped project (no .muninn/ "
-            f"directory). Run `muninn init` in the repo first."
+            f"directory). Run `muninn-mem init` in the repo first."
         )
 
     # Lazy-import Mycelium so the bare `import muninn.mcp` does not load
@@ -1133,13 +1133,13 @@ def _load_tree_for_repo(repo: Path) -> dict:
     if not tree_dir.exists() or not tree_dir.is_dir():
         raise ValueError(
             f"{repo} has no .muninn/tree/ directory — not a Muninn-bootstrapped "
-            f"project. Run `muninn init` in the repo first."
+            f"project. Run `muninn-mem init` in the repo first."
         )
     tree_json = tree_dir / "tree.json"
     if not tree_json.exists():
         raise ValueError(
-            f"{repo}/.muninn/tree/tree.json is missing. Re-run `muninn init` "
-            f"or `muninn bootstrap` to regenerate."
+            f"{repo}/.muninn/tree/tree.json is missing. Re-run `muninn-mem init` "
+            f"or `muninn-mem bootstrap` to regenerate."
         )
     try:
         return json.loads(tree_json.read_text(encoding="utf-8"))

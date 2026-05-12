@@ -237,12 +237,17 @@ class TestA7AutoBackup:
 
 class TestA8PruneWarning:
     def test_prune_warning_in_boot(self):
-        """A8: boot() contains prune warning logic."""
+        """A8: boot() contains prune warning logic.
+
+        CLI renamed `muninn` → `muninn-mem` in E.3 (2026-05-12); G.2 cleaned
+        the residual comments/docstrings so the warning now references
+        `muninn-mem prune`.
+        """
         import muninn
         _mdir = Path(muninn.__file__).parent.parent / "engine" / "core"  # BUG-091 shim
         src = chr(10).join(_mdir.joinpath(f).read_text(encoding="utf-8") for f in ["muninn.py", "muninn_layers.py", "muninn_tree.py", "muninn_tree_boot.py", "muninn_tree_prune.py", "muninn_tree_doctor.py", "muninn_feed.py"])
         assert "branches are cold" in src or "A8" in src
-        assert "muninn prune" in src
+        assert "muninn-mem prune" in src
 
 
 if __name__ == "__main__":

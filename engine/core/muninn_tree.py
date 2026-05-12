@@ -163,7 +163,7 @@ def init_tree():
     # Safety net (added 2026-05-11 PM after test_e2e_pip_install leak): refuse
     # to init a tree under a path that does not belong to the currently bound
     # _REPO_PATH. Pip-install-e + cwd-mismatch could otherwise have init_tree
-    # clobber the source repo when a downstream `muninn init` runs in a tmp
+    # clobber the source repo when a downstream `muninn-mem init` runs in a tmp
     # repo. The check is generous (resolved-path prefix) to tolerate symlinks.
     repo_path = getattr(_m, "_REPO_PATH", None)
     if repo_path is not None:
@@ -1963,7 +1963,7 @@ def show_status():
           f"({est_compressed / BUDGET['max_loaded_tokens'] * 100:.1f}%)")
 
     # H3.1 (2026-05-09): expose mycelium growth_stats inline. Lazy import +
-    # try/except so a corrupt mycelium does not break `muninn status`.
+    # try/except so a corrupt mycelium does not break `muninn-mem status`.
     try:
         try:
             from mycelium import Mycelium
@@ -2210,7 +2210,7 @@ def inject_memory(fact: str, repo_path: Path = None):
     # CRITICAL (2026-05-11 PM, follow-up to BUG-111): propagate _REPO_PATH
     # to the package namespace BEFORE load_tree/init_tree call so the
     # init_tree guard recognizes this tree dir as legitimate. Same pattern
-    # as bootstrap_mycelium and the `muninn init` handler.
+    # as bootstrap_mycelium and the `muninn-mem init` handler.
     _m._REPO_PATH = repo
     try:
         import muninn as _pkg

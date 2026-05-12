@@ -1074,8 +1074,8 @@ def main():
 
     if args.command == "init":
         # Full one-shot setup: tree + hooks + register
-        # Works on any repo: cd /path/to/repo && muninn init
-        # Or: muninn init --repo /path/to/repo
+        # Works on any repo: cd /path/to/repo && muninn-mem init
+        # Or: muninn-mem init --repo /path/to/repo
         repo = Path(args.repo or args.file or ".").resolve()
         if not repo.exists():
             print(f"ERROR: path does not exist: {repo}", file=sys.stderr)

@@ -3,7 +3,7 @@
 Wall-time: ~30s. No API key, no MCP server, no Claude Code needed.
 
 Demonstrates the pure-local data flow:
-    repo path  →  muninn init       (.muninn/ layout)
+    repo path  →  muninn-mem init       (.muninn/ layout)
               →  observe transcript (mycelium learns word co-occurrences)
               →  recall query       (return concepts connected to a seed)
 
@@ -75,20 +75,20 @@ def main() -> None:
     muninn = [sys.executable, "-m", "muninn._engine"]
 
     # 1. Initialize Muninn in the repo (creates .muninn/, installs hooks)
-    _run("STEP 1 — muninn init", [*muninn, "init"], cwd=repo)
+    _run("STEP 1 — muninn-mem init", [*muninn, "init"], cwd=repo)
 
     # 2. Show the layout that was created
-    _run("STEP 2 — muninn status", [*muninn, "status"], cwd=repo)
+    _run("STEP 2 — muninn-mem status", [*muninn, "status"], cwd=repo)
 
     # 3. Bootstrap mycelium from the repo's source files
-    _run("STEP 3 — muninn bootstrap", [*muninn, "bootstrap", str(repo)], cwd=repo)
+    _run("STEP 3 — muninn-mem bootstrap", [*muninn, "bootstrap", str(repo)], cwd=repo)
 
     # 4. Query the mycelium for concepts connected to "compression"
     _run("STEP 4 — muninn recall 'compression'", [*muninn, "recall", "compression"], cwd=repo)
 
     print("\n✓ Done. Next steps:")
     print(f"  - Inspect {repo}/.muninn/ (tree.json, mycelium.db, sessions/)")
-    print("  - Try `muninn doctor` to verify your install")
+    print("  - Try `muninn-mem doctor` to verify your install")
     print("  - Try `mcp_recall_demo.py` to see the MCP-style API")
 
 

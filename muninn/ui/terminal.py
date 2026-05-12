@@ -681,7 +681,7 @@ class TerminalWidget(QWidget):
         )
 
     def _run_status(self):
-        """Run muninn status in background thread (non-blocking UI)."""
+        """Run muninn-mem status in background thread (non-blocking UI)."""
         import sys
         self._run_subprocess_bg(
             [sys.executable, "-m", "muninn", "status"], timeout=10,

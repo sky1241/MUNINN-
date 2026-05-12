@@ -7,10 +7,10 @@ Usage:
     muninn.compress_file("input.md")
 
 CLI:
-    muninn boot "query"
-    muninn feed transcript.jsonl
-    muninn compress file.md
-    muninn status
+    muninn-mem boot "query"
+    muninn-mem feed transcript.jsonl
+    muninn-mem compress file.md
+    muninn-mem status
 """
 import sys
 import types

@@ -896,7 +896,7 @@ def boot(query: str = "") -> str:
             if pct > 45:
                 full_text += (f"\n\n[MUNINN] {pct:.0f}% branches are cold "
                               f"({cold_count}/{len(branches)}). "
-                              f"Consider running: muninn prune --force")
+                              f"Consider running: muninn-mem prune --force")
     except Exception:
         pass
 

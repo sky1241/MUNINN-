@@ -10,7 +10,7 @@ can see the exact JSON shape Claude Code receives.
 
 Prereqs:
     pip install 'muninn-memory[mcp]'
-    cd /your/repo && muninn init && muninn bootstrap .
+    cd /your/repo && muninn-mem init && muninn-mem bootstrap .
 
 If you skipped bootstrap, the recall result will be empty (mycelium is empty).
 
@@ -33,7 +33,7 @@ def main() -> None:
     repo = Path(os.environ.get("MUNINN_DEMO_REPO", ".")).expanduser().resolve()
     if not (repo / ".muninn").exists():
         print(f"No .muninn/ in {repo}.")
-        print("Run `muninn init` first, then `muninn bootstrap .` to populate the mycelium.")
+        print("Run `muninn-mem init` first, then `muninn-mem bootstrap .` to populate the mycelium.")
         print("Or set $MUNINN_DEMO_REPO to point at an initialized repo.")
         sys.exit(1)
 

@@ -1176,7 +1176,7 @@ def _log_sync_error(context: str, exc: BaseException) -> None:
 
 
 def _write_meta_sync_marker(repo_path: Path, payload: dict) -> None:
-    """Write .muninn/last_meta_sync.json — signal for `muninn doctor`.
+    """Write .muninn/last_meta_sync.json — signal for `muninn-mem doctor`.
 
     Never raises. Atomic-ish write (write to tmp + rename). Always called by
     _sync_to_meta_guarded so the doctor has a fresh signal of the last sync.
@@ -1211,7 +1211,7 @@ def _sync_to_meta_guarded(
         is daemon so it dies with the process.
       - Opt-out via MUNINN_SKIP_META_SYNC=1 (returns status=skipped early).
       - Observability marker .muninn/last_meta_sync.json (status + pushed +
-        elapsed + timestamp), so `muninn doctor` can flag drift.
+        elapsed + timestamp), so `muninn-mem doctor` can flag drift.
 
     Returns a dict with keys: status, pushed, elapsed_s, error, timestamp,
     hook_event. status is one of: ok, skipped, error, timeout.

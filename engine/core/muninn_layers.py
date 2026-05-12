@@ -48,7 +48,7 @@ def health() -> dict:
     Three optional features in muninn_layers degrade silently when
     their backing module is missing or broken (lexicons tier1
     patterns, dedup SimHash, BudgetMem chunk selection). This helper
-    returns a dict so `muninn doctor` and other observability tools
+    returns a dict so `muninn-mem doctor` and other observability tools
     can surface "feature available?" booleans to the user.
 
     Keys (all bool):

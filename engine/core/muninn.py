@@ -1000,8 +1000,8 @@ def main():
 
     if args.command == "init":
         # Full one-shot setup: tree + hooks + register
-        # Works on any repo: cd /path/to/repo && muninn init
-        # Or: muninn init --repo /path/to/repo
+        # Works on any repo: cd /path/to/repo && muninn-mem init
+        # Or: muninn-mem init --repo /path/to/repo
         repo = Path(args.repo or args.file or ".").resolve()
         if not repo.exists():
             print(f"ERROR: path does not exist: {repo}", file=sys.stderr)
@@ -1036,7 +1036,7 @@ def main():
         return
 
     if args.command == "uninstall":
-        # CHUNK MCP F.1 (2026-05-12): companion to `muninn init`. Removes
+        # CHUNK MCP F.1 (2026-05-12): companion to `muninn-mem init`. Removes
         # everything install_hooks() created in .claude/ + the systemd
         # timer. By default leaves .muninn/ user data alone — use
         # --purge-data for the nuclear option.

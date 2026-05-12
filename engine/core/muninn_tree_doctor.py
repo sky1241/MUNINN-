@@ -78,7 +78,7 @@ def doctor():
     if muninn_dir.exists():
         _ok(f".muninn/ exists ({repo.name})")
     else:
-        _fail(f".muninn/ missing in {repo}", "run: muninn init")
+        _fail(f".muninn/ missing in {repo}", "run: muninn-mem init")
 
     # 7. Write permissions
     if muninn_dir.exists():
@@ -105,7 +105,7 @@ def doctor():
         if legacy.exists():
             _ok(f"tree.json found (legacy path)")
         else:
-            _warn("tree.json not found", "run: muninn bootstrap <repo>")
+            _warn("tree.json not found", "run: muninn-mem bootstrap <repo>")
 
     # 9. mycelium.db exists and is readable
     db_path = muninn_dir / "mycelium.db" if muninn_dir.exists() else None
@@ -123,7 +123,7 @@ def doctor():
         except Exception as e:
             _fail("mycelium.db", str(e))
     elif muninn_dir.exists():
-        _warn("mycelium.db not found", "run: muninn bootstrap <repo>")
+        _warn("mycelium.db not found", "run: muninn-mem bootstrap <repo>")
 
     # 10. Encoding check — scan repo for non-UTF8 files that could crash boot
     if muninn_dir.exists():
@@ -204,7 +204,7 @@ def doctor():
                            f"install: {info['install_cmd']}")
                     any_missing = True
         if any_missing:
-            _warn("Run 'muninn doctor --fix' to auto-install missing formatters")
+            _warn("Run 'muninn-mem doctor --fix' to auto-install missing formatters")
 
     # CHUNK B11 (2026-05-08): integrate Phase A/B fixes into doctor.
 
