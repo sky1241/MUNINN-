@@ -286,6 +286,74 @@ def doctor():
     except Exception as e:
         _warn("anomalies purge skipped", str(e)[:120])
 
+    # CHUNK MCP D.5 (2026-05-12): pip-install health checks.
+    # These catch regressions that ONLY manifest in pip-installed mode
+    # (e.g. console scripts crashing because the shim chain's bare
+    # `from X import *` can't resolve without engine/core/ shipped).
+    # The BUG-091 fix that ships engine/* in the wheel (D.1, 2026-05-12)
+    # would have been caught here on day 1.
+    #
+    # When invoked directly via `python3 engine/core/muninn.py doctor` from
+    # a dev checkout (not via the pip-installed `muninn` binary), the import
+    # paths look different — we downgrade FAIL to WARN in that case to avoid
+    # false positives. Detection: this file lives outside site-packages.
+    _is_pip_install = "site-packages" in __file__
+
+    # 20. Console scripts importability — `muninn`, `mycelium`, `muninn-mcp`
+    # all resolve to `module:attr` entry points. If any one fails to
+    # import, the binary will crash at first invocation.
+    for cmd_name, target in (
+        ("muninn", "muninn._engine:main"),
+        ("mycelium", "muninn.mycelium:main"),
+        ("muninn-mcp", "muninn.mcp.server:main"),
+    ):
+        module_path, _, attr = target.partition(":")
+        try:
+            mod = __import__(module_path, fromlist=[attr])
+            func = getattr(mod, attr, None)
+            if callable(func):
+                _ok(f"console_script {cmd_name}", target)
+            else:
+                (_fail if _is_pip_install else _warn)(
+                    f"console_script {cmd_name}", f"{attr} not callable"
+                )
+        except ImportError as exc:
+            # mcp is an optional extra — always warn
+            if cmd_name == "muninn-mcp" and "mcp" in str(exc).lower():
+                _warn(f"console_script {cmd_name}",
+                       "pip install 'muninn-memory[mcp]' to enable")
+            elif _is_pip_install:
+                _fail(f"console_script {cmd_name}", f"import failed: {exc}")
+            else:
+                _warn(f"console_script {cmd_name}",
+                       f"(dev mode — only meaningful via pip install): {exc}")
+
+    # 21. engine.core package shipped — D.1 regression check. The shims
+    # in muninn/*.py rely on `engine/core/` being on sys.path; that path
+    # only exists inside the wheel if pyproject.toml's packages.find
+    # includes "engine*". If a future packaging change drops it, surface
+    # the breakage here instead of letting users hit ModuleNotFoundError.
+    try:
+        import engine.core  # noqa: F401
+        _ok("engine.core package shipped (D.1 regression check)")
+    except ImportError as exc:
+        if _is_pip_install:
+            _fail("engine.core not importable",
+                   f"shim chain will crash — check pyproject [tool.setuptools.packages.find]: {exc}")
+        else:
+            _warn("engine.core not importable (dev mode — meaningful only via pip install)",
+                  str(exc)[:120])
+
+    # 22. mcp package (separate from anthropic, different extras).
+    # `pip install muninn-memory[mcp]` adds the `mcp` lib needed by
+    # the muninn-mcp console script and the muninn/mcp/server.py module.
+    try:
+        import mcp  # noqa: F401
+        _ok("mcp installed (muninn-mcp ready)")
+    except ImportError:
+        _warn("mcp not installed",
+              "pip install 'muninn-memory[mcp]' to enable Claude Code integration")
+
     # Summary
     print(f"\n{'='*40}")
     if fail_count == 0:

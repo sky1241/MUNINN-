@@ -16,7 +16,37 @@
 
 ---
 
-## 1. Clone the repo
+## 0. 5-second install (from PyPI) — start here if you don't need to hack on Muninn itself
+
+If you just want to *use* Muninn (not modify the engine), the fastest path is :
+
+```bash
+pip install 'muninn-memory[all]'    # core + tokens + llm + mcp + quality
+muninn                              # prints welcome banner with next 3 steps
+cd <PATH_TO_YOUR_REPO>              # any code/text repo you want Muninn to remember
+muninn init                         # creates .muninn/, installs Claude Code hooks
+muninn doctor                       # 19+ checks, should print "ALL GREEN"
+```
+
+That's it. Skip to step 5 (configure Claude Code) if you went this route.
+
+Want to see Muninn in action without configuring Claude Code first? Run :
+
+```bash
+python3 -m pip install muninn-memory[all]
+# Then clone the repo just for the examples/ scripts:
+git clone https://github.com/sky1241/MUNINN-.git muninn-examples
+cd muninn-examples/examples && python3 quickstart_local.py
+```
+
+The rest of this doc walks through the **editable dev install** (clone +
+`pip install -e .`) which is the right path if you plan to modify the
+engine, run the test suite, or contribute back. The two paths are
+identical after step 5.
+
+---
+
+## 1. Clone the repo (dev path — skip if you used step 0)
 
 ```bash
 git clone https://github.com/sky1241/MUNINN-.git
