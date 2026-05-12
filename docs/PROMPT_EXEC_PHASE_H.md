@@ -21,18 +21,41 @@
 
 ## 📋 WORKFLOW PAR CHUNK (10 étapes obligatoires)
 
+**Option B confirmée par Sky : 1 commit par chunk (traçabilité git bisect) + 1 push final unique (pas de spam CI).**
+
 ```
-1. READ      Lire le code existant (Read tool, pas cat)
-2. TEST PIN  Écrire le test AVANT le code
-3. RED       pytest → ROUGE attendu
-4. FIX       Implémenter minimal
-5. GREEN     pytest → VERT (output verbatim)
-6. WIRE      CLI / hook / settings
-7. END-TO-END Commande user réelle, capture output
-8. CLEAN     pytest tests/ -m "not slow" → 0 fail nouveau
-9. FORGE     Si engine/core/ touché
-10. STAGE    git add ; PAS de commit
+ 1. READ        Lire le code existant (Read tool, pas cat)
+ 2. TEST PIN    Écrire le test AVANT le code
+ 3. RED         pytest → ROUGE attendu (prouve test mord)
+ 4. FIX         Implémenter minimal
+ 5. GREEN       pytest → VERT (output verbatim)
+ 6. WIRE        CLI / hook / settings
+ 7. END-TO-END  Commande user réelle, capture output
+ 8. CLEAN       pytest tests/ -m "not slow" → 0 fail nouveau
+ 9. FORGE       Si engine/core/ touché (RULE 5)
+10. COMMIT      git add <fichiers du chunk> + git commit (PAS de push)
 ```
+
+**Template message commit par chunk** :
+```
+<feat|fix|test|docs|chore>(<phase>.<chunk>): <one-liner action>
+
+PROBLÈME : <1-2 phrases>
+ROOT CAUSE : <ce qui clochait>
+FIX : <ce qui change concrètement>
+
+VÉRIFICATIONS (RULE 4) :
+- Test pin <name> : X/X PASS in Y.Ys
+- End-to-end : <output verbatim 1-2 lignes>
+- forge --gen-props : <result si applicable>
+- Full pytest regression : <baseline avant> → <après> PASS, 0 fail
+
+LOC débloquées : <count si applicable>
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```
+
+**Une fois TOUS les 26 chunks commités** (G.*, H.*, I.*) → **UN SEUL `git push`** final. Voir section H.FINAL.
 
 ---
 
@@ -590,77 +613,35 @@ QT_QPA_PLATFORM=offscreen timeout 5 muninn-ui 2>&1 | head -3 || echo "OK (killed
 
 ---
 
-# 🎯 LE GROS COMMIT FINAL (UN SEUL)
+# 🎯 LE PUSH FINAL (UN SEUL, après 26 commits par chunk)
+
+À ce stade tu dois avoir **26 commits locaux** (G.1 → G.10, H.0 → H.10 sub-chunks inclus, I.1 → I.5) plus les 9 commits docs préalables = ~35 commits ahead origin/main.
 
 ```bash
 cd /home/sky/Bureau/MUNINN-
+
+# 1. Verify chain commits
+git log origin/main..HEAD --oneline | wc -l
+# Attendu : ≥ 26 nouveaux (G+H+I) + 9 docs préalables = 35+
+
+git log origin/main..HEAD --oneline | head -30
+# Verify : chaque chunk a son commit avec message conforme template
+
+# 2. Verify zéro modified non-staged (tout est commité, rien de pendant)
 git status -sb
-# Verify : tous fichiers staged (M ou A), zéro modified non-staged
+# Attendu : ## main...origin/main [devant N], NO M/?? lines
 
-git commit -m "$(cat <<'EOF'
-feat(phase-G+H+I): bugfixes + wire 17.8K LOC dormantes + zéro-dormant garantie + bump 1.1.0
-
-EXÉCUTION TOTALE per docs/PROMPT_EXEC_PHASE_H.md (Sky's master prompt) :
-- Phase G : 10 chunks bugfixes
-- Phase H : 11 chunks wire features dormantes + garde-fou anti-orphan
-- Phase I : 5 chunks zéro-dormant garantie
-
-PHASE G — Bug fixes
-  G.1 Universal degree-based stopword filter (recall_local/meta/dual)
-  G.2 Doc drift résiduel `muninn init` → `muninn-mem init` (3 fichiers)
-  G.3 Error handling friendly (FileNotFoundError etc. → exit(1) clean)
-  G.4 F.1 tests @pytest.mark.slow marker
-  G.5 ~/.pypirc security note (gitignore global + README)
-  G.6 Doctor pre-init simplified output
-  G.8 Python compat claim downgrade à >=3.13 (honest)
-  G.10 Audit honest tests recount (16 REAL + 6 MEDIUM + 3 WEAK)
-
-PHASE H — Wire dormant features
-  H.0 GARDE-FOU ANTI-ORPHAN (système immunitaire CI, 6 tests)
-  H.1 muninn-mem cube CLI (5597 LOC)
-  H.2 muninn-ui console script (11 712 LOC)
-  H.2b Tests UI réactivés en CI (offscreen)
-  H.3 --include-dreams flag (561 LOC)
-  H.4 muninn-mem metrics CLI (344 LOC)
-  H.5 Cleanup dead config (MUNINN_GL_SOFTWARE wired, --output réutilisé,
-       2 TODO stubs supprimés)
-  H.5b Hygiene (.forge baseline reset, memory/ doc, tags pre-* kept)
-  H.6 Wire 3 hooks Claude Code défensifs (bash_destructive, bash_secrets,
-       edit_hardcode)
-  H.6b vault auto-lock après SessionEnd (opt-in MUNINN_VAULT_AUTO_LOCK)
-  H.6c L12 BudgetMem default activation (MUNINN_L12_BUDGET=16000 default)
-  H.7 sync_tls.py → engine/core/experimental/ + watchdog docstring
-  H.8 Garde-fou API bloat baseline (MyceliumDB freeze)
-  H.9 Docs sync (CHANGELOG + WINTER_TREE + README + QUICKSTART)
-  H.10 Bump 1.0.3 → 1.1.0 (4 mirrors)
-
-PHASE I — Zéro dormant garantie
-  I.1 Wiring-check tests par feature (vault, cube, dream, metrics, L12)
-  I.2 Garde-fou anti-fonction-zombie (xfail initial avec count, Phase J)
-  I.3 `.muninn/edits_log.jsonl` → drop hook PostToolUse edit log
-  I.4 `.muninn/session_index.json` investigation + doc rôle
-  I.5 Final H.0 garde-fou GREEN verify
-
-VÉRIFICATIONS (RULE 4) :
-- H.0 garde-fou : 6/6 PASS (ROUGE→VERT prouve wires)
-- Full pytest : 2586+ PASS, 0 fail
-- Forge --modularity Q ≥ 0.67
-- Build wheel 1.1.0 + twine check : PASSED
-- muninn-ui launch offscreen : OK
-- 0 code shipped sans caller (verified par H.0 + I.2)
-
-LOC débloquées en prod : ~17 800 (Cube + UI + dream + metrics + hooks
-défensifs + vault auto-lock + L12 default).
-
-GARANTIE : à partir de ce commit, tout futur module orphan = CI rouge
-automatique. Plus jamais une feature codée mais pas en prod.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-
+# 3. Push UNIQUE (CI run 1 fois sur HEAD final)
 git push 2>&1 | tail -3
+# Attendu : <old>..<HEAD>  main -> main
 ```
+
+**Si CI rouge** : `git bisect start HEAD origin/main` + `git bisect run pytest tests/ -q` → identifie le commit fautif parmi les 26. Avantage Option B vs Option A : tu sais EXACTEMENT lequel des 26 chunks a cassé, pas "quelque part dans le mégacommit".
+
+**Le CI run :**
+- Trigger 1 fois (sur HEAD final)
+- Mycelium step ~41min (Sky a dit "oublie ça", ignorer si rouge sur cette étape spécifique)
+- Validate + forge_smoke + e2e → focus sur ces 3 jobs
 
 ---
 
