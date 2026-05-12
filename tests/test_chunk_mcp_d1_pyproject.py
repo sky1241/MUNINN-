@@ -57,14 +57,15 @@ def test_d1_required_classifiers_present():
     PEP 639 (setuptools 77+) deprecates the "License :: ..." classifier
     in favor of `license = "MIT"` SPDX expression in [project] — we use
     the expression form, so no License classifier is allowed here.
+
+    G.8 (2026-05-12): downgraded the Python version claim from
+    3.10/3.11/3.12/3.13 to 3.13-only because CI matrix doesn't cover
+    the older versions. Honest claim > overclaim.
     """
     data = _load_pyproject()
     classifiers = data["project"]["classifiers"]
     required = [
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
     ]
     missing = [c for c in required if c not in classifiers]

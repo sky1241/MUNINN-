@@ -65,7 +65,49 @@ def doctor():
             _ok("tiktoken installed")
         except ImportError:
             _fail("tiktoken missing", "pip install tiktoken")
-        # 4. Anchor message — this is the action item
+        # 4-6. D.5 install-health checks — these are GLOBAL (deps + entry
+        # points), not repo-specific, so they fire in pre-init mode too.
+        # Without them, E.6 regression test fails (and rightly so: the user
+        # cares whether the binaries work BEFORE running init).
+        _is_pip_install = "site-packages" in __file__
+        for cmd_name, target in (
+            ("muninn", "muninn._engine:main"),
+            ("mycelium", "muninn.mycelium:main"),
+            ("muninn-mcp", "muninn.mcp.server:main"),
+        ):
+            module_path, _, attr = target.partition(":")
+            try:
+                mod = __import__(module_path, fromlist=[attr])
+                func = getattr(mod, attr, None)
+                if callable(func):
+                    _ok(f"console_script {cmd_name}", target)
+                else:
+                    (_fail if _is_pip_install else _warn)(
+                        f"console_script {cmd_name}", f"{attr} not callable")
+            except ImportError as exc:
+                if cmd_name == "muninn-mcp" and "mcp" in str(exc).lower():
+                    _warn(f"console_script {cmd_name}",
+                          "pip install 'muninn-memory[mcp]' to enable")
+                elif _is_pip_install:
+                    _fail(f"console_script {cmd_name}", f"import failed: {exc}")
+                else:
+                    _warn(f"console_script {cmd_name}",
+                          f"(dev mode — only meaningful via pip install): {exc}")
+        try:
+            import engine.core  # noqa: F401
+            _ok("engine.core package shipped")
+        except ImportError as exc:
+            if _is_pip_install:
+                _fail("engine.core not importable", str(exc)[:120])
+            else:
+                _warn("engine.core not importable (dev mode)", str(exc)[:120])
+        try:
+            import mcp  # noqa: F401
+            _ok("mcp installed (muninn-mcp ready)")
+        except ImportError:
+            _warn("mcp not installed",
+                  "pip install 'muninn-memory[mcp]' to enable Claude Code integration")
+        # 7. Anchor message — this is the action item
         _fail(
             f".muninn/ missing in {repo_for_preinit}",
             "Run `muninn-mem init` first to bootstrap this repo, then "

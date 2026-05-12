@@ -196,6 +196,7 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_MAX_COMPRESS_BYTES` | Override de la taille max d'un input pour `compress_file` (CHUNK C3) | `52428800` (50 MB) |
 | `MUNINN_SKIP_INTEGRITY` | Bypass le boot integrity_check de mycelium.db (CHUNK E6) | unset (check actif) |
 | `MUNINN_REPO` | Repo cible pour scripts ad-hoc (CLI fallback) | `os.getcwd()` |
+| `MUNINN_DEBUG` | Bypass le friendly error handler (G.3) — re-raise tout traceback. Pour debug engine. | unset (friendly mode actif) |
 | `MUNINN_DEMO_REPO` | Repo cible pour les scripts dans `examples/` (chunk MCP D.5) | `/tmp/muninn-quickstart` |
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
