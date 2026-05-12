@@ -261,8 +261,14 @@ def _auto_backup_tree():
         print(f"  A7: Backup failed: {e}", file=sys.stderr)
 
 
-def prune(dry_run: bool = True):
-    """R4: promote hot, demote cold, kill dead. Uses temperature score."""
+def prune(dry_run: bool = True, include_dreams: bool = False):
+    """R4: promote hot, demote cold, kill dead. Uses temperature score.
+
+    H.3 (2026-05-12): when `include_dreams=True`, also invoke Sleep
+    Consolidation (`mycelium.dream()`, Wilson & McNaughton 1994) after the
+    tree prune. Off by default to avoid surprise inserts in mycelium.db on
+    every routine prune.
+    """
     tree = load_tree()
     nodes = tree["nodes"]
     refresh_tree_metadata(tree)
@@ -676,3 +682,27 @@ def prune(dry_run: bool = True):
     print(f"\n  Summary: {len(hot)} hot, {len(cold)} cold "
           f"({recompressed if not dry_run else '?'} recompressed, "
           f"{len(consolidated) if not dry_run else '?'} consolidated), {len(dead)} dead")
+
+    # H.3 (2026-05-12): Sleep Consolidation pass (Wilson & McNaughton 1994).
+    # 561 LOC of mycelium_dream.py were dormant before this wire.
+    if include_dreams and not dry_run:
+        try:
+            from muninn_tree import _m  # late import to avoid circular
+            from mycelium import Mycelium
+            repo = _m._REPO_PATH or Path.cwd()
+            myc = Mycelium(repo)
+            try:
+                insights = myc.dream()
+                print(f"\n  Dream pass: {len(insights)} insight(s) "
+                      f"generated (see .muninn/insights.json)")
+            finally:
+                try:
+                    myc.save()
+                except Exception:
+                    pass
+                myc.close()
+        except Exception as exc:
+            # dream() pass is best-effort — never break prune on failure
+            print(f"  Dream pass skipped: {type(exc).__name__}: {exc}")
+    elif include_dreams and dry_run:
+        print("\n  Dream pass requires --force (dry_run blocks DB writes).")

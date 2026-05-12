@@ -956,6 +956,11 @@ def main():
                         help="For `cube run`: number of destruction/reconstruction cycles")
     parser.add_argument("--level", type=int, default=0,
                         help="For `cube run`: which cube level to operate on (0=leaves)")
+    # H.3 (2026-05-12): wire Sleep Consolidation (Wilson & McNaughton 1994)
+    # to the `prune` command. Off by default — dream() pass is opt-in to
+    # avoid surprise inserts in mycelium.db at every prune.
+    parser.add_argument("--include-dreams", action="store_true",
+                        help="For `prune`: also run Sleep Consolidation (dream insights)")
 
     args = parser.parse_args()
 
@@ -1295,7 +1300,7 @@ def main():
             if (cwd / ".muninn").exists():
                 _REPO_PATH = cwd
                 _refresh_tree_paths()
-        prune(dry_run=not args.force)
+        prune(dry_run=not args.force, include_dreams=args.include_dreams)
         return
 
     if args.command == "decode":
