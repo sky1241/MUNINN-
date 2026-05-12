@@ -38,7 +38,7 @@ python3 mcp_recall_demo.py
 If a script crashes with `ModuleNotFoundError`, run :
 
 ```bash
-muninn doctor
+muninn-mem doctor
 ```
 
 It will tell you which optional extra is missing (`[mcp]`, `[llm]`, `[tokens]`).

@@ -157,7 +157,7 @@ Welcome to Muninn 1.0.1 — LLM memory compression engine.
 
 First time? Here are the 3 commands to know:
 
-  muninn init       Set up Muninn in the current repo
+  muninn-mem init       Set up Muninn in the current repo
                     (creates .muninn/, installs Claude Code hooks)
   ...
 ```
@@ -174,7 +174,7 @@ First time? Here are the 3 commands to know:
 ```bash
 mkdir -p /tmp/muninn_protocol_empty
 cd /tmp/muninn_protocol_empty
-/tmp/muninn_protocol_venv/bin/muninn status 2>&1 | head -5
+/tmp/muninn_protocol_venv/bin/muninn-mem status 2>&1 | head -5
 ```
 
 **Expected output** :
@@ -182,7 +182,7 @@ cd /tmp/muninn_protocol_empty
 No .muninn/ found in: /tmp/muninn_protocol_empty
 
 This directory isn't a Muninn-initialized repo yet.
-Run `muninn init` here to set it up:
+Run `muninn-mem init` here to set it up:
 ```
 
 **🟢 Pass** : message "No .muninn/ found"
@@ -196,9 +196,9 @@ Run `muninn init` here to set it up:
 
 ```bash
 cd /tmp/muninn_protocol_empty
-/tmp/muninn_protocol_venv/bin/muninn init 2>&1 | tail -3
-/tmp/muninn_protocol_venv/bin/muninn doctor 2>&1 | tail -3
-/tmp/muninn_protocol_venv/bin/muninn status 2>&1 | head -5
+/tmp/muninn_protocol_venv/bin/muninn-mem init 2>&1 | tail -3
+/tmp/muninn_protocol_venv/bin/muninn-mem doctor 2>&1 | tail -3
+/tmp/muninn_protocol_venv/bin/muninn-mem status 2>&1 | head -5
 ```
 
 **Expected output** :
@@ -233,7 +233,7 @@ MUNINN_DEMO_REPO=/tmp/muninn_protocol_empty /tmp/muninn_protocol_venv/bin/python
 ```
 ✓ Done. Next steps:
   - Inspect /tmp/muninn_protocol_empty/.muninn/ (tree.json, mycelium.db, sessions/)
-  - Try `muninn doctor` to verify your install
+  - Try `muninn-mem doctor` to verify your install
   - Try `mcp_recall_demo.py` to see the MCP-style API
 ```
 
@@ -287,7 +287,7 @@ Q-MODULARITY    : 0.67X
 2. `rm -rf build dist *.egg-info && python3 -m build`  ← rebuild from current main
 3. `python3 -m twine upload --repository pypi dist/*`  ← lit `~/.pypirc` section `[pypi]` (token prod)
 4. Vérif visuelle : https://pypi.org/project/muninn-memory/1.0.1/
-5. Smoke test : `pip install muninn-memory==1.0.1` dans un autre venv vierge → `muninn --help` doit print welcome
+5. Smoke test : `pip install muninn-memory==1.0.1` dans un autre venv vierge → `muninn-mem --help` doit print welcome
 6. Commit + push une dernière fois si tu mets à jour CHANGELOG / WINTER_TREE avec le statut "shipped to PyPI prod ✅"
 
 ---
@@ -296,9 +296,9 @@ Q-MODULARITY    : 0.67X
 
 | Symptôme | Diagnostic | Fix |
 |---|---|---|
-| CI rouge sur D.x commits | Le step "Test Engine Commands" assume muninn status sans init | Le hotfix `dfe4b28` doit être dans HEAD ; si plus là, re-pull |
+| CI rouge sur D.x commits | Le step "Test Engine Commands" assume muninn-mem status sans init | Le hotfix `dfe4b28` doit être dans HEAD ; si plus là, re-pull |
 | `ModuleNotFoundError: tokenizer` en venv | engine/* pas shipped | Vérifie `[tool.setuptools.packages.find].include` contient `"engine*"` |
-| `muninn status` auto-init dans site-packages | D.4 fix absent | Check muninn.py `_print_empty_repo_hint` présent |
+| `muninn-mem status` auto-init dans site-packages | D.4 fix absent | Check muninn.py `_print_empty_repo_hint` présent |
 | `mcp not installed` malgré `[mcp]` extra | Install bug ou cache pip | `pip install --force-reinstall 'muninn-memory[mcp]==1.0.1'` |
 | Q-modularity < 0.30 | Refactor a créé du couplage | `forge --modularity --verbose` pour voir les communautés problématiques |
 | Tests CI passent mais local fail | Différence d'environnement | Reproduis avec exact CI flags (cf step 2 ci-dessus) |

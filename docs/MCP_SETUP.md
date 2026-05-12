@@ -22,7 +22,7 @@ pip install "muninn-memory[mcp]"
 Then verify the server starts:
 
 ```bash
-muninn-mcp &
+muninn-mcp-mem &
 # Or:
 python -m muninn.mcp &
 # Hit Ctrl-C to stop. Logs go to stderr.
@@ -32,7 +32,7 @@ python -m muninn.mcp &
 
 Replace `<PATH_TO_YOUR_REPO>` with the absolute path of the project whose
 Muninn memory you want exposed to Claude (typically the same repo you ran
-`muninn init` in).
+`muninn-mem init` in).
 
 Add this stanza to `~/.claude.json` (global) or `<repo>/.mcp.json` (per-project):
 
@@ -40,7 +40,7 @@ Add this stanza to `~/.claude.json` (global) or `<repo>/.mcp.json` (per-project)
 {
   "mcpServers": {
     "muninn": {
-      "command": "muninn-mcp",
+      "command": "muninn-mcp-mem",
       "args": [],
       "env": {
         "MUNINN_REPO": "<PATH_TO_YOUR_REPO>"
@@ -50,7 +50,7 @@ Add this stanza to `~/.claude.json` (global) or `<repo>/.mcp.json` (per-project)
 }
 ```
 
-If `muninn-mcp` is not on `$PATH` (e.g. you installed into a venv that Claude Code
+If `muninn-mcp-mem` is not on `$PATH` (e.g. you installed into a venv that Claude Code
 does not source), use the explicit Python path. Find your active interpreter with
 `which python` then plug it in:
 
@@ -168,7 +168,7 @@ See `docs/BATTLE_PLAN_MASTER_MCP.md` §Phase B for the full spec.
 - **`Module not found: mcp`** → `pip install 'muninn-memory[mcp]'` (the extras are NOT
   installed by default to keep the base Muninn lightweight).
 - **Server starts but Claude Code shows no tools** → check `claude mcp list` ;
-  if it shows `failed`, run the server manually (`muninn-mcp`) and watch stderr —
+  if it shows `failed`, run the server manually (`muninn-mcp-mem`) and watch stderr —
   any import error will surface there.
 - **Output corrupted in Claude** → never `print()` to stdout in MCP tools — that
   pollutes the JSON-RPC wire. Use `logging.getLogger("muninn.mcp").info(...)`

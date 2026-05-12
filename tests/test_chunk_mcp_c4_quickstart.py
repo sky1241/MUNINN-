@@ -56,14 +56,18 @@ def test_c4_quickstart_has_bash_blocks():
 
 
 def test_c4_quickstart_mentions_core_commands():
-    """QUICKSTART must mention the essential commands a new user will type."""
+    """QUICKSTART must mention the essential commands a new user will type.
+
+    Updated in E.3 (2026-05-12): renamed console scripts to avoid PyPI
+    collision (`muninn` → `muninn-mem`, `muninn-mcp` → `muninn-mcp-mem`).
+    """
     p = REPO_ROOT / "docs" / "QUICKSTART.md"
     text = p.read_text(encoding="utf-8")
     for keyword in (
         "pip install",
-        "muninn init",
-        "muninn doctor",
-        "muninn-mcp",
+        "muninn-mem init",
+        "muninn-mem doctor",
+        "muninn-mcp-mem",
         ".claude.json",
         "MUNINN_REPO",
     ):

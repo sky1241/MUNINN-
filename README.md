@@ -103,7 +103,7 @@ In two lines :
 
 ```bash
 pip install -e "<PATH_TO_MUNINN>[mcp,tokens]"
-cd <YOUR_REPO> && muninn init && muninn bootstrap . && muninn doctor
+cd <YOUR_REPO> && muninn-mem init && muninn-mem bootstrap . && muninn-mem doctor
 ```
 
 Then add the `muninn` MCP server to `~/.claude.json` and Claude will have 10 tools to actively query your project's memory during generation : `mycelium_recall_local`, `mycelium_recall_meta`, `mycelium_recall(scope="auto")`, `tree_get_root`, `tree_get_branch`, `tree_list_branches`, `bugs_list`, `bugs_get`, `runbook_list_sections`, `runbook_get`. Full cheatsheet in [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md).
@@ -163,48 +163,48 @@ Sub-commands available:
 
 ```bash
 # Memory lifecycle
-muninn boot [query]        # Load root + relevant branches + sessions
-muninn status              # Tree state + temperatures + budget + mycelium growth_stats
-muninn recall "query"      # Mid-session memory search
-muninn compress <file>     # Compress a markdown file
-muninn decode <file>       # Decompress a .mn file (debugging)
-muninn read <node>         # Read a tree node (root or b*)
+muninn-mem boot [query]        # Load root + relevant branches + sessions
+muninn-mem status              # Tree state + temperatures + budget + mycelium growth_stats
+muninn-mem recall "query"      # Mid-session memory search
+muninn-mem compress <file>     # Compress a markdown file
+muninn-mem decode <file>       # Decompress a .mn file (debugging)
+muninn-mem read <node>         # Read a tree node (root or b*)
 
 # Tree management
-muninn tree                # Visualize the tree
-muninn init                # Create empty tree.json
-muninn bootstrap <repo>    # Cold start on a new repo
-muninn ingest <folder>     # Compress reference docs into branches
-muninn prune               # Dry-run pruning
-muninn prune --force       # Actually prune cold/dead branches
-muninn inject <text>       # Manually inject content into the tree
-muninn scan                # Scan repo + emit neuron map JSON
+muninn-mem tree                # Visualize the tree
+muninn-mem init                # Create empty tree.json
+muninn-mem bootstrap <repo>    # Cold start on a new repo
+muninn-mem ingest <folder>     # Compress reference docs into branches
+muninn-mem prune               # Dry-run pruning
+muninn-mem prune --force       # Actually prune cold/dead branches
+muninn-mem inject <text>       # Manually inject content into the tree
+muninn-mem scan                # Scan repo + emit neuron map JSON
 
 # Mycelium feeding
-muninn feed <transcript>   # Feed mycelium + compress to .mn
-muninn feed --history      # Catch up on all past transcripts
-muninn feed --watch        # Poll-based feed (for scheduled tasks)
-muninn bridge              # Manual bridge invocation
-muninn zones               # Detect + label thematic zones (Laplacian spectral clustering)
+muninn-mem feed <transcript>   # Feed mycelium + compress to .mn
+muninn-mem feed --history      # Catch up on all past transcripts
+muninn-mem feed --watch        # Poll-based feed (for scheduled tasks)
+muninn-mem bridge              # Manual bridge invocation
+muninn-mem zones               # Detect + label thematic zones (Laplacian spectral clustering)
 
 # Diagnostics
-muninn verify <file>       # Check compression quality (facts, ratio)
-muninn diagnose            # Full pipeline self-check
-muninn doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
-muninn upgrade-hooks       # Update Claude Code hooks to latest format
+muninn-mem verify <file>       # Check compression quality (facts, ratio)
+muninn-mem diagnose            # Full pipeline self-check
+muninn-mem doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
+muninn-mem upgrade-hooks       # Update Claude Code hooks to latest format
 
 # Cube (B33 destruction/reconstruction)
-muninn trip                # Trigger a cube cycle
-muninn think               # Cube reflective pass
-muninn quarantine <id>     # Quarantine a suspected cube
+muninn-mem trip                # Trigger a cube cycle
+muninn-mem think               # Cube reflective pass
+muninn-mem quarantine <id>     # Quarantine a suspected cube
 
 # Security
-muninn lock                # Encrypt .muninn/ at rest (AES-256-GCM)
-muninn unlock              # Decrypt with password
-muninn rekey               # Re-encrypt with new password
-muninn scrub <path>        # Scrub secrets from a file
-muninn purge-secrets       # Repo-wide secret scrubbing
-muninn sync                # Sync to backend (TLS or git)
+muninn-mem lock                # Encrypt .muninn/ at rest (AES-256-GCM)
+muninn-mem unlock              # Decrypt with password
+muninn-mem rekey               # Re-encrypt with new password
+muninn-mem scrub <path>        # Scrub secrets from a file
+muninn-mem purge-secrets       # Repo-wide secret scrubbing
+muninn-mem sync                # Sync to backend (TLS or git)
 ```
 
 ## Claude Code Hooks
@@ -243,7 +243,7 @@ Phase B (in progress) exposes Muninn data to Claude Code/Desktop as MCP tools, c
 
 ```bash
 pip install -e ".[mcp]"
-muninn-mcp &   # or: python -m muninn.mcp
+muninn-mcp-mem &   # or: python -m muninn.mcp
 ```
 
 Wire it into `~/.claude.json`:
@@ -252,7 +252,7 @@ Wire it into `~/.claude.json`:
 {
   "mcpServers": {
     "muninn": {
-      "command": "muninn-mcp",
+      "command": "muninn-mcp-mem",
       "env": {"MUNINN_REPO": "/path/to/your/repo"}
     }
   }

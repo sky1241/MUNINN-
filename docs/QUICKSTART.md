@@ -22,10 +22,10 @@ If you just want to *use* Muninn (not modify the engine), the fastest path is :
 
 ```bash
 pip install 'muninn-memory[all]'    # core + tokens + llm + mcp + quality
-muninn                              # prints welcome banner with next 3 steps
+muninn-mem                          # prints welcome banner with next 3 steps
 cd <PATH_TO_YOUR_REPO>              # any code/text repo you want Muninn to remember
-muninn init                         # creates .muninn/, installs Claude Code hooks
-muninn doctor                       # 19+ checks, should print "ALL GREEN"
+muninn-mem init                     # creates .muninn/, installs Claude Code hooks
+muninn-mem doctor                   # 22+ checks, should print "ALL GREEN"
 ```
 
 That's it. Skip to step 5 (configure Claude Code) if you went this route.
@@ -63,22 +63,22 @@ pip install -e ".[mcp,tokens]"
 
 - `[mcp]` adds the Model Context Protocol server (so Claude can call Muninn
   tools during generation).
-- `[tokens]` adds `tiktoken` — required by `muninn doctor` to pass
+- `[tokens]` adds `tiktoken` — required by `muninn-mem doctor` to pass
   ALL GREEN. Skip it only if you have a strong reason to count tokens
   yourself.
 
 Verify :
 
 ```bash
-muninn --version    # should print "muninn 0.9.x"
-muninn-mcp --help   # entry point installed by pip
+muninn-mem --version    # should print "muninn 0.9.x"
+muninn-mcp-mem --help   # entry point installed by pip
 ```
 
 ## 3. Initialize Muninn on YOUR project
 
 ```bash
 cd <PATH_TO_YOUR_REPO>
-muninn init
+muninn-mem init
 ```
 
 This creates `.muninn/` (gitignored), scaffolds `tree.json`, registers
@@ -88,7 +88,7 @@ the repo in `~/.muninn/repos.json`, and writes 7 Claude Code hooks into
 ## 4. Run the health check
 
 ```bash
-muninn doctor
+muninn-mem doctor
 ```
 
 Expected output ends with **`ALL GREEN — N checks passed`**. If `tiktoken`
@@ -100,7 +100,7 @@ affect optional features (vault encryption, L9 LLM compression).
 ## 5. Run your first bootstrap
 
 ```bash
-muninn bootstrap .
+muninn-mem bootstrap .
 ```
 
 This scans your repo, builds the mycelium graph from your code & docs,
@@ -116,7 +116,7 @@ Add this stanza to `~/.claude.json` (global) or `<PATH_TO_YOUR_REPO>/.mcp.json`
 {
   "mcpServers": {
     "muninn": {
-      "command": "muninn-mcp",
+      "command": "muninn-mcp-mem",
       "env": {
         "MUNINN_REPO": "<PATH_TO_YOUR_REPO>"
       }
@@ -125,7 +125,7 @@ Add this stanza to `~/.claude.json` (global) or `<PATH_TO_YOUR_REPO>/.mcp.json`
 }
 ```
 
-If `muninn-mcp` isn't on `$PATH` (typical with isolated venvs), use the
+If `muninn-mcp-mem` isn't on `$PATH` (typical with isolated venvs), use the
 explicit Python path. Find it with `which python` then plug it in :
 
 ```json
@@ -158,11 +158,11 @@ You should see `muninn   running   10 tools`. If not, check
 
 ```bash
 cd <PATH_TO_YOUR_REPO>
-muninn install-cron
+muninn-mem install-cron
 ```
 
 This creates `~/.config/systemd/user/muninn-prune.{service,timer}` that
-runs `muninn prune` every Sunday at 04:00 local time, with `Persistent=true`
+runs `muninn-mem prune` every Sunday at 04:00 local time, with `Persistent=true`
 so a missed run (machine off) catches up at next boot. Then activate :
 
 ```bash
@@ -171,7 +171,7 @@ systemctl --user enable --now muninn-prune.timer
 systemctl --user list-timers | grep muninn   # confirm next-run time
 ```
 
-To remove later : `muninn install-cron --uninstall`. The hook is opt-in :
+To remove later : `muninn-mem install-cron --uninstall`. The hook is opt-in :
 nothing in this step is auto-triggered.
 
 ## 9. First Claude session — verify the boot context
@@ -215,11 +215,11 @@ runbook file (proven by test pins `test_tools_dont_touch_*`).
 
 | Symptom | Fix |
 |---|---|
-| `muninn doctor` says `tiktoken FAIL` | `pip install -e ".[mcp,tokens]"` — `[tokens]` is the key extra |
-| `claude mcp list` shows `muninn   failed` | Run `muninn-mcp` manually in a terminal, watch stderr for the import error. Most common : `[mcp]` extra missing. |
+| `muninn-mem doctor` says `tiktoken FAIL` | `pip install -e ".[mcp,tokens]"` — `[tokens]` is the key extra |
+| `claude mcp list` shows `muninn   failed` | Run `muninn-mcp-mem` manually in a terminal, watch stderr for the import error. Most common : `[mcp]` extra missing. |
 | Tools return empty `results` array | Mycelium has no signal for that query. Try `bootstrap` if you haven't, or expand the query. The auto-calibration (`MUNINN_DUAL_AUTO_CALIBRATE`) will adjust the local-strength threshold automatically after ~30 calls. |
-| Tree `root.mn` content looks wrong | Re-run `muninn bootstrap <PATH_TO_YOUR_REPO>` to rebuild the tree from scratch. Existing branches `b01..bNN` are preserved. |
-| `muninn install-cron` says `skipped_no_systemd` | systemctl not on PATH — typical in containers / WSL2 / macOS. The cron fallback is planned but not yet implemented. |
+| Tree `root.mn` content looks wrong | Re-run `muninn-mem bootstrap <PATH_TO_YOUR_REPO>` to rebuild the tree from scratch. Existing branches `b01..bNN` are preserved. |
+| `muninn-mem install-cron` says `skipped_no_systemd` | systemctl not on PATH — typical in containers / WSL2 / macOS. The cron fallback is planned but not yet implemented. |
 
 For deeper config (auto-calibration thresholds, RRF fusion, dual-mycelium
 routing), see [`docs/MCP_SETUP.md`](MCP_SETUP.md).

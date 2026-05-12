@@ -970,14 +970,14 @@ def _print_welcome():
     print()
     print("First time? Here are the 3 commands to know:")
     print()
-    print("  muninn init       Set up Muninn in the current repo")
+    print("  muninn-mem init       Set up Muninn in the current repo")
     print("                    (creates .muninn/, installs Claude Code hooks)")
     print()
-    print("  muninn status     Show tree state + mycelium growth")
+    print("  muninn-mem status     Show tree state + mycelium growth")
     print()
-    print("  muninn doctor     Diagnose install + check all dependencies")
+    print("  muninn-mem doctor     Diagnose install + check all dependencies")
     print()
-    print("Full command list: muninn --help")
+    print("Full command list: muninn-mem --help")
     print("Quickstart: https://github.com/sky1241/MUNINN-/blob/main/docs/QUICKSTART.md")
 
 
@@ -989,12 +989,12 @@ def _print_empty_repo_hint(cwd):
     print(f"No .muninn/ found in: {cwd}")
     print()
     print("This directory isn't a Muninn-initialized repo yet.")
-    print("Run `muninn init` here to set it up:")
+    print("Run `muninn-mem init` here to set it up:")
     print()
     print(f"  cd {cwd}")
-    print("  muninn init")
+    print("  muninn-mem init")
     print()
-    print("Or run `muninn doctor` to diagnose the install itself.")
+    print("Or run `muninn-mem doctor` to diagnose the install itself.")
 
 
 def main():
@@ -1041,7 +1041,7 @@ def main():
         _refresh_tree_paths()
 
     # CHUNK E6 (2026-05-08, mirror B1.4 2026-05-09): wire A3 check_integrity()
-    # at boot. Pre-fix: A3 helper existed but was only called via `muninn doctor`.
+    # at boot. Pre-fix: A3 helper existed but was only called via `muninn-mem doctor`.
     # If Sky never ran doctor, mycelium.db corruption stayed silent until
     # queries returned wrong data. Now every CLI command (except init/doctor)
     # runs a quick integrity check at boot and warns stderr on failure.
@@ -1057,14 +1057,14 @@ def main():
                 if not ok:
                     print(f"WARNING: mycelium.db integrity_check failed: {msg}",
                           file=sys.stderr)
-                    print("  Run `muninn doctor` for full diagnostic, or set "
+                    print("  Run `muninn-mem doctor` for full diagnostic, or set "
                           "MUNINN_SKIP_INTEGRITY=1 to bypass.",
                           file=sys.stderr)
             except Exception as _ic_exc:
                 print(f"WARNING: mycelium.db integrity_check failed: "
                       f"{type(_ic_exc).__name__}: {_ic_exc}",
                       file=sys.stderr)
-                print("  Run `muninn doctor` for full diagnostic, or set "
+                print("  Run `muninn-mem doctor` for full diagnostic, or set "
                       "MUNINN_SKIP_INTEGRITY=1 to bypass.",
                       file=sys.stderr)
 
@@ -1181,7 +1181,7 @@ def main():
         return
 
     if args.command == "install-cron":
-        # Chunk MCP A.3: weekly systemd-user timer for `muninn prune`.
+        # Chunk MCP A.3: weekly systemd-user timer for `muninn-mem prune`.
         repo = Path(args.repo or args.file or ".").resolve()
         if not (repo / ".muninn").exists():
             print(f"ERROR: {repo} is not a Muninn repo (no .muninn/ directory)")

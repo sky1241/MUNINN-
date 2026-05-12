@@ -66,19 +66,25 @@ def main() -> None:
     repo = _ensure_repo()
     print(f"Target repo: {repo}")
 
-    muninn = "muninn"  # the pip-installed console script
+    # Use `python -m muninn._engine` so the example works in BOTH modes :
+    #   - dev checkout (no console script installed) — picks up the module
+    #   - pip-installed (post `pip install muninn-memory`) — same code path
+    # The pip-installed console script is `muninn-mem` (renamed in E.3 to
+    # avoid PyPI collision with `muninn` 7.2.1), but we don't depend on it
+    # being on $PATH here.
+    muninn = [sys.executable, "-m", "muninn._engine"]
 
     # 1. Initialize Muninn in the repo (creates .muninn/, installs hooks)
-    _run("STEP 1 — muninn init", [muninn, "init"], cwd=repo)
+    _run("STEP 1 — muninn init", [*muninn, "init"], cwd=repo)
 
     # 2. Show the layout that was created
-    _run("STEP 2 — muninn status", [muninn, "status"], cwd=repo)
+    _run("STEP 2 — muninn status", [*muninn, "status"], cwd=repo)
 
     # 3. Bootstrap mycelium from the repo's source files
-    _run("STEP 3 — muninn bootstrap", [muninn, "bootstrap", str(repo)], cwd=repo)
+    _run("STEP 3 — muninn bootstrap", [*muninn, "bootstrap", str(repo)], cwd=repo)
 
     # 4. Query the mycelium for concepts connected to "compression"
-    _run("STEP 4 — muninn recall 'compression'", [muninn, "recall", "compression"], cwd=repo)
+    _run("STEP 4 — muninn recall 'compression'", [*muninn, "recall", "compression"], cwd=repo)
 
     print("\n✓ Done. Next steps:")
     print(f"  - Inspect {repo}/.muninn/ (tree.json, mycelium.db, sessions/)")
