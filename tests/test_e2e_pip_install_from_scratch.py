@@ -55,7 +55,10 @@ def venv_with_muninn(tmp_path_factory):
         check=True, timeout=60,
     )
     venv_py = venv_dir / "bin" / "python"
-    venv_muninn = venv_dir / "bin" / "muninn"
+    # CHUNK MCP F.3 (2026-05-12): renamed `muninn` → `muninn-mem` in E.3
+    # to avoid PyPI prod name collision with the S&T data catalog package
+    # (muninn 7.2.1). The pip-installed console script is now `muninn-mem`.
+    venv_muninn = venv_dir / "bin" / "muninn-mem"
     assert venv_py.exists(), f"venv python missing: {venv_py}"
 
     # 2. pip install -e <repo source>[tokens]
@@ -74,9 +77,9 @@ def venv_with_muninn(tmp_path_factory):
             f"stderr: {result.stderr[-500:]}"
         )
 
-    # 3. Verify the entry point was created
+    # 3. Verify the entry point was created (renamed to `muninn-mem` in E.3)
     assert venv_muninn.exists(), (
-        f"entry point `muninn` missing after pip install: {venv_muninn}"
+        f"entry point `muninn-mem` missing after pip install: {venv_muninn}"
     )
 
     yield venv_dir, venv_py, venv_muninn
