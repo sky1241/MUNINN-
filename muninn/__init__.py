@@ -21,9 +21,9 @@ try:
     try:
         __version__ = _pkg_version("muninn")
     except PackageNotFoundError:
-        __version__ = "1.0.3"  # checkout fallback (sync with pyproject.toml)
+        __version__ = "1.1.0"  # checkout fallback (sync with pyproject.toml)
 except Exception:
-    __version__ = "1.0.3"
+    __version__ = "1.1.0"
 
 from . import _engine  # noqa: F401 — loads globals + sub-modules
 
