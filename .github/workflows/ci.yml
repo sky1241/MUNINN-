@@ -144,9 +144,8 @@ jobs:
           # forge-shield is on PyPI since 2026-05-11 v1.3.0 (Sky bump cycle 11+).
           # Bumped from v1.2.2 → v1.3.0 (cycles 9-10 add --shield orchestration
           # + hook installer + venv exclusion fix ; v1.3.0 cycle 11+ Sky bump).
-          # CHUNK MCP C.2 (2026-05-12): pytest-xdist for `-n auto` parallelism.
           python3 -m pip install -c constraints.txt \
-            pytest pytest-xdist hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
 
       - name: Configure git identity (required by sync_backend tests)
         run: |
@@ -185,12 +184,7 @@ jobs:
           #     chmod 0600 + native LF.
           # Resolved (P4 — 2026-05-09): forge.gen_props split into 5 helpers,
           # all <100L. test_no_new_oversized_functions now passes in CI.
-          # CHUNK MCP C.2 (2026-05-12): -n auto enables pytest-xdist parallel
-          # workers (one per CPU). Safe thanks to autouse _repo_path_isolate
-          # fixture in tests/conftest.py:91 (CHUNK B7, 2026-05-08). Wall-time
-          # drops ~40min → ~10min on the 2-CPU ubuntu-latest runner.
           python3 -m pytest tests/ -q --tb=short \
-            -n auto \
             -m "not slow" \
             --ignore-glob='tests/test_ui_*.py' \
             --ignore=tests/eval_harness_chunk9.py \
@@ -280,40 +274,8 @@ jobs:
 
   forge_smoke:
     runs-on: ubuntu-latest
-    name: forge_smoke (${{ matrix.module }})
+    name: forge --gen-props (smoke per engine/core module)
     needs: [validate]
-    # CHUNK MCP C.2 (2026-05-12): strategy.matrix parallelizes the 17 modules
-    # across 17 jobs (was a sequential shell `for f in ...` loop ~15min total).
-    # fail-fast: false → all 17 jobs run even if one fails (better debug visibility).
-    # max-parallel: 10 stays under GitHub free-tier 20-concurrent limit.
-    # F6 (2026-05-10 PM): smoke matrix synchronisée avec l'inventaire des
-    # fichiers tests/test_props_*.py. Les 13 modules engine/core absents
-    # (sub-modules P3 + mixins H6 + sync_tls/vault/wal_monitor/watchdog/muninn)
-    # n'ont pas de fonction publique fuzzable.
-    # CHUNK D8 (H4.2): smoke-run forge --gen-props on every critical
-    # engine/core module — catches BUG-101/102/105/106-class bugs early.
-    strategy:
-      fail-fast: false
-      max-parallel: 10
-      matrix:
-        module:
-          - muninn_tree
-          - muninn_layers
-          - muninn_feed
-          - mycelium_db
-          - mycelium
-          - _secrets
-          - cube
-          - cube_providers
-          - cube_analysis
-          - sync_backend
-          - _hook_logger
-          - budget_select
-          - dedup
-          - forge_metrics
-          - lang_lexicons
-          - lexicons
-          - sentiment
     steps:
       - uses: actions/checkout@v6
       - name: Setup Python
@@ -324,16 +286,39 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -c constraints.txt pytest hypothesis tiktoken anthropic numpy cryptography freezegun forge-shield
-      - name: forge --gen-props engine/core/${{ matrix.module }}.py
+      - name: Generate property tests for every engine/core module (forge --gen-props)
         run: |
-          forge --gen-props engine/core/${{ matrix.module }}.py
-      - name: Run property tests for ${{ matrix.module }}
+          # CHUNK D8 (H4.2): smoke-run forge --gen-props on every critical
+          # engine/core module — catches BUG-101/102/105/106-class bugs early.
+          # F6 (2026-05-10 PM): smoke matrix étendue de 11 → 17 modules,
+          # synchronisée avec l'inventaire des fichiers tests/test_props_*.py.
+          # Les 13 modules absents (sub-modules P3 + mixins H6 + sync_tls/vault/
+          # wal_monitor/watchdog/muninn) n'ont pas de fonction publique fuzzable.
+          for f in engine/core/muninn_tree.py \
+                   engine/core/muninn_layers.py \
+                   engine/core/muninn_feed.py \
+                   engine/core/mycelium_db.py \
+                   engine/core/mycelium.py \
+                   engine/core/_secrets.py \
+                   engine/core/cube.py \
+                   engine/core/cube_providers.py \
+                   engine/core/cube_analysis.py \
+                   engine/core/sync_backend.py \
+                   engine/core/_hook_logger.py \
+                   engine/core/budget_select.py \
+                   engine/core/dedup.py \
+                   engine/core/forge_metrics.py \
+                   engine/core/lang_lexicons.py \
+                   engine/core/lexicons.py \
+                   engine/core/sentiment.py
+          do
+              echo "::group::forge --gen-props $f"
+              forge --gen-props "$f" || exit 1
+              echo "::endgroup::"
+          done
+      - name: Run all generated property tests (test_props_*.py)
         run: |
-          if [ -f "tests/test_props_${{ matrix.module }}.py" ]; then
-            pytest tests/test_props_${{ matrix.module }}.py -q --tb=short
-          else
-            echo "No tests/test_props_${{ matrix.module }}.py — forge generated nothing to test"
-          fi
+          pytest tests/test_props_*.py -q --tb=short
 
   e2e:
     # Chunk MCP A.4: E2E pip install from scratch + muninn init + doctor ALL GREEN.
