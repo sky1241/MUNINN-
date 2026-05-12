@@ -348,6 +348,71 @@ def _tokenize_for_meta(query: str) -> list[str]:
     return _tokenize_query(query)
 
 
+# ── G.1 (2026-05-12): universal degree-based stopword filter at query time ──
+
+def _recall_stopword_percentile() -> float:
+    """Read MUNINN_RECALL_STOPWORD_PERCENTILE (default 0.05). 0 disables filter.
+
+    Bounded to [0.0, 0.5] — beyond 50% we'd strip the entire result list.
+    """
+    try:
+        pct = float(os.environ.get("MUNINN_RECALL_STOPWORD_PERCENTILE", "0.05"))
+    except ValueError:
+        pct = 0.05
+    return max(0.0, min(0.5, pct))
+
+
+def _high_degree_set_from_meta(meta_db_path: Path, percentile: float) -> set[str]:
+    """Compute the top-`percentile` highest-degree concept names in the meta DB.
+
+    Mirrors mycelium_activation._get_high_degree_concepts() but for an
+    arbitrary SQLite DB opened read-only. Returns lowercase concept names.
+
+    percentile=0 short-circuits to an empty set (filter disabled).
+    """
+    if percentile <= 0.0 or not meta_db_path.exists():
+        return set()
+    try:
+        conn = sqlite3.connect(
+            f"file:{meta_db_path}?mode=ro",
+            uri=True, timeout=2.0,
+        )
+        try:
+            row = conn.execute("SELECT COUNT(*) FROM concepts").fetchone()
+            n_concepts = row[0] if row else 0
+            if n_concepts < 20:
+                return set()
+            cutoff = max(1, int(n_concepts * percentile))
+            rows = conn.execute("""
+                SELECT c.name, SUM(d.cnt) AS degree
+                FROM (
+                    SELECT a AS cid, COUNT(*) AS cnt FROM edges GROUP BY a
+                    UNION ALL
+                    SELECT b AS cid, COUNT(*) AS cnt FROM edges GROUP BY b
+                ) AS d
+                JOIN concepts c ON c.id = d.cid
+                GROUP BY d.cid
+                ORDER BY degree DESC
+            """).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        return set()
+    if not rows:
+        return set()
+    idx = min(cutoff - 1, len(rows) - 1)
+    threshold = max(rows[idx][1], 20)
+    return {str(name).lower() for name, deg in rows if deg >= threshold}
+
+
+def _filter_high_degree(results: list[dict], hub_set: set[str]) -> list[dict]:
+    """Drop entries from `results` whose lowercased concept name is in hub_set."""
+    if not hub_set:
+        return results
+    return [r for r in results
+            if str(r.get("concept", "")).lower() not in hub_set]
+
+
 def _recall_meta_impl(
     query: str,
     top_k: int = 10,
@@ -447,10 +512,14 @@ def _recall_meta_impl(
                 aggregated[k_] = aggregated[k_] / max_count
 
     sorted_pairs = sorted(aggregated.items(), key=lambda kv: kv[1], reverse=True)
-    results = [
+    # G.1: build candidate list larger than top_k so the filter has room to work.
+    raw_results = [
         {"concept": name, "activation": round(score, 4), "hops": hops}
-        for name, score in sorted_pairs[:top_k]
+        for name, score in sorted_pairs[:top_k * 2]
     ]
+    pct = _recall_stopword_percentile()
+    hub_set = _high_degree_set_from_meta(meta_db_path, pct)
+    results = _filter_high_degree(raw_results, hub_set)[:top_k]
     return {
         "query": query,
         "results": results,
