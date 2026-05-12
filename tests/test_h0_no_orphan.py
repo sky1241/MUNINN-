@@ -48,8 +48,10 @@ WHITELIST_DORMANT_UI_MODULES = {
 WHITELIST_DORMANT_HOOKS = {
     "config_change_hook.py",        # config drift audit, opt-in
     "notification_audit_hook.py",   # diagnostic-only
-    # I.3 (2026-05-12) marks post_tool_use_edit_log.py dormant intentional;
-    # if it's still here at I.5, it will be added to this whitelist.
+    # I.3 (2026-05-12): post_tool_use_edit_log is enterprise scaffolding;
+    # the intended audit-viewer consumer was never implemented. Kept
+    # opt-in for Phase 3 compliance pitch. Sky activates manually.
+    "post_tool_use_edit_log.py",
 }
 
 # Env vars documented in CLAUDE.md but legitimately NOT read by engine code

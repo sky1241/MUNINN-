@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """PostToolUse Edit/Write hook — log every successful file modification.
 
+[DORMANT INTENTIONAL — I.3 (2026-05-12)]
+This hook is shipped + copied to .claude/hooks/ by install_hooks() but
+NOT auto-registered in settings.local.json. The intended consumer (audit
+viewer reading .muninn/edits_log.jsonl) was never implemented. Kept as
+opt-in scaffolding for Phase 3 enterprise pitch (compliance, drift).
+Sky activates manually via direct settings.local.json edit when a
+customer asks for an edit audit trail. H.0 garde-fou whitelist covers
+this file (see WHITELIST_DORMANT_HOOKS in tests/test_h0_no_orphan.py).
+
 Reads PostToolUse JSON payload from stdin (Claude Code spec):
   {
     "hook_event_name": "PostToolUse",
