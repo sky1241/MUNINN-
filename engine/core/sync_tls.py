@@ -2,6 +2,15 @@
 """
 Muninn Sync TLS — Secure transport for meta-mycelium synchronization.
 
+[EXPERIMENTAL — H.7 (2026-05-12)]
+This module is shipped but its TLS sync backend is OPT-IN via the
+`MUNINN_SYNC_TLS_HOST=host:port` environment variable. Without that var
+set, sync_backend.py falls back to local-only mode and TLSBackend stays
+inert. Kept inside engine/core/ (not moved to experimental/) because
+sync_backend.py and the muninn/sync_tls.py shim import directly from
+this path — relocation would require coordinated changes across 3+
+files and break the BUG-091 mirror chain.
+
 Provides encrypted network transport (TLS 1.3) for syncing mycelium data
 between machines. Replaces local filesystem sync when offices/teams are remote.
 

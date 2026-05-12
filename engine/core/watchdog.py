@@ -2,6 +2,14 @@
 
 Designed to be called by Windows Task Scheduler every 15 minutes.
 Does nothing if no conversations have changed since last check.
+
+[DORMANT INTENTIONAL — H.7 (2026-05-12)]
+This module is a Windows-only standalone polling script. On Linux/macOS,
+the equivalent flow is handled by systemd-user timers (see
+muninn_install.py `install_cron()` and the `muninn-prune.timer` unit).
+Sky's box is Linux, so watchdog.py is shipped but never invoked here.
+Kept in the repo so Windows users get a functional install. H.0
+WHITELIST_DORMANT_MODULES covers this file.
 """
 import json
 import subprocess
