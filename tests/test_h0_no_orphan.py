@@ -248,16 +248,16 @@ def test_h0_all_cli_commands_have_handler() -> None:
         )
 
 
-@pytest.mark.xfail(
-    reason="RED-by-design until H.6 registers 3 defensive hooks in settings.local.json + "
-           "I.3 marks post_tool_use_edit_log dormant intentional. Push split "
-           "(2026-05-12 nuit) : Phase G+H.0+H.1 first, H.6+I.3 next session. "
-           "I.5 will remove this @xfail when full Phase H lands.",
-    strict=False,
-)
 def test_h0_all_hooks_on_disk_registered() -> None:
     """Each .claude/hooks/*.py file must be referenced by settings.local.json
-    (unless it's in WHITELIST_DORMANT_HOOKS)."""
+    (unless it's in WHITELIST_DORMANT_HOOKS).
+
+    I.5 (2026-05-13) : xfail removed after Sky ran `muninn-mem init` to
+    migrate his live settings.local.json. The 3 defensive PreToolUse hooks
+    (pre_tool_use_bash_{destructive,secrets,edit_hardcode}) are now wired.
+    Note : settings.local.json is gitignored → in CI this test will SKIP
+    (file absent in clean checkout). Only Sky's local run validates it.
+    """
     hooks_dir = REPO_ROOT / ".claude" / "hooks"
     if not hooks_dir.exists():
         pytest.skip(".claude/hooks/ missing")
