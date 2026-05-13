@@ -637,7 +637,11 @@ def sha256_hash(text: str, file_path: str = '') -> str:
 
 # ─── B4: Subdivision engine ───────────────────────────────────────────
 
-TARGET_TOKENS = 112      # Atomic cube size (QTM: 14 tokens × 8 faces)
+TARGET_TOKENS = 112      # Empirical sweep winner {80, 88, 96, 112, 128} on
+                         # btree_google.go w/ qwen 7B + Fix 20 + mycelium
+                         # (docs/BENCHMARK_TARGET_TOKENS_SWEEP_2026-05-13.md).
+                         # 14 × 8 is a mnemonic (14 = QTM God's Number 2×2×2,
+                         # 8 = cubelets) not a derivation. A cube has 6 faces.
 TOLERANCE_MIN = 92       # Accept cubes >= this (avoid tiny scraps)
 TOLERANCE_MAX = 132      # Accept cubes <= this (avoid splitting mid-statement)
 

@@ -1,0 +1,29 @@
+=== bench_n_tokens — model=qwen2.5-coder:1.5b — file=btree_google.go ===
+Mycelium: /home/sky/Bureau/MUNINN-/.muninn/mycelium.db (26,472,448 bytes)
+Sweep N tokens: (72, 96, 112, 128, 156)
+
+--- N = 72 tokens ---
+  total= 91  auto-SHA= 63  LLM-SHA=  0  fail= 28  score= 63/91  ( 69.2%)  time=   301s
+
+--- N = 96 tokens ---
+  total= 72  auto-SHA= 46  LLM-SHA=  0  fail= 26  score= 46/72  ( 63.9%)  time=   303s
+
+--- N = 112 tokens ---
+  total= 61  auto-SHA= 38  LLM-SHA=  0  fail= 23  score= 38/61  ( 62.3%)  time=   301s
+
+--- N = 128 tokens ---
+  total= 53  auto-SHA= 32  LLM-SHA=  0  fail= 21  score= 32/53  ( 60.4%)  time=   293s
+
+--- N = 156 tokens ---
+  total= 47  auto-SHA= 30  LLM-SHA=  0  fail= 17  score= 30/47  ( 63.8%)  time=   249s
+
+==============================================================================
+    N | total |  auto |   LLM |  fail |     score |    time
+------------------------------------------------------------------------------
+   72 |    91 |    63 |     0 |    28 |  63/91  (69.2%) |    301s
+   96 |    72 |    46 |     0 |    26 |  46/72  (63.9%) |    303s
+  112 |    61 |    38 |     0 |    23 |  38/61  (62.3%) |    301s
+  128 |    53 |    32 |     0 |    21 |  32/53  (60.4%) |    293s
+  156 |    47 |    30 |     0 |    17 |  30/47  (63.8%) |    249s
+==============================================================================
+Best N = 72 (63/91 = 69.2%)
