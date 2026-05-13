@@ -12,35 +12,7 @@ import math
 import re
 import sys
 import os
-import traceback
-from datetime import datetime
 from pathlib import Path
-
-
-def _log_hook_error(context: str, exc: BaseException) -> None:
-    """Append a swallowed exception to ~/.muninn/hook_errors.log.
-
-    CHUNK A8 (2026-05-08): delegates to engine/core/_hook_logger which
-    rotates the file (1 MB max, 3 backups) and falls back to stderr if
-    the file is unwritable so the audit trail is never silently lost.
-    """
-    try:
-        engine_core = str(Path(__file__).resolve().parent.parent.parent
-                          / "engine" / "core")
-        if engine_core not in sys.path:
-            sys.path.insert(0, engine_core)
-        from _hook_logger import log_hook_event
-        log_hook_event("bridge_hook", context, exc)
-    except Exception:
-        # Last-resort fallback: write directly to stderr; hooks must exit 0.
-        try:
-            sys.stderr.write(
-                f"[MUNINN HOOK LOG fallback] {datetime.now().isoformat()} "
-                f"[bridge_hook:{context}] {type(exc).__name__}: {exc}\n"
-            )
-            sys.stderr.flush()
-        except Exception:
-            pass
 
 def _shannon_entropy(s):
     """Shannon entropy of a string. High entropy = likely a secret."""
@@ -61,16 +33,9 @@ def _has_char_diversity(s):
     if re.search(r'[^a-zA-Z0-9\s]', s): classes += 1
     return classes >= 3
 
-# CHUNK A6 (2026-05-08): word boundaries + tighter entropy threshold to
-# reduce cry-wolf false positives observed live during the audit session.
-# - `\b` boundaries so "secret" matches the word, not "secretariat".
-# - Removed bare `auth` (too common in technical prose); kept `auth_token`,
-#   `api_key` (still matched via `api.?key`).
-# - Entropy threshold raised 2.8 -> 3.5 in the trigger-adjacent path
-#   (real passwords/hashes are ~3.5+; common English words are ~2.0-2.8).
 _SECRET_TRIGGERS = re.compile(
-    r'\b(?:cl[eé]|password|mdp|mot de passe|passwd|secret|passphrase'
-    r'|api.?key|credentials?|auth_token|auth_key)\b',
+    r'(?:cl[eé]|key|password|mdp|mot de passe|passwd|secret|token|passphrase'
+    r'|api.?key|credentials?|auth)',
     re.IGNORECASE
 )
 
@@ -87,47 +52,29 @@ def _check_secrets(prompt):
             return "[MUNINN SENTINEL] API key/token detected in your message. It will be stored in the Claude transcript. Consider rotating it."
 
     # 2. Check for password-like strings near trigger words
-    # A6: tightened entropy threshold from 2.8 -> 3.5 to avoid common words
     if _SECRET_TRIGGERS.search(prompt):
         words = prompt.split()
         for word in words:
-            clean = word.strip('.,;:!?\'"/()[]{}')
-            if len(clean) >= 6 and _has_char_diversity(clean) and _shannon_entropy(clean) > 3.5:
+            clean = word.strip('.,;:!?\'\"/()[]{}')
+            if len(clean) >= 6 and _has_char_diversity(clean) and _shannon_entropy(clean) > 2.8:
                 return "[MUNINN SENTINEL] You may have typed a password or secret in your message. It will be recorded in the Claude transcript (.jsonl). Consider changing it. Muninn will redact it from .mn files but CANNOT erase it from the raw transcript."
 
     # 3. Standalone high-entropy check (no trigger needed) for very suspicious strings
     for word in prompt.split():
-        clean = word.strip('.,;:!?\'"/()[]{}')
+        clean = word.strip('.,;:!?\'\"/()[]{}')
         if len(clean) >= 10 and _has_char_diversity(clean) and _shannon_entropy(clean) > 3.5:
             return "[MUNINN SENTINEL] High-entropy string detected — possible password or key. It will be stored in the raw transcript."
 
     return None
 
 def main():
-    # Empty stdin (manual run, tty mode, no pipe) is not an error — exit silently.
-    # Without this guard the JSON decoder logged ~40 false-alarm entries per
-    # day of testing into ~/.muninn/hook_errors.log (audit 2026-05-08).
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
-    except UnicodeDecodeError as e:
-        _log_hook_error("stdin_decode", e)
-        sys.exit(0)
-    except Exception as e:
-        _log_hook_error("stdin_read", e)
-        sys.exit(0)
-    if not raw.strip():
-        sys.exit(0)
-    try:
         hook_input = json.loads(raw)
-    except json.JSONDecodeError as e:
-        _log_hook_error("stdin_parse", e)
-        sys.exit(0)
-    except Exception as e:
-        _log_hook_error("stdin_unexpected", e)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError):
         sys.exit(0)
 
-    # Audit 2026-04-10: payload could be a list/str/None when stdin is
-    # malformed JSON. .get() would crash. Type-check before using.
+    # Audit 2026-04-10: type-check before .get() to never crash on bad input
     if not isinstance(hook_input, dict):
         sys.exit(0)
 
@@ -135,17 +82,22 @@ def main():
     if not prompt or not isinstance(prompt, str) or len(prompt) < 10:
         sys.exit(0)
 
-    # Secret detection — runs FIRST, before anything else
+    # Secret detection — runs FIRST, before anything else.
+    # 2026-05-13 drift-fix : Sentinel warning goes to STDERR, not stdout
+    # (Claude Code reads stdout as the bridge_fast() result JSON; polluting
+    # stdout with the warning corrupts the JSON contract).
     warning = _check_secrets(prompt)
     if warning:
-        print(warning)
-        sys.stdout.flush()
+        sys.stderr.write(warning + "\n")
+        sys.stderr.flush()
 
     repo_path = hook_input.get("cwd", os.getcwd())
 
-    engine_core = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")
-    if engine_core not in sys.path:
-        sys.path.insert(0, engine_core)
+    # Source-tree fallback: add engine/core to sys.path if present.
+    # Pip-installed mode: import muninn resolves via site-packages.
+    engine_core = Path(__file__).resolve().parent.parent.parent / "engine" / "core"
+    if engine_core.exists() and str(engine_core) not in sys.path:
+        sys.path.insert(0, str(engine_core))
 
     try:
         import muninn
@@ -153,17 +105,26 @@ def main():
         muninn._refresh_tree_paths()
         result = muninn.bridge_fast(prompt)
         if result:
-            # Anti-Adversa clamp: refuse injection of any content containing
-            # >30 chained shell commands. Defense-in-depth at the final
-            # injection point. See docs/CLAUDE_CODE_LEAK_INTEL.md sec 10.
+            # Anti-Adversa clamp (chunk 3 of leak intel battle plan).
+            # Refuse injection of any content with >30 chained shell commands.
+            # See docs/CLAUDE_CODE_LEAK_INTEL.md section 10.
             try:
                 from _secrets import clamp_chained_commands
                 result, _ = clamp_chained_commands(result)
-            except Exception as e:
-                _log_hook_error("clamp_chained_commands", e)
+            except Exception:
+                pass  # never block hook execution on a defense failure
             print(result)
     except Exception as e:
-        _log_hook_error("bridge_fast", e)
+        # 2026-05-13 drift-fix : restore audit trail (F5 regression).
+        # Centralised log_hook_event from engine/core/_hook_logger.py
+        # rotates ~/.muninn/hook_errors.log + falls back to stderr.
+        try:
+            from _hook_logger import log_hook_event
+            log_hook_event("bridge_hook", "bridge_fast", e)
+        except Exception:
+            sys.stderr.write(
+                f"[MUNINN BRIDGE ERROR] {type(e).__name__}: {e}\n"
+            )
 
     sys.exit(0)
 

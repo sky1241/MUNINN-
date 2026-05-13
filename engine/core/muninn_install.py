@@ -191,11 +191,14 @@ def main():
     if not prompt or not isinstance(prompt, str) or len(prompt) < 10:
         sys.exit(0)
 
-    # Secret detection — runs FIRST, before anything else
+    # Secret detection — runs FIRST, before anything else.
+    # 2026-05-13 drift-fix : Sentinel warning goes to STDERR, not stdout
+    # (Claude Code reads stdout as the bridge_fast() result JSON; polluting
+    # stdout with the warning corrupts the JSON contract).
     warning = _check_secrets(prompt)
     if warning:
-        print(warning)
-        sys.stdout.flush()
+        sys.stderr.write(warning + "\\n")
+        sys.stderr.flush()
 
     repo_path = hook_input.get("cwd", os.getcwd())
 
@@ -221,7 +224,16 @@ def main():
                 pass  # never block hook execution on a defense failure
             print(result)
     except Exception as e:
-        print(f"[MUNINN BRIDGE ERROR] {{type(e).__name__}}: {{e}}", file=sys.stderr)
+        # 2026-05-13 drift-fix : restore audit trail (F5 regression).
+        # Centralised log_hook_event from engine/core/_hook_logger.py
+        # rotates ~/.muninn/hook_errors.log + falls back to stderr.
+        try:
+            from _hook_logger import log_hook_event
+            log_hook_event("bridge_hook", "bridge_fast", e)
+        except Exception:
+            sys.stderr.write(
+                f"[MUNINN BRIDGE ERROR] {{type(e).__name__}}: {{e}}\\n"
+            )
 
     sys.exit(0)
 
@@ -343,11 +355,38 @@ def feed_errors_json(payload, repo_path):
     return True
 
 
+def _log_failure(context, exc):
+    """2026-05-13 drift-fix : restore audit trail (F5 regression)."""
+    try:
+        engine_core = str(Path(__file__).resolve().parent.parent.parent
+                          / "engine" / "core")
+        if engine_core not in sys.path:
+            sys.path.insert(0, engine_core)
+        from _hook_logger import log_hook_event
+        log_hook_event("post_tool_failure_hook", context, exc)
+    except Exception:
+        try:
+            sys.stderr.write(
+                f"[MUNINN HOOK LOG fallback] [post_tool_failure_hook:"
+                f"{{context}}] {{type(exc).__name__}}: {{exc}}\\n"
+            )
+        except Exception:
+            pass
+
+
 def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
+    except (UnicodeDecodeError, OSError) as e:
+        _log_failure("stdin_decode", e)
+        sys.exit(0)
+    try:
         payload = json.loads(raw)
-    except Exception:
+    except (json.JSONDecodeError, ValueError) as e:
+        _log_failure("stdin_parse", e)
+        sys.exit(0)
+    except Exception as e:
+        _log_failure("stdin_unexpected", e)
         sys.exit(0)
 
     # Audit 2026-04-10: type-check before .get() to never crash on bad input
@@ -358,8 +397,8 @@ def main():
 
     try:
         feed_errors_json(payload, Path(repo_path))
-    except Exception:
-        pass
+    except Exception as e:
+        _log_failure("feed_errors_json", e)
 
     sys.exit(0)
 
@@ -480,11 +519,40 @@ def _find_relevant_branch(tree_dir, agent_type):
     return "", ""
 
 
+def _log_subagent_error(context, exc):
+    """2026-05-13 drift-fix : restore audit trail (F5 regression)."""
+    try:
+        engine_core = str(Path(__file__).resolve().parent.parent.parent
+                          / "engine" / "core")
+        if engine_core not in sys.path:
+            sys.path.insert(0, engine_core)
+        from _hook_logger import log_hook_event
+        log_hook_event("subagent_start_hook", context, exc)
+    except Exception:
+        try:
+            sys.stderr.write(
+                f"[MUNINN HOOK LOG fallback] [subagent_start_hook:"
+                f"{{context}}] {{type(exc).__name__}}: {{exc}}\\n"
+            )
+        except Exception:
+            pass
+
+
 def main():
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
+    except (UnicodeDecodeError, OSError) as e:
+        _log_subagent_error("stdin_decode", e)
+        _emit_empty()
+        return
+    try:
         payload = json.loads(raw)
-    except Exception:
+    except (json.JSONDecodeError, ValueError) as e:
+        _log_subagent_error("stdin_parse", e)
+        _emit_empty()
+        return
+    except Exception as e:
+        _log_subagent_error("stdin_unexpected", e)
         _emit_empty()
         return
 
@@ -532,7 +600,8 @@ def main():
                 "additionalContext": injected,
             }
         }))
-    except Exception:
+    except Exception as e:
+        _log_subagent_error("compose_injected_context", e)
         _emit_empty()
         return
 
@@ -910,11 +979,12 @@ def install_hooks(repo_path: Path):
     # These enforce CLAUDE.md RULES 1, 2, 3 in code rather than text suggestion.
     ptu_hooks = _install_pre_tool_use_hooks(repo_path)
 
-    # Copy scaling/enterprise hooks (chunk 15) - scripts are placed in
-    # target .claude/hooks/ but NOT registered in settings.local.json. Sky
-    # activates them manually when a customer needs compliance/audit features.
-    # See docs/SCALING_NOTES.md.
-    _install_scaling_hooks(repo_path)
+    # Copy scaling/enterprise hooks (chunk 15) — scripts are placed in
+    # target .claude/hooks/. 2026-05-13 update : Notification +
+    # ConfigChange are now WIRED by default (Sky decision A — see
+    # docs/BATTLE_PLAN_2026-05-13_DRIFT_FIX.md chunk E). post_tool_use_edit_log
+    # remains dormant intentional (I.3 — enterprise audit trail opt-in).
+    scaling_hooks = _install_scaling_hooks(repo_path)
 
     # Portable command strings: use ${CLAUDE_PROJECT_DIR} (Claude Code substitutes
     # this env var at hook execution time). Two install modes:
@@ -948,6 +1018,25 @@ def install_hooks(repo_path: Path):
         "SubagentStart": [{"type": "command", "command": sas_cmd, "timeout": 10}],
         "SessionStart": [{"type": "command", "command": sss_cmd, "timeout": 30}],
     }
+
+    # 2026-05-13 chunk E (Sky decision A) : wire Notification +
+    # ConfigChange. notification_audit_hook builds the SOC 2 audit trail
+    # (.muninn/audit_log.jsonl). config_change_hook detects tampering /
+    # broken settings.local.json after edits.
+    if "notification_audit_hook.py" in scaling_hooks:
+        na_rel = Path(scaling_hooks["notification_audit_hook.py"]).relative_to(repo_path).as_posix()
+        required_hooks["Notification"] = [{
+            "type": "command",
+            "command": f'python "{CPD}/{na_rel}"',
+            "timeout": 5,
+        }]
+    if "config_change_hook.py" in scaling_hooks:
+        cc_rel = Path(scaling_hooks["config_change_hook.py"]).relative_to(repo_path).as_posix()
+        required_hooks["ConfigChange"] = [{
+            "type": "command",
+            "command": f'python "{CPD}/{cc_rel}"',
+            "timeout": 5,
+        }]
 
     def _ptu_cmd(name: str) -> str:
         rel = Path(ptu_hooks[name]).relative_to(repo_path).as_posix()

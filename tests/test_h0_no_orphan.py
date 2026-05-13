@@ -45,9 +45,9 @@ WHITELIST_DORMANT_UI_MODULES = {
 }
 
 # Hooks NOT required to be wired in settings.local.json (audit reserves).
+# 2026-05-13 chunk E (Sky decision A) : config_change_hook +
+# notification_audit_hook WIRED by default — removed from this whitelist.
 WHITELIST_DORMANT_HOOKS = {
-    "config_change_hook.py",        # config drift audit, opt-in
-    "notification_audit_hook.py",   # diagnostic-only
     # I.3 (2026-05-12): post_tool_use_edit_log is enterprise scaffolding;
     # the intended audit-viewer consumer was never implemented. Kept
     # opt-in for Phase 3 compliance pitch. Sky activates manually.

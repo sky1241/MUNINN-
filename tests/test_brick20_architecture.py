@@ -56,6 +56,12 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # file — not worth it for an auto-generated artifact.
     # Chunk C.1 split (2026-05-11 nuit): moved from muninn.py to muninn_install.py.
     ("muninn_install.py", "_generate_session_start_hook"),  # 261 lines (template)
+    # 2026-05-13 chunk C drift-fix (hooks F5 régression): added `_log_subagent_error`
+    # helper (+20 lignes) to restore audit trail in the subagent template.
+    # Same triple-quoted template pattern as session_start. Refactor in
+    # Phase J : extract hook templates to .py files and read them instead
+    # of inlining as f-strings.
+    ("muninn_install.py", "_generate_subagent_start_hook"),  # ~230 lines (template)
 })
 
 # Hard caps that NO file/function may cross going forward
