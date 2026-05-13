@@ -210,6 +210,7 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 | `MUNINN_SKIP_INTEGRITY` | Bypass le boot integrity_check de mycelium.db (CHUNK E6) | unset (check actif) |
 | `MUNINN_REPO` | Repo cible pour scripts ad-hoc (CLI fallback) | `os.getcwd()` |
 | `MUNINN_DEBUG` | Bypass le friendly error handler (G.3) — re-raise tout traceback. Pour debug engine. | unset (friendly mode actif) |
+| `MUNINN_TRANSLATE_FALLBACK_API` | Opt-in fallback Anthropic Haiku API pour traduire les concepts FR absents du static lexicon K.1 (~946 mots dev-vocab MIT-clean). `1` = active l'API (besoin `ANTHROPIC_API_KEY` + crédits), unset = dict-only passthrough. | unset (dict-only, zéro API) |
 | `MUNINN_DEMO_REPO` | Repo cible pour les scripts dans `examples/` (chunk MCP D.5) | `/tmp/muninn-quickstart` |
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |

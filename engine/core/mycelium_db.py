@@ -1182,12 +1182,14 @@ class ConceptTranslator:
         import threading
         self._lock = threading.Lock()  # H13: protect concurrent access
         self._cache = {}  # in-memory: foreign -> english
+        self._static_dict_size = 0  # K.1: count of entries loaded from static JSON
         self._db_path = Path.home() / ".muninn" / "translations.db"
         self._db = None
         self._tokenizer = None
         self._api_available = False
         self._init_tokenizer()
         self._init_db()
+        self._load_static_lexicon()  # K.1 (2026-05-13): offline FR→EN before API
         self._pending = []  # words waiting for batch translation
 
     @classmethod
@@ -1231,6 +1233,40 @@ class ConceptTranslator:
         except (sqlite3.Error, OSError) as e:
             print(f"WARNING: translation cache init failed: {e}", file=sys.stderr)
             self._db = None
+
+    def _load_static_lexicon(self):
+        """K.1 (2026-05-13): load offline FR→EN dict into in-memory cache.
+
+        Static dict at engine/core/data/lexicons/fr_en.json (~946 dev-vocab
+        entries, MIT-clean curated). Loaded BEFORE any API call so most
+        common French dev concepts translate without hitting Anthropic Haiku.
+
+        Entries are NOT persisted to ~/.muninn/translations.db (would be
+        redundant). If a later API call returns a different translation,
+        it overwrites the static one in `self._cache` (API more contextual).
+
+        Silently passes through if the JSON is missing or malformed —
+        ConceptTranslator stays functional.
+        """
+        try:
+            import json as _json
+            lex_path = Path(__file__).resolve().parent / "data" / "lexicons" / "fr_en.json"
+            if not lex_path.exists():
+                return
+            data = _json.loads(lex_path.read_text(encoding="utf-8"))
+            for k, v in data.items():
+                if k.startswith("_"):
+                    continue  # skip _meta block
+                k_lower = str(k).lower().strip()
+                if k_lower and k_lower not in self._cache:
+                    self._cache[k_lower] = str(v).lower().strip()
+                    self._static_dict_size += 1
+        except (OSError, ValueError, TypeError) as exc:
+            import sys
+            print(
+                f"WARNING: K.1 static lexicon load failed: {exc}",
+                file=sys.stderr,
+            )
 
     def is_english(self, word: str) -> bool:
         """Check if a word is English (1 token in BPE).
@@ -1304,7 +1340,20 @@ class ConceptTranslator:
         return result
 
     def _api_translate(self, words: list[str]) -> dict[str, str] | None:
-        """Batch translate words via Haiku API."""
+        """Batch translate words via Haiku API.
+
+        K.1 (2026-05-13): now opt-in via `MUNINN_TRANSLATE_FALLBACK_API=1`.
+        Without that env var, returns None (passthrough) so the static
+        lexicon stays the only translation surface. Avoids surprise API
+        costs for users who pip-install muninn-memory without an
+        Anthropic account.
+
+        If you want the legacy "translate via Haiku for unknown words"
+        behaviour, export MUNINN_TRANSLATE_FALLBACK_API=1.
+        """
+        import os as _os
+        if _os.environ.get("MUNINN_TRANSLATE_FALLBACK_API") != "1":
+            return None  # K.1: API opt-out by default
         try:
             import anthropic
         except ImportError:
@@ -1380,18 +1429,24 @@ class ConceptTranslator:
     def normalize_concepts(self, concepts: list[str]) -> list[str]:
         """Normalize a list of concepts: translate non-English to English.
 
-        Fast path: if all concepts are English (1 token), returns as-is.
-        Slow path: looks up cache, queues unknowns for batch translation.
-        """
-        if not self._tokenizer:
-            return concepts
+        Lookup order:
+          1. self._cache (includes K.1 static lexicon + prior API translations)
+          2. is_english check (passthrough if tokenizer says it's English)
+          3. Queue for future batch API translation (if MUNINN_TRANSLATE_FALLBACK_API=1)
 
+        K.1 (2026-05-13): even without tiktoken installed, the static lexicon
+        in _cache still resolves the most common FR concepts (~946 entries).
+        Pre-K.1 the path returned concepts as-is when tokenizer was absent.
+        """
         result = []
         for c in concepts:
             c_lower = c.lower().strip()
             if c_lower in self._cache:
                 result.append(self._cache[c_lower])
-            elif self.is_english(c_lower):
+            elif self._tokenizer and self.is_english(c_lower):
+                result.append(c_lower)
+            elif not self._tokenizer:
+                # No tokenizer + no cache hit = passthrough (K.1 graceful)
                 result.append(c_lower)
             else:
                 # Queue for future batch translation, use original for now

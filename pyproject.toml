@@ -64,6 +64,9 @@ include = ["muninn*", "engine*"]
 
 [tool.setuptools.package-data]
 "muninn" = ["*.py"]
+# K.1 (2026-05-13): ship the offline FR→EN lexicon JSON inside the wheel
+# so ConceptTranslator works without an Anthropic API key.
+"engine.core.data.lexicons" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
