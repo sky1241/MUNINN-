@@ -44,16 +44,94 @@ def test_k1_lexicon_json_exists_in_repo() -> None:
     data = json.loads(LEX_PATH.read_text(encoding="utf-8"))
     # Count non-meta entries
     entries = {k: v for k, v in data.items() if not k.startswith("_")}
-    assert len(entries) >= 500, (
-        f"K.1 lexicon should ship ≥500 entries, got {len(entries)}"
+    # K.1.bis (2026-05-13) extended via Wikidata SPARQL pull (CC0).
+    # Baseline curated 946 + Wikidata ~389 = ~1335 entries minimum.
+    assert len(entries) >= 1000, (
+        f"K.1+K.1.bis lexicon should ship ≥1000 entries, got {len(entries)}"
     )
 
 
 def test_k1_static_dict_loaded_at_boot(ct) -> None:
     """ConceptTranslator should load the static lexicon at __init__ time."""
-    assert ct._static_dict_size >= 500, (
-        f"K.1 static dict should load ≥500 entries into cache. "
+    assert ct._static_dict_size >= 1000, (
+        f"K.1+K.1.bis static dict should load ≥1000 entries into cache. "
         f"Got: {ct._static_dict_size}"
+    )
+
+
+def test_k1bis_wikidata_subset_present(ct) -> None:
+    """K.1.bis Wikidata pull added scientific/academic vocab (CC0)."""
+    # These are pulled from Wikidata seed categories (science, academic discipline)
+    # and should NOT have been in the curated MIT dict.
+    probes = {
+        "astronomie": "astronomy",
+        "mathématiques": "mathematics",
+        "biologie": "biology",
+        "physique": "physics",
+    }
+    out = ct.normalize_concepts(list(probes.keys()))
+    matches = sum(1 for got, exp in zip(out, probes.values()) if got == exp)
+    assert matches >= 3, (
+        f"K.1.bis Wikidata should cover ≥3 of {list(probes.keys())}. "
+        f"Got: {dict(zip(probes.keys(), out))}"
+    )
+
+
+def test_k1_static_dict_actually_serves_translation(monkeypatch, tmp_path) -> None:
+    """GAP test (Agent 3 audit 2026-05-13) : prove the static dict is the
+    actual source of translation, not stale SQLite cache.
+
+    Without _load_static_lexicon + with an empty cache → 'arbre' must
+    passthrough as 'arbre' (no translation). Then the OPPOSITE check :
+    with static dict loaded → 'arbre' → 'tree'.
+
+    Pre-K.1.bis the K.1 tests could pass even if _load_static_lexicon
+    was disabled, because ~/.muninn/translations.db might still hold
+    'arbre→tree' from a previous API call.
+    """
+    import importlib
+    import sys
+    monkeypatch.delenv("MUNINN_TRANSLATE_FALLBACK_API", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    sys.path.insert(0, str(REPO_ROOT / "engine" / "core"))
+    if "mycelium_db" in sys.modules:
+        importlib.reload(sys.modules["mycelium_db"])
+    from mycelium_db import ConceptTranslator
+    ConceptTranslator._instance = None
+
+    # Force the cache DB into a tmp_path so we don't read the user's real
+    # ~/.muninn/translations.db (which may contain stale "arbre→tree" entries).
+    monkeypatch.setattr(
+        "pathlib.Path.home", lambda: tmp_path,
+    )
+
+    # Phase 1 : NEUTRALIZE _load_static_lexicon BEFORE instantiation
+    monkeypatch.setattr(
+        ConceptTranslator, "_load_static_lexicon",
+        lambda self: None,
+    )
+    ct_no_dict = ConceptTranslator()  # bypass singleton
+    out_no_dict = ct_no_dict.normalize_concepts(["arbre"])
+    assert out_no_dict == ["arbre"], (
+        f"Without static dict + clean cache + no API, 'arbre' should "
+        f"passthrough as 'arbre'. Got: {out_no_dict}"
+    )
+
+    # Phase 2 : restore _load_static_lexicon, fresh instance, expect 'tree'
+    monkeypatch.undo()
+    monkeypatch.delenv("MUNINN_TRANSLATE_FALLBACK_API", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "pathlib.Path.home", lambda: tmp_path,
+    )
+    ConceptTranslator._instance = None
+    importlib.reload(sys.modules["mycelium_db"])
+    from mycelium_db import ConceptTranslator as CT2
+    ct_with_dict = CT2()
+    out_with_dict = ct_with_dict.normalize_concepts(["arbre"])
+    assert out_with_dict == ["tree"], (
+        f"With static dict loaded, 'arbre' must translate to 'tree'. "
+        f"Got: {out_with_dict}"
     )
 
 
