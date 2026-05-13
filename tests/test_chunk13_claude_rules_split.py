@@ -175,7 +175,7 @@ def test_claude_md_still_has_3_rules():
     )
 
 
-def test_claude_md_still_under_320_lines():
+def test_claude_md_still_under_360_lines():
     """CLAUDE.md size cap.
 
     Originally 200 (Anthropic's chunk-9 recommendation). Bumped to 300
@@ -184,16 +184,21 @@ def test_claude_md_still_under_320_lines():
     under fire after real bugs and required by the battle plan.
 
     Bumped to 320 (2026-05-12) to fit the PROMPT_EXEC_PHASE_H.md wire
-    encart (~14 lines) — same primacy-bias logic as RULE 4/5: a new
-    session must know which master prompt is active before it starts
-    executing, otherwise it re-plans instead of running.
+    encart (~14 lines) — same primacy-bias logic as RULE 4/5.
+
+    Bumped to 360 (2026-05-13) for drift-fix session : the cousin
+    Claude found CLAUDE.md was citing 8 commands when 32 exist in the
+    real argparse. Expanding the commands section to the real 32 (with
+    short labels) added ~30 lines but eliminates the largest drift
+    between doc and code. Same primacy-bias logic — new session must
+    see the real surface, not a 25% subset.
 
     Cap stays binding so the file doesn't grow without intent.
     """
     text = CLAUDE_MD.read_text(encoding="utf-8")
     line_count = len(text.splitlines())
-    assert line_count <= 320, (
-        f"CLAUDE.md should stay under 320 lines, got {line_count}. "
+    assert line_count <= 360, (
+        f"CLAUDE.md should stay under 360 lines, got {line_count}. "
         f"If you added content, justify it in the test docstring before "
         f"bumping the cap."
     )

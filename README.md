@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
 [![Version](https://img.shields.io/badge/version-1.1.0-green.svg)](https://github.com/sky1241/MUNINN-/releases)
-[![Tests](https://img.shields.io/badge/tests-2608%20passing-brightgreen.svg)](#continuous-integration)
+[![Tests](https://img.shields.io/badge/tests-2849%20passing-brightgreen.svg)](#continuous-integration)
 [![Modularity](https://img.shields.io/badge/Q--modularity-0.670-blue.svg)](#architecture-metrics-forge-shield-212-may-2026)
 
 **The persistent memory layer LLM agents have been missing.** Muninn compresses every Claude Code session into a dense `.mn` file, learns a co-occurrence network across sessions (mycelium), and rehydrates the right context at next boot — automatically, with zero manual curation.
@@ -18,9 +18,9 @@
 | Without LLM layer | **x1.7** (regex-only, zero API) | L0–L7 + L10 + L11 |
 | Fact retention | **92%** (37/40 questions correct) | reproducible text-search benchmark |
 | Architecture quality | **Q = 0.670** Newman-Girvan modularity | `forge --modularity` (≥ 0.30 = "good") |
-| CI gate | **2608 tests** on every push, 5× consecutive green | GitHub Actions, Python 3.13 |
-| Bugs status | **111 RESOLVED, 0 OPEN** | 12+ audit passes (2026-03 → 2026-05) |
-| Multilingual offline | **1335 FR→EN entries** shipped in wheel | MIT-curated + CC0 Wikidata, no API key needed |
+| CI gate | **2849 tests** on every push, 5× consecutive green | GitHub Actions, Python 3.13 |
+| Bugs status | **121 RESOLVED, 0 OPEN** | 12+ audit passes (2026-03 → 2026-05) |
+| Multilingual offline | **1336 FR→EN entries** shipped in wheel | MIT-curated + CC0 Wikidata, no API key needed |
 
 **License**: MIT. The wheel ships only MIT-curated content + CC0 public-domain data — sellable, relicensable, no Share-Alike contamination.
 
@@ -61,7 +61,7 @@ Four pillars, all running automatically once you `muninn-mem init` your repo:
            fusions/decay    temperature
               |
               ConceptTranslator (K.1)
-              FR→EN offline 1335 entries
+              FR→EN offline 1336 entries
               (MIT-curated + CC0 Wikidata)
 ```
 
@@ -349,7 +349,7 @@ Concept normalization across French and English works **without any API call**. 
 
 - **K.1** : 946 entries curated MIT (dev-vocab: `fichier→file`, `arbre→tree`, `mémoire→memory`, `compression→compression`, `commit→commit`, etc.)
 - **K.1.bis** : +389 entries pulled from Wikidata SPARQL (license CC0, public domain — `astronomie→astronomy`, `mathématiques→mathematics`, `biologie→biology`, etc.)
-- **Total** : 1335 entries shipped in the wheel (`engine/core/data/lexicons/fr_en.json`)
+- **Total** : 1336 entries shipped in the wheel (`engine/core/data/lexicons/fr_en.json`)
 
 Lookup order : `static lexicon` → `is_english` check (via tiktoken) → passthrough (or Haiku API if `MUNINN_TRANSLATE_FALLBACK_API=1`).
 
@@ -367,7 +367,7 @@ Idempotent. Adds only new pairs absent from the curated set. CC0 data, MIT-clean
 1. **Tree integrity check** (no node exceeds its `max_lines` budget)
 2. **Engine smoke commands** (status, prune, compress, boot)
 3. **Mycelium smoke commands** (simulate, bootstrap)
-4. **Pytest suite** — 2608+ tests, including 173 UI tests via `QT_QPA_PLATFORM=offscreen` (H.2b activated UI tests in CI)
+4. **Pytest suite** — 2849+ tests, including 173 UI tests via `QT_QPA_PLATFORM=offscreen` (H.2b activated UI tests in CI)
 5. **Factual retention benchmark** (P35)
 6. **Feed transcript parsing test**
 7. **forge --gen-props matrix** (smoke per engine/core module)
@@ -391,7 +391,7 @@ CI Python: 3.13 (the only version actively tested, per honest claim from G.8). `
 | Phase H (light up everything) | 14/15 ✅ | `muninn-mem cube` (5597 LOC), `muninn-ui` (11712 LOC), `--include-dreams` (561 LOC), `muninn-mem metrics` (344 LOC), UI tests reactivated in CI, anti-orphan + API bloat garde-fous, 1.1.0 bump. H.6b vault deferred |
 | Phase I (zero dormant) | 4/5 ✅ | Wiring-check tests, zombie ratchet, edit-log dormant whitelist, session_index documented. I.5 un-xfailed |
 | Phase K.1 (multilingual offline) | ✅ 2026-05-13 | 946 curated MIT entries, ConceptTranslator backend swap, API opt-in |
-| Phase K.1.bis | ✅ 2026-05-13 | +389 CC0 Wikidata entries, gap test fix, total 1335 entries |
+| Phase K.1.bis | ✅ 2026-05-13 | +389 CC0 Wikidata entries, gap test fix, total 1336 entries |
 
 See [`docs/CHANGELOG.md`](CHANGELOG.md), [`docs/BATTLE_PLAN_MASTER_MCP.md`](docs/BATTLE_PLAN_MASTER_MCP.md), and [`docs/PROMPT_EXEC_PHASE_H.md`](docs/PROMPT_EXEC_PHASE_H.md) for detailed timelines.
 
@@ -485,7 +485,7 @@ engine/
     _hook_logger.py       _SecureRotatingFileHandler (rotated logs in 0o600)
     data/
       lexicons/
-        fr_en.json        K.1 + K.1.bis offline FR→EN dict (1335 entries)
+        fr_en.json        K.1 + K.1.bis offline FR→EN dict (1336 entries)
         fr_en_wikidata.json K.1.bis Wikidata-only output (CC0 traceability)
 muninn/                   pip-installable package (mirrors engine/core — BUG-091 graduated cleanup)
   _engine.py              Mirror of engine/core/muninn.py for entry point
@@ -503,7 +503,7 @@ memory/
   tree.json               L-system tree (self-repo legacy fallback)
   root.mn                 Root memory (always loaded)
   b*.mn                   Branch files
-tests/                    2849 tests collected, 2608+ run in CI
+tests/                    2849 tests collected, 2849+ run in CI
   benchmark/              Factual retention benchmark (40 questions)
   test_*.py               223+ test files (chunks, tiers, props, audits)
   test_props_*.py         Hypothesis property tests (regenerated by forge --gen-props)
@@ -524,7 +524,7 @@ docs/
   BATTLE_PLAN_PHASE_K_MULTILINGUAL_OFFLINE.md  K.1 + K.2 plan
   ANTI_BULLSHIT_BATTLE_PLAN.md  RULE 4 contract
 CHANGELOG.md              Project changelog
-BUGS.md                   Bug tracker (111 RESOLVED, 0 OPEN)
+BUGS.md                   Bug tracker (121 RESOLVED, 0 OPEN)
 constraints.txt           Pinned versions for reproducible builds
 pyproject.toml            Package metadata + optional extras [tokens] [llm] [quality] [mcp] [ui] [all]
 .muninn/                  Local data (gitignored, chmod 0o600)
@@ -540,7 +540,7 @@ pyproject.toml            Package metadata + optional extras [tokens] [llm] [qua
   hooks/*.py              10 hooks (see "Claude Code Hooks" section)
   settings.local.json     Claude Code config (gitignored; generated by `muninn-mem init`)
 .github/
-  workflows/ci.yml        CI: tree + smoke + 2608+ pytest + UI offscreen + forge_smoke + E2E
+  workflows/ci.yml        CI: tree + smoke + 2849+ pytest + UI offscreen + forge_smoke + E2E
 ```
 
 ## References

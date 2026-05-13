@@ -116,7 +116,7 @@ Cree par Sky (electricien, autodidacte, 14 mois depuis debut, ~9 mois effectifs)
 ## Comment ca marche — pour toi, concretement
 
 ### Au boot de ta session
-`muninn.py boot` charge automatiquement:
+`muninn-mem boot` (auto-invoked par le hook SessionStart) charge automatiquement:
 - La racine de l'arbre (resume du projet, toujours la)
 - Les branches pertinentes (chargees selon la query)
 - Le dernier transcript compresse (.mn) de la session precedente
@@ -155,7 +155,7 @@ L12 = opt-in via env var, refactor chunk granularite a faire (BUG-104).
 +7 filtres additionnels: P17 code blocks, P24 causal, P25 priority, P26-P27 dedup, P28 tics.
 
 ## Le mycelium (le champignon)
-Fichier `.muninn/mycelium.json` — reseau vivant de co-occurrences.
+Fichier `.muninn/mycelium.db` (SQLite tier3 S1, migré depuis l'ancien `mycelium.json`) — reseau vivant de co-occurrences.
 - Concepts qui apparaissent souvent ensemble -> connexion forte
 - Connexions fortes -> fusion (= abbreviation apprise)
 - Connexions mortes -> decay (disparaissent)
@@ -185,16 +185,48 @@ Fichier `.muninn/tree/tree.json` — arbre fractal L-system.
 > pas le faire.
 
 ## Commandes
+> 32 sub-commandes au total exposées par `engine/core/muninn.py` (binary `muninn-mem`, renommé depuis `muninn` en E.3 pour éviter collision PyPI). README.md a la liste complète + descriptions. Aperçu rapide ci-dessous :
 ```
-muninn.py status              # Etat de l'arbre + temperatures
-muninn.py boot [query]        # Charge root + branches pertinentes
-muninn.py compress <fichier>  # Compresse un fichier markdown
-muninn.py feed <transcript>   # Nourrit le mycelium + compresse en .mn
-muninn.py feed --history      # Rattrape tous les transcripts passes
-muninn.py bootstrap <repo>    # Cold start sur un nouveau repo
-muninn.py prune [--force]     # Elagage R4 (froid -> supprime)
-muninn.py verify <fichier>    # Verifie qualite (facts preserves, ratio)
-muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
+# Lifecycle mémoire
+muninn-mem boot [query]        # Charge root + branches pertinentes
+muninn-mem status              # Etat de l'arbre + temperatures
+muninn-mem recall "query"      # Mid-session memory search
+muninn-mem compress <fichier>  # Compresse un fichier markdown
+muninn-mem decode <fichier>    # Décompresse un .mn
+
+# Tree management
+muninn-mem init                # Bootstrap repo + install 10 hooks (incl. 3 défensifs)
+muninn-mem uninstall           # Clean removal hooks + cron (F.1)
+muninn-mem bootstrap <repo>    # Cold start sur un nouveau repo
+muninn-mem ingest <folder>     # Compresse référence docs en branches
+muninn-mem prune [--force] [--include-dreams]  # Elagage R4 (+ Sleep Consolidation opt-in H.3)
+muninn-mem tree                # Visualize tree
+
+# Mycelium feeding
+muninn-mem feed <transcript>   # Nourrit mycelium + compresse en .mn
+muninn-mem feed --history      # Rattrape tous les transcripts passés
+muninn-mem feed --watch        # Poll-based feed
+muninn-mem zones               # Laplacian spectral clustering détecte zones thématiques
+
+# Phase H wired (17 800 LOC débloquées)
+muninn-mem cube --cube-action {scan,run,status,god} [--cycles N] [--level L]  # H.1 wire 5597 LOC cube
+muninn-mem metrics [--output FILE]  # H.4 wire forge_metrics (Q-modularity + carmack + locate)
+muninn-mem-ui                  # H.2 PyQt6 desktop (11712 LOC débloquées, console script séparé)
+
+# Diagnostics + sécurité + sync
+muninn-mem doctor              # Pre-flight (short-circuit pre-init G.6) : Python/SQLite/tiktoken
+muninn-mem diagnose            # Full pipeline self-check
+muninn-mem verify <fichier>    # Vérifie qualité compression (facts, ratio)
+muninn-mem lock / unlock / rekey         # AES-256-GCM at-rest (dormant — voir H.6b memory)
+muninn-mem scrub <path> / purge-secrets  # Scrub secrets
+muninn-mem sync                # Sync to backend (git ou TLS)
+
+# Cube reflective passes
+muninn-mem trip / think / quarantine <id>
+
+# Hooks management
+muninn-mem upgrade-hooks       # Update hooks au dernier format
+muninn-mem install-cron        # Systemd-user timer hebdo (Linux)
 ```
 
 ## Configuration / Variables d'environnement
@@ -228,14 +260,14 @@ muninn.py doctor              # Pre-flight: Python/SQLite/.muninn/tree/db/log
 
 ## Etat du projet (mai 2026, post-P3 split + BUG-104 fix + forge v2.1.2)
 - 43 features + 39 briques Cube, 12 couches compression (25 filtres) + L10/L11 + Spreading Activation + Sleep Consolidation
-- Engine: **24 731 lignes, 26 fichiers core** (P3 split 2026-05-10 a découpé muninn_tree.py 3929→2179L en 4 modules : core + boot/prune/doctor)
+- Engine: **26 970 lignes, 50 fichiers core** (post-Phase H wire +5597 cube + 561 dream + 344 metrics ; P3 split 2026-05-10 a découpé muninn_tree.py 3929→2179L en 4 modules : core + boot/prune/doctor)
 - forge-shield **v2.1.2** (PyPI) seule source de vérité — bumped 2026-05-12 (cycle 12+, MAJOR jump 1.x→2.x avec --predict --shield --bisect --snapshot --add/--close BUG-ID --full-cycle ; API rétrocompatible pour --gen-props --modularity --carmack --locate)
 - mycelium federe, meta-mycelium cross-repo (7.5M edges sur 54 jours), spreading activation (Collins & Loftus 1975)
 - Cube Muninn: 39 briques, 5000+ cubes, destruction/reconstruction, forge_metrics integration UX
 - L9 teste: x4.4 moyen sur 230 fichiers/4 repos, $0.21 API
 - Benchmark: 37/40 questions factuelles (92%), mesure tiktoken
 - Tests: **2339 PASS, 47 skip, 0 xfail, 0 FAIL** + **103 property tests** (forge --gen-props sur 17 modules)
-- Q-modularity: **0.664** (Newman-Girvan, "good — modules well isolated")
+- Q-modularity: **0.670** (Newman-Girvan, "good — modules well isolated", forge-shield 2.1.2)
 - CI: HEAD vert, 2 jobs (validate + forge_smoke matrix sur **17 modules**)
 - Hooks installes: **10 scripts** (`.claude/hooks/*.py`) wirés sur les events Claude Code : UserPromptSubmit (bridge), PreCompact, SessionStart (A.1), SessionEnd, Stop, PostToolUseFailure, PostToolUse (edit log), SubagentStart, ConfigChange, Notification (audit), PreToolUseBash{Destructive,Secrets}, PreToolUseEdit (hardcode). Compte mis à jour 2026-05-12 chunk E.5.
 - **BUG-104 FIXED** 2026-05-10 PM via spill-to-tree pattern (V9A+ planère calque). **0 bug OPEN officiel**.
