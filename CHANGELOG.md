@@ -1,5 +1,105 @@
 # MUNINN — Changelog
 
+## 2026-05-14 — Phase 3 : Mycelium learns from fails (negative learning)
+
+Battle plan : `docs/BATTLE_PLAN_PHASE_3_2026-05-14.md`. Audit forge préalable :
+`docs/DEEP_AUDIT_FORGE_2026-05-14.md`.
+
+**Contexte** : audit a révélé que le mycelium n'apprenait **que des SHA réussis**
+(`_run_level_pass` ligne 1897). Le docstring `reconstruct_adaptive` ligne 1926
+annonçait "Each failed attempt teaches learned anchors" depuis le 2026-04-23
+(commit `3aa2905`), mais le code ne l'implémentait pas. **Design jamais codé pendant
+20 jours**, fermé maintenant.
+
+### Schéma SQL — `mycelium_db.py` `SCHEMA_VERSION 3 → 4`
+
+Nouvelle table `failures(a, b, count, weight_sum, first_seen, last_seen)` avec 3
+indexes (`idx_failures_a`, `idx_failures_b`, `idx_failures_last_seen`). Création
+automatique dans `_setup_tables()` ET migration v3→v4 dans `_migrate_schema()`
+pour les DB existantes (testé en live sur copy du mycelium.db 26 MB de Sky :
+8 446 concepts + 67 872 edges intacts, 0 data loss).
+
+### API publique
+
+- `MyceliumDB.upsert_failure(a, b, weight=-0.5)` — increment count, accumulate
+  weight_sum.
+- `MyceliumDB.get_failure_weight(concept) → float` — slow path, single concept.
+- `MyceliumDB.get_failure_weights_batch(concepts: list) → dict` — **batched**,
+  1 SQL query (audit perf : 100 concepts en 0.38 ms vs ~500 ms séquentiel
+  estimé).
+- `Mycelium.observe_failure(text, weight=None)` — extract concepts via même
+  regex que `observe_text`, écrit dans `failures` via helper `_record_failure`.
+  Session-level dedup avec tag `"fail"` pour ne pas collide avec `observe()`.
+
+### Spreading activation pondéré — `mycelium_activation.py`
+
+`spread_activation()` gagne un paramètre `apply_failure_penalty=True` (default).
+Ligne 466 environ, avant min-max norm : injection du fail weight via batched
+query, `activation[concept] += fail_weight * decay`. Hub penalty existante
+**orthogonale** (composable). Flag `=False` restore strict backward-compat.
+
+### Auto-calibration optionnelle (sigmoid)
+
+Env var `MUNINN_FAILURE_WEIGHT_AUTO_CALIBRATE=1`. Toutes les 50 observations
+(seuil min 100 paires totales), recompute `weight = -1.0 / (1 + exp(-4*(fail_rate-0.5)))`,
+clamp `[-1.0, -0.05]`. Persiste dans `<repo>/.muninn/failure_weight_calibration.json`
+pour survivre aux redémarrages. **Pattern emprunté à MCP C.0**
+(`MUNINN_DUAL_AUTO_CALIBRATE`).
+
+### Wire pipeline — `cube_providers.py`
+
+- `_run_level_pass` else `wr.sha_matched` branch : `mycelium.observe_failure(c.content)`
+  (était silencieux, pas de feedback négatif).
+- **Bug #2101 fixed** : ligne 2094-2095 dans `run_progressive_levels`,
+  `mycelium.observe(text, zone=f"cube_level_{level}")` itérait sur les
+  **caractères individuels** (string passée à `observe()` qui attend `list[str]`)
+  + le kwarg `zone=` était **silencieusement ignoré** (n'existe pas dans la
+  signature de `observe`). Remplacé par `observe_text(text)` qui extrait
+  correctement les concepts via regex.
+
+### Env vars ajoutées au CLAUDE.md
+
+| Variable | Default | Effet |
+|---|---|---|
+| `MUNINN_OBSERVE_FAILURE_WEIGHT` | `-0.5` | Override du poids négatif (clamp `[-10,0]`) |
+| `MUNINN_FAILURE_WEIGHT_AUTO_CALIBRATE` | `0` | Active la recalibration sigmoid auto |
+
+### Tests
+
+`tests/test_phase3_observe_failure.py` — **20 tests verts en 1.67s** :
+- 3 tests schema/migration v3→v4
+- 5 tests batch DB methods (dont perf < 100ms pour 100 concepts)
+- 6 tests `observe_failure` (records pairs, session dedup, env override,
+  positive weight clamped, isolation edges/failures)
+- 2 tests `spread_activation` (penalty effective + backward compat)
+- 3 tests auto-calibration (disabled by default, recomputes, persists)
+- 1 test bug #2101 (concepts ≥3 chars, pas itération sur caractères)
+
+Forge `--gen-props` sur les 3 modules touchés : `mycelium_db.py` 2 props
+générées (+2 existantes pass), `mycelium.py` / `mycelium_activation.py`
+"No testable functions found" (méthodes de classe pures, pas module-level).
+
+### Fichiers modifiés
+
+```
+engine/core/mycelium_db.py         (+72 LOC : table + 3 méthodes + migration)
+engine/core/mycelium.py            (+109 LOC : observe_failure + auto-cal)
+engine/core/mycelium_activation.py (+14 LOC : penalty injection)
+engine/core/cube_providers.py      (+12 LOC : wire pipeline + bug #2101)
+tests/test_phase3_observe_failure.py (NEW, 220 LOC)
+CLAUDE.md                          (+2 env vars dans la table)
+CHANGELOG.md                       (cette entrée)
+docs/BATTLE_PLAN_PHASE_3_2026-05-14.md (NEW)
+docs/DEEP_AUDIT_FORGE_2026-05-14.md (NEW, audit préalable)
+```
+
+### Phases suivantes
+
+- Phase 4 : bench multi-LLM séquentiel (sandbox vierge + current) sur
+  llama 1B, qwen 1.5B, deepseek 6.7B, qwen 7B — démontre l'apprentissage
+  cumulatif maintenant que les fails alimentent le mycelium.
+- Phase 5 : rapport défense Yara/Idris/Liz consolidé.
+
 ## 2026-05-12 (nuit) — Phase G+H exec partiel via PROMPT_EXEC_PHASE_H.md (22 chunks)
 
 ### Split push 1/2 (CI vert 3/3 jobs verbatim)

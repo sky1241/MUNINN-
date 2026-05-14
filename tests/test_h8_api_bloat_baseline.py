@@ -23,8 +23,15 @@ CORE = REPO_ROOT / "engine" / "core"
 #   - YES → bump the baseline below + justify in commit message.
 #   - NO  → prefix with `_` to mark internal, or refactor an existing one.
 BASELINES = {
-    ("mycelium_db.py", "MyceliumDB"): 52,
-    ("mycelium.py", "Mycelium"): 20,
+    # Phase 3 (2026-05-14): +3 = upsert_failure, get_failure_weight,
+    # get_failure_weights_batch (mycelium_db.py). Justified by negative
+    # learning design: failures table needs its own write + read API,
+    # batch query is critical for spread_activation perf (audit:
+    # 0.38ms/100 concepts vs 500ms sequential).
+    ("mycelium_db.py", "MyceliumDB"): 55,
+    # Phase 3 (2026-05-14): +1 = observe_failure (public API for negative
+    # learning, mirrors observe_text). _record_failure stays private.
+    ("mycelium.py", "Mycelium"): 21,
     ("cube.py", "Cube"): 4,
 }
 

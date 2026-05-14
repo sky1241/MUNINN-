@@ -282,11 +282,28 @@ class MyceliumDB:
             CREATE INDEX IF NOT EXISTS idx_edges_last_seen_count ON edges(last_seen, count);
             CREATE INDEX IF NOT EXISTS idx_edges_b_a ON edges(b, a);
             CREATE INDEX IF NOT EXISTS idx_fusions_ab ON fusions(a, b, strength);
+            -- Phase 3 (2026-05-14): negative learning — record co-occurrences
+            -- of concepts that appeared in failed LLM reconstruction contexts.
+            -- weight_sum accumulates the negative weight (default -0.5 per obs).
+            -- Spreading activation reads get_failure_weight() to penalize
+            -- concepts that frequently appear in failure patterns.
+            CREATE TABLE IF NOT EXISTS failures (
+                a INTEGER NOT NULL,
+                b INTEGER NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                weight_sum REAL NOT NULL DEFAULT 0.0,
+                first_seen INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL,
+                PRIMARY KEY (a, b)
+            ) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS idx_failures_a ON failures(a);
+            CREATE INDEX IF NOT EXISTS idx_failures_b ON failures(b);
+            CREATE INDEX IF NOT EXISTS idx_failures_last_seen ON failures(last_seen);
         """)
         c.commit()
 
     # X4: Current schema version — bump when schema changes
-    SCHEMA_VERSION = 3  # v1=original, v2=composite indexes, v3=sync_log+tombstones
+    SCHEMA_VERSION = 4  # v1=original, v2=composite indexes, v3=sync_log+tombstones, v4=failures table
 
     def _migrate_schema(self):
         """X4: Idempotent schema migration using PRAGMA user_version.
@@ -305,7 +322,25 @@ class MyceliumDB:
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('_migration_in_progress', '1')")
             self._conn.commit()
 
-            # Future migrations go here as: if current < N: ...
+            # v3 → v4: add failures table (Phase 3, 2026-05-14).
+            # Pre-existing DBs don't have the table after `_setup_tables()`
+            # ran with an older version of the schema; idempotent CREATE.
+            if current < 4:
+                self._conn.executescript("""
+                    CREATE TABLE IF NOT EXISTS failures (
+                        a INTEGER NOT NULL,
+                        b INTEGER NOT NULL,
+                        count INTEGER NOT NULL DEFAULT 0,
+                        weight_sum REAL NOT NULL DEFAULT 0.0,
+                        first_seen INTEGER NOT NULL,
+                        last_seen INTEGER NOT NULL,
+                        PRIMARY KEY (a, b)
+                    ) WITHOUT ROWID;
+                    CREATE INDEX IF NOT EXISTS idx_failures_a ON failures(a);
+                    CREATE INDEX IF NOT EXISTS idx_failures_b ON failures(b);
+                    CREATE INDEX IF NOT EXISTS idx_failures_last_seen ON failures(last_seen);
+                """)
+                self._conn.commit()
 
             # Set version and clear migration flag
             self._conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
@@ -580,6 +615,90 @@ class MyceliumDB:
             """, (a_id, b_id, form, strength, fused_at, strength, form, fused_at))
             self._conn.commit()  # H3 fix: persist writes immediately
             self._wal_monitor.on_write()
+
+    # ── Phase 3 (2026-05-14): negative learning ────────────────────────
+    # observe_failure() in mycelium.py writes here. spread_activation
+    # in mycelium_activation.py reads via get_failure_weights_batch().
+
+    def upsert_failure(self, concept_a: str, concept_b: str,
+                       weight: float = -0.5):
+        """Record a failure co-occurrence between two concepts.
+
+        weight is negative (default -0.5 = moderate Hebbian penalty,
+        BCM rule: LTD slower than LTP).
+        Thread-safe: acquires _lock for the write.
+        """
+        with self._lock:
+            a_key = min(concept_a, concept_b)
+            b_key = max(concept_a, concept_b)
+            a_id = self._get_or_create_concept(a_key)
+            b_id = self._get_or_create_concept(b_key)
+            td = today_days()
+            self._conn.execute("""
+                INSERT INTO failures (a, b, count, weight_sum, first_seen, last_seen)
+                VALUES (?, ?, 1, ?, ?, ?)
+                ON CONFLICT(a, b) DO UPDATE SET
+                    count = count + 1,
+                    weight_sum = weight_sum + ?,
+                    last_seen = ?
+            """, (a_id, b_id, weight, td, td, weight, td))
+            self._conn.commit()
+            self._wal_monitor.on_write()
+
+    def get_failure_weight(self, concept: str) -> float:
+        """Sum of weight_sum across all failure pairs involving this concept.
+
+        Returns 0.0 if concept not in cache (never observed) or table empty.
+        Used by spread_activation for single-concept lookups (slow path).
+        Prefer get_failure_weights_batch() for multi-concept queries.
+        """
+        with self._lock:
+            cid = self._concept_cache.get(concept)
+            if cid is None:
+                return 0.0
+            row = self._conn.execute(
+                "SELECT COALESCE(SUM(weight_sum), 0.0) FROM failures "
+                "WHERE a = ? OR b = ?", (cid, cid)).fetchone()
+            return float(row[0]) if row else 0.0
+
+    def get_failure_weights_batch(self, concepts: list[str]) -> dict:
+        """Batched version of get_failure_weight for spread_activation perf.
+
+        Returns {concept_name: weight_sum} for each concept that has
+        failures recorded. Concepts not in cache or with 0 failures are
+        omitted from the result dict.
+
+        Perf: 1 SQL query instead of N (audit 2026-05-14: N=50 → 500ms
+        sequential vs ~5ms batched).
+        """
+        if not concepts:
+            return {}
+        with self._lock:
+            # Resolve names → ids via cache (no DB round-trip)
+            cid_to_name = {}
+            for c in concepts:
+                cid = self._concept_cache.get(c)
+                if cid is not None:
+                    cid_to_name[cid] = c
+            if not cid_to_name:
+                return {}
+            placeholders = ",".join("?" * len(cid_to_name))
+            cids = list(cid_to_name.keys())
+            # UNION ALL on a=cid and b=cid then SUM grouped by cid
+            query = (
+                f"SELECT cid, SUM(weight_sum) FROM ("
+                f"  SELECT a AS cid, weight_sum FROM failures WHERE a IN ({placeholders})"
+                f"  UNION ALL"
+                f"  SELECT b AS cid, weight_sum FROM failures WHERE b IN ({placeholders})"
+                f") GROUP BY cid"
+            )
+            params = cids + cids
+            result = {}
+            for row in self._conn.execute(query, params):
+                cid, weight = row
+                if cid in cid_to_name and weight is not None:
+                    result[cid_to_name[cid]] = float(weight)
+            return result
 
     def delete_connection(self, concept_a: str, concept_b: str):
         """Delete a connection and its fusion if any."""

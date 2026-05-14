@@ -95,6 +95,21 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
         self._session_seen = set()  # Delta observe: skip already-upserted pairs
         self._session_lock = threading.Lock()  # Protects _session_seen across threads
         self._congestion_checked = False  # Congestion detection flag
+        # Phase 3 (2026-05-14): auto-calibration of failure weight
+        import os as _os
+        self._auto_cal_enabled = _os.environ.get(
+            "MUNINN_FAILURE_WEIGHT_AUTO_CALIBRATE", "0") == "1"
+        self._failure_calibrated_weight = None
+        self._failure_obs_count = 0
+        # Load persisted calibration if present
+        self._calib_path = self.mycelium_dir / "failure_weight_calibration.json"
+        if self._auto_cal_enabled and self._calib_path.exists():
+            try:
+                import json as _json
+                state = _json.loads(self._calib_path.read_text(encoding="utf-8"))
+                self._failure_calibrated_weight = float(state.get("weight"))
+            except (OSError, ValueError, KeyError, TypeError):
+                pass  # Calibration file corrupt → ignore, recompute on next batch
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -549,6 +564,161 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
             concepts = list(set(concepts))
             if len(concepts) >= 2:
                 self.observe(concepts, arousal=arousal)
+
+    def observe_failure(self, text: str, weight: float = None):
+        """Phase 3 (2026-05-14): record failure patterns — concepts that
+        appeared in failed LLM reconstruction contexts.
+
+        Unlike observe_text (positive learning that strengthens connections),
+        failures are NEGATIVE signals: concepts co-occurring in failed
+        contexts get penalized in future spread_activation lookups.
+
+        Weight resolution order (caller override > calibration > env > default):
+          1. weight param if explicitly passed
+          2. self._failure_calibrated_weight if auto-calibration active
+          3. env MUNINN_OBSERVE_FAILURE_WEIGHT
+          4. -0.5 (BCM-style Hebbian, LTD < LTP convention)
+
+        Mirrors observe_text() chunking + regex extraction. Writes go
+        to the `failures` table instead of `edges` via _record_failure().
+        """
+        import os as _os
+        if weight is None:
+            # Auto-cal takes priority over env var if active
+            if getattr(self, "_auto_cal_enabled", False) and \
+               getattr(self, "_failure_calibrated_weight", None) is not None:
+                weight = self._failure_calibrated_weight
+            else:
+                try:
+                    weight = float(_os.environ.get(
+                        "MUNINN_OBSERVE_FAILURE_WEIGHT", "-0.5"))
+                except ValueError:
+                    weight = -0.5
+        # Clamp to safe range — refuse positive (would be a logic bug)
+        weight = max(-10.0, min(0.0, float(weight)))
+
+        text = _redact_secrets_text(text)
+        if not text:
+            return
+        chunks = re.split(r'\n\s*\n', text)
+        all_words = re.findall(r'[A-Za-zÀ-ÿ_]{3,}', text)
+        all_counts = Counter(w.lower() for w in all_words)
+        total_unique = sum(1 for w in all_counts if w not in _STOPWORDS)
+
+        if total_unique <= 80:
+            concepts = [w for w in all_counts if w not in _STOPWORDS]
+            entities = re.findall(r'[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*', text)
+            for entity in entities:
+                e = entity.lower()
+                if e not in _STOPWORDS and len(e) >= 3:
+                    concepts.append(e)
+            concepts = list(set(concepts))
+            if len(concepts) >= 2:
+                self._record_failure(concepts, weight)
+            return
+
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if len(chunk) < 20:
+                continue
+            words = re.findall(r'[A-Za-zÀ-ÿ_]{3,}', chunk)
+            word_counts = Counter(w.lower() for w in words)
+            concepts = [w for w in word_counts if w not in _STOPWORDS]
+            entities = re.findall(r'[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*', chunk)
+            for entity in entities:
+                e = entity.lower()
+                if e not in _STOPWORDS and len(e) >= 3:
+                    concepts.append(e)
+            concepts = list(set(concepts))
+            if len(concepts) >= 2:
+                self._record_failure(concepts, weight)
+
+    def _record_failure(self, concepts: list, weight: float = -0.5):
+        """Internal: record failure edges between all pairs of concepts.
+
+        Mirrors observe() structure but writes to the failures table via
+        MyceliumDB.upsert_failure(). Uses _session_seen with a separate
+        keyspace ('fail' tag) so a positive and a negative observation
+        of the same pair don't deduplicate each other.
+        """
+        if not concepts or self._db is None:
+            return
+        # Normalize: lowercase NFC, strip stopwords, dedupe
+        import unicodedata as _ud
+        clean = []
+        for c in concepts:
+            if c is None:
+                continue
+            c = _ud.normalize("NFC", str(c).lower().strip())
+            if len(c) >= self.MIN_CONCEPT_LEN and c not in _STOPWORDS:
+                clean.append(c)
+        clean = list(set(clean))
+        if len(clean) < 2:
+            return
+        # Build pairs (alphabetical order matches upsert_failure)
+        for i in range(len(clean)):
+            for j in range(i + 1, len(clean)):
+                a_key = min(clean[i], clean[j])
+                b_key = max(clean[i], clean[j])
+                # Session-level dedup with 'fail' tag to keep separate
+                # from positive observations of the same pair.
+                with self._session_lock:
+                    sess_key = (a_key, b_key, "fail")
+                    if sess_key in self._session_seen:
+                        continue
+                    self._session_seen.add(sess_key)
+                self._db.upsert_failure(a_key, b_key, weight=weight)
+        # Auto-calibration tick (no-op if disabled)
+        self._maybe_calibrate_failure_weight()
+
+    def _maybe_calibrate_failure_weight(self):
+        """Phase 3 (2026-05-14): if MUNINN_FAILURE_WEIGHT_AUTO_CALIBRATE=1,
+        recompute the failure weight every 50 observations using a sigmoid
+        on the global fail/success ratio.
+
+        Sigmoid centered at fail_rate=0.5:
+          - fail_rate=0.05  → weight ≈ -0.12 (rare fails, weak signal)
+          - fail_rate=0.50  → weight = -0.50  (balanced)
+          - fail_rate=0.95  → weight ≈ -0.88 (fails dominate, strong signal)
+
+        Persists last weight to .muninn/failure_weight_calibration.json
+        so the value survives session restarts.
+        """
+        if not self._auto_cal_enabled or self._db is None:
+            return
+        self._failure_obs_count += 1
+        if self._failure_obs_count % 50 != 0:
+            return
+        try:
+            n_fail = self._db._conn.execute(
+                "SELECT COUNT(*) FROM failures").fetchone()[0]
+            n_edge = self._db._conn.execute(
+                "SELECT COUNT(*) FROM edges").fetchone()[0]
+        except Exception:
+            return
+        total = n_fail + n_edge
+        if total < 100:
+            return  # not enough data to recompute
+        fail_rate = n_fail / total
+        import math as _math
+        # Sigmoid centered at 0.5, scaled to [-1.0, 0.0]
+        new_weight = -1.0 / (1.0 + _math.exp(-4.0 * (fail_rate - 0.5)))
+        new_weight = max(-1.0, min(-0.05, new_weight))
+        self._failure_calibrated_weight = new_weight
+        # Persist
+        try:
+            import json as _json
+            import time as _time
+            self._calib_path.write_text(_json.dumps({
+                "weight": new_weight,
+                "fail_rate": fail_rate,
+                "n_failures": n_fail,
+                "n_edges": n_edge,
+                "computed_at": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "obs_count": self._failure_obs_count,
+            }, indent=2), encoding="utf-8")
+        except OSError:
+            pass  # disk error → keep in-memory state, retry next batch
 
     def observe_latex(self, text: str):
         """Observe co-occurrences in LaTeX source, chunked by sections.

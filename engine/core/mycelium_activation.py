@@ -384,7 +384,8 @@ class _MyceliumActivationMixin:
         return 2  # Default
 
     def spread_activation(self, seeds: list[str], hops: int = None,
-                          decay: float = 0.5, top_n: int = 20) -> list[tuple[str, float]]:
+                          decay: float = 0.5, top_n: int = 20,
+                          apply_failure_penalty: bool = True) -> list[tuple[str, float]]:
         """Spreading activation through the semantic network (Collins & Loftus 1975).
 
         Instead of keyword matching, propagates activation from seed concepts
@@ -396,6 +397,9 @@ class _MyceliumActivationMixin:
             hops: how many steps to propagate (None = A5 adaptive, 2 = default)
             decay: activation multiplier per hop (0.5 = halves each step)
             top_n: max concepts to return
+            apply_failure_penalty: if True (default), subtract failure weight
+                from final activation (Phase 3 2026-05-14, negative learning).
+                Set False for strict backward-compat with pre-Phase-3 behavior.
 
         Returns:
             list of (concept, activation) sorted by activation descending.
@@ -461,6 +465,22 @@ class _MyceliumActivationMixin:
                 else:
                     activation[concept] = max(activation[concept], act)
             frontier = new_activation  # next hop propagates from new nodes only
+
+        # Phase 3 (2026-05-14): apply failure penalty BEFORE min-max norm.
+        # Batched 1-SQL query (audit: 50 concepts = 0.38ms vs ~500ms sequential).
+        # Gated by apply_failure_penalty for strict backward-compat.
+        if (apply_failure_penalty and self._db is not None
+                and hasattr(self._db, "get_failure_weights_batch")):
+            non_seed_concepts = [c for c in activation if c not in seed_set]
+            if non_seed_concepts:
+                try:
+                    fail_weights = self._db.get_failure_weights_batch(
+                        non_seed_concepts)
+                    for concept, fw in fail_weights.items():
+                        # fw is negative; decay scales the penalty
+                        activation[concept] = activation[concept] + fw * decay
+                except Exception:
+                    pass  # never fail spread_activation due to fail-penalty query
 
         # Remove seeds, sort by activation
         results = [(c, a) for c, a in activation.items() if c not in seed_set]

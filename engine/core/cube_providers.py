@@ -1898,6 +1898,13 @@ def _run_level_pass(cubes: list[Cube], to_test: list[int], store,
             if on_cube_cb:
                 on_cube_cb(cycle, level, i, 'SHA', wr.attempt_in_wave, 0.0)
         else:
+            # Phase 3 (2026-05-14): failed cubes feed the mycelium as
+            # NEGATIVE signal (observe_failure → failures table) so the
+            # next cube/cycle/model benefits from learning what tends
+            # to break together. weight=None → default -0.5 or env
+            # MUNINN_OBSERVE_FAILURE_WEIGHT or auto-calibrated value.
+            if mycelium:
+                mycelium.observe_failure(c.content)
             if on_cube_cb:
                 on_cube_cb(cycle, level, i, 'FAIL', wr.total_attempts, wr.best_ncd)
     return level_sha
@@ -2089,10 +2096,14 @@ def run_progressive_levels(file_path: str, content: str,
             if on_cube:
                 on_cube(level, i + 1, n, wave_result)
 
-            # Feed mycelium on SHA match — accumulate learning
+            # Feed mycelium on SHA match — accumulate learning.
+            # Phase 3 fix bug #2101 (2026-05-14): observe(str) was iterating
+            # over characters as "concepts" + the `zone=` kwarg was silently
+            # ignored (not in observe signature). Use observe_text() which
+            # extracts concepts via regex, and drop the dead zone= kwarg
+            # (federation works via Mycelium constructor, not per-call).
             if wave_result.sha_matched and mycelium is not None:
-                mycelium.observe(wave_result.best_reconstruction,
-                                zone=f"cube_level_{level}")
+                mycelium.observe_text(wave_result.best_reconstruction)
 
         sha_matched = sum(1 for w in heatmap if w.sha_matched)
         avg_ncd = (sum(w.best_ncd for w in heatmap) / len(heatmap)
