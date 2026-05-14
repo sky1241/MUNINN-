@@ -5,6 +5,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
+# _tree_renderer.py top-level imports PIL (`from PIL import Image, ...`)
+# which is an optional dep (PIL is pulled in transitively via PyQt6 locally,
+# but the CI Validate job runs a minimal install). Skip the whole module
+# when Pillow is absent so the renderer's property tests don't break CI.
+pytest.importorskip("PIL")
+
 from hypothesis import given, strategies as st, settings
 from muninn.ui._tree_renderer import *
 
