@@ -38,7 +38,7 @@ ROOT_SLOTS = {
 }
 
 
-def get_slot_px(family, level, index):
+def _get_slot_px(family, level, index):
     """Convert relative slot to absolute pixel position."""
     sol_y = FAMILY_SOL_Y.get(family, 750)
     air_top = 90
@@ -86,7 +86,7 @@ STATUS_RING = {
 }
 
 
-def get_depth_level(node):
+def _get_depth_level(node):
     """Map node depth to root sublevel."""
     depth = node.get("depth", 0)
     if depth == -5: return "R-5"
@@ -97,7 +97,7 @@ def get_depth_level(node):
     return None
 
 
-def draw_glow_ring(draw, cx, cy, r, color, alpha_outer=50, ring_w=6):
+def _draw_glow_ring(draw, cx, cy, r, color, alpha_outer=50, ring_w=6):
     for i in range(ring_w, 0, -1):
         a = int(alpha_outer * (1 - i / ring_w))
         rr = r + ring_w + i
@@ -149,7 +149,7 @@ def render(scan_path, output_path=None):
 
         # Root nodes: use depth to determine sublevel
         if level == "R":
-            dl = get_depth_level(node)
+            dl = _get_depth_level(node)
             if dl:
                 skel_level = dl
 
@@ -159,7 +159,7 @@ def render(scan_path, output_path=None):
         idx = slot_usage.get(skel_level, 0)
         slot_usage[skel_level] = idx + 1
 
-        px, py = get_slot_px(family, skel_level, idx)
+        px, py = _get_slot_px(family, skel_level, idx)
         placed.append({**node, "px": px, "py": py, "skel_level": skel_level})
 
     # Ground line at real SOL_Y
@@ -180,7 +180,7 @@ def render(scan_path, output_path=None):
         r = max(10, int(14 * (conf / 100)))
 
         # Glow ring colored by status
-        draw_glow_ring(draw, cx, cy, r, ring_col, alpha_outer=60, ring_w=8)
+        _draw_glow_ring(draw, cx, cy, r, ring_col, alpha_outer=60, ring_w=8)
 
         # Node fill colored by level
         draw.ellipse([(cx-r, cy-r), (cx+r, cy+r)],

@@ -59,6 +59,9 @@ class PropagationResult:
     lambda_c: float
     percolation_pc: float
     patch_order: list[str]             # finding_ids ordered by propagation strength
+    # Prakash 2012: λ₁(A) = largest eigenvalue of adjacency matrix.
+    # 0.0 when graph empty or scipy/power-iteration both unable to converge.
+    spectral_radius: float = 0.0
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -480,7 +483,18 @@ def propagate_findings(
         deg_vals = list(degrees.values())
         mean_k = sum(deg_vals) / n
         mean_k2 = sum(d * d for d in deg_vals) / n
-        lambda_c = mean_k / mean_k2 if mean_k2 > 0 else 0.0
+
+        # 2026-05-14: Prakash 2012 epidemic threshold via λ₁(A) (spectral
+        # radius). When scipy is available `_spectral_radius` returns the
+        # exact eigenvalue; otherwise it falls back to power iteration. If
+        # both fail (n<=1, no edges) we keep the Molloy-Reed approximation
+        # `<k>/<k²>` as a safe default. lambda_c = 1/λ₁ is the propagation
+        # threshold: systemic when β/δ > 1/λ₁ (here β/δ implicit ≈ 1).
+        spectral_radius_val = _spectral_radius(graph)
+        if spectral_radius_val > 0:
+            lambda_c = 1.0 / spectral_radius_val
+        else:
+            lambda_c = mean_k / mean_k2 if mean_k2 > 0 else 0.0
         regime = "systemic" if lambda_c < 0.05 else "local"
 
         if mean_k > 0:
@@ -490,6 +504,7 @@ def propagate_findings(
             percolation_pc = float('inf')
     else:
         lambda_c = 0.0
+        spectral_radius_val = 0.0
         percolation_pc = 0.0
         regime = "local"
 
@@ -500,6 +515,7 @@ def propagate_findings(
             lambda_c=lambda_c,
             percolation_pc=percolation_pc,
             patch_order=[],
+            spectral_radius=spectral_radius_val,
         )
 
     importance = compute_importance(file_metrics)
@@ -564,4 +580,5 @@ def propagate_findings(
         lambda_c=lambda_c,
         percolation_pc=percolation_pc,
         patch_order=patch_order,
+        spectral_radius=spectral_radius_val,
     )

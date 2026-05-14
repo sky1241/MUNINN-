@@ -772,7 +772,7 @@ def _download_file(url: str, dest: Path) -> bool:
         return False
 
 
-def download_sources(sources_dir: str | Path, refresh: bool = False) -> dict[str, Path]:
+def _download_sources(sources_dir: str | Path, refresh: bool = False) -> dict[str, Path]:
     """Download CWE XML and Semgrep rules if not cached.
 
     Args:
@@ -857,7 +857,7 @@ def scrape_bible(
 
     # 2. Download sources if requested
     if not skip_download and sources_dir:
-        sources = download_sources(sources_dir, refresh=refresh)
+        sources = _download_sources(sources_dir, refresh=refresh)
 
         # 3. Scrape CWE
         if sources.get("cwe_xml"):

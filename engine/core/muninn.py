@@ -921,6 +921,12 @@ def _print_empty_repo_hint(cwd):
 def main():
     global _REPO_PATH
 
+    if len(sys.argv) >= 2 and sys.argv[1] == "winter-tree":
+        from muninn.ui import _tree_engine
+        sys.argv = [sys.argv[0]] + sys.argv[2:]
+        _tree_engine.main()
+        return
+
     parser = argparse.ArgumentParser(description="Muninn — Universal memory compression")
     # CHUNK MCP D.4 (2026-05-12): nargs="?" makes the command optional so
     # `muninn` (no args) can show a welcome banner instead of argparse error.
@@ -934,6 +940,9 @@ def main():
         "cube",
         # H.4 (2026-05-12): wire 344 LOC of forge_metrics to the CLI.
         "metrics",
+        # 2026-05-14: wire Winter Tree Engine (muninn/ui/_tree_engine.py)
+        # as `muninn-mem winter-tree <plant|scan|guard|github|serve|...>`.
+        "winter-tree",
     ])
     parser.add_argument("file", nargs="?", help="Input file, repo path, or query")
     parser.add_argument("--repo", help="Target repo path (for local codebook)")

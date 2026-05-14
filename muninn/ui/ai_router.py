@@ -53,7 +53,7 @@ MODEL_CODE = "deepseek-coder:6.7b"
 MODEL_GENERAL = "mistral:7b"
 
 
-def classify_query(text: str) -> str:
+def _classify_query(text: str) -> str:
     """Classify a query as 'code' or 'general'.
 
     Returns the model name to use.
@@ -104,7 +104,7 @@ def pick_model(text: str, base_url: str = "http://localhost:11434") -> str:
 
     Falls back gracefully: if the ideal model isn't installed, uses whatever is available.
     """
-    ideal = classify_query(text)
+    ideal = _classify_query(text)
     available = get_available_models(base_url)
 
     if not available:

@@ -515,7 +515,7 @@ FAMILY_ROOT_TYPES = {
 # CLASSIFICATEUR — Diagnostic de famille
 # ============================================================================
 
-def classify_interactive():
+def _classify_interactive():
     """Classification interactive par questions."""
     print("\n" + "=" * 60)
     print("  🌲 WINTER TREE — CLASSIFICATEUR DE PROJET")
@@ -658,7 +658,7 @@ def classify_auto(name, desc, structure, output, deps):
 # GÉNÉRATEUR DE TEMPLATE
 # ============================================================================
 
-def generate_template(project_info):
+def _generate_template(project_info):
     """Génère un Winter Tree template v2 pré-rempli."""
     name = project_info["name"]
     family_id = project_info["family"]
@@ -797,7 +797,7 @@ Le risque structurel principal est ─── {fam['risques'][0]}
 # VALIDATEUR DE CROISSANCE
 # ============================================================================
 
-def validate_growth(project_info, nodes):
+def _validate_growth(project_info, nodes):
     """Valide la croissance d'un projet selon les règles de sa famille.
 
     Args:
@@ -921,7 +921,7 @@ def validate_growth(project_info, nodes):
 # EXPORT — JSON pour interop
 # ============================================================================
 
-def display_anatomy(family_id=None):
+def _display_anatomy(family_id=None):
     """Affiche l'anatomie biologique des 10 niveaux avec couleurs."""
     print("\n" + "=" * 80)
     print("  🌳 ANATOMIE BIOLOGIQUE — LES 10 NIVEAUX DE L'ARBRE")
@@ -955,7 +955,7 @@ def display_anatomy(family_id=None):
     print(f"  Mycorhizes amplifient absorption {BIO_RATIOS['mycorrhizae_amplification']['value']}")
 
 
-def detect_gaps(nodes, family_id):
+def _detect_gaps(nodes, family_id):
     """Détecte les trous dans l'arbre — niveaux manquants, racines absentes.
 
     Returns list of gap descriptions with severity (red/yellow/green).
@@ -1106,7 +1106,7 @@ def detect_gaps(nodes, family_id):
     return gaps
 
 
-def print_gap_report(gaps):
+def _print_gap_report(gaps):
     """Affiche le rapport de gaps avec couleurs."""
     if not gaps:
         print("  ✅ Aucun trou détecté. L'arbre est complet.")
@@ -1302,7 +1302,7 @@ DOMAIN_PATTERNS = {
 }
 
 
-def detect_domain(desc):
+def _detect_domain(desc):
     """Détecte le domaine d'un projet à partir de sa description."""
     desc_lower = desc.lower()
     scores = {}
@@ -1315,7 +1315,7 @@ def detect_domain(desc):
     return "tool_cli"  # default
 
 
-def plant(idea, lang=None, platform=None):
+def _plant(idea, lang=None, platform=None):
     """🌱 PLANTER UN ARBRE — Génère un arbre complet à partir d'une idée.
 
     C'est LA fonction centrale. Le vibe codeur dit son idée,
@@ -1330,7 +1330,7 @@ def plant(idea, lang=None, platform=None):
         dict avec l'arbre complet, la famille, et l'ordre de construction
     """
     # 1. Détecter le domaine
-    domain = detect_domain(idea)
+    domain = _detect_domain(idea)
     pattern = DOMAIN_PATTERNS[domain]
 
     # 2. Classifier la famille automatiquement
@@ -1408,7 +1408,7 @@ def plant(idea, lang=None, platform=None):
                 n["label"] = f"{lang} — {n['label']}"
 
     # 4. Générer l'ordre de construction
-    build_order = generate_build_order(family_id, nodes)
+    build_order = _generate_build_order(family_id, nodes)
 
     # 5. Assembler le résultat
     result = {
@@ -1419,7 +1419,7 @@ def plant(idea, lang=None, platform=None):
         "family_emoji": family["emoji"],
         "date": datetime.now().isoformat(),
         "phase": "GRAINE",
-        "scale": calculate_scale(0),  # nouveau projet = 0 lignes, grandira avec le dev
+        "scale": _calculate_scale(0),  # nouveau projet = 0 lignes, grandira avec le dev
         "nodes": nodes,
         "build_order": build_order,
         "next_step": build_order[0]["action"] if build_order else "Définir les contraintes",
@@ -1428,7 +1428,7 @@ def plant(idea, lang=None, platform=None):
     return result
 
 
-def generate_build_order(family_id, nodes):
+def _generate_build_order(family_id, nodes):
     """Génère l'ordre de construction basé sur la famille.
 
     La biologie dicte : racines d'abord, toujours.
@@ -1554,7 +1554,7 @@ def generate_build_order(family_id, nodes):
     return order
 
 
-def print_planted_tree(result):
+def _print_planted_tree(result):
     """Affiche un arbre planté de manière lisible."""
     f = result
     fam = FAMILIES[f["family"]]
@@ -1632,7 +1632,7 @@ def print_planted_tree(result):
     print(f"{'═' * 70}")
 
 
-def save_planted_tree(result, filepath=None):
+def _save_planted_tree(result, filepath=None):
     """Sauvegarde l'arbre planté en YAML-like markdown."""
     f = result
     fam = FAMILIES[f["family"]]
@@ -2022,10 +2022,10 @@ def scan_repo(path):
     # ── Détecter le domaine ──
     # Utiliser les noms de fichiers et dossiers pour deviner
     all_text = " ".join(f["path"] for f in all_files).lower()
-    domain = detect_domain(all_text + " " + project_name)
+    domain = _detect_domain(all_text + " " + project_name)
 
     # ── Construire l'arbre ──
-    build_order = generate_build_order(family_id, nodes)
+    build_order = _generate_build_order(family_id, nodes)
 
     # Calculer le poids des données (tout sauf le code et .git)
     data_weight_mb = 0
@@ -2048,7 +2048,7 @@ def scan_repo(path):
         pass
 
     # Calculer l'échelle visuelle (hauteur = code, épaisseur = data)
-    scale = calculate_scale(total_code_lines, data_weight_mb)
+    scale = _calculate_scale(total_code_lines, data_weight_mb)
 
     tree = {
         "idea": f"[scanned] {project_name}",
@@ -2537,7 +2537,7 @@ def _detect_versioned_files(all_files):
     return False
 
 
-def calculate_scale(total_lines, data_weight_mb=0):
+def _calculate_scale(total_lines, data_weight_mb=0):
     """Calcule l'échelle visuelle de l'arbre — 2 dimensions.
 
     HAUTEUR (factor, height_px) = lignes de code = le bois, la structure.
@@ -2652,7 +2652,7 @@ def calculate_scale(total_lines, data_weight_mb=0):
     }
 
 
-def print_scan_report(tree):
+def _print_scan_report(tree):
     """Affiche le rapport de scan."""
     stats = tree["stats"]
     fam = FAMILIES[tree["family"]]
@@ -2744,7 +2744,7 @@ RESEARCH_STRATEGY = {
 }
 
 
-def generate_research_prompts(tree, context=""):
+def _generate_research_prompts(tree, context=""):
     """🔍 Génère les prompts de recherche pour remplir les racines.
 
     Le plant enrichi utilise ces prompts pour chercher automatiquement.
@@ -2791,7 +2791,7 @@ def generate_research_prompts(tree, context=""):
     return prompts
 
 
-def confidence_bar(pct, width=10):
+def _confidence_bar(pct, width=10):
     """Génère une barre de confiance visuelle."""
     filled = int((pct / 100) * width)
     empty = width - filled
@@ -2810,7 +2810,7 @@ def confidence_bar(pct, width=10):
     return f"{icon} {bar} {pct:3d}%  {label}"
 
 
-def print_research_prompts(prompts):
+def _print_research_prompts(prompts):
     """Affiche les prompts de recherche."""
     print(f"\n{'=' * 60}")
     print(f"  🔍 PROMPTS DE RECHERCHE")
@@ -2824,7 +2824,7 @@ def print_research_prompts(prompts):
             print(f"\n  [{current_level}] {strategy['zone']} — cherche: {strategy['cherche']}")
             print(f"  " + "─" * 50)
 
-        bar = confidence_bar(p["confidence"])
+        bar = _confidence_bar(p["confidence"])
         print(f"    [{p['node_id']:>3}] {p['node_label']}")
         print(f"          {bar}")
         print(f"          🔎 \"{p['prompt']}\"")
@@ -2841,7 +2841,7 @@ def print_research_prompts(prompts):
     print(f"{'=' * 60}")
 
 
-def print_confidence_map(tree):
+def _print_confidence_map(tree):
     """Affiche la carte de confiance de l'arbre — vue rapide."""
     nodes = tree["nodes"]
 
@@ -2862,7 +2862,7 @@ def print_confidence_map(tree):
         print(f"\n  {label}")
         for n in depth_nodes:
             conf = n.get("confidence", 0)
-            bar = confidence_bar(conf)
+            bar = _confidence_bar(conf)
             print(f"    [{n['id']:>3}] {n['label'][:45]:45s} {bar}")
 
     # Au-dessus du sol — résumé simple
@@ -2870,7 +2870,7 @@ def print_confidence_map(tree):
     if above:
         avg_conf = sum(n.get("confidence", 0) for n in above) // len(above) if above else 0
         print(f"\n  🌳 Au-dessus du sol ({len(above)} nœuds)")
-        print(f"    Confiance moyenne: {confidence_bar(avg_conf)}")
+        print(f"    Confiance moyenne: {_confidence_bar(avg_conf)}")
 
     print(f"\n{'=' * 60}")
 
@@ -2888,7 +2888,7 @@ def load_tree(filepath):
         return json.load(f)
 
 
-def save_tree_json(tree, filepath=None):
+def _save_tree_json(tree, filepath=None):
     """Sauvegarde l'arbre en JSON pour persistance entre sessions."""
     if filepath is None:
         name_slug = tree["idea"].lower()
@@ -2903,7 +2903,7 @@ def save_tree_json(tree, filepath=None):
     return filepath
 
 
-def guardian_check(tree, target_node_id):
+def _guardian_check(tree, target_node_id):
     """🛡️ GARDIEN — Vérifie si on peut travailler sur un nœud.
 
     Avant de coder quoi que ce soit, le gardien vérifie :
@@ -3027,7 +3027,7 @@ def guardian_check(tree, target_node_id):
     return result
 
 
-def guardian_update(tree, node_id, status=None, entry=None, desc=None, confidence=None):
+def _guardian_update(tree, node_id, status=None, entry=None, desc=None, confidence=None):
     """Met à jour un nœud de l'arbre (status, entry, description, confidence).
 
     Le champ `entry` est LA boussole de Claude dans le code.
@@ -3060,7 +3060,7 @@ def guardian_update(tree, node_id, status=None, entry=None, desc=None, confidenc
             if confidence is not None:
                 old_conf = n.get("confidence", 0)
                 n["confidence"] = confidence
-                bar = confidence_bar(confidence)
+                bar = _confidence_bar(confidence)
                 print(f"  📊 {node_id} confiance : {old_conf}% → {bar}")
 
             return n
@@ -3092,7 +3092,7 @@ def _update_phase(tree):
         tree["phase"] = "GRAINE"
 
 
-def guardian_session_report(tree):
+def _guardian_session_report(tree):
     """🛡️ Rapport de session — à exécuter au début de chaque conversation.
 
     Affiche :
@@ -3214,7 +3214,7 @@ def guardian_session_report(tree):
     }
 
 
-def guardian_find(tree, query):
+def _guardian_find(tree, query):
     """🔍 Cherche dans l'arbre — par ID, label, ou entry.
 
     Claude utilise ça pour trouver où aller dans le code.
@@ -3248,7 +3248,7 @@ def guardian_find(tree, query):
     return [n for _, n in results]
 
 
-def print_guardian_check(result):
+def _print_guardian_check(result):
     """Affiche le résultat d'un guardian_check de manière lisible."""
     if result["ok"]:
         print(f"\n  ✅ {result['recommendation']}")
@@ -3269,7 +3269,7 @@ def print_guardian_check(result):
         print(f"\n  💡 Recommandation : {result['recommendation']}")
 
 
-def export_knowledge_base(filepath="winter_tree_kb.json"):
+def _export_knowledge_base(filepath="winter_tree_kb.json"):
     """Exporte toute la knowledge base en JSON."""
     data = {
         "version": "1.1",
@@ -3331,7 +3331,7 @@ def export_knowledge_base(filepath="winter_tree_kb.json"):
 # CLI — Interface en ligne de commande
 # ============================================================================
 
-def print_family(family_id):
+def _print_family(family_id):
     """Affiche les détails d'une famille."""
     fam = FAMILIES[family_id]
     print(f"\n{fam['emoji']} {fam['nom'].upper()} — {fam['forme']}")
@@ -3350,7 +3350,7 @@ def print_family(family_id):
         print(f"  - {r}")
 
 
-def print_all_families():
+def _print_all_families():
     """Affiche un résumé de toutes les familles."""
     print("\n" + "=" * 60)
     print("  🌲 LES 6 FAMILLES D'ARBRES")
@@ -3373,385 +3373,11 @@ FAMILY_IMAGE_MAP = {
     "palmier":  "winter_tree_planche_VII_palmier.png",
 }
 
-# Positions Y des niveaux sur l'image Planche II (922×1244px)
-LEVEL_Y_MAP = {
-    "C":  {"y": 100, "label": "CIME",             "color": "#28c862", "zone": "aerial"},
-    "F":  {"y": 215, "label": "FEUILLES",          "color": "#32b555", "zone": "aerial"},
-    "b":  {"y": 330, "label": "RAMEAUX",            "color": "#38a048", "zone": "aerial"},
-    "B":  {"y": 440, "label": "BRANCHES",           "color": "#3d8a3a", "zone": "aerial"},
-    "T":  {"y": 530, "label": "TRONC",              "color": "#5a9a35", "zone": "aerial"},
-    # SOL = 575
-    "R-1": {"y": 650, "label": "R.STRUCTURELLES",   "color": "#9a7453", "zone": "underground"},
-    "R-2": {"y": 760, "label": "R.PIVOTANTES",      "color": "#8a6344", "zone": "underground"},
-    "R-3": {"y": 870, "label": "RADICELLES",        "color": "#7a5235", "zone": "underground"},
-    "R-4": {"y": 960, "label": "POILS ABSORBANTS",  "color": "#6b4226", "zone": "underground"},
-    "R-5": {"y": 1060, "label": "MYCORHIZES",       "color": "#5c3317", "zone": "underground"},
-}
 
 
-def _node_level_key(node):
-    """Convertit un noeud en clé pour LEVEL_Y_MAP."""
-    level = node.get("level", "")
-    depth = node.get("depth")
-    if level == "R" and depth is not None:
-        return f"R{depth}"
-    if level == "M":
-        return "R-5"
-    return level
 
 
-def _generate_profile_html(tree, image_base64):
-    """Génère le HTML de la vue profil d'un arbre avec la Planche II en fond."""
-
-    project_name = tree.get("idea", "Projet").replace("[scanned] ", "")
-    family = tree.get("family_name", "Inconnu")
-    family_emoji = tree.get("family_emoji", "🌳")
-    scale = tree.get("scale", {})
-    stats = tree.get("stats", {})
-    nodes = tree.get("nodes", [])
-
-    # Grouper les nodes par niveau
-    level_groups = {}
-    for node in nodes:
-        key = _node_level_key(node)
-        if key not in level_groups:
-            level_groups[key] = []
-        level_groups[key].append(node)
-
-    # Générer les éléments SVG pour chaque node
-    svg_nodes = []
-    center_x = 461  # Centre de l'image
-
-    for level_key, level_info in LEVEL_Y_MAP.items():
-        y = level_info["y"]
-        color = level_info["color"]
-        label = level_info["label"]
-        zone = level_info["zone"]
-
-        group_nodes = level_groups.get(level_key, [])
-
-        # Label du niveau à gauche
-        opacity = "0.9" if zone == "aerial" else "0.8"
-        svg_nodes.append(f'''
-        <text x="38" y="{y}" fill="{color}" font-size="12" font-weight="600"
-              font-family="JetBrains Mono, monospace" opacity="{opacity}"
-              filter="url(#textShadow)">{label}</text>''')
-
-        if not group_nodes:
-            # Niveau vide — cercle gris discret
-            svg_nodes.append(f'''
-        <circle cx="{center_x}" cy="{y}" r="3" fill="#333" opacity="0.3"/>''')
-            continue
-
-        # Distribuer les nodes sur l'axe si plusieurs au même niveau
-        n_count = len(group_nodes)
-        for i, node in enumerate(group_nodes):
-            # Offset Y pour éviter les chevauchements (±15px par node supplémentaire)
-            offset_y = (i - (n_count - 1) / 2) * 24
-            ny = y + offset_y
-
-            status = node.get("status", "todo")
-            confidence = node.get("confidence", 0)
-            node_id = node.get("id", "?")
-            node_label = node.get("label", "")
-            entry = node.get("entry", "~")
-
-            # Couleur du node selon status
-            if status == "done":
-                fill = color
-                inner_fill = "#fff"
-                inner_opacity = "0.8"
-            elif status == "wip":
-                fill = "#FFB74D"
-                inner_fill = "#fff"
-                inner_opacity = "0.6"
-            else:
-                fill = "#FF5252"
-                inner_fill = "#FF5252"
-                inner_opacity = "0.4"
-
-            # Taille selon confidence
-            radius = 5 + (confidence / 100) * 3  # 5-8px
-
-            # Node circle avec glow
-            svg_nodes.append(f'''
-        <g class="node-group" data-id="{node_id}" data-status="{status}"
-           data-confidence="{confidence}">
-          <circle cx="{center_x}" cy="{ny}" r="{radius:.0f}" fill="{fill}"
-                  opacity="0.85" filter="url(#nodeGlow)"/>
-          <circle cx="{center_x}" cy="{ny}" r="{radius/2.5:.1f}" fill="{inner_fill}"
-                  opacity="{inner_opacity}"/>''')
-
-            # Ligne de connexion + texte descriptif à droite
-            # Tronquer le label pour l'affichage
-            display_label = node_label[:50]
-            if len(node_label) > 50:
-                display_label += "…"
-
-            # Status icon
-            status_icon = {"done": "✓", "wip": "◐", "todo": "○"}.get(status, "?")
-
-            # Confidence bar compacte
-            conf_width = 40
-            conf_filled = int((confidence / 100) * conf_width)
-
-            svg_nodes.append(f'''
-          <line x1="{center_x + radius + 2}" y1="{ny}" x2="530" y2="{ny}"
-                stroke="{color}" stroke-width="0.7" opacity="0.35" stroke-dasharray="3,3"/>
-          <text x="538" y="{ny - 3}" fill="{color}" font-size="10" font-weight="400"
-                font-family="JetBrains Mono, monospace" opacity="0.85"
-                filter="url(#textShadow)">{status_icon} {node_id} {display_label}</text>
-          <rect x="538" y="{ny + 3}" width="{conf_width}" height="3" rx="1.5"
-                fill="#1a1a1a" opacity="0.6"/>
-          <rect x="538" y="{ny + 3}" width="{conf_filled}" height="3" rx="1.5"
-                fill="{fill}" opacity="0.6"/>
-          <text x="{538 + conf_width + 6}" y="{ny + 8}" fill="{color}" font-size="8"
-                font-family="JetBrains Mono, monospace" opacity="0.5"
-                filter="url(#textShadow)">{confidence}%</text>
-        </g>''')
-
-    # Assembler le SVG complet
-    svg_content = "\n".join(svg_nodes)
-
-    # Stats pour le panneau info
-    total_lines = stats.get("total_code_lines", 0)
-    total_files = stats.get("total_files", 0)
-    data_mb = stats.get("data_weight_mb", 0)
-    scale_label = scale.get("label", "")
-    done_count = sum(1 for n in nodes if n.get("status") == "done")
-    wip_count = sum(1 for n in nodes if n.get("status") == "wip")
-    todo_count = sum(1 for n in nodes if n.get("status") == "todo")
-
-    html = f'''<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Winter Tree — {project_name}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap');
-
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-
-  body {{
-    background: #050805;
-    color: #EDE5DB;
-    font-family: 'JetBrains Mono', monospace;
-    display: flex;
-    min-height: 100vh;
-  }}
-
-  .sidebar {{
-    width: 280px;
-    min-width: 280px;
-    background: #0a0d08;
-    border-right: 1px solid rgba(255,255,255,0.06);
-    padding: 24px 16px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }}
-
-  .sidebar h1 {{
-    font-size: 14px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    color: #8B6914;
-    font-weight: 400;
-  }}
-
-  .sidebar h2 {{
-    font-size: 20px;
-    font-weight: 300;
-    letter-spacing: 2px;
-    color: #EDE5DB;
-  }}
-
-  .stat-block {{
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.04);
-    border-radius: 6px;
-    padding: 12px;
-  }}
-
-  .stat-block .label {{
-    font-size: 9px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    opacity: 0.4;
-    margin-bottom: 6px;
-  }}
-
-  .stat-block .value {{
-    font-size: 16px;
-    font-weight: 300;
-  }}
-
-  .stat-row {{
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-    font-size: 11px;
-    opacity: 0.7;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
-  }}
-
-  .status-badge {{
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-  }}
-
-  .status-done {{ background: rgba(40,200,98,0.15); color: #28c862; }}
-  .status-wip {{ background: rgba(255,183,77,0.15); color: #FFB74D; }}
-  .status-todo {{ background: rgba(255,82,82,0.15); color: #FF5252; }}
-
-  .tree-container {{
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    overflow: auto;
-  }}
-
-  .tree-wrapper {{
-    position: relative;
-    width: 922px;
-    height: 1244px;
-    flex-shrink: 0;
-  }}
-
-  .tree-wrapper img {{
-    width: 100%;
-    height: 100%;
-    display: block;
-    border-radius: 4px;
-  }}
-
-  .tree-overlay {{
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-  }}
-
-  .node-group {{ pointer-events: all; cursor: default; }}
-  .node-group:hover circle {{ filter: url(#nodeGlowStrong); }}
-
-  .footer {{
-    margin-top: auto;
-    font-size: 9px;
-    opacity: 0.25;
-    letter-spacing: 2px;
-    text-align: center;
-  }}
-</style>
-</head>
-<body>
-
-<div class="sidebar">
-  <div>
-    <a href="/forest" style="text-decoration:none; color:#8B6914; font-size:10px;
-       letter-spacing:2px; opacity:0.6; display:block; margin-bottom:12px;">← LA FORÊT</a>
-    <h1>Winter Tree</h1>
-    <h2>{family_emoji} {project_name}</h2>
-  </div>
-
-  <div class="stat-block">
-    <div class="label">Famille</div>
-    <div class="value">{family}</div>
-  </div>
-
-  <div class="stat-block">
-    <div class="label">Échelle</div>
-    <div class="value">{scale_label}</div>
-  </div>
-
-  <div class="stat-block">
-    <div class="label">Code</div>
-    <div class="value">{total_lines:,} lignes</div>
-    <div class="stat-row"><span>Fichiers</span><span>{total_files}</span></div>
-    <div class="stat-row"><span>Data</span><span>{data_mb:.0f} Mo</span></div>
-  </div>
-
-  <div class="stat-block">
-    <div class="label">Nœuds ({len(nodes)})</div>
-    <div style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
-      <span class="status-badge status-done">✓ {done_count}</span>
-      <span class="status-badge status-wip">◐ {wip_count}</span>
-      <span class="status-badge status-todo">○ {todo_count}</span>
-    </div>
-  </div>
-
-  <div class="stat-block">
-    <div class="label">Langages</div>
-    {"".join(f'<div class="stat-row"><span>{lang}</span><span>{lines:,}L</span></div>' for lang, lines in sorted(stats.get("languages", {}).items(), key=lambda x: -x[1])[:6])}
-  </div>
-
-  <div class="footer">
-    racines &gt; arbre — 2026
-  </div>
-</div>
-
-<div class="tree-container">
-  <div class="tree-wrapper">
-    <img src="data:image/png;base64,{image_base64}" alt="Winter Tree Planche II"/>
-
-    <svg class="tree-overlay" viewBox="0 0 922 1244" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="blur"/>
-          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-        </filter>
-        <filter id="nodeGlow" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="5" result="blur"/>
-          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-        </filter>
-        <filter id="nodeGlowStrong" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="10" result="blur"/>
-          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-        </filter>
-        <filter id="textShadow" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#000" flood-opacity="0.9"/>
-        </filter>
-      </defs>
-
-      <!-- Axe central -->
-      <line x1="{center_x}" y1="60" x2="{center_x}" y2="1100"
-            stroke="rgba(139,105,20,0.15)" stroke-width="1" stroke-dasharray="6,4"/>
-
-      <!-- SOL label -->
-      <text x="860" y="580" fill="#8B6914" font-size="11" font-weight="600"
-            font-family="JetBrains Mono, monospace" opacity="0.7"
-            text-anchor="end" filter="url(#textShadow)">SOL</text>
-
-      <!-- Nodes -->
-      {svg_content}
-
-      <!-- Footer -->
-      <text x="461" y="1170" text-anchor="middle" fill="#555" font-size="10"
-            font-family="JetBrains Mono, monospace" letter-spacing="3" opacity="0.4">
-        WINTER TREE ENGINE v1 — {project_name}
-      </text>
-      <text x="461" y="1190" text-anchor="middle" fill="#444" font-size="8"
-            font-family="JetBrains Mono, monospace" letter-spacing="2" opacity="0.3">
-        racines toujours &gt; arbre — sky1241 — 2026
-      </text>
-    </svg>
-  </div>
-</div>
-
-</body>
-</html>'''
-
-    return html
-
-
-def scan_github_repo(owner, repo_name, token=None):
+def _scan_github_repo(owner, repo_name, token=None):
     """🌐 Scanne un repo GitHub distant via l'API (sans cloner).
 
     Utilise l'API GitHub pour :
@@ -3962,11 +3588,11 @@ def scan_github_repo(owner, repo_name, token=None):
 
     # Classifier — on passe all_files pour l'analyse structurelle
     family_id = _classify_from_scan(nodes, top_dirs, biggest_file, total_code_lines, repo_path=None, all_files=all_files)
-    domain = detect_domain((description + " " + repo_name + " " + " ".join(f["path"] for f in all_files[:50])).lower())
-    build_order = generate_build_order(family_id, nodes)
+    domain = _detect_domain((description + " " + repo_name + " " + " ".join(f["path"] for f in all_files[:50])).lower())
+    build_order = _generate_build_order(family_id, nodes)
 
     data_weight_mb = max(0, (repo_size_kb / 1024) - (total_code_lines * 40 / 1024 / 1024))
-    scale = calculate_scale(total_code_lines, data_weight_mb)
+    scale = _calculate_scale(total_code_lines, data_weight_mb)
 
     tree = {
         "idea": f"[scanned] {repo_name}",
@@ -3993,7 +3619,7 @@ def scan_github_repo(owner, repo_name, token=None):
     return tree
 
 
-def scan_github_user(username, token=None, max_repos=20):
+def _scan_github_user(username, token=None, max_repos=20):
     """🌐 Scanne tous les repos d'un utilisateur GitHub.
 
     Args:
@@ -4036,7 +3662,7 @@ def scan_github_user(username, token=None, max_repos=20):
         name = repo["name"]
         print(f"  [{i+1}/{min(len(repos), max_repos)}] Scan de {name}...", end="", flush=True)
 
-        tree = scan_github_repo(username, name, token)
+        tree = _scan_github_repo(username, name, token)
         if tree:
             # Sauvegarder le scan
             script_dir = Path(__file__).parent
@@ -4376,7 +4002,7 @@ def _generate_forest_html(trees, image_base64_map):
     return html
 
 
-def serve_tree(json_path=None):
+def _serve_tree(json_path=None):
     """🌐 Lance un serveur local interactif.
 
     Sans argument → vue forêt (tous les scans/)
@@ -4655,6 +4281,7 @@ Usage:
   python engine.py update <json> <id> <status> [entry]  📝 Update un nœud
   python engine.py find <json> <query>  🔍 Cherche dans l'arbre
   python engine.py classify           Classification interactive
+  python engine.py classify-auto <name> <desc> <structure> <output> <deps>  Classification non-interactive (script-friendly)
   python engine.py families           Liste toutes les familles
   python engine.py family <id>        Détails d'une famille
   python engine.py anatomy [id]       Anatomie biologique 10 niveaux
@@ -4686,12 +4313,12 @@ Exemples:
             print("Exemple: python engine.py plant \"je veux un Shazam pour piano\"")
             return
         idea = " ".join(sys.argv[2:])
-        result = plant(idea)
-        print_planted_tree(result)
+        result = _plant(idea)
+        _print_planted_tree(result)
 
         # Sauvegarder en markdown + JSON
-        filepath_md = save_planted_tree(result)
-        filepath_json = save_tree_json(result)
+        filepath_md = _save_planted_tree(result)
+        filepath_json = _save_tree_json(result)
         print(f"\n  💾 Arbre sauvé : {filepath_md}")
         print(f"  💾 JSON sauvé  : {filepath_json}")
 
@@ -4703,10 +4330,10 @@ Exemples:
         repo_path = sys.argv[2]
         tree = scan_repo(repo_path)
         if tree:
-            print_scan_report(tree)
-            print_planted_tree(tree)
-            filepath_json = save_tree_json(tree)
-            filepath_md = save_planted_tree(tree)
+            _print_scan_report(tree)
+            _print_planted_tree(tree)
+            filepath_json = _save_tree_json(tree)
+            filepath_md = _save_planted_tree(tree)
             print(f"\n  💾 JSON sauvé : {filepath_json}")
             print(f"  💾 MD sauvé   : {filepath_md}")
 
@@ -4717,30 +4344,30 @@ Exemples:
             return
         tree = load_tree(sys.argv[2])
         context = " ".join(sys.argv[3:]) if len(sys.argv) > 3 else ""
-        prompts = generate_research_prompts(tree, context)
-        print_research_prompts(prompts)
+        prompts = _generate_research_prompts(tree, context)
+        _print_research_prompts(prompts)
 
     elif cmd == "confidence":
         if len(sys.argv) < 3:
             print("Usage: python engine.py confidence <fichier.json>")
             return
         tree = load_tree(sys.argv[2])
-        print_confidence_map(tree)
+        _print_confidence_map(tree)
 
     elif cmd == "guard":
         if len(sys.argv) < 3:
             print("Usage: python engine.py guard <fichier.json>")
             return
         tree = load_tree(sys.argv[2])
-        guardian_session_report(tree)
+        _guardian_session_report(tree)
 
     elif cmd == "check":
         if len(sys.argv) < 4:
             print("Usage: python engine.py check <fichier.json> <node_id>")
             return
         tree = load_tree(sys.argv[2])
-        result = guardian_check(tree, sys.argv[3].upper())
-        print_guardian_check(result)
+        result = _guardian_check(tree, sys.argv[3].upper())
+        _print_guardian_check(result)
 
     elif cmd == "update":
         if len(sys.argv) < 5:
@@ -4752,8 +4379,8 @@ Exemples:
         node_id = sys.argv[3].upper()
         status = sys.argv[4].lower()
         entry = sys.argv[5] if len(sys.argv) > 5 else None
-        guardian_update(tree, node_id, status=status, entry=entry)
-        save_tree_json(tree, sys.argv[2])
+        _guardian_update(tree, node_id, status=status, entry=entry)
+        _save_tree_json(tree, sys.argv[2])
         print(f"  💾 Arbre mis à jour : {sys.argv[2]}")
 
     elif cmd == "find":
@@ -4762,7 +4389,7 @@ Exemples:
             return
         tree = load_tree(sys.argv[2])
         query = " ".join(sys.argv[3:])
-        results = guardian_find(tree, query)
+        results = _guardian_find(tree, query)
         if results:
             print(f"\n  🔍 {len(results)} résultat(s) pour '{query}' :")
             for n in results:
@@ -4775,7 +4402,7 @@ Exemples:
             print(f"\n  Aucun résultat pour '{query}'")
 
     elif cmd == "classify":
-        result = classify_interactive()
+        result = _classify_interactive()
         if result:
             print(f"\n--- RÉSULTAT ---")
             print(f"Projet : {result['name']}")
@@ -4783,15 +4410,32 @@ Exemples:
 
             save = input("\nGénérer le template ? (o/n) : ").strip().lower()
             if save == "o":
-                template = generate_template(result)
+                template = _generate_template(result)
                 filename = f"scans/{result['name'].lower().replace(' ', '-')}_tree.md"
                 os.makedirs("scans", exist_ok=True)
                 with open(filename, "w", encoding="utf-8") as f:
                     f.write(template)
                 print(f"\n✅ Template sauvé : {filename}")
 
+    elif cmd == "classify-auto":
+        if len(sys.argv) < 7:
+            print("Usage: python engine.py classify-auto <name> <desc> <structure> <output> <deps>")
+            print("  structure: pipeline | parallel | engine | tools | plugin")
+            print("  output:    concentrated | distributed | minimal | multiple")
+            print("  deps:      sequential | interdependent | core-interface | independent | external")
+            return
+        name, desc, structure, output, deps = sys.argv[2:7]
+        result = classify_auto(name, desc, structure, output, deps)
+        print(f"\n--- RÉSULTAT ---")
+        print(f"Projet : {result['name']}")
+        fam_id = result['family']
+        print(f"Famille : {FAMILIES[fam_id]['emoji']} {fam_id}")
+        print(f"\nScores complets :")
+        for f, score in result['scores'].items():
+            print(f"  {FAMILIES[f]['emoji']} {f:<10} : {score}")
+
     elif cmd == "families":
-        print_all_families()
+        _print_all_families()
 
     elif cmd == "family":
         if len(sys.argv) < 3:
@@ -4800,7 +4444,7 @@ Exemples:
             return
         fid = sys.argv[2].lower()
         if fid in FAMILIES:
-            print_family(fid)
+            _print_family(fid)
         else:
             print(f"Famille inconnue : {fid}")
             print(f"IDs disponibles : {', '.join(FAMILIES.keys())}")
@@ -4811,7 +4455,7 @@ Exemples:
             print(f"Famille inconnue : {fid}")
             print(f"IDs disponibles : {', '.join(FAMILIES.keys())}")
             return
-        display_anatomy(fid)
+        _display_anatomy(fid)
 
     elif cmd == "gaps":
         if len(sys.argv) < 3:
@@ -4832,8 +4476,8 @@ Exemples:
         ]
         fam = FAMILIES[fid]
         print(f"\n  Analyse gaps pour {fam['emoji']} {fam['nom']} (nœuds demo)")
-        gaps = detect_gaps(demo_nodes, fid)
-        print_gap_report(gaps)
+        gaps = _detect_gaps(demo_nodes, fid)
+        _print_gap_report(gaps)
 
     elif cmd == "generate":
         if len(sys.argv) < 3:
@@ -4842,7 +4486,7 @@ Exemples:
         fid = sys.argv[2].lower()
         name = sys.argv[3] if len(sys.argv) > 3 else "Mon Projet"
         if fid in FAMILIES:
-            template = generate_template({"name": name, "family": fid, "desc": ""})
+            template = _generate_template({"name": name, "family": fid, "desc": ""})
             print(template)
         else:
             print(f"Famille inconnue : {fid}")
@@ -4860,11 +4504,11 @@ Exemples:
             if token_file.exists():
                 token = token_file.read_text().strip()
             print(f"  🌐 Scan GitHub de {username}...")
-            scan_github_user(username, token)
-            serve_tree(None)
+            _scan_github_user(username, token)
+            _serve_tree(None)
         else:
             json_path = sys.argv[2] if len(sys.argv) > 2 else None
-            serve_tree(json_path)
+            _serve_tree(json_path)
 
     elif cmd == "github":
         if len(sys.argv) < 3:
@@ -4887,24 +4531,24 @@ Exemples:
         if "/" in target:
             # Scan un repo spécifique
             owner, repo_name = target.split("/", 1)
-            tree = scan_github_repo(owner, repo_name, token)
+            tree = _scan_github_repo(owner, repo_name, token)
             if tree:
-                print_scan_report(tree)
-                filepath = save_tree_json(tree)
+                _print_scan_report(tree)
+                filepath = _save_tree_json(tree)
                 print(f"\n  💾 JSON sauvé : {filepath}")
         else:
             # Scan tous les repos d'un utilisateur
-            trees = scan_github_user(target, token)
+            trees = _scan_github_user(target, token)
             if trees:
                 print(f"\n  🌲 Lance: python engine.py serve")
                 print(f"  pour voir ta forêt !")
 
     elif cmd == "export":
-        path = export_knowledge_base()
+        path = _export_knowledge_base()
         print(f"✅ Knowledge base exportée : {path}")
 
     elif cmd == "validate":
-        print("Validation YAML non implementee. Utiliser validate_growth() en Python.", file=sys.stderr)
+        print("Validation YAML non implementee. Utiliser _validate_growth() en Python.", file=sys.stderr)
 
     else:
         print(f"Commande inconnue : {cmd}")

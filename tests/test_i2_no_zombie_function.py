@@ -90,10 +90,13 @@ def _find_zombies() -> list[tuple[str, str]]:
     return zombies
 
 
-# Captured 2026-05-12 (real count 35; audit overclaim said 89).
+# 2026-05-14: actual count dropped to 0 after wiring _tree_engine.main()
+# as `muninn-mem winter-tree` subcommand + renaming 33 internal-only
+# functions to `_` prefix (across _tree_engine.py, _tree_renderer.py,
+# ai_router.py, bible_scraper.py) + deleting dead `classify_auto`.
 # Cushion of +5 over current actual so a single legitimate addition
-# doesn't break CI immediately. Phase J refactor will lower further.
-ZOMBIE_COUNT_BASELINE = 40
+# doesn't break CI immediately.
+ZOMBIE_COUNT_BASELINE = 5
 
 
 @pytest.mark.xfail(
