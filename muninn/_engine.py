@@ -1002,6 +1002,8 @@ def _print_empty_repo_hint(cwd):
 def main():
     global _REPO_PATH
 
+    # Mirror of engine/core/muninn.py: early intercept for `winter-tree`
+    # before argparse so the sub-arguments aren't validated.
     if len(sys.argv) >= 2 and sys.argv[1] == "winter-tree":
         from muninn.ui import _tree_engine
         sys.argv = [sys.argv[0]] + sys.argv[2:]
@@ -1567,6 +1569,11 @@ def main():
 
     elif args.command == "tree":
         build_tree(filepath)
+
+    elif args.command == "winter-tree":
+        # Unreachable: handled by the pre-argparse early intercept at the
+        # top of main(). Kept for parity with engine/core/muninn.py.
+        return
 
 
 # G.3 (2026-05-12): friendly error handler at the CLI boundary. Mirror of

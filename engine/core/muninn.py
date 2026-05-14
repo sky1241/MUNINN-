@@ -921,6 +921,13 @@ def _print_empty_repo_hint(cwd):
 def main():
     global _REPO_PATH
 
+    # Early intercept for `winter-tree`: argparse can't accept the free-form
+    # sub-arguments (`plant "<idea>"`, `scan <path>`, ...) without
+    # `parse_known_args` gymnastics, so we steal the call before argparse
+    # runs. The post-argparse `if args.command == "winter-tree"` branch
+    # below is dead code kept purely to satisfy test_h0_all_cli_commands
+    # _have_handler (which scans for `args.command == "<choice>"` per
+    # CLI choice).
     if len(sys.argv) >= 2 and sys.argv[1] == "winter-tree":
         from muninn.ui import _tree_engine
         sys.argv = [sys.argv[0]] + sys.argv[2:]
@@ -1498,6 +1505,11 @@ def main():
 
     elif args.command == "tree":
         build_tree(filepath)
+
+    elif args.command == "winter-tree":
+        # Unreachable: handled by the pre-argparse early intercept at the
+        # top of main(). Kept for test_h0_all_cli_commands_have_handler.
+        return
 
 
 # G.3 (2026-05-12): friendly error handler at the CLI boundary.
