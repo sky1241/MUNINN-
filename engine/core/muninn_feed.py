@@ -366,13 +366,19 @@ def parse_transcript(jsonl_path) -> list[str]:
 
 
 def feed_from_transcript(jsonl_path: Path, repo_path: Path,
-                         max_seconds: float = 60.0):
+                         max_seconds: float | None = None):
     """Feed the mycelium from a single transcript JSONL file.
     V6A: Per-message arousal via VADER -> passed to observe() for emotional tagging.
     Chunked: saves every FEED_CHUNK_SIZE messages to avoid timeout on large transcripts.
     Resumable: tracks offset in .muninn/feed_progress.json to resume after interruption.
     Graceful timeout: if max_seconds elapsed, saves progress and exits cleanly.
     Next call resumes where it left off. No more infinite crash loops.
+
+    Timing (2026-05-14): max_seconds=None auto-computes a budget from the
+    number of remaining messages. JSONL transcripts are append-only, so a
+    larger file_size than last progress just means new messages — we resume
+    from the previous offset instead of restarting from zero (was a bug that
+    re-fed the same prefix on every PreCompact when the conversation grew).
     """
     FEED_CHUNK_SIZE = 50  # save mycelium every N messages
 
@@ -391,13 +397,24 @@ def feed_from_transcript(jsonl_path: Path, repo_path: Path,
     file_key = jsonl_path.name
     file_size = jsonl_path.stat().st_size
     prev = progress.get(file_key, {})
-    # If file size changed since last progress, start fresh (file grew)
-    offset = prev.get("offset", 0) if prev.get("size", 0) == file_size else 0
+    prev_size = prev.get("size", 0)
+    prev_offset = prev.get("offset", 0)
+    # JSONL transcripts are append-only: if file grew (or unchanged), the
+    # prefix up to prev_offset is still valid. Only restart from zero if the
+    # file shrank (rotated / truncated / different file under same name).
+    offset = prev_offset if file_size >= prev_size else 0
 
     texts = parse_transcript(jsonl_path)
     if not texts:
         print(f"  No text messages found in {jsonl_path.name}")
         return 0, []
+
+    # Adaptive timing budget: ~16 msg/s observed on a 1.3GB mycelium DB.
+    # 2x safety margin so a chunky message can't blow the budget. Floor at
+    # 60s for tiny transcripts (Mycelium init + save overhead).
+    if max_seconds is None:
+        remaining = max(0, len(texts) - offset)
+        max_seconds = max(60.0, (remaining / 16.0) * 2.0)
 
     if offset >= len(texts):
         print(f"  Already fed {offset}/{len(texts)} messages from {jsonl_path.name}")
