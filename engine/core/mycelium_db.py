@@ -90,6 +90,12 @@ class MyceliumDB:
         self._wal_monitor = WALMonitor(self._conn)
         self._concept_cache = {}  # name -> id (in-memory for fast lookups)
         self._load_concept_cache()
+        # K.2 (2026-05-14): in-memory embedding matrix for cross-lingual fusion.
+        # Lazily populated on first read by _ensure_embedding_matrix().
+        self._embedding_matrix = None  # np.ndarray (N, dim) or None
+        self._embedding_names: list[str] = []
+        self._embedding_ids: list[int] = []
+        self._embedding_loaded = False
 
     class _Transaction:
         """Context manager: acquires _lock, enters sqlite3 transaction, returns conn."""
@@ -299,11 +305,24 @@ class MyceliumDB:
             CREATE INDEX IF NOT EXISTS idx_failures_a ON failures(a);
             CREATE INDEX IF NOT EXISTS idx_failures_b ON failures(b);
             CREATE INDEX IF NOT EXISTS idx_failures_last_seen ON failures(last_seen);
+            -- K.2 (2026-05-14): cross-lingual sentence embeddings per concept.
+            -- One row per (concept_id, model) so we can swap models without
+            -- destroying existing embeddings. embedding stored as raw float32
+            -- bytes (np.ndarray.tobytes()) for compactness — 768-dim LaBSE ≈ 3 KB.
+            CREATE TABLE IF NOT EXISTS concept_embeddings (
+                concept_id INTEGER NOT NULL,
+                model TEXT NOT NULL,
+                dim INTEGER NOT NULL,
+                embedding BLOB NOT NULL,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (concept_id, model)
+            ) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS idx_concept_embeddings_model ON concept_embeddings(model);
         """)
         c.commit()
 
     # X4: Current schema version — bump when schema changes
-    SCHEMA_VERSION = 4  # v1=original, v2=composite indexes, v3=sync_log+tombstones, v4=failures table
+    SCHEMA_VERSION = 5  # v1=original, v2=composite indexes, v3=sync_log+tombstones, v4=failures table, v5=concept_embeddings (K.2)
 
     def _migrate_schema(self):
         """X4: Idempotent schema migration using PRAGMA user_version.
@@ -339,6 +358,21 @@ class MyceliumDB:
                     CREATE INDEX IF NOT EXISTS idx_failures_a ON failures(a);
                     CREATE INDEX IF NOT EXISTS idx_failures_b ON failures(b);
                     CREATE INDEX IF NOT EXISTS idx_failures_last_seen ON failures(last_seen);
+                """)
+                self._conn.commit()
+
+            # v4 → v5: add concept_embeddings table (K.2, 2026-05-14).
+            if current < 5:
+                self._conn.executescript("""
+                    CREATE TABLE IF NOT EXISTS concept_embeddings (
+                        concept_id INTEGER NOT NULL,
+                        model TEXT NOT NULL,
+                        dim INTEGER NOT NULL,
+                        embedding BLOB NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        PRIMARY KEY (concept_id, model)
+                    ) WITHOUT ROWID;
+                    CREATE INDEX IF NOT EXISTS idx_concept_embeddings_model ON concept_embeddings(model);
                 """)
                 self._conn.commit()
 
@@ -383,6 +417,96 @@ class MyceliumDB:
                 self._id_to_name[row[0]] = name
                 return row[0]
             raise ValueError(f"Failed to get/create concept: {name}")
+
+    # --- K.2 (2026-05-14): concept embeddings storage ------------------------
+    def _ensure_embedding_matrix(self, provider) -> None:
+        """Lazy-load embeddings for the active model into RAM.
+
+        Called from Mycelium.observe() right before a fusion lookup, only
+        when EmbeddingProvider.is_available() is True. Cheap on second
+        call (early return via self._embedding_loaded).
+        """
+        if self._embedding_loaded:
+            return
+        with self._lock:
+            if self._embedding_loaded:
+                return
+            try:
+                import numpy as np
+            except ImportError:
+                self._embedding_loaded = True  # nothing to load
+                return
+            model = provider.model_name
+            rows = self._conn.execute(
+                "SELECT ce.concept_id, c.name, ce.dim, ce.embedding "
+                "FROM concept_embeddings ce JOIN concepts c ON c.id = ce.concept_id "
+                "WHERE ce.model = ?",
+                (model,),
+            ).fetchall()
+            if not rows:
+                # No embeddings yet for this model — leave matrix as None
+                self._embedding_loaded = True
+                return
+            dim = rows[0][2]
+            mat = np.zeros((len(rows), dim), dtype=np.float32)
+            ids: list[int] = []
+            names: list[str] = []
+            for i, (cid, name, _dim, blob) in enumerate(rows):
+                mat[i] = np.frombuffer(blob, dtype=np.float32)
+                ids.append(cid)
+                names.append(name)
+            self._embedding_matrix = mat
+            self._embedding_ids = ids
+            self._embedding_names = names
+            self._embedding_loaded = True
+
+    def _persist_embedding(self, concept_id: int, model: str, vec) -> None:
+        """Store one (concept_id, model) -> embedding row. Idempotent."""
+        try:
+            import numpy as np
+        except ImportError:
+            return
+        vec = np.asarray(vec, dtype=np.float32)
+        blob = vec.tobytes()
+        ts = int(time.time())
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO concept_embeddings "
+                "(concept_id, model, dim, embedding, created_at) VALUES (?, ?, ?, ?, ?)",
+                (concept_id, model, int(vec.shape[0]), blob, ts),
+            )
+            self._conn.commit()
+            # Append to in-memory matrix if already loaded
+            if self._embedding_loaded and self._embedding_matrix is not None:
+                self._embedding_matrix = np.vstack([self._embedding_matrix, vec[None, :]])
+                self._embedding_ids.append(concept_id)
+                # Look up the name to keep the index consistent
+                row = self._conn.execute(
+                    "SELECT name FROM concepts WHERE id = ?", (concept_id,)
+                ).fetchone()
+                if row:
+                    self._embedding_names.append(row[0])
+            elif self._embedding_loaded and self._embedding_matrix is None:
+                # First embedding ever — seed the matrix
+                self._embedding_matrix = vec[None, :].copy()
+                self._embedding_ids = [concept_id]
+                row = self._conn.execute(
+                    "SELECT name FROM concepts WHERE id = ?", (concept_id,)
+                ).fetchone()
+                self._embedding_names = [row[0]] if row else [str(concept_id)]
+
+    def get_embedding_count(self, model: str | None = None) -> int:
+        """Diagnostic: how many embeddings are stored (optionally for one model)."""
+        with self._lock:
+            if model:
+                row = self._conn.execute(
+                    "SELECT COUNT(*) FROM concept_embeddings WHERE model = ?", (model,)
+                ).fetchone()
+            else:
+                row = self._conn.execute(
+                    "SELECT COUNT(*) FROM concept_embeddings"
+                ).fetchone()
+            return int(row[0]) if row else 0
 
     def _concept_name(self, cid: int) -> str:
         """Get concept name from ID. O(1) via reverse cache. Thread-safe via _lock."""

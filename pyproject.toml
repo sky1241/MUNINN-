@@ -32,7 +32,8 @@ llm = ["anthropic>=0.20"]
 quality = ["forge-shield>=2.1.0"]  # Phase 4 (2026-05-09): regression shield + carmack/locate/modularity for cube heatmap UX
 mcp = ["mcp>=1.7.1,<2.0"]  # Phase B (2026-05-11): MCP server for Claude Code integration
 ui = ["PyQt6>=6.10"]  # H.2 (2026-05-12): muninn-ui desktop console script
-all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=2.1.0", "mcp>=1.7.1,<2.0", "PyQt6>=6.10"]
+embeddings = ["sentence-transformers>=2.7"]  # K.2 (2026-05-14): LaBSE cross-lingual fusion
+all = ["tiktoken>=0.5", "anthropic>=0.20", "forge-shield>=2.1.0", "mcp>=1.7.1,<2.0", "PyQt6>=6.10", "sentence-transformers>=2.7"]
 
 [project.urls]
 Homepage = "https://github.com/sky1241/MUNINN-"

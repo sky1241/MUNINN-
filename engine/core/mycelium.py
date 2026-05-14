@@ -335,6 +335,77 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
         """Canonical key for a pair (alphabetical order)."""
         return f"{min(a,b)}|{max(a,b)}"
 
+    def _k2_fuse_cross_lingual(self, concepts: list[str]) -> list[str]:
+        """K.2 (2026-05-14): map foreign-language concepts to existing
+        canonical concepts via sentence-embedding cosine similarity.
+
+        Triggered from observe() after the K.1 dict lookup. Bypassed
+        entirely when MUNINN_EMBEDDINGS != "1" or when sentence-transformers
+        is not importable — in both cases this returns the input list
+        unchanged.
+
+        Algorithm:
+          1. Split concepts into 'already known' (existing concept_id)
+             and 'new' (would be created).
+          2. Embed the 'new' batch in one model call (cheaper than N).
+          3. For each new concept, find the best cosine match in the
+             existing embedding matrix.
+          4. If cosine >= threshold, rewrite the concept to the canonical
+             name (= fusion). Otherwise persist the new embedding so
+             future lookups can fuse against it.
+        """
+        try:
+            from .embeddings import EmbeddingProvider
+        except ImportError:
+            try:
+                from embeddings import EmbeddingProvider  # type: ignore[no-redef]
+            except ImportError:
+                return concepts
+        provider = EmbeddingProvider.get()
+        if not provider.is_available():
+            return concepts
+        try:
+            self._db._ensure_embedding_matrix(provider)
+        except (sqlite3.Error, AttributeError, OSError):
+            return concepts
+
+        new_concepts = [c for c in concepts if c not in self._db._concept_cache]
+        if not new_concepts:
+            return concepts
+
+        try:
+            new_vecs = provider.embed_batch(new_concepts)
+        except Exception:  # noqa: BLE001 — model errors must not break observe()
+            return concepts
+        if new_vecs is None:
+            return concepts
+
+        mapping: dict[str, str] = {}
+        matrix = self._db._embedding_matrix
+        names = self._db._embedding_names
+        threshold = provider.threshold
+        model_name = provider.model_name
+
+        for concept, vec in zip(new_concepts, new_vecs):
+            best_name, score = provider.find_best_match(vec, matrix, names)
+            if best_name is not None and score >= threshold:
+                mapping[concept] = best_name
+                continue
+            # No fusion — create the concept now and seed its embedding so
+            # the NEXT concept in this loop (or session) can fuse against it.
+            try:
+                cid = self._db._get_or_create_concept(concept)
+                self._db._persist_embedding(cid, model_name, vec)
+                matrix = self._db._embedding_matrix
+                names = self._db._embedding_names
+            except (sqlite3.Error, ValueError):
+                continue
+
+        if not mapping:
+            return concepts
+        rewritten = [mapping.get(c, c) for c in concepts]
+        return list(set(rewritten))
+
     def observe(self, concepts: list[str], arousal: float = 0.0):
         """Record co-occurrence of concepts in this context.
 
@@ -365,6 +436,13 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
             pass  # Graceful: no tiktoken/anthropic = no translation
 
         clean = list(set(clean))  # deduplicate
+
+        # K.2 (2026-05-14): cross-lingual fusion via sentence embeddings.
+        # Off by default — only fires if MUNINN_EMBEDDINGS=1 AND a model
+        # actually loaded. Catches multilingual variants the K.1 dict
+        # misses (Baum/árbol/木 → tree, jargon equivalents, etc.).
+        if self._db is not None and clean:
+            clean = self._k2_fuse_cross_lingual(clean)
 
         # V6A: Emotional tagging — Hill function boost (Richter-Levin 2003)
         _kappa = 1.0

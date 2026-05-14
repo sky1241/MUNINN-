@@ -28,7 +28,10 @@ BASELINES = {
     # learning design: failures table needs its own write + read API,
     # batch query is critical for spread_activation perf (audit:
     # 0.38ms/100 concepts vs 500ms sequential).
-    ("mycelium_db.py", "MyceliumDB"): 55,
+    # K.2 (2026-05-14): +1 = get_embedding_count (diagnostic for
+    # doctor + migration scripts). _ensure_embedding_matrix +
+    # _persist_embedding stay private.
+    ("mycelium_db.py", "MyceliumDB"): 56,
     # Phase 3 (2026-05-14): +1 = observe_failure (public API for negative
     # learning, mirrors observe_text). _record_failure stays private.
     ("mycelium.py", "Mycelium"): 21,

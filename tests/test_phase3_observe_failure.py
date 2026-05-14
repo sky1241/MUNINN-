@@ -45,13 +45,13 @@ def _make_sqlite_mycelium(tmp_path: Path) -> Mycelium:
 
 
 def test_failures_table_created_at_boot(tmp_path):
-    """v4: new DB has the failures table immediately."""
+    """v4+: new DB has the failures table immediately."""
     db = MyceliumDB(tmp_path / "fresh.db")
     tables = {r[0] for r in db._conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert "failures" in tables
     version = db._conn.execute("PRAGMA user_version").fetchone()[0]
-    assert version == 4
+    assert version >= 4  # bumped to 5 in K.2 (concept_embeddings)
     db.close()
 
 
@@ -79,7 +79,7 @@ def test_failures_table_migration_v3_to_v4(tmp_path):
     tables = {r[0] for r in db2._conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert "failures" in tables
-    assert db2._conn.execute("PRAGMA user_version").fetchone()[0] == 4
+    assert db2._conn.execute("PRAGMA user_version").fetchone()[0] >= 4
     db2.close()
 
 

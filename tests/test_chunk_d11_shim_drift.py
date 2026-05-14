@@ -43,6 +43,7 @@ SHIMMED_MODULES = [
     "sync_backend",
     "sync_tls",
     "vault",
+    "embeddings",  # K.2 (2026-05-14)
 ]
 
 
