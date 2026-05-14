@@ -436,11 +436,13 @@ class TestH13ThreadSafety:
 # ── Schema version ───────────────────────────────────────────────
 
 class TestSchemaVersion:
-    def test_schema_v3(self, tmp_path):
-        """Schema version bumped to 3 for sync_log + tombstones."""
+    def test_schema_current(self, tmp_path):
+        """Schema version must equal MyceliumDB.SCHEMA_VERSION (single source
+        of truth). Bumped over time: v1 original, v2 composite indexes,
+        v3 sync_log+tombstones, v4 failures table (Phase 3 negative learning)."""
         db = MyceliumDB(tmp_path / "schema.db")
         version = db._conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 3
+        assert version == MyceliumDB.SCHEMA_VERSION
         db.close()
 
     def test_sync_log_table_exists(self, tmp_path):

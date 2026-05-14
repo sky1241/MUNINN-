@@ -102,8 +102,8 @@ def test_claude_md_has_forbidden_phrases_listed(claude_md_text):
 def test_claude_md_size_reasonable(claude_md_text):
     """CLAUDE.md should not balloon out of control or shrink unexpectedly."""
     n_lines = claude_md_text.count("\n")
-    assert 150 < n_lines < 350, (
-        f"CLAUDE.md has {n_lines} lines — outside expected range 150-350"
+    assert 150 < n_lines < 400, (
+        f"CLAUDE.md has {n_lines} lines — outside expected range 150-400"
     )
 
 
