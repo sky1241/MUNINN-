@@ -1,0 +1,63 @@
+name: MUNINN Nightly Full Bootstrap
+
+# Runs the FULL `muninn bootstrap .` (no --max-files cap) once per day.
+# The regular CI runs a smoke test (--max-files 10, ~30s) on every push;
+# this job catches any bug that would only manifest at full-repo scale
+# (e.g. memory pressure, OOM, edge-case file types deep in the tree).
+#
+# If this job goes red, look at the diff since the last green run and
+# consider whether the smoke scope in ci.yml needs a wider sample.
+
+on:
+  schedule:
+    # 01:00 UTC daily = 03:00 Geneva (CEST summer, 02:00 CET winter).
+    # GitHub Actions cron may be delayed up to 30 min during peak load.
+    - cron: '0 1 * * *'
+  # Allow manual trigger from the Actions UI ("Run workflow" button).
+  workflow_dispatch:
+
+jobs:
+  full-bootstrap:
+    name: Full bootstrap (no smoke cap) — catches scale-only regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90  # safety net: full bootstrap is ~47min on current repo
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install pytest + runtime deps (mirror of ci.yml)
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -c constraints.txt \
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun \
+            forge-shield mcp
+
+      - name: Configure git identity (sync_backend tests need it)
+        run: |
+          git config --global user.email "ci-nightly@muninn.local"
+          git config --global user.name "MUNINN Nightly CI"
+
+      - name: Reset .muninn state
+        run: rm -rf .muninn
+
+      - name: Full bootstrap on this repo (NO --max-files cap)
+        run: |
+          # This is the heavy run: scans all 546 files, builds the
+          # full mycelium. Expected runtime: 35-50 min depending on
+          # runner load. If it crashes here but the smoke test in
+          # ci.yml passes, it's a scale-only bug — investigate.
+          python3 engine/core/muninn.py bootstrap .
+
+      - name: Sanity check the output
+        run: |
+          python3 - <<'EOF'
+          from pathlib import Path
+          assert Path(".muninn/tree/tree.json").exists(), "tree.json not created"
+          assert Path(".muninn/mycelium.db").exists(), "mycelium.db not created"
+          size_mb = Path(".muninn/mycelium.db").stat().st_size / (1024 * 1024)
+          print(f"OK — mycelium.db size: {size_mb:.1f} MB")
+          assert size_mb > 1.0, f"mycelium.db suspiciously small ({size_mb} MB)"
+          EOF
