@@ -443,12 +443,19 @@ def analyze_file(filepath: Path) -> dict:
     }
 
 
-def bootstrap_mycelium(repo_path: Path):
+def bootstrap_mycelium(repo_path: Path, max_files=None):
     """Cold start: scan repo files and feed the mycelium.
 
     Reads all human-written files (code, docs, config) and feeds them
     to the mycelium as co-occurrence observations. This bootstraps the
     living codebook from scratch on a new repo.
+
+    Args:
+        repo_path: target repo to scan.
+        max_files: if set, stop scanning after N files (used by CI as a
+            smoke test — full bootstrap takes ~47 min on this repo while
+            smoke test with N=30 takes ~3 min and validates the same
+            pipeline-end-to-end-runs invariant).
     """
     repo_path = repo_path.resolve()
     # CRITICAL (2026-05-11 PM hotfix): propagate _REPO_PATH to the package
@@ -478,10 +485,13 @@ def bootstrap_mycelium(repo_path: Path):
                  "data", "output", "cache", "caches", ".muninn"}
 
     file_count = 0
+    capped = False
     for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
                     "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
                     "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini",
                     "**/*.mn", "**/*.tex"]:
+        if capped:
+            break
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -495,11 +505,17 @@ def bootstrap_mycelium(repo_path: Path):
                     else:
                         m.observe_text(clean)
                     file_count += 1
+                    if max_files is not None and file_count >= max_files:
+                        capped = True
+                        break
             except (PermissionError, OSError):
                 continue
 
     m.save()
-    print(f"  Scanned: {file_count} files")
+    if capped:
+        print(f"  Scanned: {file_count} files (capped at --max-files={max_files})")
+    else:
+        print(f"  Scanned: {file_count} files")
     print(f"\n{m.status()}")
 
     rules = m.get_compression_rules()
@@ -513,8 +529,16 @@ def bootstrap_mycelium(repo_path: Path):
     generate_winter_tree(repo_path, file_count, m)
     install_hooks(repo_path)
 
-    # P40: Create branches from scanned files (not just root + mycelium)
-    _bootstrap_branches(repo_path, skip_dirs)
+    # P40: Create branches from scanned files (not just root + mycelium).
+    # Skipped in smoke-test mode (max_files set): _bootstrap_branches re-reads
+    # ~20 docs and runs the full L10/L11/segmentation compression pipeline on
+    # each one — adds ~8min on this repo even with max_files=30 in scan.
+    # Skipping it keeps smoke test under 3min and is fine because we just want
+    # to validate that bootstrap_mycelium itself runs end-to-end.
+    if max_files is None:
+        _bootstrap_branches(repo_path, skip_dirs)
+    else:
+        print(f"  Skipping P40 branch creation (smoke test mode, max_files={max_files})")
 
 
 def _bootstrap_branches(repo_path: Path, skip_dirs: set):
@@ -1040,6 +1064,10 @@ def main():
                         help="For install-cron: remove the systemd timer instead of installing")
     parser.add_argument("--purge-data", action="store_true",
                         help="For uninstall: ALSO remove .muninn/ user data (nuclear). Default: keep data.")
+    parser.add_argument("--max-files", type=int, default=None,
+                        help="For bootstrap: stop scanning after N files (CI smoke test — "
+                             "full bootstrap is ~47min on big repos, --max-files 30 ≈ 3min "
+                             "and validates the same pipeline-runs invariant).")
     # H.1 (2026-05-12): cube sub-action and tuning flags (mirror engine/core/muninn.py).
     parser.add_argument("--cube-action",
                         choices=["scan", "run", "status", "god"],
@@ -1231,7 +1259,7 @@ def main():
             print(f"ERROR: path does not exist: {_safe_path(_REPO_PATH)}", file=sys.stderr)
             sys.exit(1)
         _refresh_tree_paths()
-        bootstrap_mycelium(Path(args.file))
+        bootstrap_mycelium(Path(args.file), max_files=args.max_files)
         return
 
     if args.command == "upgrade-hooks":

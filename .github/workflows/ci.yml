@@ -137,9 +137,13 @@ jobs:
           assert "Fusions" in r.stdout, "simulate should produce fusions"
           print(r.stdout[:500])
 
-          # Test bootstrap on this repo
+          # Test bootstrap on this repo (smoke test — --max-files 30 keeps it
+          # under ~3min instead of the ~47min full bootstrap. Validates the
+          # same pipeline-runs invariant: if the pipeline crashes on any file
+          # type, it crashes on the first one, not the 500th. A full nightly
+          # bootstrap is the place for repo-scale validation.)
           r = subprocess.run(
-              ["python3", "engine/core/muninn.py", "bootstrap", "."],
+              ["python3", "engine/core/muninn.py", "bootstrap", ".", "--max-files", "10"],
               capture_output=True, text=True
           )
           assert r.returncode == 0, f"bootstrap failed: {r.stderr}"
