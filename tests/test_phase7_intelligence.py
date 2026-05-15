@@ -66,21 +66,28 @@ class TestA2AdaptiveDecay:
 
     def test_adaptive_decay_active(self, tmp_path):
         """A2: Active repo gets shorter half-life."""
+        from datetime import date, timedelta
         from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.data["session_count"] = 100
-        m.data["created"] = "2026-01-01"
+        # Relative date so the simulated rate stays constant over time
+        # (previously hardcoded "2026-01-01" which made the test drift —
+        # it flipped from hl=27 to hl=40 around 2026-05-15, hitting the
+        # assert boundary).
+        m.data["created"] = (date.today() - timedelta(days=90)).isoformat()
         hl = m.adaptive_decay_half_life()
-        # 100 sessions over ~3 months = ~1.1/day -> ~27 days
+        # 100 sessions over ~90 days = ~1.1/day -> ~27 days
         assert hl < 40
         m.close()
 
     def test_adaptive_decay_inactive(self, tmp_path):
         """A2: Inactive repo gets longer half-life."""
+        from datetime import date, timedelta
         from muninn.mycelium import Mycelium
         m = Mycelium(tmp_path)
         m.data["session_count"] = 3
-        m.data["created"] = "2025-01-01"
+        # Relative date — same rationale as test_adaptive_decay_active
+        m.data["created"] = (date.today() - timedelta(days=450)).isoformat()
         hl = m.adaptive_decay_half_life()
         # 3 sessions over ~450 days = very low rate -> cap at 90
         assert hl >= 30
