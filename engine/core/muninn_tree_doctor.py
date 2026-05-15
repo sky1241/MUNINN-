@@ -387,6 +387,19 @@ def doctor():
     # false positives. Detection: this file lives outside site-packages.
     _is_pip_install = "site-packages" in __file__
 
+    # Fix MCP false-WARN (2026-05-15): checks 13/15/18/19 above inserted
+    # `_m._CORE_DIR` (the `muninn/` package dir) at sys.path[0] so relative
+    # imports like `from sync_backend import ...` work. Side-effect: with
+    # `muninn/` at the front of sys.path, its sub-package `muninn/mcp/`
+    # resolves as top-level `mcp` and shadows the PyPI `mcp` lib. The next
+    # `__import__("muninn.mcp.server")` and `import mcp` then load the shim
+    # which re-imports itself recursively and raises ImportError with "mcp"
+    # in the message — flipping checks 20 and 22 to false WARN even when
+    # both packages are correctly installed. Restore sys.path before the
+    # import-resolution checks fire.
+    while _m._CORE_DIR in sys.path:
+        sys.path.remove(_m._CORE_DIR)
+
     # 20. Console scripts importability — `muninn`, `mycelium`, `muninn-mcp`
     # all resolve to `module:attr` entry points. If any one fails to
     # import, the binary will crash at first invocation.

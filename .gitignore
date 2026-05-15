@@ -6,6 +6,11 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Virtualenv
+.venv/
+venv/
+env/
+
 # Hypothesis property test cache
 .hypothesis/
 
