@@ -20,7 +20,10 @@ jobs:
   full-bootstrap:
     name: Full bootstrap (no smoke cap) — catches scale-only regressions
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # safety net: full bootstrap is ~47min on current repo
+    timeout-minutes: 180  # bumped from 90 → 180 after first run hit timeout
+                          # at 1h29m on 2026-05-15 without finishing. Full
+                          # bootstrap exceeds 90min on free-tier GHA runners.
+                          # GHA public-repo job cap = 6h, so 3h leaves margin.
     steps:
       - uses: actions/checkout@v6
       - name: Setup Python
