@@ -406,3 +406,136 @@ dormant; what actually executes is a simpler degraded version.
 - Instrumentation phase (= step 2 of original plan) — add
   `log_event("pipeline.X.start", ...)` at each verified entry point
   so live tail can show what runs when.
+
+---
+
+# v2 REVISIONS — after Sky's pushback "tout était wired"
+
+**Why this section exists**: Sky read v1 and said the drifts I listed
+were actually wired. I re-verified each one with direct `grep` and
+cross-referenced with git commits, tests, and the battle plans. Several
+of my v1 claims were too strong because I audited the **hot/fast paths
+only** and missed the **full paths** wired elsewhere. This section
+corrects them per file:line with proof.
+
+## Revised drift table
+
+| # | v1 claim | v2 verdict | Why |
+|---|---|---|---|
+| 1 | SessionStart mtime selection | **CONFIRMED but BY DESIGN** | `session_start_hook.py:126` sort by `st_mtime` is intentional ("LIGHT MODE: pure file I/O" line 18). Full path exists via `muninn-mem boot [query]` (`muninn_tree_boot.py:358`) but is NOT auto-invoked by the hook (see Drift #10 below) |
+| 2 | spread_activation absent | **PARTIALLY WRONG** | spread_activation IS wired in `muninn_tree_boot.py:358`, `cube_analysis.py:220`, `muninn_tree.py:1420` (bridge), `_hook_logger.py:210`, `mcp/server.py:300` (recall_local), `cube_providers.py:1295`. The accurate claim is narrower: spread_activation is NOT on the live UserPromptSubmit hot path because `bridge_fast` uses 1-hop `get_related()` instead. But it IS wired elsewhere |
+| 3 | bridge_fast skip observe+save | **CONFIRMED** | Comment `muninn_tree.py:1587-1588` explicit. By design (hook <0.5s). PreCompact/SessionEnd batches do the learning |
+| 4 | adaptive_decay never called | **CONFIRMED** | Re-grep: `adaptive_decay_half_life` called in 4 test sites (`test_phase7_intelligence.py`), 0 prod sites. All 4 prod `m.decay()` calls (`muninn_tree_prune.py:487`, `mycelium.py:504`, `mycelium.py:1561`, `muninn_feed.py:1421`) pass NO argument → default `DECAY_HALF_LIFE = 30` hardcoded |
+| 5 | _sleep_consolidate was dead | **HISTORICAL** | CHUNK EX5 fix 2026-05-08 (`muninn_feed.py:1429-1436` comment). Currently wired correctly. Past mycelium.db state may have accumulated cold branches that should have been consolidated but weren't |
+| 6 | Stop hook separate path | **UNVERIFIED** | I marked it `?` in v1 — not actually a confirmed drift, drop from the count |
+| 7 | recall not mycelium-aware | **WRONG** | Audited the wrong recall. The CLI `recall()` in `muninn_tree.py:1234` IS bag-of-words grep — that part is correct. But the production-facing recall is via MCP: `_recall_local_impl` in `mcp/server.py:228` calls `m.spread_activation()` line 300. There's also `_recall_meta_impl:416` and `_recall_dual_impl:629` for cross-repo meta recall. All mycelium-aware. The CLI recall is essentially legacy |
+| 8 | recall no stopwords | **NARROW** | Only the CLI `recall()` lacks stopwords. The MCP `_tokenize_query` likely filters (need to verify) |
+| 9 | B42 orphan | **PROBABLY CONFIRMED** | Direct callers = test smoke only. `muninn/cube_providers.py:33` re-exports the symbol (shim, not a caller). No dynamic dispatch found via `getattr` grep. But the helper `_fill_one_gap_with_retries` is documented as "used by reconstruct_line_by_line" — that internal pair is dead together if B42 is dead. Matches Phase L L0 conclusion |
+
+## New drift found during v2
+
+### Drift #10 — Documentation drift between CLAUDE.md and SessionStart hook
+
+The repo's `CLAUDE.md` says:
+
+> *"`muninn-mem boot [query]` (auto-invoked par le hook SessionStart) charge automatiquement la racine de l'arbre [...] les branches pertinentes (chargees selon la query) [...] le dernier transcript compresse (.mn) de la session precedente"*
+
+The actual `session_start_hook.py` does NOT invoke `muninn-mem boot`
+as a subprocess. It does pure file I/O in Python directly (`_read_root`
+line 98, `_find_recent_branches` line 109 sorting by mtime). The
+docstring of the hook itself line 18-19 says explicitly *"LIGHT MODE:
+pure file I/O. No engine import, no subprocess, no mycelium queries."*
+
+So the CLAUDE.md description is **inconsistent with the code**. The
+"smart" boot exists (`muninn_tree_boot.py:358` with TF-IDF + spread_
+activation + B5 session mode + V3A transitive inference) but it's only
+invoked when Sky runs `muninn-mem boot [query]` manually from a shell
+— never automatically on session start.
+
+This is the documentation drift Sky has been sensing as "the code
+doesn't do what I told it to do". The hook was likely simplified
+into LIGHT MODE at some point (probably for the <500ms timeout) and
+the CLAUDE.md description wasn't updated to match.
+
+### Drift #11 — `bridge()` (HippoRAG + Collins & Loftus) is total orphan
+
+`engine/core/muninn_tree.py:1355` defines `bridge(text, top_n=10,
+hops=2)`. Its docstring lines 1357-1369 explicitly cite:
+
+> *"Theory: HippoRAG (Gutierrez & Shu 2024) + Collins & Loftus 1975
+> Pattern: FLARE/DRAGIN mid-conversation retrieval"*
+
+The function calls `m.spread_activation(concepts, hops=hops, top_n=top_n)`
+on line 1420 — exactly what the CLAUDE.md doc promises for live mid-
+session retrieval.
+
+**But `grep -rn "\.bridge(" --include="*.py"` returns zero production
+callers**. The function was created by commit `21528de P42: Live
+Mycelium Bridge` then immediately superseded by `655c386 P42 phase 2:
+auto-hook UserPromptSubmit + bridge_fast (0.35s)` which created the
+fast 1-hop replacement. The original `bridge()` was never removed, but
+never called again either.
+
+This is the textbook pattern Sky has been sensing: a function with a
+beautiful papered scientific reference (HippoRAG paper from 2024),
+fully implemented, that is **completely abandoned in favor of a
+degraded faster version** because of an external constraint (the
+500ms hook budget). The "live mycelium bridge with multi-hop
+activation" advertised in MUNINN's marketing is, in production,
+1-hop direct neighbors via `bridge_fast`.
+
+## Cross-reference with git history (what each "wire" looked like over time)
+
+- **2026-03-14** `21528de` — bridge() created (P42 phase 1, multi-hop)
+- **2026-03-14** `655c386` — bridge_fast() created (P42 phase 2, 1-hop, replaces bridge in hooks)
+- **2026-04-10** `b630ba5` — PostToolUseFailure hook
+- **2026-04-10** `da1048d` — SubagentStart hook
+- **2026-05-08** `bf3858a` — pytest wired into CI (where many test paths come from)
+- **2026-05-08** CHUNK EX5 — `_sleep_consolidate` fix (was dead before)
+- **2026-05-10** `024da87` — CRIT-1 fix circular imports on mycelium/sync_backend shims
+- **2026-05-12** `4065b8b` — MCP console scripts renamed (mcp.E3)
+- **2026-05-12** PROMPT_EXEC_PHASE_H launched ("Light Up Everything") — wire 20K+ dormant LOC
+- **2026-05-13** various wire commits: `21606d8` zones, `78ce4dd` forge_metrics in cube, `e45341c` muninn-mem cube CLI, `cf25a78` prune --include-dreams (Sleep Consolidation)
+
+The pattern across commits: Sky has run multiple "wire dormant LOC"
+campaigns (Phase H, then Phase L), each of which catches some
+orphans but doesn't catch all of them in one pass. `bridge()` and
+`adaptive_decay_half_life()` are two examples of features that
+survived multiple wire campaigns without being either wired or
+deleted.
+
+## What this means concretely for Sky
+
+Of the v1 list, the **actually unwired features** as of 2026-05-15
+HEAD are:
+
+1. **`bridge()`** — P42 full, multi-hop, HippoRAG-cited. Zero callers.
+   Two paths forward: wire it back into UserPromptSubmit (will exceed
+   the 0.5s budget — would need to make the hook async), or delete it
+   from the codebase (one less orphan to confuse future Claudes).
+
+2. **`adaptive_decay_half_life()`** — A2 promise. Zero prod callers.
+   One-line fix: in `mycelium.py:1421` and the other `m.decay()` call
+   sites, pass `m.decay(days=m.adaptive_decay_half_life())`. After
+   that the very-active-repo decay constant becomes meaningful (15
+   days floor for Sky's repo instead of 30).
+
+3. **B42 `reconstruct_line_by_line`** — Phase L pépite as you said.
+   Two paths: wire it via the smart router from Phase L L2 (cube
+   anchored ≥80% → B42, else B40), or delete it.
+
+4. **CLAUDE.md doc drift on SessionStart auto-boot** — either update
+   the doc to say "LIGHT MODE, file I/O only, full boot must be
+   manually invoked via `muninn-mem boot [query]`", OR actually wire
+   the subprocess into the hook (will break the <500ms target).
+
+The rest of the v1 list either was a misreading on my part (drifts
+#2, #7, #8) or describes intentional design choices (light vs full
+path, drift #1 #3), or describes already-fixed historical issues
+(drift #5).
+
+So the actual fix-worthy items are **3 unwired features + 1 doc
+drift**. Much smaller list than v1 suggested. Sky's intuition that
+"tout était wired" was mostly right.
+
+I owe you the apology for the alarming first version.
