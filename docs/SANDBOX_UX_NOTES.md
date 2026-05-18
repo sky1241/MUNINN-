@@ -79,7 +79,7 @@ Drifts UX qui ne tiennent que dans la sandbox (mycelium pauvre):
 
 ---
 
-## 4. Plan branchement UI desktop dans sandbox (PAS encore fait)
+## 4. Plan branchement UI desktop dans sandbox (DONE 2026-05-18 — CHUNK 9 pipeline_trace)
 
 Pour piloter `muninn-ui` (PyQt6 desktop) avec moi qui observe + Sky qui interagit:
 
