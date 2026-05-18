@@ -565,6 +565,8 @@ def compute_temperature(node: dict) -> float:
 
 def refresh_tree_metadata(tree: dict):
     """Recompute hash + line count + temperature for all nodes."""
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+    _pt_n = len(tree.get("nodes", {}))  # PIPELINE_TRACE
     for name, node in tree["nodes"].items():
         filepath = _m.TREE_DIR / node["file"]
         node["hash"] = compute_hash(filepath)
@@ -575,6 +577,7 @@ def refresh_tree_metadata(tree: dict):
             except (OSError, UnicodeDecodeError):
                 pass
         node["temperature"] = compute_temperature(node)
+    log_event("pipeline.engine.refresh_tree.end", {"nodes": _pt_n, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
 
 
 def read_node(name: str, _tree: dict | None = None) -> str:
@@ -846,11 +849,15 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
     Merges into existing branch if >50% tag overlap (avoids duplication).
     V6B: Propagates session valence/arousal to branch nodes for decay modulation.
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+    log_event("pipeline.engine.grow_branches.begin", {"mn_path": mn_path.name})  # PIPELINE_TRACE
     if not mn_path.exists():
+        log_event("pipeline.engine.grow_branches.end", {"reason": "mn_missing", "created": 0})  # PIPELINE_TRACE
         return 0
 
     content = _safe_read_mn(mn_path)
     if content is None or not content.strip():
+        log_event("pipeline.engine.grow_branches.end", {"reason": "empty_content", "created": 0})  # PIPELINE_TRACE
         return 0
 
     # Split by ## headers (compress_transcript already creates these)
@@ -1027,6 +1034,7 @@ def grow_branches_from_session(mn_path: Path, session_sentiment: dict = None):
     if created > 0:
         print(f"  Auto-segmentation: {len(segments)} sections -> {created} new branches", file=sys.stderr)
 
+    log_event("pipeline.engine.grow_branches.end", {"sections": len(segments), "created": created, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
     return created
 
 

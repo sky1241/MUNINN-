@@ -21,6 +21,13 @@ import sys
 import time
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 from muninn_tree import (
     _m,
     _atomic_text_write,
@@ -51,7 +58,10 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
     Returns:
         list of (merged_name, merged_content) for newly created branches
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+    log_event("pipeline.engine.sleep_consolidate.begin", {"cold_count": len(cold_branches), "ncd_threshold": ncd_threshold})  # PIPELINE_TRACE
     if len(cold_branches) < 2:
+        log_event("pipeline.engine.sleep_consolidate.end", {"reason": "fewer_than_2_cold", "merged": 0})  # PIPELINE_TRACE
         return []
 
     # P8: Cap to top-20 coldest branches by recall score to avoid O(n^2) NCD
@@ -190,6 +200,7 @@ def _sleep_consolidate(cold_branches: list[tuple[str, dict]], nodes: dict,
         print(f"  CONSOLIDATED {len(members)} branches -> {merged_name}: "
               f"{orig_lines} -> {len(combined.split(chr(10)))} lines")
 
+    log_event("pipeline.engine.sleep_consolidate.end", {"merged": len(results), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
     return results
 
 
@@ -200,12 +211,15 @@ def _light_prune():
     Just Ebbinghaus recall check + B14 dust removal + file cleanup.
     Runs in < 1s even on 2000+ branches.
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
     tree = load_tree()
     nodes = tree["nodes"]
     refresh_tree_metadata(tree)
 
     branches = {n: d for n, d in nodes.items() if n != "root"}
+    log_event("pipeline.engine.light_prune.begin", {"branches": len(branches)})  # PIPELINE_TRACE
     if not branches:
+        log_event("pipeline.engine.light_prune.end", {"removed": 0, "reason": "no_branches"})  # PIPELINE_TRACE
         return 0
 
     removed = 0
@@ -234,6 +248,7 @@ def _light_prune():
     if removed > 0:
         save_tree(tree)
         print(f"  LIGHT PRUNE: removed {removed} dead/dust branches ({len(nodes)-1} remaining)", file=sys.stderr)
+    log_event("pipeline.engine.light_prune.end", {"removed": removed, "remaining": len(nodes) - 1, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
     return removed
 
 

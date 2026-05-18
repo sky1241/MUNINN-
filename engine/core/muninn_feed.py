@@ -579,10 +579,14 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
     Returns the path to the written .mn file.
     Accepts pre-parsed texts to avoid double parse_transcript call.
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+    log_event("pipeline.engine.compress.begin", {"jsonl": jsonl_path.name if jsonl_path else None, "texts_prefetched": texts is not None})  # PIPELINE_TRACE
     if texts is None:
         texts = parse_transcript(jsonl_path)
     if not texts:
+        log_event("pipeline.engine.compress.end", {"reason": "no_texts"})  # PIPELINE_TRACE
         return None, None
+    log_event("pipeline.engine.compress.parsed", {"texts": len(texts)})  # PIPELINE_TRACE
 
     # P10: Strip secrets before compression (compiled patterns)
     for i, text in enumerate(texts):
@@ -666,11 +670,14 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
     # Contradiction resolution (last-writer-wins on numeric facts)
     result = _m._resolve_contradictions(result)
 
+    log_event("pipeline.engine.compress.pre_l10", {"tokens": token_count(result)})  # PIPELINE_TRACE
     # L10: Cue Distillation — BEFORE L9 (filter generic knowledge early)
     result = _m._cue_distill(result)
+    log_event("pipeline.engine.compress.post_l10", {"tokens": token_count(result)})  # PIPELINE_TRACE
 
     # L11: Rule Extraction — factorize repeated key=value patterns
     result = _m._extract_rules(result)
+    log_event("pipeline.engine.compress.post_l11", {"tokens": token_count(result)})  # PIPELINE_TRACE
 
     # Layer 9: SKIP on transcripts — regex already achieves x100+ on tool-heavy
     # transcripts, L9 adds no value (tested: 3014 vs 3319 tokens, L9 is worse).
@@ -804,6 +811,7 @@ def compress_transcript(jsonl_path: Path, repo_path: Path, texts: list = None) -
                                  "n_positive": 0, "n_negative": 0, "n_neutral": 0}
         session_sentiment["danger_score"] = _danger
 
+    log_event("pipeline.engine.compress.end", {"mn_path": mn_path.name if mn_path else None, "final_tokens": token_count(result) if 'result' in dir() else 0, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
     return mn_path, session_sentiment
 
 
@@ -1254,10 +1262,13 @@ def _sync_to_meta_guarded(
         "hook_event": hook_event,
     }
 
+    log_event("pipeline.engine.meta_sync.begin", {"hook_event": hook_event, "budget_s": budget_seconds})  # PIPELINE_TRACE
+
     # Opt-out — early return before any sync work.
     if os.environ.get("MUNINN_SKIP_META_SYNC") == "1":
         result["status"] = "skipped"
         _write_meta_sync_marker(repo_path, result)
+        log_event("pipeline.engine.meta_sync.end", {"status": "skipped", "reason": "env_opt_out"})  # PIPELINE_TRACE
         return result
 
     container = {"pushed": 0, "error": None}
@@ -1312,6 +1323,7 @@ def _sync_to_meta_guarded(
                 pass
 
     _write_meta_sync_marker(repo_path, result)
+    log_event("pipeline.engine.meta_sync.end", {"status": result["status"], "pushed": result["pushed"], "elapsed_s": result["elapsed_s"], "error": result.get("error")})  # PIPELINE_TRACE
     return result
 
 
