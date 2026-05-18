@@ -62,6 +62,14 @@ DOCUMENTED_OVERSIZED_FUNCTIONS = frozenset({
     # Phase J : extract hook templates to .py files and read them instead
     # of inlining as f-strings.
     ("muninn_install.py", "_generate_subagent_start_hook"),  # ~230 lines (template)
+    # 2026-05-18 chunk-1-followup of pipeline_trace campaign : added 9-line
+    # block to wire pre_tool_use_task_throttle.py with matcher "Task"
+    # (Sky's quota protection, see hook docstring). Function was already at
+    # ~200 lines threshold; the throttle addition pushed it over. Refactor
+    # in Phase J : split install_hooks() into _build_required_hooks() +
+    # _merge_with_existing() so the entry-list building can be unit-tested
+    # without touching the filesystem. Out of scope for this chunk.
+    ("muninn_install.py", "install_hooks"),
 })
 
 # Hard caps that NO file/function may cross going forward

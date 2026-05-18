@@ -557,11 +557,15 @@ def test_install_hooks_copies_pre_tool_use_hooks(tmp_path):
     repo.mkdir()
     muninn.install_hooks(repo)
 
-    # The 3 PreToolUse scripts should be present in the target
+    # The 4 PreToolUse scripts should be present in the target
+    # (throttle added 2026-05-18 — chunk-1-followup of pipeline_trace
+    # campaign, see commit message; protects against quota burns like the
+    # 2026-05-14 incident where 342 Explore subagents ate 58% of weekly cap)
     expected = [
         "pre_tool_use_bash_destructive.py",
         "pre_tool_use_bash_secrets.py",
         "pre_tool_use_edit_hardcode.py",
+        "pre_tool_use_task_throttle.py",
     ]
     target_hooks_dir = repo / ".claude" / "hooks"
     for name in expected:
@@ -576,7 +580,7 @@ def test_install_hooks_copies_pre_tool_use_hooks(tmp_path):
     )
     pre_tool = settings["hooks"]["PreToolUse"]
     assert isinstance(pre_tool, list)
-    assert len(pre_tool) == 3, f"Expected 3 PreToolUse entries, got {len(pre_tool)}"
+    assert len(pre_tool) == 4, f"Expected 4 PreToolUse entries, got {len(pre_tool)}"
     # Each entry should have matcher + hooks
     for entry in pre_tool:
         assert "matcher" in entry
