@@ -166,11 +166,24 @@ class TestBootstrapTexRouting:
         assert count > 0, "Bootstrap with .tex should create mycelium connections"
 
     def test_bootstrap_tex_pattern_in_glob(self):
-        """The bootstrap glob list should include **/*.tex."""
-        import inspect
-        from muninn import bootstrap_mycelium
-        source = inspect.getsource(bootstrap_mycelium)
-        assert "**/*.tex" in source, "bootstrap should glob for .tex files"
+        """bootstrap_mycelium MUST pick up .tex files.
+
+        Until the CHUNK 10 refactor (commit 9ce6b06, 2026-05-18) this
+        test grepped the literal string `**/*.tex` in the function
+        source — brittle, broke as soon as the glob list moved into the
+        MEMORY_EXTENSIONS frozenset. Now we check the actual behaviour:
+        `.tex` is in MEMORY_EXTENSIONS AND _glob_patterns() emits the
+        right glob when MEMORY_EXTENSIONS is included.
+        """
+        from muninn._engine import MEMORY_EXTENSIONS, _glob_patterns
+        assert ".tex" in MEMORY_EXTENSIONS, (
+            ".tex must be in MEMORY_EXTENSIONS so bootstrap_mycelium "
+            "feeds LaTeX papers into the mycelium."
+        )
+        globs = _glob_patterns(MEMORY_EXTENSIONS)
+        assert "**/*.tex" in globs, (
+            f"_glob_patterns(MEMORY_EXTENSIONS) should yield `**/*.tex`, got {globs}"
+        )
 
     def test_bootstrap_routing_logic(self):
         """The bootstrap should check f.suffix == '.tex' for routing."""
