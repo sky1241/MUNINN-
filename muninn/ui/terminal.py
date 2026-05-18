@@ -128,6 +128,11 @@ class TerminalWidget(QWidget):
     # Closes the UX gap where the palette scan wrote local.json to disk
     # but the UI never refreshed (see SANDBOX_UX_NOTES drift #5).
     scan_data_ready = pyqtSignal(str)
+    # CHUNK 10 phase 4 (2026-05-18): signal-based chat append, replaces
+    # QTimer.singleShot pattern that was unreliable under X11 forward.
+    # Emitted from worker threads, slot is on the main thread —
+    # pyqtSignal auto-routes via QueuedConnection so no race conditions.
+    subprocess_output_ready = pyqtSignal(str, str)  # (text, color_hex)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -609,20 +614,32 @@ class TerminalWidget(QWidget):
         # find_owning_repo() that walks up from the file via the
         # `.muninn/` (or `.git/`) marker. See engine/core/repo_discovery.py.
         try:
-            from engine.core.repo_discovery import find_owning_repo
+            from engine.core.repo_discovery import (
+                find_owning_repo, find_bootstrapped_repo,
+            )
         except ImportError:
-            from repo_discovery import find_owning_repo  # type: ignore[no-redef]
+            from repo_discovery import (  # type: ignore[no-redef]
+                find_owning_repo, find_bootstrapped_repo,
+            )
         if not file_path.is_absolute():
             anchor = find_owning_repo(Path.cwd()) or Path.cwd()
             file_path = (anchor / file_path).resolve()
         if not file_path.exists():
             self._append_text(f"File not found: {file_path}", color="#EF4444")
             return
-        repo_root = find_owning_repo(file_path)
+        # Use the stricter helper for the gate: a fully-bootstrapped
+        # repo has BOTH tree.json AND mycelium.db. Partial .muninn/
+        # directories created by `muninn-mem scan <somedir>` (only
+        # mycelium.db, no tree) are skipped — find_bootstrapped_repo
+        # walks past them looking for a real one. Fixes the 2026-05-18
+        # drift where scanning /tmp/btree-only made find_owning_repo
+        # match that incomplete .muninn/, making the gate fail forever.
+        repo_root = find_bootstrapped_repo(file_path)
         if repo_root is None:
             self._append_text(
-                f"[reco] {file_path} is not inside a Muninn-bootstrapped repo. "
-                "Run `muninn-mem bootstrap <repo>` first, or set MUNINN_REPO.",
+                f"[reco] No bootstrapped Muninn repo found anywhere above "
+                f"{file_path}. Run `muninn-mem init` then "
+                f"`muninn-mem bootstrap <repo>` (or set MUNINN_REPO).",
                 color="#EF4444",
             )
             return
@@ -777,20 +794,60 @@ class TerminalWidget(QWidget):
         return os.getcwd()
 
     def _run_subprocess_bg(self, cmd: list, timeout: int = 30, on_success=None):
-        """Run a subprocess in a background thread to avoid freezing the UI.
+        """Run a subprocess in a background thread.
 
-        Args:
-            on_success: optional callable invoked on the main thread (via
-                QTimer.singleShot) after the subprocess returns 0. Used by
-                /scan to load the produced JSON into the cube + tree
-                panels — closes the UX gap where palette commands
-                produced disk output but the UI never refreshed.
+        Three CHUNK 10 phase 4 fixes (2026-05-18) vs the earlier version:
+          1. The chat append no longer goes through QTimer.singleShot from
+             the worker thread (unreliable under X11 forward — caused
+             "scan terminé mais rien dans le chat"). It emits the
+             ``subprocess_output_ready`` signal, which is auto-routed
+             via QueuedConnection to the main-thread slot.
+          2. A progress ticker (QTimer, started in the main thread BEFORE
+             the worker) appends "[scan] running… Xs" every 2s so the
+             user can see the op is alive. Stopped when the worker emits
+             ``subprocess_output_ready``.
+          3. ``on_success`` is called directly from the worker (already
+             done in commit 13430d2). Same rationale.
         """
         import subprocess, sys, threading
 
         cwd = self._detect_subprocess_cwd()
         _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
         log_event("pipeline.ui.terminal.subprocess_start", {"cmd": " ".join(str(c) for c in cmd)[:200], "timeout_s": timeout, "cwd": cwd})  # PIPELINE_TRACE
+
+        # Wire the cross-thread output channel once. Connect-then-disconnect
+        # is idempotent if called repeatedly because Qt deduplicates by
+        # callable identity.
+        try:
+            self.subprocess_output_ready.disconnect(self._append_subprocess_output)
+        except (TypeError, RuntimeError):
+            pass
+        self.subprocess_output_ready.connect(self._append_subprocess_output)
+
+        # Progress ticker — main thread, ticks every 2s while worker runs.
+        progress_state = {"elapsed": 0}
+
+        def _tick():
+            progress_state["elapsed"] += 2
+            self._append_text(
+                f"[scan] running… {progress_state['elapsed']}s",
+                color=TEXT_SECONDARY,
+            )
+
+        progress_timer = QTimer(self)
+        progress_timer.timeout.connect(_tick)
+        progress_timer.start(2000)
+
+        # Stop the ticker as soon as either output_ready fires (success or
+        # failure both emit it). Using a single-fire local guard.
+        def _stop_ticker(*_args):
+            if progress_timer.isActive():
+                progress_timer.stop()
+        try:
+            self.subprocess_output_ready.disconnect(_stop_ticker)
+        except (TypeError, RuntimeError):
+            pass
+        self.subprocess_output_ready.connect(_stop_ticker)
 
         def _worker():
             try:
@@ -801,26 +858,28 @@ class TerminalWidget(QWidget):
                 )
                 log_event("pipeline.ui.terminal.subprocess_end", {"cmd": " ".join(str(c) for c in cmd)[:120], "returncode": result.returncode, "stdout_len": len(result.stdout), "stderr_len": len(result.stderr), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
                 if result.returncode == 0:
-                    # Use QTimer.singleShot to emit on main thread
-                    QTimer.singleShot(0, lambda: self._append_text(
-                        result.stdout.strip() or "Done.", color="#32CD32"))
+                    self.subprocess_output_ready.emit(
+                        result.stdout.strip() or "Done.", "#32CD32",
+                    )
                     if on_success is not None:
-                        # Call directly: pyqtSignal.emit is thread-safe
-                        # via AutoConnection → QueuedConnection. Wrapping
-                        # in QTimer.singleShot proved unreliable under
-                        # X11 forward (drift #5 follow-up).
                         try:
                             on_success()
                         except Exception as _e:  # noqa: BLE001
                             log_event("pipeline.ui.terminal.on_success_error", {"err": str(_e)[:200]})  # PIPELINE_TRACE
                 else:
-                    QTimer.singleShot(0, lambda: self._append_text(
-                        result.stderr.strip() or "Failed.", color="#EF4444"))
+                    self.subprocess_output_ready.emit(
+                        result.stderr.strip() or "Failed.", "#EF4444",
+                    )
             except Exception as e:
-                QTimer.singleShot(0, lambda: self._append_text(
-                    f"Error: {e}", color="#EF4444"))
+                self.subprocess_output_ready.emit(f"Error: {e}", "#EF4444")
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _append_subprocess_output(self, text: str, color: str) -> None:
+        """Slot for ``subprocess_output_ready``. Runs on the main thread
+        thanks to Qt's AutoConnection → QueuedConnection across threads.
+        """
+        self._append_text(text, color=color)
 
     # --- LLM ---
 

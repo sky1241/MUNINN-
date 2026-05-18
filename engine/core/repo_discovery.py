@@ -39,7 +39,7 @@ import os
 from pathlib import Path
 from typing import Optional, Union
 
-__all__ = ["find_owning_repo"]
+__all__ = ["find_owning_repo", "find_bootstrapped_repo"]
 
 
 def _candidate_from_env(var: str) -> Optional[Path]:
@@ -115,3 +115,55 @@ def find_owning_repo(start: Union[Path, str, None] = None) -> Optional[Path]:
 
     git_match = _walk_up_for_marker(start_path, ".git")
     return git_match
+
+
+def _is_bootstrapped(repo: Path) -> bool:
+    """A repo is *bootstrapped* iff its .muninn/ holds BOTH the canonical
+    tree (`.muninn/tree/tree.json`) AND the mycelium DB
+    (`.muninn/mycelium.db`). Stricter than just "has a .muninn/" because
+    `scan_repo` writes a partial .muninn/ (only mycelium.db) into the
+    scan target — that one must NOT pass the /reconstruct gate.
+    """
+    muninn = repo / ".muninn"
+    return (muninn / "tree" / "tree.json").exists() and (muninn / "mycelium.db").exists()
+
+
+def find_bootstrapped_repo(start: Union[Path, str, None] = None) -> Optional[Path]:
+    """Like ``find_owning_repo`` but only returns a repo whose ``.muninn/``
+    is fully bootstrapped (tree.json + mycelium.db both present).
+
+    Required by the ``/reconstruct`` gate, which can only run on a repo
+    where the reconstructor will find BOTH the tree (for context) AND
+    the mycelium (for neighbor hints). A bare ``.muninn/`` created by a
+    one-off ``muninn-mem scan <somedir>`` would otherwise be matched by
+    ``find_owning_repo`` and then the gate would fail with "tree missing"
+    — exactly the loop drift Sky hit in the sandbox on 2026-05-18.
+
+    Resolution order mirrors ``find_owning_repo`` but each candidate must
+    pass ``_is_bootstrapped`` to be returned:
+
+      1. MUNINN_REPO env var (if it points at a bootstrapped dir)
+      2. CLAUDE_PROJECT_DIR env var (same)
+      3. Walk up from ``start`` looking for an ancestor whose
+         ``.muninn/`` is bootstrapped (skips partial ones)
+      4. ``None`` — caller must surface a clear error.
+    """
+    for var in ("MUNINN_REPO", "CLAUDE_PROJECT_DIR"):
+        env_hit = _candidate_from_env(var)
+        if env_hit is not None and _is_bootstrapped(env_hit):
+            return env_hit
+
+    if start is None:
+        start_path = Path(os.getcwd())
+    else:
+        start_path = Path(start)
+    if not start_path.exists():
+        return None
+    if start_path.is_file():
+        start_path = start_path.parent
+
+    here = start_path.resolve()
+    for cand in [here, *here.parents]:
+        if _is_bootstrapped(cand):
+            return cand
+    return None

@@ -144,3 +144,88 @@ def test_nonexistent_start_returns_none(tmp_path):
     """A start path that doesn't exist returns None (no exceptions)."""
     bogus = tmp_path / "does" / "not" / "exist"
     assert find_owning_repo(bogus) is None
+
+
+# ─── find_bootstrapped_repo ─────────────────────────────────────────
+
+
+def _make_bootstrapped(repo: Path) -> None:
+    """Create a fully-bootstrapped .muninn/ inside `repo`."""
+    (repo / ".muninn" / "tree").mkdir(parents=True, exist_ok=True)
+    (repo / ".muninn" / "tree" / "tree.json").write_text("{}")
+    (repo / ".muninn" / "mycelium.db").write_bytes(b"")
+
+
+def test_bootstrapped_repo_returns_when_complete(tmp_path):
+    """A .muninn/ with BOTH tree.json AND mycelium.db is accepted."""
+    from engine.core.repo_discovery import find_bootstrapped_repo
+    repo = tmp_path / "myrepo"
+    _make_bootstrapped(repo)
+    file_in_repo = repo / "src" / "main.go"
+    file_in_repo.parent.mkdir()
+    file_in_repo.write_text("package main\n")
+    assert find_bootstrapped_repo(file_in_repo) == repo.resolve()
+
+
+def test_bootstrapped_repo_skips_partial_muninn(tmp_path):
+    """The 2026-05-18 sandbox drift: /tmp/btree-only/.muninn/ has only
+    mycelium.db (from `muninn-mem scan`), no tree. find_bootstrapped_repo
+    must walk PAST it and find the real repo upstream.
+    """
+    from engine.core.repo_discovery import find_bootstrapped_repo
+    # Outer = real bootstrapped repo
+    real = tmp_path / "real-repo"
+    _make_bootstrapped(real)
+    # Inner = a scan target that scan_repo decorated with a partial .muninn/
+    scan_target = real / "subdir" / "btree-only"
+    scan_target.mkdir(parents=True)
+    (scan_target / ".muninn").mkdir()
+    (scan_target / ".muninn" / "mycelium.db").write_bytes(b"")  # tree absent
+    file_being_reco = scan_target / "btree.go"
+    file_being_reco.write_text("package main\n")
+
+    found = find_bootstrapped_repo(file_being_reco)
+    assert found == real.resolve(), (
+        f"Expected to skip the partial scan-output .muninn/ at "
+        f"{scan_target}/.muninn/ and find the outer bootstrapped repo "
+        f"{real}, but got {found}."
+    )
+
+
+def test_bootstrapped_repo_returns_none_when_nothing_complete(tmp_path):
+    """If no ancestor has the full pair (tree.json + mycelium.db),
+    return None so the caller can surface a clear init+bootstrap message.
+    """
+    from engine.core.repo_discovery import find_bootstrapped_repo
+    # Two partial .muninn/ dirs, none complete
+    a = tmp_path / "a"; (a / ".muninn").mkdir(parents=True)
+    (a / ".muninn" / "mycelium.db").write_bytes(b"")  # no tree
+    b = tmp_path / "b"; (b / ".muninn" / "tree").mkdir(parents=True)
+    (b / ".muninn" / "tree" / "tree.json").write_text("{}")  # no mycelium
+    file_in_a = a / "x.py"; file_in_a.write_text("pass\n")
+
+    assert find_bootstrapped_repo(file_in_a) is None
+
+
+def test_bootstrapped_repo_env_var_overrides(tmp_path, monkeypatch):
+    """MUNINN_REPO env wins if it points at a bootstrapped repo."""
+    from engine.core.repo_discovery import find_bootstrapped_repo
+    forced = tmp_path / "forced"
+    _make_bootstrapped(forced)
+    monkeypatch.setenv("MUNINN_REPO", str(forced))
+    # The walk-up start has its own bootstrapped repo, but env wins
+    other = tmp_path / "other"; _make_bootstrapped(other)
+    assert find_bootstrapped_repo(other / "deep") == forced
+
+
+def test_bootstrapped_repo_env_var_ignored_if_partial(tmp_path, monkeypatch):
+    """If MUNINN_REPO points at a NON-bootstrapped dir, the env is
+    ignored and we walk up looking for a real bootstrapped repo."""
+    from engine.core.repo_discovery import find_bootstrapped_repo
+    partial = tmp_path / "partial"
+    (partial / ".muninn").mkdir(parents=True)  # no tree, no mycelium
+    monkeypatch.setenv("MUNINN_REPO", str(partial))
+    real = tmp_path / "real"
+    _make_bootstrapped(real)
+    file_in_real = real / "x.py"; file_in_real.write_text("pass\n")
+    assert find_bootstrapped_repo(file_in_real) == real.resolve()
