@@ -767,7 +767,14 @@ class TerminalWidget(QWidget):
                     QTimer.singleShot(0, lambda: self._append_text(
                         result.stdout.strip() or "Done.", color="#32CD32"))
                     if on_success is not None:
-                        QTimer.singleShot(0, on_success)
+                        # Call directly: pyqtSignal.emit is thread-safe
+                        # via AutoConnection → QueuedConnection. Wrapping
+                        # in QTimer.singleShot proved unreliable under
+                        # X11 forward (drift #5 follow-up).
+                        try:
+                            on_success()
+                        except Exception as _e:  # noqa: BLE001
+                            log_event("pipeline.ui.terminal.on_success_error", {"err": str(_e)[:200]})  # PIPELINE_TRACE
                 else:
                     QTimer.singleShot(0, lambda: self._append_text(
                         result.stderr.strip() or "Failed.", color="#EF4444"))
