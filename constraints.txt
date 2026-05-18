@@ -82,5 +82,5 @@ mcp==1.27.1
 # pyproject.optional-dependencies.ui). pytest-qt 4.4.x provides the
 # `qtbot` fixture consumed by the 173 tests/test_ui_*.py. Both are
 # required so CI can exercise the UI in QT_QPA_PLATFORM=offscreen mode.
-PyQt6==6.10.0
+PyQt6==6.11.0
 pytest-qt==4.5.0
