@@ -157,13 +157,26 @@ def find_bootstrapped_repo(start: Union[Path, str, None] = None) -> Optional[Pat
         start_path = Path(os.getcwd())
     else:
         start_path = Path(start)
-    if not start_path.exists():
-        return None
-    if start_path.is_file():
-        start_path = start_path.parent
 
-    here = start_path.resolve()
-    for cand in [here, *here.parents]:
-        if _is_bootstrapped(cand):
-            return cand
+    # Walk up from `start` (the file/dir of interest).
+    walk_starts = []
+    if start_path.exists():
+        s = start_path if not start_path.is_file() else start_path.parent
+        walk_starts.append(s.resolve())
+
+    # CWD fallback — `start` may live in a different filesystem branch
+    # than the bootstrapped repo (e.g. `start=/tmp/foo.go` while the UI
+    # was launched from `/home/sky/Bureau/MUNINN-`, the loaded repo).
+    # Walk-up from /tmp would never reach /home regardless of how high we
+    # climb because they share only `/` and `/` is never bootstrapped.
+    # Adding cwd as a second walk-up base catches "the dir I'm operating
+    # from is bootstrapped even though this specific file isn't inside it".
+    cwd_path = Path(os.getcwd()).resolve()
+    if cwd_path not in walk_starts:
+        walk_starts.append(cwd_path)
+
+    for here in walk_starts:
+        for cand in [here, *here.parents]:
+            if _is_bootstrapped(cand):
+                return cand
     return None

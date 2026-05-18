@@ -192,9 +192,13 @@ def test_bootstrapped_repo_skips_partial_muninn(tmp_path):
     )
 
 
-def test_bootstrapped_repo_returns_none_when_nothing_complete(tmp_path):
+def test_bootstrapped_repo_returns_none_when_nothing_complete(tmp_path, monkeypatch):
     """If no ancestor has the full pair (tree.json + mycelium.db),
     return None so the caller can surface a clear init+bootstrap message.
+
+    Includes a chdir into tmp_path so the CWD fallback (added 2026-05-18)
+    can't accidentally hit the developer's host MUNINN repo and turn this
+    None-test into a host-environment-dependent assertion.
     """
     from engine.core.repo_discovery import find_bootstrapped_repo
     # Two partial .muninn/ dirs, none complete
@@ -203,6 +207,7 @@ def test_bootstrapped_repo_returns_none_when_nothing_complete(tmp_path):
     b = tmp_path / "b"; (b / ".muninn" / "tree").mkdir(parents=True)
     (b / ".muninn" / "tree" / "tree.json").write_text("{}")  # no mycelium
     file_in_a = a / "x.py"; file_in_a.write_text("pass\n")
+    monkeypatch.chdir(tmp_path)  # cwd has nothing bootstrapped
 
     assert find_bootstrapped_repo(file_in_a) is None
 
@@ -216,6 +221,35 @@ def test_bootstrapped_repo_env_var_overrides(tmp_path, monkeypatch):
     # The walk-up start has its own bootstrapped repo, but env wins
     other = tmp_path / "other"; _make_bootstrapped(other)
     assert find_bootstrapped_repo(other / "deep") == forced
+
+
+def test_bootstrapped_repo_falls_back_to_cwd_when_start_is_disjoint(
+    tmp_path, monkeypatch,
+):
+    """Sky's 2026-05-18 sandbox case: /reconstruct /tmp/btree-only/x.go.
+
+    File lives in /tmp, bootstrapped repo lives in /home/.../muninn.
+    Walk-up from /tmp can NEVER reach /home — different FS branches,
+    they only share `/`. The helper must fallback to walking up from
+    cwd (where the UI was launched from = the loaded repo typically)
+    so the gate accepts.
+    """
+    from engine.core.repo_discovery import find_bootstrapped_repo
+
+    real = tmp_path / "real-repo"
+    _make_bootstrapped(real)
+    monkeypatch.chdir(real)  # UI process cwd = the loaded repo
+
+    # File in a totally disjoint location (no bootstrap in its ancestors)
+    disjoint = tmp_path / "disjoint" / "btree.go"
+    disjoint.parent.mkdir(parents=True)
+    disjoint.write_text("package main\n")
+
+    found = find_bootstrapped_repo(disjoint)
+    assert found == real.resolve(), (
+        f"When walking up from {disjoint} finds nothing, helper should "
+        f"fall back to cwd walk-up and find {real}, got {found}"
+    )
 
 
 def test_bootstrapped_repo_env_var_ignored_if_partial(tmp_path, monkeypatch):
