@@ -181,6 +181,51 @@ def test_scan_skips_noise(tmp_path):
     assert not is_scannable_text(tmp_path / "bin.exe"), "binary fails UTF-8 decode"
 
 
+def test_format_code_no_crash_on_extended_langs(tmp_path):
+    """CHUNK 10 phase 3 (2026-05-18): format_code accepts new languages
+    (C/C++/Java/Shell/PHP) without crashing. Falls back gracefully to
+    normalize_content if the binary is missing.
+    """
+    from engine.core.cube import format_code
+
+    samples = {
+        ".c":    "int main() { return 0; }",
+        ".cpp":  "#include <iostream>\nint main(){return 0;}",
+        ".h":    "#ifndef FOO\n#define FOO\n#endif",
+        ".hpp":  "#pragma once\nclass Foo {};",
+        ".cc":   "int main() { return 0; }",
+        ".cxx":  "int main() { return 0; }",
+        ".cs":   "class Foo { void Bar() {} }",
+        ".java": "class Foo { void bar() {} }",
+        ".sh":   "#!/bin/bash\necho hello",
+        ".bash": "echo $PATH",
+        ".php":  "<?php echo \"hi\"; ?>",
+        ".zig":  "pub fn main() void {}",   # universal scan, no formatter
+    }
+    for ext, code in samples.items():
+        out = format_code(code, f"sample{ext}")
+        assert isinstance(out, str), f"{ext} returned non-str"
+        assert out, f"{ext} returned empty"
+
+
+def test_ext_to_formatter_mapping_includes_new_langs():
+    """The _EXT_TO_FORMATTER lookup must list the new extensions —
+    used by formatter detection / install messages.
+    """
+    from engine.core.cube import _EXT_TO_FORMATTER
+    expected = {
+        ".c": "clang-format", ".cpp": "clang-format", ".h": "clang-format",
+        ".cs": "clang-format",
+        ".java": "google-java-format",
+        ".sh": "shfmt", ".bash": "shfmt",
+        ".php": "php-cs-fixer",
+    }
+    for ext, tool in expected.items():
+        assert _EXT_TO_FORMATTER.get(ext) == tool, (
+            f"{ext} should map to {tool}, got {_EXT_TO_FORMATTER.get(ext)}"
+        )
+
+
 def test_scan_rejects_oversized_file(tmp_path):
     """Generated/dump files over SCAN_MAX_BYTES are rejected."""
     big = tmp_path / "huge.py"

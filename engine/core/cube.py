@@ -350,7 +350,9 @@ def normalize_content(text: str) -> str:
 def format_code(text: str, file_path: str = '') -> str:
     """Format code using the language's standard formatter.
 
-    gofmt (Go), black (Python), rustfmt (Rust), prettier (JS/TS).
+    Native: gofmt (Go), black (Python), rustfmt (Rust), prettier (JS/TS/JSX/TSX).
+    Extended (2026-05-18): clang-format (C/C++/C#/Obj-C), google-java-format
+    (Java), shfmt (shell), php-cs-fixer (PHP).
     Falls back to normalize_content if formatter not available.
     Both original and reconstruction get the same treatment → SHA match.
     """
@@ -359,6 +361,12 @@ def format_code(text: str, file_path: str = '') -> str:
     ext = os.path.splitext(file_path)[1].lower() if file_path else ''
 
     import sys as _sys
+    # google-java-format jar path — installed by sandbox Dockerfile + can
+    # be overridden by env var for host installs.
+    _GJF_JAR = os.environ.get(
+        "MUNINN_GOOGLE_JAVA_FORMAT_JAR",
+        "/opt/google-java-format.jar",
+    )
     formatters = {
         '.go': ['gofmt'],
         '.py': [_sys.executable, '-m', 'black', '--quiet', '-'],
@@ -367,6 +375,22 @@ def format_code(text: str, file_path: str = '') -> str:
         '.jsx': ['npx', 'prettier', '--parser', 'babel', '--stdin-filepath', 'x.jsx'],
         '.ts': ['npx', 'prettier', '--parser', 'typescript', '--stdin-filepath', 'x.ts'],
         '.tsx': ['npx', 'prettier', '--parser', 'typescript', '--stdin-filepath', 'x.tsx'],
+        # C family — clang-format reads stdin/writes stdout when given `-`
+        '.c':    ['clang-format', '-style=Google'],
+        '.h':    ['clang-format', '-style=Google'],
+        '.cpp':  ['clang-format', '-style=Google'],
+        '.hpp':  ['clang-format', '-style=Google'],
+        '.cc':   ['clang-format', '-style=Google'],
+        '.cxx':  ['clang-format', '-style=Google'],
+        '.cs':   ['clang-format', '-style=Google'],
+        # Java — google-java-format ships as a jar; flag `-` reads stdin
+        '.java': ['java', '-jar', _GJF_JAR, '-'],
+        # Shell — shfmt with default options (`-` reads stdin)
+        '.sh':   ['shfmt', '-'],
+        '.bash': ['shfmt', '-'],
+        # PHP — php-cs-fixer is per-file, but its `fix - --using-cache=no`
+        # mode reads stdin. Fall back gracefully if unavailable.
+        '.php':  ['php-cs-fixer', 'fix', '-', '--using-cache=no'],
     }
 
     cmd = formatters.get(ext)
@@ -425,6 +449,15 @@ def format_code(text: str, file_path: str = '') -> str:
 _EXT_TO_FORMATTER = {
     '.go': 'gofmt', '.py': 'black', '.rs': 'rustfmt',
     '.js': 'prettier', '.jsx': 'prettier', '.ts': 'prettier', '.tsx': 'prettier',
+    # CHUNK 10 phase 2 (2026-05-18) — extended language coverage:
+    # clang-format handles the C family (Google style), google-java-format
+    # for Java, shfmt for shell, php-cs-fixer for PHP.
+    '.c': 'clang-format', '.h': 'clang-format', '.cpp': 'clang-format',
+    '.hpp': 'clang-format', '.cc': 'clang-format', '.cxx': 'clang-format',
+    '.cs': 'clang-format',
+    '.java': 'google-java-format',
+    '.sh': 'shfmt', '.bash': 'shfmt',
+    '.php': 'php-cs-fixer',
 }
 
 # Formatter → how to find it and how to install it per OS
@@ -475,6 +508,46 @@ _FORMATTER_INFO = {
         },
         'auto_cmd': ['npm', 'install', '-g', 'prettier'],
         'npx_fallback': True,  # npx prettier works without global install
+    },
+    'clang-format': {
+        'which': 'clang-format',
+        'fallback_paths': {},
+        'install': {
+            'nt': 'winget install LLVM.LLVM',
+            'darwin': 'brew install clang-format',
+            'linux': 'sudo apt install clang-format',
+        },
+        'auto_cmd': None,
+    },
+    'google-java-format': {
+        'which': 'java',  # We invoke `java -jar /opt/google-java-format.jar`
+        'fallback_paths': {},
+        'install': {
+            'nt': 'choco install openjdk + download google-java-format jar',
+            'darwin': 'brew install openjdk google-java-format',
+            'linux': 'sudo apt install openjdk-17-jre-headless + download jar',
+        },
+        'auto_cmd': None,
+    },
+    'shfmt': {
+        'which': 'shfmt',
+        'fallback_paths': {},
+        'install': {
+            'nt': 'winget install mvdan.shfmt',
+            'darwin': 'brew install shfmt',
+            'linux': 'sudo apt install shfmt',
+        },
+        'auto_cmd': None,
+    },
+    'php-cs-fixer': {
+        'which': 'php-cs-fixer',
+        'fallback_paths': {},
+        'install': {
+            'nt': 'composer global require friendsofphp/php-cs-fixer',
+            'darwin': 'brew install php-cs-fixer',
+            'linux': 'sudo apt install php-cs-fixer',
+        },
+        'auto_cmd': None,
     },
 }
 
