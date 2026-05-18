@@ -562,6 +562,32 @@ class TerminalWidget(QWidget):
 
     # --- Cube reconstruction (heatmap live) ---
 
+    @staticmethod
+    def _reconstruction_prereqs_missing(repo_root: Path) -> list:
+        """Return list of missing prereqs for /reconstruct, empty if ok.
+
+        CHUNK 4 (2026-04-30, commit 80b6619) added a precondition gate but
+        hardcoded the legacy `memory/tree.json` path. BUG-091 H.5b (commit
+        112bcdd, 2026-05-08) then moved the tree to `.muninn/tree/tree.json`
+        and `cleanup_legacy_tree()` (muninn_tree.py:92-118) actively deletes
+        the legacy path. The gate refused forever on any post-migration
+        repo. The original error message also told the user to run `/scan`,
+        but `scan_repo` (engine/core/muninn.py:117-336) never writes
+        `mycelium.db` — only `bootstrap_mycelium` does.
+
+        This helper is the single source of truth, extracted so the gate
+        is unit-testable from tests/test_ui_terminal.py with tmp_path.
+        """
+        tree_canonical = repo_root / ".muninn" / "tree" / "tree.json"
+        tree_legacy = repo_root / "memory" / "tree.json"
+        mycelium_db = repo_root / ".muninn" / "mycelium.db"
+        missing = []
+        if not (tree_canonical.exists() or tree_legacy.exists()):
+            missing.append("tree (run `muninn-mem init`)")
+        if not mycelium_db.exists():
+            missing.append("mycelium.db (run `muninn-mem bootstrap <repo>`)")
+        return missing
+
     def _cmd_reconstruct(self, parts: list):
         """Launch a cube-by-cube reconstruction on a source file.
 
@@ -584,17 +610,13 @@ class TerminalWidget(QWidget):
         if not file_path.exists():
             self._append_text(f"File not found: {file_path}", color="#EF4444")
             return
-        # CHUNK 4: require a prior /scan so the tree + mycelium are loaded.
-        # Without these, the reconstruction has no cross-file neighbors and no
-        # mycelium vocabulary -> hints are empty and SHA score collapses.
         repo_root = Path(__file__).resolve().parent.parent.parent
-        tree_path = repo_root / "memory" / "tree.json"
-        mycelium_db = repo_root / ".muninn" / "mycelium.db"
-        if not tree_path.exists() or not mycelium_db.exists():
+        missing = self._reconstruction_prereqs_missing(repo_root)
+        if missing:
             self._append_text(
-                "[reco] No scan detected — type /scan <repo> first to build "
-                "the tree + mycelium. Reconstruction needs neighbors and "
-                "vocabulary to work correctly.",
+                "[reco] Reconstruction prerequisites missing: "
+                + ", ".join(missing)
+                + ". Once both exist, /reconstruct can run.",
                 color="#EF4444",
             )
             return
