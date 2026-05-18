@@ -137,6 +137,12 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
                                # No public muninn/ shim needed — module is operational,
                                # not API. Whole module + this entry removed at cleanup
                                # (see docs/PIPELINE_TRACE_REMOVAL.md).
+        "repo_discovery",      # 2026-05-18 drift #9 fix — canonical
+                               # find_owning_repo() helper used by muninn/ui and
+                               # (future) MCP / hooks. Imported via
+                               # `from engine.core.repo_discovery import find_owning_repo`
+                               # — no public muninn/ shim needed, the helper is
+                               # path-resolution glue not an API surface.
     }
     for name in engine_files:
         if name in engine_only:
