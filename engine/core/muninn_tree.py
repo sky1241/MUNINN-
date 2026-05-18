@@ -15,6 +15,13 @@ from pathlib import Path
 from tokenizer import token_count
 from _secrets import redact_secrets_text as _redact_secrets_text
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 class _ModRef:
     """Lazy reference to muninn module — avoids circular import."""
@@ -1237,12 +1244,16 @@ def recall(query: str) -> str:
     Returns the most relevant lines from past sessions matching the query.
     Designed to be called via `muninn.py recall "search terms"` mid-conversation.
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
     repo = _m._REPO_PATH or Path(".")
     query_words = set(re.findall(r'[A-Za-z]{4,}', query.lower()))
+    log_event("pipeline.engine.recall.begin", {"query_len": len(query), "query_words": sorted(query_words)})  # PIPELINE_TRACE
     if not query_words:
+        log_event("pipeline.engine.recall.end", {"reason": "empty_query"})  # PIPELINE_TRACE
         return "RECALL: empty query"
 
     results = []
+    _pt_idx_before = 0  # PIPELINE_TRACE
 
     # 1. Search session index for relevant sessions
     index_path = repo / ".muninn" / "session_index.json"
@@ -1265,6 +1276,8 @@ def recall(query: str) -> str:
                                           f"[session {entry.get('file', '?')}] concepts: {', '.join(concepts & query_words)}"))
         except (json.JSONDecodeError, OSError):
             pass
+    log_event("pipeline.engine.recall.session_index", {"matches_after_step": len(results)})  # PIPELINE_TRACE
+    _pt_recent_before = len(results)  # PIPELINE_TRACE
 
     # 2. Grep .mn files for matching lines
     sessions_dir = repo / ".muninn" / "sessions"
@@ -1283,6 +1296,7 @@ def recall(query: str) -> str:
                         results.append((overlap, date, stripped[:150]))
             except OSError:
                 continue
+    log_event("pipeline.engine.recall.recent_grep", {"matches_added": len(results) - _pt_recent_before})  # PIPELINE_TRACE
 
     # 3. Search tree branches (P37: also warm up matched branches)
     matched_branches = set()
@@ -1303,14 +1317,18 @@ def recall(query: str) -> str:
                         matched_branches.add(mn_file.stem)
             except OSError:
                 continue
+    log_event("pipeline.engine.recall.tree_grep", {"matched_branches": len(matched_branches)})  # PIPELINE_TRACE
 
     # 4. Check error/fix memory
     error_hints = _surface_known_errors(repo, query)
+    _pt_hint_count = len(error_hints.split("\n")) if error_hints else 0  # PIPELINE_TRACE
     if error_hints:
         for hint in error_hints.split("\n"):
             results.append((5, "errors", hint))
+    log_event("pipeline.engine.recall.errors_surfaced", {"hint_count": _pt_hint_count})  # PIPELINE_TRACE
 
     if not results:
+        log_event("pipeline.engine.recall.end", {"reason": "no_results", "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
         return f"RECALL: nothing found for '{query}'"
 
     # P37: Warm up matched tree branches (update access_count + last_access)
@@ -1329,6 +1347,7 @@ def recall(query: str) -> str:
             save_tree(tree)
         except Exception:
             pass
+    log_event("pipeline.engine.recall.branches_warmed", {"count": len(matched_branches)})  # PIPELINE_TRACE
 
     # Sort by relevance (overlap score), dedup, take top 10
     results.sort(key=lambda x: x[0], reverse=True)
@@ -1347,7 +1366,9 @@ def recall(query: str) -> str:
     # C4: Real-time k adaptation based on recall concepts
     adapt_k(list(query_words))
 
-    return "\n".join(output)
+    _pt_out = "\n".join(output)  # PIPELINE_TRACE
+    log_event("pipeline.engine.recall.end", {"total_matches": len(results), "output_len": len(_pt_out), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
+    return _pt_out
 
 
 # ── P41: Live Mycelium Bridge ────────────────────────────────────
@@ -1516,6 +1537,8 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
 
     Returns compact context for injection into Claude's conversation.
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+    log_event("pipeline.engine.bridge_fast.start", {"text_len": len(text), "top_n": top_n})  # PIPELINE_TRACE
     repo = _m._REPO_PATH or Path(".")
 
     # Extract concepts (same filter as bridge())
@@ -1540,7 +1563,9 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
         if w not in stop and w not in seen and len(w) >= 4:
             seen.add(w)
             concepts.append(w)
+    log_event("pipeline.engine.bridge_fast.concepts", {"seeds": concepts[:5], "total_concepts": len(concepts), "raw_words": len(words)})  # PIPELINE_TRACE
     if not concepts:
+        log_event("pipeline.engine.bridge_fast.end", {"reason": "no_concepts", "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
         return ""
 
     # Load mycelium
@@ -1570,12 +1595,16 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
 
     # get_related for top seeds (fast path — no full graph scan)
     all_neighbors = {}
+    _pt_total_pairs = 0  # PIPELINE_TRACE
     for seed in concepts[:5]:
         neighbors = m.get_related(seed, top_n=top_n)
         if neighbors:
             all_neighbors[seed] = neighbors
+            _pt_total_pairs += len(neighbors)  # PIPELINE_TRACE
+    log_event("pipeline.engine.bridge_fast.related", {"seeds_with_hits": len(all_neighbors), "total_pairs": _pt_total_pairs})  # PIPELINE_TRACE
 
     if not all_neighbors:
+        log_event("pipeline.engine.bridge_fast.end", {"reason": "no_neighbors", "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
         return ""
 
     # Compact output
@@ -1599,6 +1628,7 @@ def bridge_fast(text: str, top_n: int = 5) -> str:
     except Exception:
         pass  # never break the fast-path on a defense failure
 
+    log_event("pipeline.engine.bridge_fast.end", {"output_len": len(output), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
     return output
 
 
