@@ -34,6 +34,16 @@ except ImportError as exc:
         "Install with: pip install 'muninn-memory[mcp]'"
     ) from exc
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _muninn_root = Path(__file__).resolve().parent.parent.parent  # PIPELINE_TRACE
+    _pt_core = str(_muninn_root / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_core not in sys.path: sys.path.insert(0, _pt_core)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 # stderr-only logger (stdout = MCP protocol, must stay clean)
 _log = logging.getLogger("muninn.mcp")
@@ -249,6 +259,7 @@ def _recall_local_impl(
         ValueError if repo_path is not a Muninn-bootstrapped project
             (i.e. no .muninn/ directory).
     """
+    log_event("pipeline.mcp.recall_local.begin", {})  # PIPELINE_TRACE
     start = time.time()
 
     # Clamp bounds so the tool can never blow up Claude's context window.
@@ -426,6 +437,7 @@ def _recall_meta_impl(
     `{results: [], error: "meta_unavailable" | "meta_locked"}` instead of
     raising — so the auto-router can degrade to local-only.
     """
+    log_event("pipeline.mcp.recall_meta.begin", {})  # PIPELINE_TRACE
     start = time.time()
     top_k = max(TOP_K_MIN, min(TOP_K_MAX, int(top_k)))
     meta_db_path = _resolve_meta_db_path()
@@ -644,6 +656,7 @@ def _recall_dual_impl(
 
     `fusion` / `alpha` / `beta` default to module constants (env-var driven).
     """
+    log_event("pipeline.mcp.recall_dual.begin", {})  # PIPELINE_TRACE
     start = time.time()
     if scope not in ("auto", "local", "meta", "both"):
         scope = "auto"
@@ -832,6 +845,7 @@ def _runbook_list_sections_impl(
     repo_path: str | None = None,
 ) -> dict:
     """Return the list of H2 sections for the requested runbook."""
+    log_event("pipeline.mcp.runbook_list_sections.begin", {})  # PIPELINE_TRACE
     start = time.time()
     if not isinstance(document, str) or not _DOC_NAME_RE.match(document):
         raise ValueError(
@@ -875,6 +889,7 @@ def _runbook_get_impl(
     repo_path: str | None = None,
 ) -> dict:
     """Return the content + metadata for one H2 section of the requested runbook."""
+    log_event("pipeline.mcp.runbook_get.begin", {})  # PIPELINE_TRACE
     start = time.time()
     if not isinstance(document, str) or not _DOC_NAME_RE.match(document):
         raise ValueError(
@@ -1032,6 +1047,7 @@ def _bugs_list_impl(
 
     Read-only. Filters by status when `status_filter` is set (case-insensitive).
     """
+    log_event("pipeline.mcp.bugs_list.begin", {})  # PIPELINE_TRACE
     start = time.time()
     limit = max(1, min(BUGS_LIST_LIMIT_MAX, int(limit)))
     repo = _resolve_repo_path(repo_path)
@@ -1077,6 +1093,7 @@ def _bugs_get_impl(bug_id: str, repo_path: str | None = None) -> dict:
     against path traversal — even though we never touch the filesystem with
     the bug_id, we keep the same hardening pattern as B.2 tree_get_branch.
     """
+    log_event("pipeline.mcp.bugs_get.begin", {})  # PIPELINE_TRACE
     start = time.time()
     if not isinstance(bug_id, str) or not _BUG_ID_RE.match(bug_id):
         raise ValueError(
@@ -1176,6 +1193,7 @@ def _read_branch_file(repo: Path, file_name: str) -> str:
 
 def _tree_get_root_impl(repo_path: str | None = None) -> dict:
     """Read-only fetch of <repo>/.muninn/tree/root.mn + its metadata."""
+    log_event("pipeline.mcp.tree_get_root.begin", {})  # PIPELINE_TRACE
     start = time.time()
     repo = _resolve_repo_path(repo_path)
     tree = _load_tree_for_repo(repo)
@@ -1217,6 +1235,7 @@ def _tree_get_branch_impl(branch_name: str, repo_path: str | None = None) -> dic
     If the branch doesn't exist, returns {error, available} instead of raising
     so Claude can recover (typically by calling tree_list_branches).
     """
+    log_event("pipeline.mcp.tree_get_branch.begin", {})  # PIPELINE_TRACE
     start = time.time()
     if not isinstance(branch_name, str) or not _BRANCH_NAME_RE.match(branch_name):
         raise ValueError(
@@ -1272,6 +1291,7 @@ def _tree_list_branches_impl(repo_path: str | None = None) -> dict:
 
     Lets Claude discover what branches exist before querying with tree_get_branch.
     """
+    log_event("pipeline.mcp.tree_list_branches.begin", {})  # PIPELINE_TRACE
     start = time.time()
     repo = _resolve_repo_path(repo_path)
     tree = _load_tree_for_repo(repo)
