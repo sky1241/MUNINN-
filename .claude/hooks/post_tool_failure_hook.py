@@ -21,6 +21,15 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 MAX_ENTRIES = 500
 
 
@@ -130,9 +139,11 @@ def main():
         sys.exit(0)
 
     repo_path = payload.get("cwd") or os.getcwd()
+    log_event("pipeline.hook.post_failure.begin", {"tool_name": payload.get("tool_name", "")}, level="warn")  # PIPELINE_TRACE
 
     try:
-        feed_errors_json(payload, Path(repo_path))
+        _pt_logged = feed_errors_json(payload, Path(repo_path))  # PIPELINE_TRACE
+        log_event("pipeline.hook.post_failure.logged", {"appended": bool(_pt_logged)})  # PIPELINE_TRACE
     except Exception as e:
         _log_failure("feed_errors_json", e)
 

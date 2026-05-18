@@ -27,7 +27,7 @@ deleted as one unit.
 | Chunk | Commit hash | Files touched | Lines added | Revert |
 |---|---|---|---|---|
 | 0 | `2bcd3c4` + CI-fix (this commit) | `engine/core/pipeline_trace.py` (NEW, ~140L) + `docs/PIPELINE_TRACE_REMOVAL.md` (NEW, this file) + 2 whitelist entries in `tests/test_h0_no_orphan.py` + `tests/test_chunk_d11_shim_drift.py` | ~195 | `git revert` both chunk-0 commits |
-| 1 | _pending_ | 9 hooks in `.claude/hooks/` | _TBD_ | `git revert <hash>` |
+| 1 | _pending_ | 9 hooks in `.claude/hooks/` (session_start, bridge, subagent_start, post_tool_failure, post_tool_use_edit_log, pre_tool_use_bash_destructive, pre_tool_use_bash_secrets, pre_tool_use_edit_hardcode, pre_tool_use_task_throttle) + regenerated `.claude/hooks/hooks.sha256sum` | ~150 (9×~8 import block + ~25 call sites) | `git revert <hash>` |
 | 2 | _pending_ | `engine/core/muninn_tree.py` (`bridge_fast`, `recall`) | _TBD_ | `git revert <hash>` |
 | 3 | _pending_ | `engine/core/muninn_feed.py` (`feed_from_hook`, `feed_from_stop_hook`) | _TBD_ | `git revert <hash>` |
 | 4 | _pending_ | engine downstream (compress, grow, refresh, prune, sleep_consolidate, sync) | _TBD_ | `git revert <hash>` |

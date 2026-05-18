@@ -274,7 +274,7 @@ muninn-mem install-cron        # Systemd-user timer hebdo (Linux)
 - Tests: **2339 PASS, 47 skip, 0 xfail, 0 FAIL** + **103 property tests** (forge --gen-props sur 17 modules)
 - Q-modularity: **0.670** (Newman-Girvan, "good — modules well isolated", forge-shield 2.1.2)
 - CI: HEAD vert, 2 jobs (validate + forge_smoke matrix sur **17 modules**)
-- Hooks installes: **10 scripts** (`.claude/hooks/*.py`) wirés sur les events Claude Code : UserPromptSubmit (bridge), PreCompact, SessionStart (A.1), SessionEnd, Stop, PostToolUseFailure, PostToolUse (edit log), SubagentStart, ConfigChange, Notification (audit), PreToolUseBash{Destructive,Secrets}, PreToolUseEdit (hardcode). Compte mis à jour 2026-05-12 chunk E.5.
+- Hooks installes: **11 scripts** (`.claude/hooks/*.py`) wirés sur les events Claude Code : UserPromptSubmit (bridge), PreCompact, SessionStart (A.1), SessionEnd, Stop, PostToolUseFailure, PostToolUse (edit log), SubagentStart, ConfigChange, Notification (audit), PreToolUseBash{Destructive,Secrets}, PreToolUseEdit (hardcode), PreToolUseTask (throttle, 2026-05-15 quota protection). Compte mis à jour 2026-05-18.
 - **BUG-104 FIXED** 2026-05-10 PM via spill-to-tree pattern (V9A+ planère calque). **0 bug OPEN officiel**.
 
 ## Plan de bataille en cours (référence unique)

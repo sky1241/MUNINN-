@@ -23,6 +23,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 def _log_hook_error(context: str, exc: BaseException) -> None:
     """Append a swallowed exception to ~/.muninn/hook_errors.log.
@@ -149,10 +158,14 @@ def main():
     if not isinstance(command, str):
         sys.exit(0)
 
+    log_event("pipeline.hook.pre_bash_secrets.begin", {"cmd_len": len(command), "cmd_head": command[:60]})  # PIPELINE_TRACE
+
     would_expose, reason = check_secret_exposure(command)
     if not would_expose:
+        log_event("pipeline.hook.pre_bash_secrets.allowed", {})  # PIPELINE_TRACE
         sys.exit(0)
 
+    log_event("pipeline.hook.pre_bash_secrets.blocked", {"reason": reason}, level="warn")  # PIPELINE_TRACE
     msg = (
         f"[MUNINN PRE-TOOL HOOK] Blocked Bash command that would expose a secret.\n"
         f"Reason: {reason}\n"

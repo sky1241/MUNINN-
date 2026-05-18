@@ -32,6 +32,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 def _log_hook_error(context: str, exc: BaseException) -> None:
     """Append a swallowed exception to ~/.muninn/hook_errors.log.
@@ -154,10 +163,14 @@ def main():
     if not isinstance(command, str):
         sys.exit(0)
 
+    log_event("pipeline.hook.pre_bash_destructive.begin", {"cmd_len": len(command), "cmd_head": command[:60]})  # PIPELINE_TRACE
+
     is_destructive, label = check_destructive(command)
     if not is_destructive:
+        log_event("pipeline.hook.pre_bash_destructive.allowed", {})  # PIPELINE_TRACE
         sys.exit(0)
 
+    log_event("pipeline.hook.pre_bash_destructive.blocked", {"label": label, "cmd_head": command[:120]}, level="warn")  # PIPELINE_TRACE
     # BLOCK: print to stderr (Claude sees this as feedback) and exit 2
     msg = (
         f"[MUNINN PRE-TOOL HOOK] Blocked destructive Bash command.\n"

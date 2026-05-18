@@ -26,6 +26,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 def _log_hook_error(context, exc):
     """Append a swallowed exception to ~/.muninn/hook_errors.log."""
@@ -134,6 +143,7 @@ def _find_recent_branches(tree_dir, n):
 
 
 def main():
+    log_event("pipeline.hook.session_start.begin", {})  # PIPELINE_TRACE
     try:
         raw = sys.stdin.buffer.read().decode("utf-8")
     except UnicodeDecodeError as e:
@@ -168,6 +178,7 @@ def main():
     # context), and compact already ran the PreCompact hook which wrote
     # the session .mn — re-injecting would be redundant.
     if source not in ("startup", "resume"):
+        log_event("pipeline.hook.session_start.skip", {"source": source, "reason": "source_filter"})  # PIPELINE_TRACE
         _emit_empty()
         return
 
@@ -191,6 +202,7 @@ def main():
     try:
         root_text = _read_root(tree_dir)
         branches = _find_recent_branches(tree_dir, TOP_RECENT_BRANCHES)
+        log_event("pipeline.hook.session_start.tree_loaded", {"has_root": bool(root_text), "branches": len(branches), "source": source})  # PIPELINE_TRACE
 
         if not root_text and not branches:
             _emit_empty()
@@ -211,6 +223,7 @@ def main():
 
         injected = "\n".join(parts)
         injected = _truncate_with_marker(injected, MAX_INJECT_CHARS)
+        log_event("pipeline.hook.session_start.emit", {"len": len(injected), "truncated": len(injected) >= MAX_INJECT_CHARS})  # PIPELINE_TRACE
 
         print(json.dumps({
             "hookSpecificOutput": {

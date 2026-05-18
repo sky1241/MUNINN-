@@ -28,6 +28,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 def _log_hook_error(context: str, exc: BaseException) -> None:
     """Append a swallowed exception to ~/.muninn/hook_errors.log.
@@ -161,10 +170,14 @@ def main():
     if not isinstance(content, str):
         sys.exit(0)
 
+    log_event("pipeline.hook.pre_edit_hardcode.begin", {"tool": tool_name, "file_path": file_path[:120], "content_len": len(content)})  # PIPELINE_TRACE
+
     found, sample = find_hardcode_in_content(content)
     if not found:
+        log_event("pipeline.hook.pre_edit_hardcode.allowed", {})  # PIPELINE_TRACE
         sys.exit(0)
 
+    log_event("pipeline.hook.pre_edit_hardcode.blocked", {"file_path": file_path[:120], "sample": sample[:120]}, level="warn")  # PIPELINE_TRACE
     msg = (
         f"[MUNINN PRE-TOOL HOOK] Blocked {tool_name} introducing hardcoded path.\n"
         f"File: {file_path}\n"

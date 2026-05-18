@@ -12,7 +12,18 @@ import math
 import re
 import sys
 import os
+import time
 from pathlib import Path
+
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 def _shannon_entropy(s):
     """Shannon entropy of a string. High entropy = likely a secret."""
@@ -80,7 +91,10 @@ def main():
 
     prompt = hook_input.get("prompt", "")
     if not prompt or not isinstance(prompt, str) or len(prompt) < 10:
+        log_event("pipeline.hook.bridge.skip_short", {"len": len(prompt) if isinstance(prompt, str) else 0})  # PIPELINE_TRACE
         sys.exit(0)
+
+    log_event("pipeline.hook.bridge.begin", {"prompt_len": len(prompt)})  # PIPELINE_TRACE
 
     # Secret detection — runs FIRST, before anything else.
     # 2026-05-13 drift-fix : Sentinel warning goes to STDERR, not stdout
@@ -88,6 +102,7 @@ def main():
     # stdout with the warning corrupts the JSON contract).
     warning = _check_secrets(prompt)
     if warning:
+        log_event("pipeline.hook.bridge.secrets_warned", {"warning_snippet": warning[:80]}, level="warn")  # PIPELINE_TRACE
         sys.stderr.write(warning + "\n")
         sys.stderr.flush()
 
@@ -103,7 +118,9 @@ def main():
         import muninn
         muninn._REPO_PATH = Path(repo_path).resolve()
         muninn._refresh_tree_paths()
+        _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
         result = muninn.bridge_fast(prompt)
+        log_event("pipeline.hook.bridge.fast_done", {"result_len": len(result or ""), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
         if result:
             # Anti-Adversa clamp (chunk 3 of leak intel battle plan).
             # Refuse injection of any content with >30 chained shell commands.
