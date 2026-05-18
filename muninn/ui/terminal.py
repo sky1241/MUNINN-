@@ -8,13 +8,25 @@ Rules: R1 (ownership), R3 (worker pattern), R5 (repaint throttle),
 R8 (empty state), bug #61 (maxBlockCount 5000), bug #20 (no QMessageBox in slot).
 """
 
+import sys
 import time
+from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import (
     Qt, QTimer, QThread, QPropertyAnimation, QEasingCurve,
     pyqtSignal, QObject,
 )
+
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _muninn_root = Path(__file__).resolve().parent.parent.parent  # PIPELINE_TRACE
+    _pt_core = str(_muninn_root / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_core not in sys.path: sys.path.insert(0, _pt_core)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
 from PyQt6.QtGui import (
     QFont, QColor, QTextCursor, QTextCharFormat, QPalette,
 )
@@ -691,6 +703,9 @@ class TerminalWidget(QWidget):
         """Run a subprocess in a background thread to avoid freezing the UI."""
         import subprocess, sys, threading
 
+        _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+        log_event("pipeline.ui.terminal.subprocess_start", {"cmd": " ".join(str(c) for c in cmd)[:200], "timeout_s": timeout})  # PIPELINE_TRACE
+
         def _worker():
             try:
                 result = subprocess.run(
@@ -698,6 +713,7 @@ class TerminalWidget(QWidget):
                     encoding="utf-8", errors="replace",
                     timeout=timeout, cwd=".",
                 )
+                log_event("pipeline.ui.terminal.subprocess_end", {"cmd": " ".join(str(c) for c in cmd)[:120], "returncode": result.returncode, "stdout_len": len(result.stdout), "stderr_len": len(result.stderr), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
                 if result.returncode == 0:
                     # Use QTimer.singleShot to emit on main thread
                     QTimer.singleShot(0, lambda: self._append_text(

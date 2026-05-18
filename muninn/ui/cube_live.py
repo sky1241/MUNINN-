@@ -20,9 +20,20 @@ Signals:
 """
 
 import sys
+import time
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
+
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    _muninn_root = Path(__file__).resolve().parent.parent.parent  # PIPELINE_TRACE
+    _pt_core = str(_muninn_root / "engine" / "core")  # PIPELINE_TRACE
+    if _pt_core not in sys.path: sys.path.insert(0, _pt_core)  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
 
 
 def _ensure_engine_path():
@@ -274,6 +285,8 @@ class ReconstructionWorker(QObject):
             # receive the full file, but it keeps the event/result stream
             # aligned with the heatmap indices).
             try:
+                _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+                log_event("pipeline.ui.cube_live.reconstruct_start", {"file": str(self._file), "base_tokens": self._base_tokens, "max_cycles": self._max_cycles, "attempts": self._attempts, "provider": str(provider)[:60]})  # PIPELINE_TRACE
                 reconstruct_adaptive(
                     str(self._file), content, provider,
                     base_tokens=self._base_tokens,
@@ -282,6 +295,7 @@ class ReconstructionWorker(QObject):
                     mycelium=mycelium,
                     on_cube=on_cube,
                 )
+                log_event("pipeline.ui.cube_live.reconstruct_end", {"file": str(self._file), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
             except ConnectionError as e:
                 self.error.emit(f"Ollama connection error: {e}")
                 return
