@@ -101,3 +101,71 @@ def test_scan_mirror_path_works(tmp_path):
     db = tmp_path / ".muninn" / "mycelium.db"
     assert db.exists(), "muninn/_engine.py mirror must also create mycelium.db"
     assert db.stat().st_size > 0
+
+
+def test_scan_picks_up_go_files(tmp_path):
+    """Drift #12 regression — `.go` files MUST be scanned.
+
+    Before the 2026-05-18 fix, scan_repo's hardcoded extension list
+    omitted .go even though the reconstruction path supports Go via
+    gofmt. A `/scan /tmp/dir-with-only-a-go-file` came back with
+    files=0 and the mycelium silently never grew. This test pins the
+    bug closed.
+    """
+    (tmp_path / "main.go").write_text(
+        "package main\n\nimport \"fmt\"\n\nfunc main() {\n"
+        "    fmt.Println(\"hello mycelium\")\n}\n"
+    )
+    from engine.core.muninn import scan_repo
+
+    scan_repo(tmp_path)
+
+    db = tmp_path / ".muninn" / "mycelium.db"
+    assert db.exists(), "Mycelium DB must be created from a .go file alone"
+    assert db.stat().st_size > 0
+
+
+def test_extension_constants_align_across_mirror():
+    """BUG-091 — the constant sets in engine/core/muninn.py and
+    muninn/_engine.py must be byte-identical, else scan/bootstrap/branches
+    drift apart between the two entry points.
+    """
+    from engine.core import muninn as canon
+    from muninn import _engine as mirror
+
+    for name in ("SOURCE_CODE_EXTENSIONS", "PROSE_EXTENSIONS",
+                 "CONFIG_EXTENSIONS", "MEMORY_EXTENSIONS"):
+        a = getattr(canon, name)
+        b = getattr(mirror, name)
+        assert a == b, f"{name} drifted between canonical and mirror: {a} vs {b}"
+
+
+def test_extension_constants_cover_cube_corpus():
+    """The cube_corpus benchmark files must all be scannable.
+
+    Adding a new test corpus file with an unsupported extension would
+    silently drop it from the mycelium graph — catch it here.
+    """
+    from pathlib import Path
+    from engine.core.muninn import (
+        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
+    )
+    all_supported = SOURCE_CODE_EXTENSIONS | PROSE_EXTENSIONS | CONFIG_EXTENSIONS
+
+    corpus = Path(__file__).resolve().parent / "cube_corpus"
+    if not corpus.exists():
+        return  # corpus may not be shipped with installed package
+    skipped_intentionally = {".json"}  # JSON benchmark data, not source code
+    missing = []
+    for f in corpus.iterdir():
+        if not f.is_file():
+            continue
+        ext = f.suffix.lower()
+        if ext in skipped_intentionally or ext in all_supported:
+            continue
+        missing.append(f.name)
+    assert not missing, (
+        f"cube_corpus has files with unsupported extensions: {missing}. "
+        f"Add the extension to the appropriate frozenset in "
+        f"engine/core/muninn.py (and mirror in muninn/_engine.py)."
+    )

@@ -61,6 +61,28 @@ except ImportError:
     from _secrets import redact_secrets_text as _redact_secrets_text
     from _secrets import secure_perms
 
+
+# CHUNK 10 (2026-05-18, drift #12 fix) — BUG-091 mirror of
+# engine/core/muninn.py. See that file's docstring for full rationale.
+# Four conceptual buckets, used everywhere we walk the repo for files.
+SOURCE_CODE_EXTENSIONS = frozenset({
+    ".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".java",
+    ".go", ".kt", ".cob", ".c", ".h",
+})
+PROSE_EXTENSIONS = frozenset({".md", ".txt"})
+CONFIG_EXTENSIONS = frozenset({".toml", ".yaml", ".yml", ".cfg", ".ini"})
+MEMORY_EXTENSIONS = frozenset({".mn", ".tex"})
+
+
+def _glob_patterns(*sets) -> list:
+    """`**/*.<ext>` globs for one-or-more extension frozensets."""
+    out = set()
+    for s in sets:
+        for ext in s:
+            out.add(f"**/*{ext}")
+    return sorted(out)
+
+
 # --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
 try:  # PIPELINE_TRACE
     from pipeline_trace import log_event  # PIPELINE_TRACE
@@ -206,10 +228,10 @@ def scan_repo(repo_path: Path, output_path: str = None):
     skip_dirs = {".git", "node_modules", "__pycache__", "venv", ".venv",
                  "dist", "build", "coverage", ".gradle", ".idea",
                  "data", "output", "cache", "caches", ".muninn"}
-    # Only scan human-written files, not data/generated
-    for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
-                    "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
-                    "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini"]:
+    # scan_repo() codebook builder — needs everything Cube can reformat.
+    for pattern in _glob_patterns(
+        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
+    ):
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -524,10 +546,11 @@ def bootstrap_mycelium(repo_path: Path, max_files=None):
 
     file_count = 0
     capped = False
-    for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
-                    "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
-                    "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini",
-                    "**/*.mn", "**/*.tex"]:
+    # bootstrap_mycelium() — code + memory files.
+    for pattern in _glob_patterns(
+        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
+        MEMORY_EXTENSIONS,
+    ):
         if capped:
             break
         for f in repo_path.glob(pattern):
@@ -587,7 +610,8 @@ def _bootstrap_branches(repo_path: Path, skip_dirs: set):
     via grow_branches_from_session. Caps at 20 files to keep bootstrap fast.
     """
     candidates = []
-    for pattern in ["**/*.md", "**/*.txt"]:
+    # _bootstrap_branches — narrative prose only (branches = summaries).
+    for pattern in _glob_patterns(PROSE_EXTENSIONS):
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -679,8 +703,7 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
             deps.append(dep_file)
 
     # Entry point guess (largest code file)
-    code_exts = {".py", ".rs", ".ts", ".js", ".java", ".c", ".go"}
-    entry = next((f for f, l in file_map if Path(f).suffix in code_exts), file_map[0][0] if file_map else name)
+    entry = next((f for f, l in file_map if Path(f).suffix in SOURCE_CODE_EXTENSIONS), file_map[0][0] if file_map else name)
 
     # Top mycelium concepts
     top_concepts = []
@@ -794,9 +817,9 @@ def generate_winter_tree(repo_path: Path, file_count: int, mycelium):
         if len(parts) > 1:
             dirs.add(parts[0])
         ext = f.suffix.lower()
-        if ext in {".py", ".rs", ".ts", ".js", ".java", ".c", ".go"}:
+        if ext in SOURCE_CODE_EXTENSIONS:
             code_files += 1
-        elif ext in {".md", ".txt"}:
+        elif ext in PROSE_EXTENSIONS:
             doc_files += 1
 
     if mycelium._db is not None:

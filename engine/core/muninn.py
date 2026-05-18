@@ -76,6 +76,40 @@ except ImportError:
     from engine.core._secrets import _SECRET_PATTERNS, _COMPILED_PATTERNS as _COMPILED_SECRET_PATTERNS
 
 
+# CHUNK 10 (2026-05-18, drift #12 fix): single source of truth for the
+# file-extension sets used by scan_repo / bootstrap_mycelium / branches /
+# winter_tree. Before this, the same lists were duplicated in 8 places
+# per file × 2 files (BUG-091 mirror) = 16 hand-maintained spots, each
+# drifting independently — that's why `.go` was missing from scan
+# even though Go is supported by Cube's format_code (gofmt).
+#
+# Four conceptual buckets:
+#   SOURCE_CODE — files Cube's format_code knows how to reformat.
+#   PROSE       — narrative docs (.md/.txt). Branches build from these.
+#   CONFIG      — declarative configs (.toml/.yaml/.cfg/.ini).
+#   MEMORY      — Muninn's own compressed outputs (.mn/.tex).
+SOURCE_CODE_EXTENSIONS = frozenset({
+    ".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".java",
+    ".go", ".kt", ".cob", ".c", ".h",
+})
+PROSE_EXTENSIONS = frozenset({".md", ".txt"})
+CONFIG_EXTENSIONS = frozenset({".toml", ".yaml", ".yml", ".cfg", ".ini"})
+MEMORY_EXTENSIONS = frozenset({".mn", ".tex"})
+
+
+def _glob_patterns(*sets) -> list[str]:
+    """Convert one-or-more extension frozensets into `**/*.<ext>` globs.
+
+    Used by every walk-the-repo loop so they stay aligned. Sorted output
+    for deterministic test fixtures.
+    """
+    out: set[str] = set()
+    for s in sets:
+        for ext in s:
+            out.add(f"**/*{ext}")
+    return sorted(out)
+
+
 # Legacy globals — recomputed by _refresh_tree_paths() once _REPO_PATH is set.
 # BUG-091 follow-up (2026-05-08): default to MUNINN_ROOT/.muninn/tree (runtime,
 # gitignored) instead of MUNINN_ROOT/memory (tracked). Callers that forget to
@@ -128,10 +162,10 @@ def scan_repo(repo_path: Path, output_path: str = None):
     skip_dirs = {".git", "node_modules", "__pycache__", "venv", ".venv",
                  "dist", "build", "coverage", ".gradle", ".idea",
                  "data", "output", "cache", "caches", ".muninn"}
-    # Only scan human-written files, not data/generated
-    for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
-                    "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
-                    "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini"]:
+    # scan_repo() codebook builder — needs everything Cube can reformat.
+    for pattern in _glob_patterns(
+        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
+    ):
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -342,7 +376,7 @@ def scan_repo(repo_path: Path, output_path: str = None):
         # Co-occurrence connections
         file_concepts = {}
         for f in repo_path.rglob("*"):
-            if f.is_file() and f.suffix in {".py", ".md", ".txt", ".rs", ".ts", ".js"}:
+            if f.is_file() and f.suffix in (SOURCE_CODE_EXTENSIONS | PROSE_EXTENSIONS):
                 try:
                     text = f.read_text(encoding="utf-8", errors="ignore")[:10000]
                     present = [n["id"] for n in nodes if n["label"].lower() in text.lower()]
@@ -437,10 +471,12 @@ def bootstrap_mycelium(repo_path: Path, max_files=None):
 
     file_count = 0
     capped = False
-    for pattern in ["**/*.md", "**/*.txt", "**/*.py", "**/*.rs", "**/*.ts",
-                    "**/*.js", "**/*.java", "**/*.c", "**/*.h", "**/*.toml",
-                    "**/*.yaml", "**/*.yml", "**/*.cfg", "**/*.ini",
-                    "**/*.mn", "**/*.tex"]:
+    # bootstrap_mycelium() — same code set as scan_repo + .mn/.tex
+    # so historical Muninn memory files also seed concepts.
+    for pattern in _glob_patterns(
+        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
+        MEMORY_EXTENSIONS,
+    ):
         if capped:
             break
         for f in repo_path.glob(pattern):
@@ -500,7 +536,9 @@ def _bootstrap_branches(repo_path: Path, skip_dirs: set):
     via grow_branches_from_session. Caps at 20 files to keep bootstrap fast.
     """
     candidates = []
-    for pattern in ["**/*.md", "**/*.txt"]:
+    # _bootstrap_branches — narrative prose only, branches are summaries
+    # not code reconstructions, so .md/.txt is intentional (not source code).
+    for pattern in _glob_patterns(PROSE_EXTENSIONS):
         for f in repo_path.glob(pattern):
             parts = f.relative_to(repo_path).parts
             if any(p.startswith(".") or p in skip_dirs for p in parts):
@@ -592,8 +630,7 @@ def generate_root_mn(repo_path: Path, file_count: int, mycelium):
             deps.append(dep_file)
 
     # Entry point guess (largest code file)
-    code_exts = {".py", ".rs", ".ts", ".js", ".java", ".c", ".go"}
-    entry = next((f for f, l in file_map if Path(f).suffix in code_exts), file_map[0][0] if file_map else name)
+    entry = next((f for f, l in file_map if Path(f).suffix in SOURCE_CODE_EXTENSIONS), file_map[0][0] if file_map else name)
 
     # Top mycelium concepts
     top_concepts = []
@@ -712,9 +749,9 @@ def generate_winter_tree(repo_path: Path, file_count: int, mycelium):
         if len(parts) > 1:
             dirs.add(parts[0])
         ext = f.suffix.lower()
-        if ext in {".py", ".rs", ".ts", ".js", ".java", ".c", ".go"}:
+        if ext in SOURCE_CODE_EXTENSIONS:
             code_files += 1
-        elif ext in {".md", ".txt"}:
+        elif ext in PROSE_EXTENSIONS:
             doc_files += 1
 
     if mycelium._db is not None:
