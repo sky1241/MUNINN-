@@ -73,7 +73,8 @@ class ReconstructionWorker(QObject):
                  max_cubes: int = 0,            # 0 = no cap, process whole file
                  base_tokens: int = 112,
                  max_cycles: int = 3,
-                 attempts_per_cube: int = 11):
+                 attempts_per_cube: int = 11,
+                 repo_root: Path = None):
         super().__init__()
         self._file = Path(file_path)
         self._model = model
@@ -82,6 +83,13 @@ class ReconstructionWorker(QObject):
         self._max_cycles = max_cycles
         self._attempts = attempts_per_cube
         self._stop = False
+        # Drift #9 (CHUNK 10, 2026-05-18) — caller passes the loaded
+        # repo root explicitly. Falls back to find_owning_repo(file) so
+        # the worker keeps working when invoked from headless scripts
+        # that bypass the UI's load_scan signal. Old behavior was
+        # `Path(__file__).resolve().parents[2]` which always pointed at
+        # the UI install dir — wrong repo bound to Mycelium.
+        self._repo_root = Path(repo_root).resolve() if repo_root else None
 
     def stop(self):
         self._stop = True
@@ -107,11 +115,28 @@ class ReconstructionWorker(QObject):
                 return
 
             # CHUNK 2 fix: Mycelium expects a repo_path (folder), not a DB file.
-            # Internally it builds <repo>/.muninn/mycelium.db. Passing a DB path
-            # here would create <path>/.muninn/mycelium.db which is empty.
-            # Using repo_root binds the UX to the real .muninn/mycelium.db
-            # of the project (847 MB / 5.9M edges accumulated across sessions).
-            repo_root = Path(__file__).resolve().parents[2]
+            # Internally it builds <repo>/.muninn/mycelium.db.
+            # CHUNK 10 (drift #9 fix, 2026-05-18): repo_root now comes from the
+            # caller (TerminalWidget passed the loaded scan target); when None
+            # we walk up from the file being reconstructed via the canonical
+            # find_owning_repo() helper. Old behavior was
+            # `Path(__file__).parents[2]` (UI install dir) which made
+            # Mycelium open the wrong .muninn/mycelium.db.
+            if self._repo_root is not None:
+                repo_root = self._repo_root
+            else:
+                try:
+                    from engine.core.repo_discovery import find_owning_repo
+                except ImportError:
+                    from repo_discovery import find_owning_repo  # type: ignore[no-redef]
+                repo_root = find_owning_repo(self._file)
+                if repo_root is None:
+                    self.error.emit(
+                        f"{self._file} is not inside a Muninn-bootstrapped "
+                        "repo (no .muninn/ ancestor). Run `muninn-mem "
+                        "bootstrap <repo>` first."
+                    )
+                    return
             mycelium = Mycelium(repo_root)
 
             content = self._file.read_text(encoding="utf-8", errors="replace")

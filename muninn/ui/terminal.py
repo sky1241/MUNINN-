@@ -603,19 +603,34 @@ class TerminalWidget(QWidget):
             return
         args = parts[1].split() if len(parts) == 2 else [parts[1]] + parts[2].split()
         file_path = Path(args[0])
+        # Drift #9 (CHUNK 10, 2026-05-18) — replaced the hardcoded
+        # `Path(__file__).resolve().parent.parent.parent` (= UI install
+        # dir, NOT the loaded repo) with the canonical helper
+        # find_owning_repo() that walks up from the file via the
+        # `.muninn/` (or `.git/`) marker. See engine/core/repo_discovery.py.
+        try:
+            from engine.core.repo_discovery import find_owning_repo
+        except ImportError:
+            from repo_discovery import find_owning_repo  # type: ignore[no-redef]
         if not file_path.is_absolute():
-            # Resolve relative to repo root (3 levels up from this file)
-            repo_root = Path(__file__).resolve().parent.parent.parent
-            file_path = (repo_root / file_path).resolve()
+            anchor = find_owning_repo(Path.cwd()) or Path.cwd()
+            file_path = (anchor / file_path).resolve()
         if not file_path.exists():
             self._append_text(f"File not found: {file_path}", color="#EF4444")
             return
-        repo_root = Path(__file__).resolve().parent.parent.parent
+        repo_root = find_owning_repo(file_path)
+        if repo_root is None:
+            self._append_text(
+                f"[reco] {file_path} is not inside a Muninn-bootstrapped repo. "
+                "Run `muninn-mem bootstrap <repo>` first, or set MUNINN_REPO.",
+                color="#EF4444",
+            )
+            return
         missing = self._reconstruction_prereqs_missing(repo_root)
         if missing:
             self._append_text(
-                "[reco] Reconstruction prerequisites missing: "
-                + ", ".join(missing)
+                "[reco] Reconstruction prerequisites missing in "
+                f"{repo_root}: " + ", ".join(missing)
                 + ". Once both exist, /reconstruct can run.",
                 color="#EF4444",
             )
@@ -640,6 +655,7 @@ class TerminalWidget(QWidget):
         self._reco_worker = ReconstructionWorker(
             str(file_path), model=model,
             lines_per_cube=lines_per_cube, max_cubes=max_cubes,
+            repo_root=repo_root,
         )
         self._reco_worker.moveToThread(self._reco_thread)
 
