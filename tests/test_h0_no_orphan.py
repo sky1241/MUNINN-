@@ -31,6 +31,10 @@ WHITELIST_DORMANT_MODULES = {
     "watchdog.py",          # standalone polling script for Windows; Linux N/A
     "__init__.py",          # package marker, no callable surface
     "__main__.py",          # python -m entry; not imported by name
+    "pipeline_trace.py",    # 2026-05-18 TEMPORARY observability scaffolding.
+                            # Callers added chunks 1-8 of pipeline_trace campaign.
+                            # Whole module + this whitelist entry removed at
+                            # cleanup (see docs/PIPELINE_TRACE_REMOVAL.md).
     # Files in `experimental/` are auto-whitelisted (see _is_experimental).
 }
 

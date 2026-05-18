@@ -131,6 +131,12 @@ def test_every_canonical_has_a_shim_or_is_intentionally_local():
         "muninn_tree_boot",    # P3.3 (2026-05-10): boot + _load_virtual_branches
                                # + _surface_insights_for_boot + _surface_known_errors
                                # + _load_relevant_sessions extracted. Same pattern.
+        "pipeline_trace",      # 2026-05-18 TEMPORARY observability scaffolding.
+                               # Imported directly by hooks + engine via
+                               # `from engine.core.pipeline_trace import log_event`.
+                               # No public muninn/ shim needed — module is operational,
+                               # not API. Whole module + this entry removed at cleanup
+                               # (see docs/PIPELINE_TRACE_REMOVAL.md).
     }
     for name in engine_files:
         if name in engine_only:

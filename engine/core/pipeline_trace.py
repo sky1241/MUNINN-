@@ -32,7 +32,7 @@ from typing import Any
 
 _REPO_CACHE: Path | None = None
 _TRACE_PATH_CACHE: Path | None = None
-_DISABLED: bool = False
+_DISABLED: bool = os.environ.get("PIPELINE_TRACE_DISABLE") == "1"
 
 
 def _resolve_repo() -> Path | None:
@@ -77,7 +77,7 @@ def log_event(name: str, data: dict[str, Any] | None = None, level: str = "info"
 
     Silently no-ops if:
       - the trace file path cannot be resolved (no .muninn/ around)
-      - the module has been globally disabled via PIPELINE_TRACE_DISABLE=1
+      - the env var PIPELINE_TRACE_DISABLE=1 was set at module import
       - any IO error during write (we must NEVER raise to the caller —
         a trace failure cannot break the hook or engine path it wraps)
 
@@ -110,18 +110,6 @@ def log_event(name: str, data: dict[str, Any] | None = None, level: str = "info"
             f.flush()
     except OSError:
         return
-
-
-def disable() -> None:
-    """Globally disable the tracer at runtime. Used by `_self_bench()` to
-    measure the no-op cost, and available as an escape hatch."""
-    global _DISABLED
-    _DISABLED = True
-
-
-def enable() -> None:
-    global _DISABLED
-    _DISABLED = False
 
 
 def _self_bench(n: int = 1000) -> dict[str, float]:
