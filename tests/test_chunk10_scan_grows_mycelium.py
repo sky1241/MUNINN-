@@ -140,6 +140,56 @@ def test_extension_constants_align_across_mirror():
         assert a == b, f"{name} drifted between canonical and mirror: {a} vs {b}"
 
 
+def test_scan_picks_up_unknown_languages(tmp_path):
+    """Universal scanner: any UTF-8 text file is picked up.
+
+    CHUNK 10 phase 2 — Sky's request "scan n'importe quel langage du
+    monde". Tests Zig, Crystal, V, Nim, Elixir — extensions that are
+    NOT in SOURCE_CODE_EXTENSIONS but should still be scanned because
+    they're plain UTF-8 source code.
+    """
+    (tmp_path / "main.zig").write_text(
+        "const std = @import(\"std\");\npub fn main() void {}\n"
+    )
+    (tmp_path / "lib.cr").write_text("class Foo\n  def bar; end\nend\n")  # Crystal
+    (tmp_path / "app.v").write_text("fn main() { println('hi') }\n")  # V
+    (tmp_path / "core.nim").write_text("proc hello() = echo \"hi\"\n")  # Nim
+    (tmp_path / "mod.ex").write_text("defmodule Foo do\nend\n")  # Elixir
+    from engine.core.muninn import scan_repo
+
+    scan_repo(tmp_path)
+
+    db = tmp_path / ".muninn" / "mycelium.db"
+    assert db.exists(), "Universal scanner must pick up Zig/Crystal/V/Nim/Elixir"
+    assert db.stat().st_size > 0
+
+
+def test_scan_skips_noise(tmp_path):
+    """Universal scanner must skip .log .json .csv .lock and binaries."""
+    (tmp_path / "real.py").write_text("def hello(): pass\n")
+    (tmp_path / "app.log").write_text("ERROR: noise\n" * 50)
+    (tmp_path / "data.csv").write_text("a,b,c\n1,2,3\n")
+    (tmp_path / "package-lock.json").write_text('{"name":"x"}\n')
+    (tmp_path / "bin.exe").write_bytes(b"\x7f\x45\x4c\x46" + b"\x00" * 100)
+
+    from engine.core.muninn import is_scannable_text
+
+    assert is_scannable_text(tmp_path / "real.py")
+    assert not is_scannable_text(tmp_path / "app.log"), ".log is noise"
+    assert not is_scannable_text(tmp_path / "data.csv"), ".csv is data"
+    assert not is_scannable_text(tmp_path / "package-lock.json"), "lockfile is data"
+    assert not is_scannable_text(tmp_path / "bin.exe"), "binary fails UTF-8 decode"
+
+
+def test_scan_rejects_oversized_file(tmp_path):
+    """Generated/dump files over SCAN_MAX_BYTES are rejected."""
+    big = tmp_path / "huge.py"
+    big.write_text("# noise\n" * 10000)  # 80KB > 50KB cap
+    from engine.core.muninn import is_scannable_text, SCAN_MAX_BYTES
+    assert big.stat().st_size > SCAN_MAX_BYTES
+    assert not is_scannable_text(big)
+
+
 def test_extension_constants_cover_cube_corpus():
     """The cube_corpus benchmark files must all be scannable.
 

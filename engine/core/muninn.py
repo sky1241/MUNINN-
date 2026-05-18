@@ -110,6 +110,89 @@ def _glob_patterns(*sets) -> list[str]:
     return sorted(out)
 
 
+# CHUNK 10 (2026-05-18, drift #12 phase 2) — universal text-file scanner.
+# The whitelist above (SOURCE_CODE_EXTENSIONS et al.) is still used for
+# CATEGORIZATION (is this prose? code? config? memory?) so feed routing
+# stays deterministic. But the INCLUSION DECISION for scan_repo /
+# bootstrap_mycelium walks the repo and accepts ANY UTF-8 text file
+# that isn't oversized or obvious noise. Sky's intent: "scan
+# n'importe quel langage du monde". Adding Zig/Crystal/V/Nim/etc tomorrow
+# requires zero code change.
+#
+# Three filters: skip dirs (kept by callers), skip noise extensions
+# (data/binaries/locks), accept if first 4KB decodes as UTF-8.
+SCAN_NOISE_EXTENSIONS = frozenset({
+    # Data/serialized blobs
+    ".json", ".csv", ".tsv", ".xml", ".xlsx", ".parquet", ".arrow",
+    # Compiled/binary artifacts
+    ".pyc", ".pyo", ".so", ".a", ".o", ".dll", ".exe", ".dylib", ".lib",
+    ".class", ".jar", ".war", ".pyd",
+    # Lock/manifest files (machine-edited)
+    ".lock", ".sum",
+    # Minified bundles (no semantic info even though text)
+    ".min.js", ".min.css", ".map",
+    # Images / media / archives
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".bmp", ".tiff", ".webp",
+    ".pdf", ".mp3", ".mp4", ".avi", ".mov", ".webm", ".ogg",
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar",
+    # Database files (binary)
+    ".db", ".db-shm", ".db-wal", ".sqlite", ".sqlite3",
+    # Logs (machine-generated noise)
+    ".log",
+})
+
+SCAN_MAX_BYTES = 50_000  # consistent with the historical scan_repo size cap
+
+
+def is_scannable_text(path: Path, max_bytes: int = SCAN_MAX_BYTES) -> bool:
+    """True when `path` is a text file worth feeding to the mycelium.
+
+    Universal detector — doesn't care about file extension whitelist.
+    Three rejections, in order:
+      1. Size > max_bytes (generated/dump files)
+      2. Suffix in SCAN_NOISE_EXTENSIONS (json/csv/binary/log/etc.)
+      3. First 4KB doesn't UTF-8 decode (binary)
+
+    Anything else is accepted. New language tomorrow → just works.
+    """
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
+    if size > max_bytes or size == 0:
+        return False
+    if path.suffix.lower() in SCAN_NOISE_EXTENSIONS:
+        return False
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(4096)
+    except OSError:
+        return False
+    try:
+        chunk.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def iter_scannable_files(repo_path: Path, skip_dirs: set) -> "Iterator[Path]":
+    """Yield every file in `repo_path` that survives is_scannable_text
+    AND isn't inside a skip_dir / dotfile path component.
+    """
+    for f in repo_path.rglob("*"):
+        if not f.is_file():
+            continue
+        try:
+            parts = f.relative_to(repo_path).parts
+        except ValueError:
+            continue
+        if any(p.startswith(".") or p in skip_dirs for p in parts):
+            continue
+        if not is_scannable_text(f):
+            continue
+        yield f
+
+
 # Legacy globals — recomputed by _refresh_tree_paths() once _REPO_PATH is set.
 # BUG-091 follow-up (2026-05-08): default to MUNINN_ROOT/.muninn/tree (runtime,
 # gitignored) instead of MUNINN_ROOT/memory (tracked). Callers that forget to
@@ -156,27 +239,22 @@ def scan_repo(repo_path: Path, output_path: str = None):
     repo_path = repo_path.resolve()
     print(f"=== MUNINN SCAN: {repo_path.name} ===")
 
-    # Collect text from documentation and code files (NOT data files)
+    # Universal scanner (CHUNK 10 phase 2, 2026-05-18):
+    # accept any UTF-8 text file under SCAN_MAX_BYTES, regardless of
+    # extension. SCAN_NOISE_EXTENSIONS filters obvious noise
+    # (binaries / .json / .csv / .log / .lock / minified bundles /
+    # archives). New languages (Zig, Crystal, V, Nim...) just work.
     all_text = []
     file_count = 0
     skip_dirs = {".git", "node_modules", "__pycache__", "venv", ".venv",
                  "dist", "build", "coverage", ".gradle", ".idea",
                  "data", "output", "cache", "caches", ".muninn"}
-    # scan_repo() codebook builder — needs everything Cube can reformat.
-    for pattern in _glob_patterns(
-        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
-    ):
-        for f in repo_path.glob(pattern):
-            parts = f.relative_to(repo_path).parts
-            if any(p.startswith(".") or p in skip_dirs for p in parts):
-                continue
-            try:
-                text = f.read_text(encoding="utf-8", errors="ignore")
-                if len(text) < 50_000:  # skip huge generated files
-                    all_text.append(text)
-                    file_count += 1
-            except (PermissionError, OSError):
-                continue
+    for f in iter_scannable_files(repo_path, skip_dirs):
+        try:
+            all_text.append(f.read_text(encoding="utf-8", errors="ignore"))
+            file_count += 1
+        except (PermissionError, OSError):
+            continue
 
     if not all_text:
         print("  No text files found.")
@@ -471,32 +549,23 @@ def bootstrap_mycelium(repo_path: Path, max_files=None):
 
     file_count = 0
     capped = False
-    # bootstrap_mycelium() — same code set as scan_repo + .mn/.tex
-    # so historical Muninn memory files also seed concepts.
-    for pattern in _glob_patterns(
-        SOURCE_CODE_EXTENSIONS, PROSE_EXTENSIONS, CONFIG_EXTENSIONS,
-        MEMORY_EXTENSIONS,
-    ):
-        if capped:
-            break
-        for f in repo_path.glob(pattern):
-            parts = f.relative_to(repo_path).parts
-            if any(p.startswith(".") or p in skip_dirs for p in parts):
-                continue
-            try:
-                text = f.read_text(encoding="utf-8", errors="ignore")
-                if len(text) < 50_000:
-                    clean = _redact_secrets_text(text)
-                    if f.suffix == ".tex":
-                        m.observe_latex(clean)
-                    else:
-                        m.observe_text(clean)
-                    file_count += 1
-                    if max_files is not None and file_count >= max_files:
-                        capped = True
-                        break
-            except (PermissionError, OSError):
-                continue
+    # Universal scanner (CHUNK 10 phase 2, 2026-05-18): same logic as
+    # scan_repo, accepts any UTF-8 text file. .tex routing kept (special
+    # path that calls observe_latex instead of observe_text).
+    for f in iter_scannable_files(repo_path, skip_dirs):
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+            clean = _redact_secrets_text(text)
+            if f.suffix == ".tex":
+                m.observe_latex(clean)
+            else:
+                m.observe_text(clean)
+            file_count += 1
+            if max_files is not None and file_count >= max_files:
+                capped = True
+                break
+        except (PermissionError, OSError):
+            continue
 
     m.save()
     if capped:
