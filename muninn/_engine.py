@@ -353,6 +353,37 @@ def scan_repo(repo_path: Path, output_path: str = None):
         orig = next((c[1] for c in candidates if c[0] == pattern), 0)
         print(f"    '{pattern}' -> '{code}' ({orig}x)")
 
+    # CHUNK 10 follow-up (2026-05-18, drift "intent ≠ impl"): grow the
+    # mycelium graph from the scanned files. Until today scan_repo only
+    # wrote a per-target codebook; users intuitively expected /scan to
+    # "learn the repo" (= populate mycelium.db) but it didn't — only
+    # `bootstrap_mycelium` did, and there's no /bootstrap in the UI
+    # palette. Best-effort: if mycelium init fails the scan still
+    # delivers local.json. (BUG-091 mirror of engine/core/muninn.py)
+    try:
+        from mycelium import Mycelium
+    except ImportError:
+        try:
+            from .mycelium import Mycelium  # type: ignore[no-redef]
+        except ImportError:
+            Mycelium = None  # type: ignore[assignment]
+    if Mycelium is not None and all_text:
+        log_event("pipeline.engine.scan.mycelium_grow_begin", {"files": file_count, "chars": len(corpus)})  # PIPELINE_TRACE
+        try:
+            myc = Mycelium(repo_path)
+            for text in all_text:
+                try:
+                    myc.observe_text(text)
+                except Exception:
+                    continue
+            myc.save()
+            db_size = myc.db_path.stat().st_size if myc.db_path.exists() else 0
+            print(f"  Mycelium grown: {_safe_path(myc.db_path)} ({db_size:,} bytes)")
+            log_event("pipeline.engine.scan.mycelium_grow_end", {"db_bytes": db_size, "files": file_count})  # PIPELINE_TRACE
+        except Exception as _e:
+            print(f"  [warn] mycelium growth failed: {_e}")
+            log_event("pipeline.engine.scan.mycelium_grow_error", {"err": str(_e)[:200]})  # PIPELINE_TRACE
+
     # Generate neuron map JSON for UI if output requested
     if output_path:
         nodes = []
