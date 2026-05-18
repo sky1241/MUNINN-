@@ -123,6 +123,11 @@ class TerminalWidget(QWidget):
     cube_progress = pyqtSignal(int, float, bool)  # idx, ncd, sha_match
     reconstruction_started = pyqtSignal()        # Navi hide during /reconstruct
     reconstruction_ended = pyqtSignal()          # Navi show again
+    # Palette /scan: emits scan output path so MainWindow.load_scan() can
+    # populate the cube + tree like the "Scanner un repo" button does.
+    # Closes the UX gap where the palette scan wrote local.json to disk
+    # but the UI never refreshed (see SANDBOX_UX_NOTES drift #5).
+    scan_data_ready = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -688,8 +693,17 @@ class TerminalWidget(QWidget):
                     )
                     return
         self._append_text(f"Scanning {target}...", color=TEXT_SECONDARY)
+        # Write the scan result to a tmpfile and emit it on success so the
+        # cube + tree panels can pick it up (mirrors MainWindow._scan_folder
+        # for the button path). Without --output the subprocess writes to
+        # <target>/.muninn/local.json which the UI never reloads.
+        import tempfile, os
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix="muninn-scan-", suffix=".json")
+        os.close(tmp_fd)
         self._run_subprocess_bg(
-            [sys.executable, "-m", "muninn", "scan", target], timeout=120,
+            [sys.executable, "-m", "muninn", "scan", target, "--output", tmp_path],
+            timeout=120,
+            on_success=lambda p=tmp_path: self.scan_data_ready.emit(p),
         )
 
     def _run_status(self):
@@ -724,8 +738,16 @@ class TerminalWidget(QWidget):
             pass
         return os.getcwd()
 
-    def _run_subprocess_bg(self, cmd: list, timeout: int = 30):
-        """Run a subprocess in a background thread to avoid freezing the UI."""
+    def _run_subprocess_bg(self, cmd: list, timeout: int = 30, on_success=None):
+        """Run a subprocess in a background thread to avoid freezing the UI.
+
+        Args:
+            on_success: optional callable invoked on the main thread (via
+                QTimer.singleShot) after the subprocess returns 0. Used by
+                /scan to load the produced JSON into the cube + tree
+                panels — closes the UX gap where palette commands
+                produced disk output but the UI never refreshed.
+        """
         import subprocess, sys, threading
 
         cwd = self._detect_subprocess_cwd()
@@ -744,6 +766,8 @@ class TerminalWidget(QWidget):
                     # Use QTimer.singleShot to emit on main thread
                     QTimer.singleShot(0, lambda: self._append_text(
                         result.stdout.strip() or "Done.", color="#32CD32"))
+                    if on_success is not None:
+                        QTimer.singleShot(0, on_success)
                 else:
                     QTimer.singleShot(0, lambda: self._append_text(
                         result.stderr.strip() or "Failed.", color="#EF4444"))

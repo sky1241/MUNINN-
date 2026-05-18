@@ -147,6 +147,10 @@ class MainWindow(QMainWindow):
         # her while a reconstruction is running so the heatmap stays snappy.
         self.terminal_panel.reconstruction_started.connect(self._on_reco_started)
         self.terminal_panel.reconstruction_ended.connect(self._on_reco_ended)
+        # Palette /scan -> load the produced JSON into the cube + tree
+        # like the "Scanner un repo" button path does. Closes the UX gap
+        # where /scan completed silently with no visible refresh.
+        self.terminal_panel.scan_data_ready.connect(self.load_scan)
 
     def _on_reco_started(self):
         if hasattr(self, "_navi") and self._navi is not None:
