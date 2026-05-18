@@ -246,6 +246,7 @@ muninn-mem install-cron        # Systemd-user timer hebdo (Linux)
 | `MUNINN_DEBUG` | Bypass le friendly error handler (G.3) — re-raise tout traceback. Pour debug engine. | unset (friendly mode actif) |
 | `MUNINN_TRANSLATE_FALLBACK_API` | Opt-in fallback Anthropic Haiku API pour traduire les concepts FR absents du static lexicon K.1 (~946 mots dev-vocab MIT-clean). `1` = active l'API (besoin `ANTHROPIC_API_KEY` + crédits), unset = dict-only passthrough. | unset (dict-only, zéro API) |
 | `MUNINN_DEMO_REPO` | Repo cible pour les scripts dans `examples/` (chunk MCP D.5) | `/tmp/muninn-quickstart` |
+| `MUNINN_GOOGLE_JAVA_FORMAT_JAR` | CHUNK 10 phase 3 (2026-05-18) : path du jar `google-java-format` pour la reco Java précise. Le sandbox Dockerfile le télécharge à `/opt/`. Si le jar manque, `format_code('.java')` tombe sur le fallback `normalize_content` (no crash). | `/opt/google-java-format.jar` |
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
 | `MUNINN_SKIP_META_SYNC` | Opt-out de la sync auto vers meta-mycelium dans SessionEnd/Stop hooks (chunk MCP A.2) | unset (sync actif) |
