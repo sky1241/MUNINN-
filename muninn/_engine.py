@@ -61,6 +61,13 @@ except ImportError:
     from _secrets import redact_secrets_text as _redact_secrets_text
     from _secrets import secure_perms
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 try:
     from .sentiment import score_sentiment, score_session
     _HAS_SENTIMENT = True
@@ -835,6 +842,7 @@ def _handle_vault_command(args):
 
     try:
         if args.command == "lock":
+            log_event("pipeline.cli.lock.start", {})  # PIPELINE_TRACE
             if not v.is_initialized():
                 v.init(pw)
                 print("VAULT: initialized (salt + backup saved)")
@@ -843,6 +851,7 @@ def _handle_vault_command(args):
             result = v.lock()
             print(f"VAULT LOCKED: {result['encrypted']} files encrypted ({result['total_bytes']:,} bytes)")
         elif args.command == "unlock":
+            log_event("pipeline.cli.unlock.start", {})  # PIPELINE_TRACE
             if not v.is_initialized():
                 print("ERROR: vault not initialized. Run: muninn lock --password <pw>")
                 sys.exit(1)
@@ -850,6 +859,7 @@ def _handle_vault_command(args):
             result = v.unlock()
             print(f"VAULT UNLOCKED: {result['decrypted']} files decrypted ({result['total_bytes']:,} bytes)")
         elif args.command == "rekey":
+            log_event("pipeline.cli.rekey.start", {})  # PIPELINE_TRACE
             if not v.is_initialized():
                 print("ERROR: vault not initialized.")
                 sys.exit(1)
@@ -1129,6 +1139,8 @@ def main():
                       file=sys.stderr)
 
     if args.command == "init":
+
+        log_event("pipeline.cli.init.start", {})  # PIPELINE_TRACE
         # Full one-shot setup: tree + hooks + register
         # Works on any repo: cd /path/to/repo && muninn-mem init
         # Or: muninn-mem init --repo /path/to/repo
@@ -1166,6 +1178,8 @@ def main():
         return
 
     if args.command == "uninstall":
+
+        log_event("pipeline.cli.uninstall.start", {})  # PIPELINE_TRACE
         # CHUNK MCP F.1 (2026-05-12): mirror of engine/core/muninn.py.
         repo = Path(args.repo or args.file or ".").resolve()
         if not repo.exists():
@@ -1196,6 +1210,8 @@ def main():
         return
 
     if args.command == "status":
+
+        log_event("pipeline.cli.status.start", {})  # PIPELINE_TRACE
         if not _REPO_PATH:
             cwd = Path(".").resolve()
             if (cwd / ".muninn").exists():
@@ -1211,6 +1227,8 @@ def main():
         return
 
     if args.command == "diagnose":
+
+        log_event("pipeline.cli.diagnose.start", {})  # PIPELINE_TRACE
         if not _REPO_PATH:
             cwd = Path(".").resolve()
             if (cwd / ".muninn").exists():
@@ -1223,6 +1241,8 @@ def main():
         return
 
     if args.command == "doctor":
+
+        log_event("pipeline.cli.doctor.start", {})  # PIPELINE_TRACE
         if not _REPO_PATH:
             cwd = Path(".").resolve()
             if (cwd / ".muninn").exists():
@@ -1236,14 +1256,20 @@ def main():
         return
 
     if args.command == "trip":
+
+        log_event("pipeline.cli.trip.start", {})  # PIPELINE_TRACE
         _handle_huginn_trip(args)
         return
 
     if args.command == "think":
+
+        log_event("pipeline.cli.think.start", {})  # PIPELINE_TRACE
         _handle_huginn_think(args)
         return
 
     if args.command == "scan":
+
+        log_event("pipeline.cli.scan.start", {})  # PIPELINE_TRACE
         if not args.file:
             print("ERROR: repo path required. Usage: muninn.py scan <repo-path>")
             sys.exit(1)
@@ -1251,6 +1277,8 @@ def main():
         return
 
     if args.command == "bootstrap":
+
+        log_event("pipeline.cli.bootstrap.start", {})  # PIPELINE_TRACE
         if not args.file:
             print("ERROR: repo path required. Usage: muninn.py bootstrap <repo-path>")
             sys.exit(1)
@@ -1263,6 +1291,8 @@ def main():
         return
 
     if args.command == "upgrade-hooks":
+
+        log_event("pipeline.cli.upgrade-hooks.start", {})  # PIPELINE_TRACE
         repo = Path(args.repo or args.file or ".").resolve()
         if not (repo / ".muninn").exists():
             print(f"ERROR: {repo} is not a Muninn repo (no .muninn/ directory)")
@@ -1271,6 +1301,8 @@ def main():
         return
 
     if args.command == "install-cron":
+
+        log_event("pipeline.cli.install-cron.start", {})  # PIPELINE_TRACE
         # Chunk MCP A.3: weekly systemd-user timer for `muninn-mem prune`.
         repo = Path(args.repo or args.file or ".").resolve()
         if not (repo / ".muninn").exists():
@@ -1291,6 +1323,8 @@ def main():
         return
 
     if args.command == "feed":
+
+        log_event("pipeline.cli.feed.start", {})  # PIPELINE_TRACE
         # --repo is authoritative. For direct file mode without --repo, use CWD (not the JSONL path).
         if args.repo:
             repo = Path(args.repo).resolve()
@@ -1333,6 +1367,8 @@ def main():
         return
 
     if args.command == "ingest":
+
+        log_event("pipeline.cli.ingest.start", {})  # PIPELINE_TRACE
         if not args.file:
             print("ERROR: file or folder required. Usage: muninn.py ingest <file-or-folder> --repo <repo-path>")
             sys.exit(1)
@@ -1343,6 +1379,8 @@ def main():
         return
 
     if args.command == "inject":
+
+        log_event("pipeline.cli.inject.start", {})  # PIPELINE_TRACE
         if not args.file:
             print('ERROR: fact required. Usage: muninn.py inject "important fact here"')
             sys.exit(1)
@@ -1353,6 +1391,8 @@ def main():
         return
 
     if args.command == "recall":
+
+        log_event("pipeline.cli.recall.start", {})  # PIPELINE_TRACE
         if not args.file:
             print("ERROR: query required. Usage: muninn.py recall \"search terms\"")
             sys.exit(1)
@@ -1366,6 +1406,8 @@ def main():
         return
 
     if args.command == "bridge":
+
+        log_event("pipeline.cli.bridge.start", {})  # PIPELINE_TRACE
         if not args.file:
             print('ERROR: text required. Usage: muninn.py bridge "user message or concepts"')
             sys.exit(1)
@@ -1379,6 +1421,8 @@ def main():
         return
 
     if args.command == "boot":
+
+        log_event("pipeline.cli.boot.start", {})  # PIPELINE_TRACE
         # If no --repo, try to use current dir if it has .muninn/
         if not _REPO_PATH:
             cwd = Path(".").resolve()
@@ -1390,6 +1434,8 @@ def main():
         return
 
     if args.command == "prune":
+
+        log_event("pipeline.cli.prune.start", {})  # PIPELINE_TRACE
         if not _REPO_PATH:
             cwd = Path(".").resolve()
             if (cwd / ".muninn").exists():
@@ -1399,6 +1445,8 @@ def main():
         return
 
     if args.command == "decode":
+
+        log_event("pipeline.cli.decode.start", {})  # PIPELINE_TRACE
         if args.file:
             fpath = Path(args.file)
             if not fpath.exists():
@@ -1412,6 +1460,8 @@ def main():
         return
 
     if args.command == "verify":
+
+        log_event("pipeline.cli.verify.start", {})  # PIPELINE_TRACE
         if not args.file:
             print("ERROR: file required. Usage: muninn.py verify <file>")
             sys.exit(1)
@@ -1423,14 +1473,20 @@ def main():
         return
 
     if args.command == "scrub":
+
+        log_event("pipeline.cli.scrub.start", {})  # PIPELINE_TRACE
         _handle_scrub_command(args)
         return
 
     if args.command == "purge-secrets":
+
+        log_event("pipeline.cli.purge-secrets.start", {})  # PIPELINE_TRACE
         _handle_purge_secrets_command(args)
         return
 
     if args.command == "sync":
+
+        log_event("pipeline.cli.sync.start", {})  # PIPELINE_TRACE
         # I1: CLI sync commands — --status/--backend/--migrate/--export/--import
         if not _REPO_PATH:
             cwd = Path(".").resolve()
@@ -1531,14 +1587,20 @@ def main():
         return
 
     if args.command == "quarantine":
+
+        log_event("pipeline.cli.quarantine.start", {})  # PIPELINE_TRACE
         _handle_quarantine_command()
         return
 
     if args.command == "zones":
+
+        log_event("pipeline.cli.zones.start", {})  # PIPELINE_TRACE
         _handle_zones_command(args)
         return
 
     if args.command == "cube":
+
+        log_event("pipeline.cli.cube.start", {})  # PIPELINE_TRACE
         # H.1 (2026-05-12): wire 5597 LOC of engine/core/cube_*.py via the
         # cli_{scan,run,status,god} delegates (mirror engine/core/muninn.py).
         from cube_analysis import cli_scan, cli_run, cli_status, cli_god
@@ -1557,6 +1619,8 @@ def main():
         return
 
     if args.command == "metrics":
+
+        log_event("pipeline.cli.metrics.start", {})  # PIPELINE_TRACE
         # H.4 (2026-05-12): mirror — forge metrics CLI.
         from forge_metrics import get_repo_risk
         repo = Path(_REPO_PATH or args.file or Path.cwd()).resolve()
@@ -1579,6 +1643,8 @@ def main():
         sys.exit(1)
 
     if args.command == "read":
+
+        log_event("pipeline.cli.read.start", {})  # PIPELINE_TRACE
         stats = analyze_file(filepath)
         print(f"\n=== MUNINN READ: {filepath.name} ===")
         print(f"  Lines: {stats['lines']}, Tokens (est): {stats['tokens_est']}")
@@ -1589,6 +1655,8 @@ def main():
         print(f"\n  Tokens: {stats['tokens_est']} -> {stats['tokens_after']} (x{stats['ratio']})")
 
     elif args.command == "compress":
+
+        log_event("pipeline.cli.compress.start", {})  # PIPELINE_TRACE
         compressed = compress_file(filepath)
         print(compressed)
         orig = filepath.stat().st_size
@@ -1596,9 +1664,13 @@ def main():
         print(f"\n# {orig} -> {comp} chars (x{orig / max(comp, 1):.1f})")
 
     elif args.command == "tree":
+
+        log_event("pipeline.cli.tree.start", {})  # PIPELINE_TRACE
         build_tree(filepath)
 
     elif args.command == "winter-tree":
+
+        log_event("pipeline.cli.winter-tree.start", {})  # PIPELINE_TRACE
         # Unreachable: handled by the pre-argparse early intercept at the
         # top of main(). Kept for parity with engine/core/muninn.py.
         return
