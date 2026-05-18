@@ -699,19 +699,45 @@ class TerminalWidget(QWidget):
             [sys.executable, "-m", "muninn", "status"], timeout=10,
         )
 
+    def _detect_subprocess_cwd(self) -> str:
+        """Pick cwd for `python -m muninn ...` subprocesses.
+
+        Was hardcoded `"."` which inherits the muninn-ui launch dir. In
+        the sandbox the UI starts at `/home/sandbox` while the repo lives
+        at `/home/sandbox/workspace/muninn`, so log_event() resolved the
+        wrong .muninn/ and traces leaked to the home dir. Pattern D from
+        .claude/rules/python.md: env vars first, then walk up from the
+        editable-installed muninn package, last fallback is os.getcwd().
+        """
+        import os
+        for var in ("MUNINN_REPO", "CLAUDE_PROJECT_DIR"):
+            v = os.environ.get(var)
+            if v and Path(v).is_dir():
+                return v
+        try:
+            import muninn as _muninn_pkg
+            pkg = Path(_muninn_pkg.__file__).resolve().parent
+            for cand in [pkg.parent] + list(pkg.parents):
+                if (cand / "pyproject.toml").exists() or (cand / ".git").exists():
+                    return str(cand)
+        except Exception:
+            pass
+        return os.getcwd()
+
     def _run_subprocess_bg(self, cmd: list, timeout: int = 30):
         """Run a subprocess in a background thread to avoid freezing the UI."""
         import subprocess, sys, threading
 
+        cwd = self._detect_subprocess_cwd()
         _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
-        log_event("pipeline.ui.terminal.subprocess_start", {"cmd": " ".join(str(c) for c in cmd)[:200], "timeout_s": timeout})  # PIPELINE_TRACE
+        log_event("pipeline.ui.terminal.subprocess_start", {"cmd": " ".join(str(c) for c in cmd)[:200], "timeout_s": timeout, "cwd": cwd})  # PIPELINE_TRACE
 
         def _worker():
             try:
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
                     encoding="utf-8", errors="replace",
-                    timeout=timeout, cwd=".",
+                    timeout=timeout, cwd=cwd,
                 )
                 log_event("pipeline.ui.terminal.subprocess_end", {"cmd": " ".join(str(c) for c in cmd)[:120], "returncode": result.returncode, "stdout_len": len(result.stdout), "stderr_len": len(result.stderr), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
                 if result.returncode == 0:
