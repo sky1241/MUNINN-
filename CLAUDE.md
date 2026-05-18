@@ -241,6 +241,8 @@ muninn-mem install-cron        # Systemd-user timer hebdo (Linux)
 | `MUNINN_MAX_COMPRESS_BYTES` | Override de la taille max d'un input pour `compress_file` (CHUNK C3) | `52428800` (50 MB) |
 | `MUNINN_SKIP_INTEGRITY` | Bypass le boot integrity_check de mycelium.db (CHUNK E6) | unset (check actif) |
 | `MUNINN_REPO` | Repo cible pour scripts ad-hoc (CLI fallback) | `os.getcwd()` |
+| `MUNINN_TASK_MAX` | Plafond de subagents Task lancés par fenêtre, enforcé par `pre_tool_use_task_throttle.py` (2026-05-15 — Sky a brûlé 58% de son quota hebdo Max-20x quand une session a spawn 342 Explore en burst). | `3` |
+| `MUNINN_TASK_WINDOW` | Longueur de la fenêtre glissante (secondes) pour le throttle Task. | `60` |
 | `MUNINN_DEBUG` | Bypass le friendly error handler (G.3) — re-raise tout traceback. Pour debug engine. | unset (friendly mode actif) |
 | `MUNINN_TRANSLATE_FALLBACK_API` | Opt-in fallback Anthropic Haiku API pour traduire les concepts FR absents du static lexicon K.1 (~946 mots dev-vocab MIT-clean). `1` = active l'API (besoin `ANTHROPIC_API_KEY` + crédits), unset = dict-only passthrough. | unset (dict-only, zéro API) |
 | `MUNINN_DEMO_REPO` | Repo cible pour les scripts dans `examples/` (chunk MCP D.5) | `/tmp/muninn-quickstart` |

@@ -891,6 +891,7 @@ def _install_pre_tool_use_hooks(repo_path: Path) -> dict:
         "pre_tool_use_bash_destructive.py",
         "pre_tool_use_bash_secrets.py",
         "pre_tool_use_edit_hardcode.py",
+        "pre_tool_use_task_throttle.py",
     ])
 
 
@@ -1069,6 +1070,18 @@ def install_hooks(repo_path: Path):
             "hooks": [{
                 "type": "command",
                 "command": _ptu_cmd("pre_tool_use_edit_hardcode.py"),
+                "timeout": 5,
+            }],
+        })
+    if "pre_tool_use_task_throttle.py" in ptu_hooks:
+        # 2026-05-15: protect Anthropic quota — see hook docstring.
+        # Sky burned 58% of his weekly Max-20x quota when a session
+        # spawned 342 Explore subagents in one go.
+        pre_tool_entries.append({
+            "matcher": "Task",
+            "hooks": [{
+                "type": "command",
+                "command": _ptu_cmd("pre_tool_use_task_throttle.py"),
                 "timeout": 5,
             }],
         })
@@ -1303,6 +1316,7 @@ _MUNINN_INSTALLED_HOOK_FILES = frozenset({
     "pre_tool_use_bash_destructive.py",
     "pre_tool_use_bash_secrets.py",
     "pre_tool_use_edit_hardcode.py",
+    "pre_tool_use_task_throttle.py",
     "config_change_hook.py",
     "notification_audit_hook.py",
     "post_tool_use_edit_log.py",
