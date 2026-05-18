@@ -31,7 +31,7 @@ deleted as one unit.
 | 2 | _pending_ | `engine/core/muninn_tree.py` (`bridge_fast` +5 events, `recall` +7 events) + 7-line import block + new `tests/test_props_muninn_tree.py` (14 forge props, generated, kept) | ~25 | `git revert <hash>` |
 | 3 | _pending_ | `engine/core/muninn_feed.py` (`feed_from_hook` +12 events, `feed_from_stop_hook` +5 events, `_feed_from_stop_hook_locked` +8 events) + 7-line import block + new `tests/test_props_muninn_feed.py` (1 forge prop, generated) | ~35 | `git revert <hash>` |
 | 4 | _pending_ | `engine/core/muninn_feed.py` (`compress_transcript` +6 events, `_sync_to_meta_guarded` +3 events) + `engine/core/muninn_tree.py` (`refresh_tree_metadata` +1, `grow_branches_from_session` +3) + `engine/core/muninn_tree_prune.py` (`_sleep_consolidate` +3, `_light_prune` +3) + 7-line import block in prune module | ~25 | `git revert <hash>` |
-| 5 | _pending_ | `engine/core/mycelium.py`, `engine/core/mycelium_activation.py` | _TBD_ | `git revert <hash>` |
+| 5 | _pending_ | `engine/core/mycelium.py` (`decay` +3 events, 7-line import block) + `engine/core/mycelium_activation.py` (`get_related` +2 events incl. sqlite/memory branches, `spread_activation` +3 events incl. 2 early-exit, 7-line import block). `observe` NOT instrumented — called ~10K/feed, would flood the trace; the higher-level `pipeline.engine.feed.observed` aggregates count. | ~22 | `git revert <hash>` |
 | 6 | _pending_ | `engine/core/muninn.py` (32 CLI subcommands) | _TBD_ | `git revert <hash>` |
 | 7 | _pending_ | `muninn/ui/*.py` (main_window, cube_live, tree_view, search, command_palette, terminal, navi) | _TBD_ | `git revert <hash>` |
 | 8 | _pending_ | `muninn/mcp/server.py` (10 `_*_impl`) | _TBD_ | `git revert <hash>` |

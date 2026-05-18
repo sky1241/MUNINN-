@@ -29,6 +29,13 @@ import time
 from collections import Counter
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 # Import mycelium_db — works both as package (from .mycelium_db) and standalone
 try:
     from .mycelium_db import MyceliumDB, days_to_date, date_to_days, today_days
@@ -1010,7 +1017,9 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
         """
         if days is None:
             days = self.DECAY_HALF_LIFE
+        log_event("pipeline.mycelium.decay.begin", {"days": days, "default_used": days == self.DECAY_HALF_LIFE})  # PIPELINE_TRACE
         if days <= 0:
+            log_event("pipeline.mycelium.decay.end", {"dead": 0, "reason": "days_le_0"})  # PIPELINE_TRACE
             return 0
 
         _decay_start = time.time()
@@ -1084,8 +1093,10 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
                 self.cleanup_orphan_concepts()
             self._adj_cache = None  # M10 fix: invalidate after decay
             # A4: Auto-vacuum if decay took > 10s
-            if time.time() - _decay_start > 10.0:
+            _decay_elapsed = time.time() - _decay_start  # PIPELINE_TRACE
+            if _decay_elapsed > 10.0:
                 self.vacuum_if_needed()
+            log_event("pipeline.mycelium.decay.end", {"dead": len(dead_ids), "days": days, "elapsed_s": round(_decay_elapsed, 3), "backend": "sqlite"})  # PIPELINE_TRACE
             return len(dead_ids)
         else:
             # Fallback: in-memory dict
@@ -1118,6 +1129,7 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
                 if key in self.data["fusions"]:
                     del self.data["fusions"][key]
             self._adj_cache = None  # M10 fix: invalidate after decay
+            log_event("pipeline.mycelium.decay.end", {"dead": len(dead), "days": days, "elapsed_s": round(time.time() - _decay_start, 3), "backend": "memory_dict"})  # PIPELINE_TRACE
             return len(dead)
 
     def adaptive_fusion_threshold(self) -> int:

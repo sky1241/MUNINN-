@@ -40,6 +40,14 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+import time
+
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
 
 try:
     from .mycelium_db import MyceliumDB
@@ -297,6 +305,7 @@ class _MyceliumActivationMixin:
         (stopwords like 'est', 'les', 'pas') are excluded from results
         to surface meaningful semantic neighbors. Fixed after BUG-M4.
         """
+        _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
         if not concept:
             return []
         concept = str(concept).lower().strip()
@@ -325,7 +334,9 @@ class _MyceliumActivationMixin:
                     weight = float(count)
                 related.append((name, weight))
             related.sort(key=lambda x: x[1], reverse=True)
-            return related[:top_n]
+            _pt_out = related[:top_n]  # PIPELINE_TRACE
+            log_event("pipeline.mycelium.get_related.end", {"concept": concept, "found": len(_pt_out), "backend": "sqlite", "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
+            return _pt_out
         else:
             # CHUNK D2 (2026-05-08): pre-index conns by concept so
             # subsequent get_related() calls don't re-scan the entire
@@ -354,7 +365,9 @@ class _MyceliumActivationMixin:
                     weight = float(val["count"])
                 related.append((other, weight))
             related.sort(key=lambda x: x[1], reverse=True)
-            return related[:top_n]
+            _pt_out = related[:top_n]  # PIPELINE_TRACE
+            log_event("pipeline.mycelium.get_related.end", {"concept": concept, "found": len(_pt_out), "backend": "memory_dict", "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
+            return _pt_out
 
     def adaptive_hops(self) -> int:
         """A5: Adaptive spreading activation hops — 1 if dense, 3 if sparse.
@@ -405,15 +418,19 @@ class _MyceliumActivationMixin:
             list of (concept, activation) sorted by activation descending.
             Seeds themselves are excluded from results.
         """
+        _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
         # A5: Adaptive hops if not explicitly set
+        _pt_hops_passed = hops  # PIPELINE_TRACE
         if hops is None:
             hops = self.adaptive_hops()
+        log_event("pipeline.mycelium.spread.begin", {"n_seeds": len(seeds), "hops": hops, "hops_adaptive": _pt_hops_passed is None, "decay": decay, "top_n": top_n})  # PIPELINE_TRACE
         # BRICK 15 (2026-04-11): use bounded BFS subgraph instead of loading
         # the entire 15M-edge graph. On Sky's real DB the full _build_adj_cache
         # hangs for 60+s; the bounded version queries only the edges within
         # `hops` hops of the seeds — typically <50K rows even on huge graphs.
         raw_adj, _max_w = self._build_adj_subgraph(seeds, hops=hops)
         if not raw_adj:
+            log_event("pipeline.mycelium.spread.end", {"reason": "empty_subgraph", "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
             return []
         if self._high_degree_cache is None:
             self._high_degree_cache = self._get_high_degree_concepts()
@@ -447,6 +464,7 @@ class _MyceliumActivationMixin:
                 seed_set.add(s)
 
         if not activation:
+            log_event("pipeline.mycelium.spread.end", {"reason": "no_seed_in_adj", "subgraph_size": len(raw_adj), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
             return []
 
         # Propagate — only from current frontier (not all activated nodes)
@@ -498,7 +516,9 @@ class _MyceliumActivationMixin:
             else:
                 results = [(c, 0.5) for c, a in results]
         results.sort(key=lambda x: x[1], reverse=True)
-        return results[:top_n]
+        _pt_out = results[:top_n]  # PIPELINE_TRACE
+        log_event("pipeline.mycelium.spread.end", {"subgraph_size": len(raw_adj), "activated": len(results), "returned": len(_pt_out), "hops": hops, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
+        return _pt_out
 
     def transitive_inference(self, concept: str, max_hops: int = 3,
                               beta: float = 0.5, top_n: int = 15,
