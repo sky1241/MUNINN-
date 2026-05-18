@@ -10,6 +10,13 @@ import zlib
 from datetime import datetime
 from pathlib import Path
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 
 # CHUNK C6 (2026-05-08): magic header + version + CRC32 for .mn files.
 # Without this, format evolution (L0-L7 -> +L9 -> +L10 -> +L11 -> +L12)
@@ -1339,9 +1346,12 @@ def _validate_transcript_path(p: Path) -> bool:
 
 def feed_from_hook(repo_path: Path):
     """Called by PreCompact/SessionEnd hook. Reads transcript_path from stdin JSON."""
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
     hook_event = "PreCompact/SessionEnd"
+    log_event("pipeline.engine.feed.begin", {"repo": repo_path.name})  # PIPELINE_TRACE
     _hook_log(repo_path, f"ENTER feed_from_hook (repo={repo_path.name})")
     if sys.stdin.isatty():
+        log_event("pipeline.engine.feed.end", {"reason": "tty_mode"}, level="warn")  # PIPELINE_TRACE
         print(f"MUNINN {hook_event}: no stdin (tty mode). Use 'feed --history' for manual.", file=sys.stderr)
         sys.exit(1)
     try:
@@ -1349,6 +1359,7 @@ def feed_from_hook(repo_path: Path):
         hook_input = json.loads(raw)
         hook_event = hook_input.get("hook_event_name", hook_event)
     except (json.JSONDecodeError, EOFError) as e:
+        log_event("pipeline.engine.feed.end", {"reason": "invalid_json", "error": str(e)[:80]}, level="error")  # PIPELINE_TRACE
         print(f"MUNINN {hook_event}: invalid JSON on stdin: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -1360,12 +1371,15 @@ def feed_from_hook(repo_path: Path):
     jsonl_path = Path(transcript_path)
     # CHUNK A4: refuse anything outside ~/.claude/projects/
     if not _validate_transcript_path(jsonl_path):
+        log_event("pipeline.engine.feed.end", {"reason": "transcript_refused"}, level="warn")  # PIPELINE_TRACE
         print(f"MUNINN {hook_event}: transcript_path refused (outside {_TRANSCRIPT_ROOT}): "
               f"{_m._safe_path(jsonl_path)}", file=sys.stderr)
         sys.exit(1)
     if not jsonl_path.exists():
+        log_event("pipeline.engine.feed.end", {"reason": "transcript_missing"}, level="warn")  # PIPELINE_TRACE
         print(f"MUNINN {hook_event}: transcript not found: {_m._safe_path(jsonl_path)}", file=sys.stderr)
         sys.exit(1)
+    log_event("pipeline.engine.feed.transcript_validated", {"hook_event": hook_event, "transcript": jsonl_path.name})  # PIPELINE_TRACE
 
     print(f"MUNINN {hook_event}: processing {jsonl_path.name} for {repo_path.name}", file=sys.stderr)
 
@@ -1374,36 +1388,47 @@ def feed_from_hook(repo_path: Path):
         with _MuninnLock(repo_path, "hook", timeout=120):
             # 0. P36: Update usefulness scores before anything modifies the tree
             _update_usefulness(repo_path, jsonl_path)
+            log_event("pipeline.engine.feed.usefulness_updated", {})  # PIPELINE_TRACE
 
             # 1. Feed mycelium (co-occurrences)
             count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
+            log_event("pipeline.engine.feed.observed", {"messages": count, "texts": len(parsed_texts) if parsed_texts else 0})  # PIPELINE_TRACE
             print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
             # 2. Compress transcript into a .mn session file (reuse parsed texts)
             mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
+            log_event("pipeline.engine.feed.compressed", {"mn_path": mn_path.name if mn_path else None, "sentiment": session_sentiment})  # PIPELINE_TRACE
 
             # 3. Auto-segment into tree branches (Brique 3)
             # V6B: Pass session sentiment to branches for valence-modulated decay
             if mn_path:
                 _m.grow_branches_from_session(mn_path, session_sentiment=session_sentiment)
+            log_event("pipeline.engine.feed.branches_grown", {"from_mn": bool(mn_path)})  # PIPELINE_TRACE
 
             # 4. Refresh tree temperatures
             tree = _m.load_tree()
             _m.refresh_tree_metadata(tree)
             _m.save_tree(tree)
+            log_event("pipeline.engine.feed.tree_refreshed", {"nodes": len(tree.get("nodes", {}))})  # PIPELINE_TRACE
 
             # B15: Auto-prune when branches exceed cap
             # Light prune: kills dead + dust only (no L9, no consolidation)
             branch_count = len([n for n in tree["nodes"] if n != "root"])
             if branch_count > 150:
+                log_event("pipeline.engine.feed.light_prune", {"branch_count": branch_count, "ran": True})  # PIPELINE_TRACE
                 print(f"MUNINN AUTO-PRUNE: {branch_count} branches > 150, running light prune", file=sys.stderr)
                 _m._light_prune()
+            else:
+                log_event("pipeline.engine.feed.light_prune", {"branch_count": branch_count, "ran": False, "reason": "under_cap"})  # PIPELINE_TRACE
 
             # P20c: Ensure repo is registered for cross-repo discovery
             _m._register_repo(repo_path)
+            log_event("pipeline.engine.feed.repo_registered", {})  # PIPELINE_TRACE
     except TimeoutError:
+        log_event("pipeline.engine.feed.lock_timeout", {"hook_event": hook_event}, level="warn")  # PIPELINE_TRACE
         print(f"MUNINN {hook_event}: lock timeout, skipping", file=sys.stderr)
     except Exception as e:
+        log_event("pipeline.engine.feed.crashed", {"error": str(e)[:120]}, level="error")  # PIPELINE_TRACE
         _hook_log(repo_path, f"CRITICAL feed_from_hook crashed: {e}")
         print(f"MUNINN {hook_event} CRASHED: {e}", file=sys.stderr)
         import traceback
@@ -1419,6 +1444,7 @@ def feed_from_hook(repo_path: Path):
             # Debounced: only runs if hook_event is SessionEnd (not PreCompact).
             if hook_event == "SessionEnd":
                 dead = m.decay()
+                log_event("pipeline.engine.feed.decay", {"dead": dead, "hook_event": hook_event})  # PIPELINE_TRACE
                 if dead > 0:
                     m.save()
                     print(f"MUNINN DECAY: {dead} dead connections removed")
@@ -1447,8 +1473,10 @@ def feed_from_hook(repo_path: Path):
                         recall = _m._ebbinghaus_recall(node)
                         if recall < 0.15:
                             cold.append((name, node))
+                    log_event("pipeline.engine.feed.sleep_consolidate_scan", {"cold_count": len(cold)})  # PIPELINE_TRACE
                     if cold:
                         merged = _m._sleep_consolidate(cold, nodes)
+                        log_event("pipeline.engine.feed.sleep_consolidate", {"cold": len(cold), "merged": len(merged) if merged else 0})  # PIPELINE_TRACE
                         if merged:
                             _m.save_tree(tree)
                             _hook_log(repo_path, f"SLEEP_CONSOLIDATE: {len(merged)} merged")
@@ -1461,6 +1489,7 @@ def feed_from_hook(repo_path: Path):
 
         # Chunk MCP A.2: guarded sync (timeout + opt-out + doctor marker)
         sync_result = _sync_to_meta_guarded(repo_path, hook_event=hook_event)
+        log_event("pipeline.engine.feed.meta_synced", {"status": sync_result.get("status"), "pushed": sync_result.get("pushed", 0), "elapsed_s": sync_result.get("elapsed_s")})  # PIPELINE_TRACE
         if sync_result["status"] == "ok" and sync_result["pushed"] > 0:
             print(f"MUNINN SYNC: {sync_result['pushed']} connections -> meta-mycelium")
         elif sync_result["status"] == "timeout":
@@ -1468,6 +1497,7 @@ def feed_from_hook(repo_path: Path):
                   f"(opt-out via MUNINN_SKIP_META_SYNC=1)", file=sys.stderr)
         elif sync_result["status"] == "error":
             print(f"MUNINN SYNC warning: {sync_result['error']}", file=sys.stderr)
+        log_event("pipeline.engine.feed.end", {"hook_event": hook_event, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
 
 
 def feed_from_stop_hook(repo_path: Path):
@@ -1476,18 +1506,22 @@ def feed_from_stop_hook(repo_path: Path):
     P32: captures short conversations that never trigger PreCompact/SessionEnd.
     Uses message count dedup to avoid reprocessing the same conversation 50x.
     """
+    _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
+    log_event("pipeline.engine.feed_stop.begin", {"repo": repo_path.name})  # PIPELINE_TRACE
     _hook_log(repo_path, "ENTER feed_from_stop_hook")
     try:
         raw = sys.stdin.read() if not sys.stdin.isatty() else ""
     except Exception:
         raw = ""
     if not raw.strip():
+        log_event("pipeline.engine.feed_stop.end", {"reason": "no_stdin"})  # PIPELINE_TRACE
         _hook_log(repo_path, "EXIT no stdin data")
         print("MUNINN STOP: no stdin data received", file=sys.stderr)
         return
     try:
         hook_input = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
+        log_event("pipeline.engine.feed_stop.end", {"reason": "invalid_json"}, level="error")  # PIPELINE_TRACE
         print(f"MUNINN STOP: invalid JSON on stdin", file=sys.stderr)
         return
 
@@ -1496,10 +1530,12 @@ def feed_from_stop_hook(repo_path: Path):
 
     transcript_path = hook_input.get("transcript_path")
     if not transcript_path:
+        log_event("pipeline.engine.feed_stop.end", {"reason": "no_transcript_path"}, level="warn")  # PIPELINE_TRACE
         print("MUNINN STOP: no transcript_path in hook data", file=sys.stderr)
         return
     jsonl_path = Path(transcript_path)
     if not jsonl_path.exists():
+        log_event("pipeline.engine.feed_stop.end", {"reason": "transcript_missing"}, level="warn")  # PIPELINE_TRACE
         print(f"MUNINN STOP: transcript not found: {_m._safe_path(jsonl_path)}", file=sys.stderr)
         return
 
@@ -1510,7 +1546,9 @@ def feed_from_stop_hook(repo_path: Path):
         with _MuninnLock(repo_path, "hook", timeout=120):
             _feed_from_stop_hook_locked(repo_path, jsonl_path, session_id)
     except TimeoutError:
+        log_event("pipeline.engine.feed_stop.end", {"reason": "lock_timeout"}, level="warn")  # PIPELINE_TRACE
         print("MUNINN STOP: lock timeout, skipping", file=sys.stderr)
+    log_event("pipeline.engine.feed_stop.end", {"elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
 
 
 def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: str):
@@ -1520,8 +1558,10 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
         with open(jsonl_path, encoding="utf-8", errors="replace") as f:
             msg_count = sum(1 for _ in f)
     except OSError:
+        log_event("pipeline.engine.feed_stop.locked.skip", {"reason": "transcript_unreadable"}, level="error")  # PIPELINE_TRACE
         return
     if msg_count == 0:
+        log_event("pipeline.engine.feed_stop.locked.skip", {"reason": "empty_transcript"})  # PIPELINE_TRACE
         return
 
     # Dedup file: {session_id: last_fed_count}
@@ -1535,9 +1575,11 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
 
     last_count = dedup.get(session_id, 0)
     if msg_count <= last_count:
+        log_event("pipeline.engine.feed_stop.locked.skip", {"reason": "dedup", "msg_count": msg_count, "last_count": last_count})  # PIPELINE_TRACE
         return  # Nothing new, skip
 
     # New messages detected — feed the full conversation
+    log_event("pipeline.engine.feed_stop.locked.new_messages", {"new": msg_count - last_count, "total": msg_count, "session_id": session_id[:8]})  # PIPELINE_TRACE
     print(f"MUNINN STOP: {msg_count - last_count} new messages (session {session_id[:8]})")
 
     # 0. P36: Update usefulness scores
@@ -1546,10 +1588,12 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
     try:
         # 1. Feed mycelium
         count, parsed_texts = feed_from_transcript(jsonl_path, repo_path)
+        log_event("pipeline.engine.feed_stop.locked.observed", {"messages": count})  # PIPELINE_TRACE
         print(f"MUNINN FEED: {count} messages -> mycelium ({repo_path.name})")
 
         # 2. Compress transcript (reuse parsed texts)
         mn_path, session_sentiment = compress_transcript(jsonl_path, repo_path, texts=parsed_texts)
+        log_event("pipeline.engine.feed_stop.locked.compressed", {"mn_path": mn_path.name if mn_path else None, "sentiment": session_sentiment})  # PIPELINE_TRACE
 
         # 3. Auto-segment into branches
         if mn_path:
@@ -1559,15 +1603,18 @@ def _feed_from_stop_hook_locked(repo_path: Path, jsonl_path: Path, session_id: s
         tree = _m.load_tree()
         _m.refresh_tree_metadata(tree)
         _m.save_tree(tree)
+        log_event("pipeline.engine.feed_stop.locked.tree_refreshed", {"nodes": len(tree.get("nodes", {}))})  # PIPELINE_TRACE
 
         # P20c: Ensure repo is registered for cross-repo discovery
         _m._register_repo(repo_path)
     except Exception as e:
+        log_event("pipeline.engine.feed_stop.locked.error", {"error": str(e)[:120]}, level="error")  # PIPELINE_TRACE
         _hook_log(repo_path, f"STOP feed error: {e}")
         print(f"MUNINN STOP feed error: {e}", file=sys.stderr)
     finally:
         # 5. Chunk MCP A.2: guarded sync (timeout + opt-out + doctor marker)
         sync_result = _sync_to_meta_guarded(repo_path, hook_event="Stop")
+        log_event("pipeline.engine.feed_stop.locked.meta_synced", {"status": sync_result.get("status"), "pushed": sync_result.get("pushed", 0)})  # PIPELINE_TRACE
         if sync_result["status"] == "ok" and sync_result["pushed"] > 0:
             print(f"MUNINN SYNC: {sync_result['pushed']} connections -> meta-mycelium")
         elif sync_result["status"] == "timeout":
