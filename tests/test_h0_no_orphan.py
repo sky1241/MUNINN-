@@ -253,22 +253,31 @@ def test_h0_all_cli_commands_have_handler() -> None:
 
 
 def test_h0_all_hooks_on_disk_registered() -> None:
-    """Each .claude/hooks/*.py file must be referenced by settings.local.json
-    (unless it's in WHITELIST_DORMANT_HOOKS).
+    """Each .claude/hooks/*.py file must be referenced by the union of
+    settings.json (shipped) and settings.local.json (per-user override)
+    — unless it's in WHITELIST_DORMANT_HOOKS.
 
     I.5 (2026-05-13) : xfail removed after Sky ran `muninn-mem init` to
     migrate his live settings.local.json. The 3 defensive PreToolUse hooks
     (pre_tool_use_bash_{destructive,secrets,edit_hardcode}) are now wired.
-    Note : settings.local.json is gitignored → in CI this test will SKIP
-    (file absent in clean checkout). Only Sky's local run validates it.
+
+    2026-05-18 fix : previously only checked settings.local.json, which
+    gave false-negative orphans for hooks wired in the shipped settings.json
+    (e.g. pre_tool_use_task_throttle.py). Now reads BOTH and tests the union.
+    settings.local.json is gitignored → in CI only settings.json is read.
     """
     hooks_dir = REPO_ROOT / ".claude" / "hooks"
     if not hooks_dir.exists():
         pytest.skip(".claude/hooks/ missing")
-    settings_path = REPO_ROOT / ".claude" / "settings.local.json"
-    if not settings_path.exists():
-        pytest.skip(".claude/settings.local.json missing")
-    settings_text = settings_path.read_text(encoding="utf-8")
+    settings_paths = [
+        REPO_ROOT / ".claude" / "settings.json",
+        REPO_ROOT / ".claude" / "settings.local.json",
+    ]
+    settings_text = "\n".join(
+        p.read_text(encoding="utf-8") for p in settings_paths if p.exists()
+    )
+    if not settings_text:
+        pytest.skip("no settings.json or settings.local.json found")
     orphans: list[str] = []
     for hk in hooks_dir.glob("*.py"):
         if hk.name in WHITELIST_DORMANT_HOOKS:
@@ -277,7 +286,7 @@ def test_h0_all_hooks_on_disk_registered() -> None:
             orphans.append(hk.name)
     if orphans:
         pytest.fail(
-            f"{len(orphans)} hook(s) on disk but not in settings.local.json:\n  "
+            f"{len(orphans)} hook(s) on disk but not in any settings file:\n  "
             + "\n  ".join(orphans)
             + "\n\nAdd to WHITELIST_DORMANT_HOOKS or wire them in (H.6)."
         )
