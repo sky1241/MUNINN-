@@ -3,6 +3,36 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C7/14)
+>
+> **THE archi fix livré**. Scan-aware subdivide_file: pure zone-based.
+>
+> **Fichiers touchés** :
+> - `engine/core/mycelium.py` :
+>   - `Mycelium.has_concept(name) -> bool` (méthode publique).
+>   - `concept_to_file_lines(content, mycelium) -> dict[idx, set]`.
+> - `engine/core/cube.py` :
+>   - `_SCAN_AWARE_SUBDIVIDE_ENABLED` (env flag).
+>   - `find_concept_boundaries(content, mycelium, target_tokens)`.
+>   - `_subdivide_at_boundaries(...)` slicer.
+>   - `subdivide_file(... mycelium=None)` étendu.
+> - `muninn/ui/cube_live.py` — passe mycelium.
+> - `engine/core/cube_providers.py` — 3 call sites passent mycelium.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py` (9 tests).
+> **Forge** : 12 props cube + 1 prop mycelium.
+>
+> **Décision Sky 2026-05-19** : pure zone-based, `target_tokens` = plafond.
+> Cubes hétérogènes OK (60-400 tokens). 1 cube = 1 unité logique.
+> **Feature flag** : `MUNINN_SCAN_AWARE_SUBDIVIDE` (default `1`).
+>
+> **Pipeline scan→reco maintenant entièrement aligné** :
+> 1. Scan définit zones conceptuelles via mycelium
+> 2. subdivide_file (C7) coupe les cubes à ces zones
+> 3. fuse_risks (C6) trie cubes par risk
+> 4. reconstruct_adaptive cycles avec mycelium feedback
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C6/14)
 >
 > Septième chunk. fuse_risks wiré dans reconstruct_adaptive (F2).

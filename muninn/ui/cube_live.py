@@ -159,9 +159,14 @@ class ReconstructionWorker(QObject):
             mycelium = Mycelium(repo_root)
 
             content = self._file.read_text(encoding="utf-8", errors="replace")
+            # CHUNK C7 (2026-05-19) — pass mycelium for scan-aware
+            # subdivide. Cubes align on conceptual zones from the scan
+            # instead of token-uniform slabs. Falls back gracefully when
+            # mycelium signal is too weak (returns same result as legacy).
             cubes = subdivide_file(
                 str(self._file), content,
                 target_tokens=self._base_tokens, level=0,
+                mycelium=mycelium,
             )
             if not cubes:
                 self.error.emit("subdivide_file returned 0 cubes")

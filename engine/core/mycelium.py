@@ -242,6 +242,28 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
         # the degree distribution stabilized
         self._check_fusions()
 
+    def has_concept(self, name: str) -> bool:
+        """CHUNK C7 (2026-05-19) — fast concept-existence check.
+
+        Used by `concept_to_file_lines` to decide whether a token from a
+        source line is part of the mycelium codebook (i.e. the scan has
+        observed it). Returns False if the DB is closed or the lookup
+        fails — graceful for fakes and partial state.
+        """
+        if not name or self._db is None:
+            return False
+        n = str(name).lower().strip()
+        if not n:
+            return False
+        try:
+            with self._db._lock:
+                row = self._db._conn.execute(
+                    "SELECT 1 FROM concepts WHERE name = ? LIMIT 1", (n,)
+                ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
         # P20.5+6: Auto-label zones on save when federated and enough data
         if self.federated and self._db is not None:
             n_conns = self._db.connection_count()
@@ -1669,6 +1691,45 @@ def main():
             total = _db.connection_count()
             _db.close()
             print(f"Meta: {total} connections from {len(repos)} repos ({', '.join(repos)})")
+
+
+# CHUNK C7 (2026-05-19) — public helper used by cube.subdivide_file
+# (scan-aware découpage). Maps each line of `content` to the set of
+# mycelium concepts the line touches.
+
+# Compiled regex for concept tokenization. MUST match observe_text
+# tokenizer (`r"[A-Za-zÀ-ÿ_]{3,}"`) so the intersection with the
+# mycelium codebook hits.
+_CONCEPT_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÿ_]{3,}")
+
+
+def concept_to_file_lines(content: str, mycelium) -> dict:
+    """For each line of `content`, set of mycelium concepts present.
+
+    Args:
+        content: source file body, "\\n"-joined.
+        mycelium: any object with `has_concept(name: str) -> bool`
+            (Mycelium has this; tests can pass a duck-typed fake).
+
+    Returns:
+        dict[line_idx, set[str]] — 0-indexed line → set of concept
+        names. Empty set if no concept matches on that line.
+
+    Used by cube.find_concept_boundaries to decide where the dominant
+    semantic zone changes; cubes are cut at those boundaries.
+    """
+    lines = content.split("\n")
+    out: dict = {}
+    for idx, line in enumerate(lines):
+        concepts = set()
+        for tok in _CONCEPT_TOKEN_RE.findall(line.lower()):
+            try:
+                if mycelium.has_concept(tok):
+                    concepts.add(tok)
+            except Exception:
+                pass
+        out[idx] = concepts
+    return out
 
 
 if __name__ == "__main__":

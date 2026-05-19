@@ -2066,8 +2066,9 @@ def reconstruct_adaptive(file_path: str, content: str,
 
         for level in range(1, num_levels + 1):
             tokens = base_tokens * level
+            # CHUNK C7 (2026-05-19) — pass mycelium for scan-aware cubes.
             cubes = subdivide_file(content=content, file_path=file_path,
-                                   target_tokens=tokens)
+                                   target_tokens=tokens, mycelium=mycelium)
             if cycle == 1 and level == 1:
                 results['total_cubes'] = len(cubes)
 
@@ -2105,7 +2106,7 @@ def reconstruct_adaptive(file_path: str, content: str,
         results['sha_pct'] = 100 * results['sha_count'] / results['total_cubes']
 
     cubes_x1 = subdivide_file(content=content, file_path=file_path,
-                               target_tokens=base_tokens)
+                               target_tokens=base_tokens, mycelium=mycelium)
     results['critical_cubes'] = [
         i for i, c in enumerate(cubes_x1)
         if (c.line_start, c.line_end) not in sha_ranges
@@ -2163,7 +2164,7 @@ def run_progressive_levels(file_path: str, content: str,
 
         cubes = subdivide_file(
             content=content, file_path=file_path,
-            target_tokens=target_tokens,
+            target_tokens=target_tokens, mycelium=mycelium,
         )
         store = CubeStore(db_path)
         for c in cubes:

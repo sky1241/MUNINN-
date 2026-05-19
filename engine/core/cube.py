@@ -769,13 +769,120 @@ def _find_split_point(lines: list[str], target_line: int) -> int:
     return best
 
 
+# CHUNK C7 (2026-05-19) — Feature flag for mycelium-aware subdivision.
+# Default ON: subdivide_file consumes the mycelium graph (when provided)
+# to find conceptual boundaries — cubes align on functional zones
+# instead of uniform token slabs. Set MUNINN_SCAN_AWARE_SUBDIVIDE=0
+# to revert to legacy token-uniform splitting.
+_SCAN_AWARE_SUBDIVIDE_ENABLED = os.environ.get(
+    "MUNINN_SCAN_AWARE_SUBDIVIDE", "1"
+) != "0"
+
+
+def find_concept_boundaries(content: str, mycelium,
+                             target_tokens: int = TARGET_TOKENS) -> list:
+    """CHUNK C7 (2026-05-19) — line numbers where the dominant semantic
+    zone changes in `content`.
+
+    Pure zone-based heuristic (decision Sky 2026-05-19):
+      - For each line, set of mycelium concepts (via mycelium.has_concept).
+      - Detect transitions: Jaccard(line_i, line_i+1) < 0.20 AND both
+        non-empty → boundary (clear topic shift).
+      - Cap: when cumulative tokens since last boundary > target_tokens * 2,
+        force a boundary (prevents a single dense zone swallowing the file).
+      - Floor: ignore boundaries < target_tokens / 3 apart (don't carve
+        tiny crumbs out of a single coherent zone).
+
+    Returns sorted list of 1-indexed line numbers. The caller treats
+    these as preferred split points; the actual `subdivide_file` chooses
+    among them to balance against the token target.
+
+    Returns `[]` when mycelium signal is too weak (no concepts on >70%
+    of lines) — caller falls back to legacy token-uniform splitting.
+    """
+    if not content.strip() or mycelium is None:
+        return []
+    try:
+        from mycelium import concept_to_file_lines
+    except ImportError:
+        from engine.core.mycelium import concept_to_file_lines
+
+    line_concepts = concept_to_file_lines(content, mycelium)
+    lines = content.split("\n")
+    n_lines = len(lines)
+
+    # Signal-strength gate: drop if fewer than 30% of lines hit the codebook.
+    n_with_concepts = sum(1 for s in line_concepts.values() if s)
+    if n_with_concepts < max(2, n_lines * 0.30):
+        return []
+
+    line_tok = [token_count(ln + "\n") for ln in lines]
+    target_max = max(target_tokens * 2, 50)
+    target_min = max(target_tokens // 3, 10)
+
+    boundaries: list[int] = []
+    cum = 0
+    last_boundary_tokens = 0
+    for i in range(n_lines - 1):
+        cum += line_tok[i]
+        cur = line_concepts.get(i, set())
+        nxt = line_concepts.get(i + 1, set())
+        is_topic_shift = False
+        if cur and nxt:
+            inter = len(cur & nxt)
+            union = len(cur | nxt)
+            jaccard = (inter / union) if union else 1.0
+            if jaccard < 0.20:
+                is_topic_shift = True
+        cap_hit = (cum - last_boundary_tokens) > target_max
+        floor_ok = (cum - last_boundary_tokens) >= target_min
+        if (is_topic_shift and floor_ok) or cap_hit:
+            boundaries.append(i + 1)  # 1-indexed line number
+            last_boundary_tokens = cum
+    return boundaries
+
+
+def _subdivide_at_boundaries(file_path: str, content: str, lines: list,
+                              boundaries: list, level: int) -> list:
+    """CHUNK C7 (2026-05-19) — slice `content` at given line numbers
+    (1-indexed) and return Cube list. Last cube extends to EOF."""
+    cubes: list = []
+    # Add EOF as final boundary so the last segment is captured.
+    splits = sorted(set(boundaries + [len(lines)]))
+    start_line = 0  # 0-indexed inclusive
+    for end_line in splits:  # 1-indexed exclusive
+        if end_line <= start_line:
+            continue
+        chunk_lines = lines[start_line:end_line]
+        chunk_content = '\n'.join(chunk_lines)
+        if chunk_content.strip():
+            cubes.append(Cube(
+                id=f"{file_path}:L{start_line + 1}-L{end_line}:lv{level}",
+                content=chunk_content,
+                sha256=sha256_hash(chunk_content),
+                file_origin=file_path,
+                line_start=start_line + 1,
+                line_end=end_line,
+                level=level,
+                token_count=token_count(chunk_content),
+            ))
+        start_line = end_line
+    return cubes
+
+
 def subdivide_file(file_path: str, content: str, target_tokens: int = TARGET_TOKENS,
-                   level: int = 0) -> list[Cube]:
+                   level: int = 0, mycelium=None) -> list[Cube]:
     """
     B4: Subdivide a file's content into atomic cubes of ~target_tokens each.
 
     Respects semantic boundaries (function defs, blank lines, blocks).
     Returns list of Cube objects.
+
+    CHUNK C7 (2026-05-19): when `mycelium` is provided AND the feature
+    flag `MUNINN_SCAN_AWARE_SUBDIVIDE` is on (default), uses
+    `find_concept_boundaries` to cut at zone changes instead of uniform
+    token intervals. Falls back to legacy token-uniform splitting when
+    mycelium is None, flag is off, or signal is too weak.
     """
     if not content.strip():
         return []
@@ -795,6 +902,18 @@ def subdivide_file(file_path: str, content: str, target_tokens: int = TARGET_TOK
             token_count=total_tokens,
         )
         return [cube]
+
+    # CHUNK C7 (2026-05-19) — pure zone-based path when mycelium present.
+    if (
+        mycelium is not None
+        and _SCAN_AWARE_SUBDIVIDE_ENABLED
+    ):
+        boundaries = find_concept_boundaries(content, mycelium, target_tokens)
+        if boundaries:
+            return _subdivide_at_boundaries(
+                file_path, content, lines, boundaries, level
+            )
+        # signal too weak → fall through to legacy token-uniform
 
     # Estimate number of cubes needed
     n_cubes = max(2, round(total_tokens / target_tokens))

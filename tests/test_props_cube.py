@@ -55,13 +55,26 @@ def test_sha256_hash_no_crash(text, file_path):
             SystemExit, Exception):
         pass  # Expected rejections are OK
 
-@given(file_path=st.text(max_size=100), content=st.text(max_size=100), target_tokens=st.integers(-1000, 1000), level=st.integers(-1000, 1000))
+@given(content=st.text(max_size=100), mycelium=st.text(max_size=50), target_tokens=st.integers(-1000, 1000))
+@settings(max_examples=50)
+def test_find_concept_boundaries_no_crash(content, mycelium, target_tokens):
+    """Smoke: find_concept_boundaries() does not crash on arbitrary input"""
+    # from engine.core.cube import find_concept_boundaries
+    try:
+        find_concept_boundaries(content, mycelium, target_tokens)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
+@given(file_path=st.text(max_size=100), content=st.text(max_size=100), target_tokens=st.integers(-1000, 1000), level=st.integers(-1000, 1000), mycelium=st.text(max_size=50))
 @settings(max_examples=50, deadline=None)  # subdivide_file tokenizer can exceed Hypothesis 200ms default on cold cache
-def test_subdivide_file_no_crash(file_path, content, target_tokens, level):
+def test_subdivide_file_no_crash(file_path, content, target_tokens, level, mycelium):
     """Smoke: subdivide_file() does not crash on arbitrary input"""
     # from engine.core.cube import subdivide_file
     try:
-        subdivide_file(file_path, content, target_tokens, level)
+        subdivide_file(file_path, content, target_tokens, level, mycelium)
     except (ValueError, TypeError, KeyError, IndexError,
             OSError, AttributeError, RuntimeError, SyntaxError,
             LookupError, ArithmeticError, AssertionError,

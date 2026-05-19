@@ -1,5 +1,63 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C7/14 : Scan-aware subdivide_file (THE archi fix)
+
+Huitième chunk. **THE** correction architecturale que Sky demandait
+depuis le début : le scan définit la structure, la reco s'aligne dessus.
+Pré-fix, `subdivide_file` ignorait totalement le mycelium et coupait
+en tranches uniformes de ~112 tokens — peu importe que ça coupe au
+milieu d'une fonction.
+
+Décision Sky 2026-05-19 : **PURE zone-based**. `target_tokens` devient
+un plafond, pas une cible. Cubes hétérogènes acceptés (60-400 tokens
+peu importe). 1 cube = 1 unité logique du code.
+
+**Fix** :
+- `engine/core/mycelium.py` :
+  - Méthode `Mycelium.has_concept(name: str) -> bool` (lookup direct DB).
+  - Fonction module-level `concept_to_file_lines(content, mycelium)` →
+    `dict[line_idx, set[str]]`. Regex `[A-Za-zÀ-ÿ_]{3,}` alignée avec
+    `observe_text`.
+- `engine/core/cube.py` :
+  - Constante `_SCAN_AWARE_SUBDIVIDE_ENABLED` (env `MUNINN_SCAN_AWARE_SUBDIVIDE`, default `1`).
+  - Helper `find_concept_boundaries(content, mycelium, target_tokens) -> list[int]` :
+    détecte transitions Jaccard < 0.20 entre lignes, plafond
+    `target_tokens × 2`, plancher `target_tokens / 3`. Signal-strength
+    gate : `[]` si < 30% des lignes hit le codebook.
+  - Helper `_subdivide_at_boundaries(file_path, content, lines, boundaries, level)` :
+    slice à chaque boundary, retourne `list[Cube]`.
+  - `subdivide_file(... mycelium=None)` signature étendue. Si mycelium
+    fourni + flag ON : zone-based via `find_concept_boundaries` puis
+    `_subdivide_at_boundaries`. Sinon fallback legacy token-uniform.
+- `muninn/ui/cube_live.py` : passe `mycelium=mycelium` à `subdivide_file`.
+- `engine/core/cube_providers.py` : 3 call sites de `subdivide_file`
+  passent `mycelium=mycelium` (l.2069, 2108, 2165 dans
+  `reconstruct_adaptive` + `run_progressive_levels`).
+
+**Tests verbatim** (9 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py
+→ 9 passed in 0.69s
+
+pytest tests/test_cube_b1_b6.py tests/test_cube_b16_b19.py
+       tests/test_cube_wiring.py tests/test_props_cube.py
+       tests/test_props_cube_providers.py
+       tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py
+→ 129 passed in 6.23s (backward-compat 100%)
+
+forge --gen-props engine/core/cube.py engine/core/mycelium.py
+→ 12 + 1 props générées, 4 destructive skipped (cube)
+
+pytest tests/test_props_cube.py tests/test_props_mycelium.py
+→ 13 passed in 1.40s
+```
+
+**Feature flag (§4bis)** : `MUNINN_SCAN_AWARE_SUBDIVIDE=0` revient au
+legacy. Documenté CLAUDE.md.
+
+Pas de mirror BUG-091 (cube.py et mycelium.py shimmés).
+
+
 ## 2026-05-19 (PM) — CHUNK C6/14 : Forge cube-level fusion (F2 — fuse_risks ordering)
 
 Septième chunk. Wire le `fuse_risks` dormant dans le hot path

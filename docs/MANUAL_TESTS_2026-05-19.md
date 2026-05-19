@@ -363,4 +363,59 @@ grep "pipeline.engine.reco.cube_ordering_applied" /home/sandbox/.muninn/pipeline
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C7 → C13.)*
+## CHUNK C7 — Scan-aware subdivide_file (THE archi fix)
+
+### Test 1 — Helpers exist
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+import cube, mycelium
+assert hasattr(cube, '_SCAN_AWARE_SUBDIVIDE_ENABLED')
+assert hasattr(cube, 'find_concept_boundaries')
+assert hasattr(mycelium, 'concept_to_file_lines')
+assert hasattr(mycelium.Mycelium, 'has_concept')
+print('OK : tous les helpers C7 présents')
+"
+```
+- [ ]
+
+### Test 2 — Backward-compat (mycelium=None preserves legacy)
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+import cube
+content = '\n'.join(f'line {i}' for i in range(200))
+a = cube.subdivide_file('t.py', content, target_tokens=50)
+b = cube.subdivide_file('t.py', content, target_tokens=50, mycelium=None)
+assert len(a) == len(b)
+print(f'OK : legacy preserved ({len(a)} cubes both paths)')
+"
+```
+- [ ]
+
+### Test 3 — Bascule legacy MUNINN_SCAN_AWARE_SUBDIVIDE=0
+```bash
+MUNINN_SCAN_AWARE_SUBDIVIDE=0 python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+import cube
+assert cube._SCAN_AWARE_SUBDIVIDE_ENABLED is False
+print('OK: flag OFF')
+"
+```
+- [ ]
+
+### Test 4 — Scan-aware sandbox visuel
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# 1. /scan /tmp/btree-only → mycelium populé
+# 2. /reconstruct /tmp/btree-only/btree_google.go → cubes alignés zones
+# Observer : line_start des cubes doit suivre des frontières
+# fonctions/classes Go, pas des tranches uniformes de ~14 lignes.
+```
+**Attendu** : nombre de cubes ≠ token-uniform (zone-based découpe selon
+les transitions conceptuelles).
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C8 → C13.)*
