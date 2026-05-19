@@ -1,5 +1,46 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D11/11) — `update_cube_details` refire `neuron_selected` if selected
+
+Sixième chunk de remediation. Audit a flag : si l'utilisateur clique sur
+un cube AVANT que ses `cube_details` (gap_lines, unknown_idents) soient
+arrivés (cycle long, late CYCLE_END), le DetailPanel restait figé sur
+les anciennes valeurs jusqu'à un re-click manuel.
+
+**Reproduction** : test D11 simule la séquence
+1. user click cube 1 (`self._selected = {1}`)
+2. late CYCLE_END arrive → `update_cube_details(1, gap_lines, unknowns)`
+3. Pré-D11 : `neuron_selected` jamais re-émis → DetailPanel stale
+4. Post-D11 : `neuron_selected` refire avec data updated → DetailPanel refresh
+
+**Fix** (`muninn/ui/neuron_map.py:update_cube_details`) :
+```python
+n.gap_lines = list(gap_lines or [])
+n.unknown_idents = list(unknown_idents or [])
+# D11 : if user already focused this cube, push updated payload
+if idx in self._selected:
+    self.neuron_selected.emit(n)
+```
+
+**Tests** (`tests/test_chunk_2026-05-19_C10_recon_extras.py` +2) :
+- `test_d11_update_cube_details_refires_neuron_selected_if_selected`
+- `test_d11_update_cube_details_no_refire_if_not_selected` (negative)
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py -k "test_d11" -v
+→ 2 passed in 0.49s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube_providers.py \
+       ...
+→ 156 passed in 6.91s (no regression)
+```
+
+Pas de mirror BUG-091 (muninn/ui/* sans pendant engine/core/).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D9/11) — `options_applied` trace fires ONCE per session
 
 Cinquième chunk de remediation (D5-D8 enchainent après). Audit a montré

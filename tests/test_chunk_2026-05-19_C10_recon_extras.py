@@ -335,3 +335,53 @@ def test_d3_extract_unknown_identifiers_keeps_real_idents():
     assert "magic_constant" in r
     assert "helper_function" in r
     assert "input_var" in r
+
+
+# CHUNK D11 (2026-05-19 remediation) — `update_cube_details` must refire
+# `neuron_selected` if the cube is ALREADY in self._selected so the
+# DetailPanel refreshes without the user re-clicking. Pre-D11, late
+# CYCLE_END payloads left the panel stale.
+
+def test_d11_update_cube_details_refires_neuron_selected_if_selected(qtbot):
+    """D11 regression : if user has cube X selected and late cube_details
+    for cube X arrives, neuron_selected must refire with updated data."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube")
+                  for i in range(3)]
+    received: list = []
+    w.neuron_selected.connect(
+        lambda n: received.append((n.id, list(n.gap_lines), list(n.unknown_idents)))
+    )
+    # Simulate user clicking cube 1
+    w._selected = {1}
+    # Late details arrive for cube 1
+    w.update_cube_details(1, [3, 7], ["magic_var"])
+    assert received, "neuron_selected was not refired for selected cube"
+    assert received[-1] == ("c1", [3, 7], ["magic_var"]), (
+        f"refired with wrong data : {received[-1]}"
+    )
+
+
+def test_d11_update_cube_details_no_refire_if_not_selected(qtbot):
+    """D11 negative test : if cube is NOT selected, no refire to avoid
+    needless DetailPanel updates on other cubes."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube")
+                  for i in range(3)]
+    received: list = []
+    w.neuron_selected.connect(lambda n: received.append(n.id))
+    # User has DIFFERENT cube selected
+    w._selected = {2}
+    # Details arrive for cube 1 (not selected)
+    w.update_cube_details(1, [3, 7], ["magic_var"])
+    assert not received, (
+        f"neuron_selected fired wrongly for non-selected cube : {received}"
+    )

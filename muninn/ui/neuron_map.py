@@ -1390,11 +1390,16 @@ class NeuronMapWidget(QWidget):
         """CHUNK C10 (2026-05-19) — store reco diagnostics on the cube
         neuron so the DetailPanel can surface them on selection.
 
-        No repaint trigger (these fields don't affect the visual);
-        consumed lazily by `_on_neuron_selected` in main_window.
+        CHUNK D11 (2026-05-19 remediation) — if the cube is ALREADY
+        selected when its details arrive (late CYCLE_END), refire
+        `neuron_selected` so the DetailPanel refreshes without a manual
+        re-click. Pre-D11 user had to click again to see the late data.
         """
         if idx < 0 or idx >= len(self._neurons):
             return
         n = self._neurons[idx]
         n.gap_lines = list(gap_lines or [])
         n.unknown_idents = list(unknown_idents or [])
+        # D11 : if user already focused this cube, push updated payload
+        if idx in self._selected:
+            self.neuron_selected.emit(n)

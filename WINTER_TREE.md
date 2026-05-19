@@ -3,6 +3,21 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D11/11)
+>
+> **`update_cube_details` refire `neuron_selected` if cube already selected**.
+>
+> **Fichier touché** :
+> - `muninn/ui/neuron_map.py:update_cube_details` :
+>   - Si `idx in self._selected` après update, refire `self.neuron_selected.emit(n)`.
+>   - DetailPanel refresh automatique sur late CYCLE_END.
+>
+> **Tests** : 2 nouveaux `test_d11_*` dans `tests/test_chunk_2026-05-19_C10_recon_extras.py`.
+>
+> **Reste remediation** : D5 (C12 hover/click groups), D6 (forge tri 44 no-op),
+> D7 (E2E pipeline_trace réel), D8 (workflow perf.yml weekly), D10 (mock_ollama + test C0 runtime).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D9/11)
 >
 > **`options_applied` trace fires ONCE per session (module-level guard)**.
