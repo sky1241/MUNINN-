@@ -46,6 +46,13 @@ DOCUMENTED_IN_TREE_DEAD_CANDIDATES = frozenset({
     # internally by `forge_score_for_path` / `forge_color_for_path`,
     # so they no longer appear as dead candidates.
     "forge_color_for_path",
+    # CHUNK C4 (2026-05-19): get_file_risk_map is the flat-dict accessor
+    # added by the unified battle plan, designed to be consumed by C5
+    # (file-level priority, modifies orchestrator.py) and C6 (cube-level
+    # fuse_risks ordering, modifies cube_providers.py). Both chunks not
+    # yet merged — temporary unused. Test references it directly.
+    # When C5 + C6 land, this line can be removed.
+    "get_file_risk_map",
 })
 
 
