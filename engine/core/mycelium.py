@@ -242,28 +242,6 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
         # the degree distribution stabilized
         self._check_fusions()
 
-    def has_concept(self, name: str) -> bool:
-        """CHUNK C7 (2026-05-19) — fast concept-existence check.
-
-        Used by `concept_to_file_lines` to decide whether a token from a
-        source line is part of the mycelium codebook (i.e. the scan has
-        observed it). Returns False if the DB is closed or the lookup
-        fails — graceful for fakes and partial state.
-        """
-        if not name or self._db is None:
-            return False
-        n = str(name).lower().strip()
-        if not n:
-            return False
-        try:
-            with self._db._lock:
-                row = self._db._conn.execute(
-                    "SELECT 1 FROM concepts WHERE name = ? LIMIT 1", (n,)
-                ).fetchone()
-            return row is not None
-        except Exception:
-            return False
-
         # P20.5+6: Auto-label zones on save when federated and enough data
         if self.federated and self._db is not None:
             n_conns = self._db.connection_count()
@@ -434,6 +412,28 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
             return concepts
         rewritten = [mapping.get(c, c) for c in concepts]
         return list(set(rewritten))
+
+    def has_concept(self, name: str) -> bool:
+        """CHUNK C7 (2026-05-19) — fast concept-existence check.
+
+        Used by `concept_to_file_lines` to decide whether a token from a
+        source line is part of the mycelium codebook (i.e. the scan has
+        observed it). Returns False if the DB is closed or the lookup
+        fails — graceful for fakes and partial state.
+        """
+        if not name or self._db is None:
+            return False
+        n = str(name).lower().strip()
+        if not n:
+            return False
+        try:
+            with self._db._lock:
+                row = self._db._conn.execute(
+                    "SELECT 1 FROM concepts WHERE name = ? LIMIT 1", (n,)
+                ).fetchone()
+            return row is not None
+        except Exception:
+            return False
 
     def observe(self, concepts: list[str], arousal: float = 0.0):
         """Record co-occurrence of concepts in this context.
