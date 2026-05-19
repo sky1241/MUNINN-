@@ -104,13 +104,13 @@ def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per
             SystemExit, Exception):
         pass  # Expected rejections are OK
 
-@given(file_path=st.text(max_size=100), content=st.text(max_size=100), provider=st.text(max_size=50), base_tokens=st.integers(-1000, 1000), max_cycles=st.integers(-1000, 1000), attempts_per_cube=st.integers(-1000, 1000), mycelium=st.text(max_size=50), on_cube=st.text(max_size=50))
+@given(file_path=st.text(max_size=100), content=st.text(max_size=100), provider=st.text(max_size=50), base_tokens=st.integers(-1000, 1000), max_cycles=st.integers(-1000, 1000), attempts_per_cube=st.integers(-1000, 1000), mycelium=st.text(max_size=50), forge_root=st.text(max_size=50), on_cube=st.text(max_size=50))
 @settings(max_examples=50)
-def test_reconstruct_adaptive_no_crash(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, on_cube):
+def test_reconstruct_adaptive_no_crash(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, forge_root, on_cube):
     """Smoke: reconstruct_adaptive() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_adaptive
     try:
-        reconstruct_adaptive(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, on_cube)
+        reconstruct_adaptive(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, forge_root, on_cube)
     except (ValueError, TypeError, KeyError, IndexError,
             OSError, AttributeError, RuntimeError, SyntaxError,
             LookupError, ArithmeticError, AssertionError,

@@ -376,12 +376,16 @@ class ReconstructionWorker(QObject):
             try:
                 _pt_t0 = time.perf_counter()  # PIPELINE_TRACE
                 log_event("pipeline.ui.cube_live.reconstruct_start", {"file": str(self._file), "base_tokens": self._base_tokens, "max_cycles": self._max_cycles, "attempts": self._attempts, "provider": str(provider)[:60]})  # PIPELINE_TRACE
+                # CHUNK C6 (2026-05-19) — pass repo_root as forge_root so
+                # reconstruct_adaptive sorts cubes by combined fuse_risks
+                # (low first = stable context for fragile cubes).
                 reconstruct_adaptive(
                     str(self._file), content, provider,
                     base_tokens=self._base_tokens,
                     max_cycles=self._max_cycles,
                     attempts_per_cube=self._attempts,
                     mycelium=mycelium,
+                    forge_root=str(repo_root) if repo_root else None,
                     on_cube=on_cube,
                 )
                 log_event("pipeline.ui.cube_live.reconstruct_end", {"file": str(self._file), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE

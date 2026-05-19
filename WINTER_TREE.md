@@ -3,6 +3,29 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C6/14)
+>
+> Septième chunk. fuse_risks wiré dans reconstruct_adaptive (F2).
+>
+> **Fichiers touchés** :
+> - `engine/core/cube_providers.py` :
+>   - Constante `_FUSE_RISKS_ORDERING_ENABLED` (env flag).
+>   - `_sort_to_test_by_risk(to_test, cubes, store, forge_root)` —
+>     trie ASC par fuse_risks.combined.
+>   - `reconstruct_adaptive(... forge_root=None, ...)` étendu.
+>   - Pipeline_trace event `pipeline.engine.reco.cube_ordering_applied`.
+> - `muninn/ui/cube_live.py` — passe `forge_root=str(repo_root)`.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C6_fuse_risks_wired.py` (7 tests).
+> **Forge** : 7 props générées (regen), 1 destructive skipped.
+>
+> **Feature flag** : `MUNINN_FUSE_RISKS_ORDERING` (default `1`).
+>
+> **Wiring forge complet** : F0 (C4) cache + F1 (C5) file-level priority
+> + F2 (C6) cube-level fusion. Le pipeline `scan → reco` est maintenant
+> entièrement risk-aware via forge.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C5/14)
 >
 > Sixième chunk. Forge file-level priority (F1) — sort des files par

@@ -301,4 +301,66 @@ grep "pipeline.forge.file_ordering_applied" /home/sandbox/.muninn/pipeline_trace
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C6 → C13.)*
+## CHUNK C6 — Forge cube-level fusion (F2 — fuse_risks ordering)
+
+### Test 1 — Helper exists et trie ascendant
+```bash
+python3 -c "
+import sys, pathlib
+sys.path.insert(0, 'engine/core')
+import cube_providers
+from cube import Cube, sha256_hash
+
+cubes = []
+for i, fo in enumerate(['a.py', 'b.py', 'c.py']):
+    cubes.append(Cube(id=f'c{i}', sha256=sha256_hash(f'x{i}'),
+                      content=f'x{i}', file_origin=fo,
+                      line_start=i, line_end=i, level=1,
+                      score=0.0, temperature=0.5, token_count=5))
+
+# Mock fuse_risks
+import cube_analysis
+cube_analysis.fuse_risks = lambda store, fr, **kw: [
+    {'file': 'a.py', 'combined': 0.7, 'forge_risk': 0.5, 'cube_temp': 0.5, 'hot_cubes': []},
+    {'file': 'b.py', 'combined': 0.2, 'forge_risk': 0.1, 'cube_temp': 0.3, 'hot_cubes': []},
+    {'file': 'c.py', 'combined': 0.9, 'forge_risk': 0.8, 'cube_temp': 0.5, 'hot_cubes': []},
+]
+result = cube_providers._sort_to_test_by_risk([0, 1, 2], cubes, object(), pathlib.Path('.'))
+assert result == [1, 0, 2], f'Expected [1, 0, 2], got {result}'
+print('OK : low-risk first (b=0.2, a=0.7, c=0.9)')
+"
+```
+- [ ]
+
+### Test 2 — Bascule legacy MUNINN_FUSE_RISKS_ORDERING=0
+```bash
+MUNINN_FUSE_RISKS_ORDERING=0 python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+import cube_providers
+assert cube_providers._FUSE_RISKS_ORDERING_ENABLED is False
+print('OK: flag OFF = legacy ordering')
+"
+```
+- [ ]
+
+### Test 3 — `/reconstruct` sandbox visuel
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# /scan /tmp/btree-only puis /reconstruct
+# Observer terminal : les cubes low-risk attaqués en premier
+# (visible via les line_start dans les status messages, ordre non
+# strictement croissant si fuse_risks a un signal)
+```
+**Attendu** : ordre des cubes ≠ séquentiel pur quand forge a des données.
+- [ ]
+
+### Test 4 — Pipeline trace event
+```bash
+grep "pipeline.engine.reco.cube_ordering_applied" /home/sandbox/.muninn/pipeline_trace.jsonl 2>/dev/null | tail -2
+```
+**Attendu** : 1+ ligne par cycle×level avec `n_cubes`, `n_with_risk`.
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C7 → C13.)*

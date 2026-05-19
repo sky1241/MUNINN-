@@ -44,6 +44,14 @@ __all__ = [
 _OLLAMA_REPEAT_PENALTY = float(os.environ.get("MUNINN_LLM_REPEAT_PENALTY", "1.15"))
 _OLLAMA_TEMPERATURE = float(os.environ.get("MUNINN_LLM_TEMPERATURE", "0.2"))
 
+# CHUNK C6 (2026-05-19) — Feature flag for fuse_risks cube ordering.
+# Default ON: reconstruct_adaptive sorts `to_test` by combined risk
+# ascending (low first → stable cubes become context for fragile ones).
+# Set MUNINN_FUSE_RISKS_ORDERING=0 to revert to legacy sequential order.
+_FUSE_RISKS_ORDERING_ENABLED = os.environ.get(
+    "MUNINN_FUSE_RISKS_ORDERING", "1"
+) != "0"
+
 # --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
 try:  # PIPELINE_TRACE
     from pipeline_trace import log_event  # PIPELINE_TRACE
@@ -1869,6 +1877,66 @@ def _compute_levels_count(content: str, base_tokens: int) -> int:
     return min(11, max(1, int(math.log2(lines / base_tokens)) + 1))
 
 
+def _sort_to_test_by_risk(to_test: list, cubes: list, store, forge_root) -> list:
+    """CHUNK C6 (2026-05-19) — sort `to_test` indices by combined risk
+    ASCENDING (low risk first).
+
+    Why low-first: stable cubes (low fuse_risks score) are likely to
+    succeed quickly via SHA match. Each success feeds the mycelium AND
+    becomes context for the higher-risk cubes that follow — Sky's
+    design from the start.
+
+    Falls back to input unchanged when:
+      - feature flag MUNINN_FUSE_RISKS_ORDERING=0
+      - forge_root is None
+      - fuse_risks raises or returns empty
+    """
+    if not _FUSE_RISKS_ORDERING_ENABLED:
+        return to_test
+    if forge_root is None or not to_test:
+        return to_test
+
+    # Lazy import to keep the no-forge path zero-cost.
+    try:
+        from cube_analysis import fuse_risks
+    except ImportError:
+        try:
+            from engine.core.cube_analysis import fuse_risks
+        except ImportError:
+            return to_test
+
+    try:
+        rows = fuse_risks(store, str(forge_root))
+    except Exception:
+        log_event("pipeline.engine.reco.cube_ordering_applied", {
+            "n_cubes": len(to_test),
+            "n_with_risk": 0,
+            "skipped_reason": "fuse_risks_raised",
+        })
+        return to_test
+    if not rows:
+        log_event("pipeline.engine.reco.cube_ordering_applied", {
+            "n_cubes": len(to_test),
+            "n_with_risk": 0,
+            "skipped_reason": "fuse_risks_empty",
+        })
+        return to_test
+
+    # fuse_risks returns per-file rows; build file → combined map.
+    file_risk = {r["file"]: r.get("combined", 0.0) for r in rows}
+    # Stable sort by (combined_risk_asc, original_index).
+    indexed = list(enumerate(to_test))
+    indexed.sort(key=lambda ix: (file_risk.get(cubes[ix[1]].file_origin, 0.0), ix[0]))
+    sorted_to_test = [v for _, v in indexed]
+
+    n_with_risk = sum(1 for i in to_test if cubes[i].file_origin in file_risk)
+    log_event("pipeline.engine.reco.cube_ordering_applied", {
+        "n_cubes": len(to_test),
+        "n_with_risk": n_with_risk,
+    })
+    return sorted_to_test
+
+
 def _filter_cubes_to_test(cubes: list[Cube], sha_ranges: set,
                           level: int, mycelium) -> list[int]:
     """Return indices of cubes that still need testing at this level.
@@ -1946,6 +2014,7 @@ def reconstruct_adaptive(file_path: str, content: str,
                          max_cycles: int = 3,
                          attempts_per_cube: int = 11,
                          mycelium=None,
+                         forge_root=None,
                          on_cube: callable = None) -> dict:
     """B43: Adaptive multi-level reconstruction with restart cycles.
 
@@ -2009,6 +2078,9 @@ def reconstruct_adaptive(file_path: str, content: str,
             assign_neighbors(cubes, [], store, max_neighbors=9)
 
             to_test = _filter_cubes_to_test(cubes, sha_ranges, level, mycelium)
+            # CHUNK C6 (2026-05-19) — sort by forge×temp risk ascending
+            # (low risk first → stable cubes become context for fragile).
+            to_test = _sort_to_test_by_risk(to_test, cubes, store, forge_root)
             level_sha = _run_level_pass(
                 cubes, to_test, store, provider, attempts_per_cube,
                 content, mycelium, on_cube, sha_ranges, cycle, level)

@@ -1,5 +1,58 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C6/14 : Forge cube-level fusion (F2 — fuse_risks ordering)
+
+Septième chunk. Wire le `fuse_risks` dormant dans le hot path
+`reconstruct_adaptive`. Cubes triés par `combined_risk` ASCENDANT —
+stables (low risk) en premier deviennent contexte fiable pour les
+fragiles (high risk) qui suivent. C'est exactement le design Sky
+depuis le départ.
+
+**Fix** :
+- `engine/core/cube_providers.py` :
+  - Constante `_FUSE_RISKS_ORDERING_ENABLED` (env `MUNINN_FUSE_RISKS_ORDERING`, default `1`)
+  - Helper `_sort_to_test_by_risk(to_test, cubes, store, forge_root)` —
+    lazy import `cube_analysis.fuse_risks`, fallback `to_test` unchanged
+    sur ImportError/Exception/forge_root=None/flag OFF.
+  - Sort stable par `(combined_risk_asc, original_index)`.
+  - Pipeline_trace event `pipeline.engine.reco.cube_ordering_applied`
+    avec `{n_cubes, n_with_risk}`.
+  - `reconstruct_adaptive(... forge_root=None, ...)` signature étendue
+    (backward-compat).
+  - 1 ligne ajoutée dans la boucle cycle×level : appel `_sort_to_test_by_risk`
+    après `_filter_cubes_to_test`, avant `_run_level_pass`.
+- `muninn/ui/cube_live.py::ReconstructionWorker.run` :
+  passe `forge_root=str(repo_root)` à `reconstruct_adaptive`.
+
+**Tests verbatim** (7 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C6_fuse_risks_wired.py
+→ 7 passed in 0.33s
+  - test_fuse_risks_ordering_flag_default_enabled ✓
+  - test_sort_helper_exists ✓
+  - test_sort_no_forge_root_returns_unchanged ✓
+  - test_sort_flag_off_returns_unchanged ✓ (§8.B)
+  - test_sort_low_risk_first_when_forge_root_given ✓
+  - test_sort_emits_pipeline_trace_event ✓
+  - test_reconstruct_adaptive_accepts_forge_root_kwarg ✓
+
+pytest tests/test_cube_b16_b19.py tests/test_cube_wiring.py
+       tests/test_cube_b32_b39.py tests/test_props_cube_providers.py
+       tests/test_chunk_2026-05-19_C0_llm_no_collapse.py
+→ 88 passed in 3.35s
+
+forge --gen-props engine/core/cube_providers.py
+→ Generated 7 property tests
+→ Skipped 1 destructive: run_progressive_levels
+
+pytest tests/test_props_cube_providers.py
+→ 7 passed in 4.14s (deadline=None restored sur reconstruct_cube_waves)
+```
+
+**Feature flag (§4bis)** : `MUNINN_FUSE_RISKS_ORDERING=0` revient au
+legacy. Documenté CLAUDE.md.
+
+
 ## 2026-05-19 (PM) — CHUNK C5/14 : Forge file-level priority (F1)
 
 Sixième chunk. Trie `files_to_scan` par risk descendant avant les
