@@ -3,6 +3,26 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D5/11 — Q1 B acté)
+>
+> **C12 hover/click via groups : clic sur molécule sélectionne le groupe entier**.
+>
+> **Fichier touché** :
+> - `muninn/ui/neuron_map.py` :
+>   - `_aggregate_neurons_with_groups` nouveau helper (retourne `(molecules, groups)`).
+>   - `_aggregate_neurons_to_level` devient wrapper backward-compat.
+>   - `NeuronMapWidget._displayed_groups: list` (mapping mol→originals).
+>   - Cache `_displayed_neurons_cache` (+level+n) pour identité Python stable.
+>   - `_hit_test` au zoom>1 cherche dans `_displayed_neurons()` O(n).
+>   - `_resolve_clicked_originals(neuron)` helper de résolution.
+>   - `_handle_neuron_click` utilise resolve_clicked_originals + select groupe.
+>
+> **Tests** : 7 nouveaux `test_d5_*` dans
+> `tests/test_chunk_2026-05-19_C12_fractal_zoom.py`. Total = 18 tests.
+>
+> **Reste remediation** : D6 (forge tri 44 no-op).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D10/11 — Q3 B acté)
 >
 > **mock_ollama capture + test C0 runtime**.

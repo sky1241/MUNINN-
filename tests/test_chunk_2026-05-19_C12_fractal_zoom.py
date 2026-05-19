@@ -185,3 +185,111 @@ def test_displayed_neurons_switches_on_zoom(qtbot):
     assert len(w._displayed_neurons()) == 3
     w.set_zoom_level(3)
     assert len(w._displayed_neurons()) == 2
+
+
+# CHUNK D5 (2026-05-19 remediation, Q1 B acté) — hover/click at zoom>1
+# must operate on molecules, not silently land on whichever original is
+# nearest to the centroid. Click on a molecule selects ALL its
+# constituent cubes (group selection).
+
+def test_d5_aggregate_with_groups_returns_mapping():
+    """D5 : new helper _aggregate_neurons_with_groups returns (molecules, groups)
+    where groups[i] = list of orig_idx aggregated in molecule i."""
+    from muninn.ui.neuron_map import _aggregate_neurons_with_groups, Neuron
+    src = [Neuron(id=f"c{i}", label=f"L{i}", level="cube") for i in range(5)]
+    molecules, groups = _aggregate_neurons_with_groups(src, 2)
+    assert len(molecules) == 3  # ceil(5/2)
+    assert groups == [[0, 1], [2, 3], [4]]
+
+
+def test_d5_aggregate_with_groups_level_1_identity():
+    """level=1 returns groups = [[0], [1], ...]."""
+    from muninn.ui.neuron_map import _aggregate_neurons_with_groups, Neuron
+    src = [Neuron(id=f"c{i}", label=f"L{i}", level="cube") for i in range(3)]
+    molecules, groups = _aggregate_neurons_with_groups(src, 1)
+    assert molecules == src
+    assert groups == [[0], [1], [2]]
+
+
+def test_d5_aggregate_with_groups_empty():
+    """Empty input → empty molecules + empty groups."""
+    from muninn.ui.neuron_map import _aggregate_neurons_with_groups
+    molecules, groups = _aggregate_neurons_with_groups([], 2)
+    assert molecules == []
+    assert groups == []
+
+
+def test_d5_displayed_groups_filled_after_set_zoom_level(qtbot):
+    """`_displayed_groups` mirrors `_displayed_neurons` mapping."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube")
+                  for i in range(6)]
+    # zoom=1
+    _ = w._displayed_neurons()
+    assert w._displayed_groups == [[0], [1], [2], [3], [4], [5]]
+    # zoom=2
+    w.set_zoom_level(2)
+    _ = w._displayed_neurons()
+    assert w._displayed_groups == [[0, 1], [2, 3], [4, 5]]
+    # zoom=3
+    w.set_zoom_level(3)
+    _ = w._displayed_neurons()
+    assert w._displayed_groups == [[0, 1, 2], [3, 4, 5]]
+
+
+def test_d5_click_at_zoom_2_selects_whole_group(qtbot):
+    """Q1 B regression : click on a molecule at zoom=2 selects all
+    originals of that group (not just one)."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    from PyQt6.QtCore import Qt
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube", x=i, y=0, z=0)
+                  for i in range(6)]
+    w.set_zoom_level(2)
+    displayed = w._displayed_neurons()
+    # Click on molecule idx 1 (group = [2, 3])
+    molecule_1 = displayed[1]
+    w._handle_neuron_click(molecule_1, Qt.KeyboardModifier.NoModifier)
+    assert w._selected == {2, 3}, f"expected {{2, 3}}, got {w._selected}"
+
+
+def test_d5_click_at_zoom_1_unchanged(qtbot):
+    """D5 must NOT regress zoom=1 click behavior (single-cube selection)."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    from PyQt6.QtCore import Qt
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube")
+                  for i in range(4)]
+    # zoom=1 default, click on cube 2
+    _ = w._displayed_neurons()  # ensure _displayed_groups populated
+    w._handle_neuron_click(w._neurons[2], Qt.KeyboardModifier.NoModifier)
+    assert w._selected == {2}
+
+
+def test_d5_resolve_clicked_originals_molecule(qtbot):
+    """D5 helper : _resolve_clicked_originals(molecule) returns its group."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube")
+                  for i in range(5)]
+    w.set_zoom_level(2)
+    displayed = w._displayed_neurons()
+    # displayed[0] is molecule aggregating originals [0, 1]
+    result = w._resolve_clicked_originals(displayed[0])
+    assert result == [0, 1]
+    # displayed[2] is molecule with single original [4]
+    result = w._resolve_clicked_originals(displayed[2])
+    assert result == [4]

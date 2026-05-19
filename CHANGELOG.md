@@ -1,5 +1,62 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D5/11) — C12 hover/click via groups (Q1 B acté)
+
+Dixième chunk de remediation. Décision Sky Q1 = B (2026-05-19 PM) :
+au zoom fractal x2/x3, le clic sur une molécule doit sélectionner
+TOUS ses cubes constituants. Pré-D5, `_hit_test` cherchait dans
+`self._neurons` (originaux) au lieu de `_displayed_neurons()`
+(molécules), donc le clic landait silencieusement sur l'original
+le plus proche du centroïde — invariablement le mauvais. Hover
+était mort aussi à zoom>1 (`is` check dans `_paint_neurons` ne
+matchait jamais une molécule fraîche).
+
+**Fix engine helper** (`muninn/ui/neuron_map.py`) :
+- Nouveau `_aggregate_neurons_with_groups(neurons, level) ->
+  (molecules, groups)` qui retourne aussi le mapping
+  `groups[molecule_idx] = [orig_idx_0, ...]`.
+- `_aggregate_neurons_to_level` devient un wrapper (backward compat).
+
+**Fix widget** :
+- Champ `self._displayed_groups: list = []` populé à chaque
+  `_displayed_neurons()`. À zoom=1 = `[[0], [1], ...]`.
+- Cache `_displayed_neurons_cache` (+ level + n) pour que les
+  molecules retournées soient les MÊMES Python objects entre appels
+  successifs. Sinon `is` comparison dans hover/click fail.
+- `set_zoom_level` invalide le cache.
+- `_hit_test` au zoom>1 : cherche dans `_displayed_neurons()` (O(n)
+  sur ceil(N/2) ou ceil(N/3), pas de KD-tree besoin).
+- Nouveau helper `_resolve_clicked_originals(neuron) -> list[int]` :
+  retourne `[idx]` à zoom=1, `groups[mol_idx]` à zoom>1.
+- `_handle_neuron_click` utilise `_resolve_clicked_originals` pour
+  set `self._selected` au groupe entier. `neuron_selected.emit()`
+  fire pour le premier cube du groupe (DetailPanel focuse sur 1).
+
+**Tests** (`tests/test_chunk_2026-05-19_C12_fractal_zoom.py` +7) :
+- `test_d5_aggregate_with_groups_returns_mapping`
+- `test_d5_aggregate_with_groups_level_1_identity`
+- `test_d5_aggregate_with_groups_empty`
+- `test_d5_displayed_groups_filled_after_set_zoom_level`
+- `test_d5_click_at_zoom_2_selects_whole_group` (Q1 B regression)
+- `test_d5_click_at_zoom_1_unchanged` (zoom=1 no regression)
+- `test_d5_resolve_clicked_originals_molecule`
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C12_fractal_zoom.py -v
+→ 18 passed in 0.56s (11 existants C12 + 7 nouveaux D5)
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube_providers.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 168 passed in 8.06s (no regression)
+```
+
+Pas de mirror BUG-091 (`muninn/ui/*` sans pendant `engine/core/`).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D10/11) — mock_ollama capture + test C0 runtime (Q3 B acté)
 
 Neuvième chunk de remediation. Décision Sky Q3 = B (2026-05-19 PM) :

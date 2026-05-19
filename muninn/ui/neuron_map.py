@@ -107,33 +107,33 @@ DEGREE_GRADIENT = [
 ]
 
 
-def _aggregate_neurons_to_level(neurons: list, level: int) -> list:
-    """CHUNK C12 (2026-05-19) — fractal aggregation for x2/x3 zoom.
+def _aggregate_neurons_with_groups(neurons: list, level: int):
+    """CHUNK D5 (2026-05-19 remediation) — fractal aggregation that also
+    returns the molecule→originals mapping needed for hover/click at
+    zoom>1.
 
-    Groups consecutive neurons by `level` (1, 2 or 3) and produces a
-    smaller list of "molecule" Neurons. level=1 is identity (returns
-    the input list unchanged). Invalid levels also return the input.
+    Returns `(molecules, groups)` where `groups[i] = [orig_idx_0, ...]`
+    lists the indices into `neurons` that the i-th molecule aggregates.
+    level=1 is identity : groups = [[0], [1], ..., [n-1]].
+    Invalid levels return (neurons, [[i] for i in range(len(neurons))]).
 
-    Per molecule :
-      - `temperature` = token-weighted average NCD of group members
-        (weight = `degree` or `1` if all members have degree 0 so we
-        don't divide by zero on a fresh paint before any reco).
-      - `degree`      = max degree of group members (worst NCD wins,
-        so the molecule paints as bad as its worst constituent).
-      - `id`/`label`  = first member's id + range "Li-Lj" label.
-      - `level`       = "cube" (preserves cube semantics for paint).
-      - `x`/`y`/`z`   = centroid of member positions.
-      - `category`    = first member's category (shape).
+    Used by NeuronMapWidget._displayed_neurons() so clicks and hovers
+    at zoom 2/3 can resolve to the right originals.
     """
-    if not neurons or level == 1 or level not in (2, 3):
-        return neurons if neurons else []
+    if not neurons:
+        return [], []
+    if level == 1 or level not in (2, 3):
+        return list(neurons), [[i] for i in range(len(neurons))]
 
-    out: list = []
+    out_molecules: list = []
+    out_groups: list = []
     n = len(neurons)
     for start in range(0, n, level):
-        group = neurons[start:start + level]
+        end = min(start + level, n)
+        group = neurons[start:end]
         if not group:
             continue
+        group_indices = list(range(start, end))
         total_w = sum(max(1, m.degree) for m in group)
         if total_w <= 0:
             avg_temp = 0.0
@@ -166,8 +166,22 @@ def _aggregate_neurons_to_level(neurons: list, level: int) -> list:
             temperature=avg_temp,
             zone=first.zone,
         )
-        out.append(molecule)
-    return out
+        out_molecules.append(molecule)
+        out_groups.append(group_indices)
+    return out_molecules, out_groups
+
+
+def _aggregate_neurons_to_level(neurons: list, level: int) -> list:
+    """CHUNK C12 (2026-05-19) — fractal aggregation for x2/x3 zoom.
+
+    Public API kept for backward compat with existing tests.
+    Internally delegates to `_aggregate_neurons_with_groups` and
+    returns only the molecules list.
+
+    See `_aggregate_neurons_with_groups` for the full mapping (D5).
+    """
+    molecules, _ = _aggregate_neurons_with_groups(neurons, level)
+    return molecules if molecules else (neurons if neurons else [])
 
 
 def _degree_color(degree: int, max_degree: int) -> QColor:
@@ -310,6 +324,13 @@ class NeuronMapWidget(QWidget):
         # max-degree (worst NCD wins). Distinct from self._zoom (float
         # pan/zoom transform). See _aggregate_neurons_to_level helper.
         self._zoom_level: int = 1
+        # CHUNK D5 (2026-05-19 remediation, Q1 B acté) — mapping from
+        # molecule_idx (in `_displayed_neurons()` result) to the list of
+        # original neuron indices (in `self._neurons`) that it aggregates.
+        # Filled by `_displayed_neurons()` ; at zoom=1 it's the trivial
+        # identity `[[0], [1], ...]`. Used by `_hit_test` and click handler
+        # so user-facing clicks on molecules resolve to the right cubes.
+        self._displayed_groups: list = []
 
     def set_color_mode(self, mode: str) -> None:
         """CHUNK C9 (2026-05-19) — switch the neuron paint source.
@@ -347,6 +368,9 @@ class NeuronMapWidget(QWidget):
         silently ignored. Triggers a repaint without rebuilding any
         underlying data — the displayed neurons are derived lazily
         via `_displayed_neurons()`.
+
+        CHUNK D5 (2026-05-19 remediation) — invalidates the molecules
+        cache so click/hover at the new level operate on fresh objects.
         """
         try:
             lv = int(level)
@@ -357,6 +381,8 @@ class NeuronMapWidget(QWidget):
         if lv == self._zoom_level:
             return
         self._zoom_level = lv
+        # D5 : drop the molecules cache so next _displayed_neurons() rebuilds
+        self._displayed_neurons_cache = None
         self._cache_dirty = True
         self.update()
 
@@ -364,12 +390,43 @@ class NeuronMapWidget(QWidget):
         """CHUNK C12 (2026-05-19) — return the neuron list as shown to
         the user, possibly aggregated when `_zoom_level > 1`.
 
+        CHUNK D5 (2026-05-19 remediation) — also updates
+        `self._displayed_groups` so click/hover handlers at zoom>1 can
+        resolve molecules back to their constituent originals.
+
+        D5 hot-fix : at zoom>1 we CACHE the molecules object identity
+        (`self._displayed_neurons_cache`) so that successive calls return
+        the same Python objects. Without this, `is` comparison in
+        `_resolve_clicked_originals` / `_paint_neurons` hover would fail.
+        Cache invalidated when zoom level changes (via `set_zoom_level`)
+        or when underlying `_neurons` changes (via cache_dirty flag).
+
         x1 = identity (returns `self._neurons` directly, no copy).
-        x2/x3 = consecutive groups merged via `_aggregate_neurons_to_level`.
+        x2/x3 = consecutive groups merged via `_aggregate_neurons_with_groups`.
         """
         if self._zoom_level == 1:
+            self._displayed_groups = [[i] for i in range(len(self._neurons))]
+            self._displayed_neurons_cache = None
             return self._neurons
-        return _aggregate_neurons_to_level(self._neurons, self._zoom_level)
+        # D5 cache : reuse the same molecules across calls within a frame
+        # so identity-based lookups (is) work in _resolve_clicked_originals
+        # and _paint_neurons hover.
+        cached = getattr(self, "_displayed_neurons_cache", None)
+        cached_level = getattr(self, "_displayed_neurons_cache_level", None)
+        cached_n = getattr(self, "_displayed_neurons_cache_n", None)
+        if (cached is not None
+                and cached_level == self._zoom_level
+                and cached_n == len(self._neurons)):
+            # Cache hit — keep _displayed_groups in sync
+            return cached
+        molecules, groups = _aggregate_neurons_with_groups(
+            self._neurons, self._zoom_level
+        )
+        self._displayed_groups = groups
+        self._displayed_neurons_cache = molecules
+        self._displayed_neurons_cache_level = self._zoom_level
+        self._displayed_neurons_cache_n = len(self._neurons)
+        return molecules
 
     def closeEvent(self, event):  # R4: cleanup
         self._cancel_laplacian()
@@ -1012,12 +1069,36 @@ class NeuronMapWidget(QWidget):
     # --- Hit testing ---
 
     def _hit_test(self, screen_pos: QPointF) -> Optional[Neuron]:
-        """Find neuron under screen position. Uses KD-tree if available."""
+        """Find neuron under screen position.
+
+        CHUNK D5 (2026-05-19 remediation, Q1 B) — at zoom>1 the painted
+        objects are molecules from `_displayed_neurons()`, not originals
+        from `self._neurons`. We MUST search molecules at zoom>1 so the
+        user clicks land where they think they will. Pre-D5 click silently
+        landed on whichever original was closest to the molecule centroid.
+
+        At zoom=1, behavior is unchanged (KD-tree fast path).
+        """
         if not self._neurons:
             return None
         hit_radius = max(8, 10 * self._zoom)
 
-        # Try KD-tree first (B-UI-05)
+        # D5 : zoom>1 = search molecules, O(n) is fine (ceil(N/2) or ceil(N/3))
+        if self._zoom_level > 1:
+            displayed = self._displayed_neurons()
+            best = None
+            best_dist = float("inf")
+            for n in displayed:
+                sp = self._world_to_screen(n.x, n.y, n.z)
+                dx = screen_pos.x() - sp.x()
+                dy = screen_pos.y() - sp.y()
+                dist = math.hypot(dx, dy)
+                if dist < hit_radius and dist < best_dist:
+                    best = n
+                    best_dist = dist
+            return best
+
+        # zoom=1 : original KD-tree path (B-UI-05)
         if self._kdtree is None:
             self._build_kdtree()
 
@@ -1027,7 +1108,7 @@ class NeuronMapWidget(QWidget):
                 return self._neurons[idx]
             return None
 
-        # Fallback O(n)
+        # Fallback O(n) at zoom=1 when KD-tree unavailable
         best = None
         best_dist = float("inf")
         for n in self._neurons:
@@ -1084,20 +1165,60 @@ class NeuronMapWidget(QWidget):
 
     # --- Selection (B-UI-06) ---
 
+    def _resolve_clicked_originals(self, neuron: Neuron) -> list:
+        """CHUNK D5 (2026-05-19 remediation) — resolve a clicked Neuron
+        to the list of original cube indices it represents.
+
+        At zoom=1, returns [neurons.index(neuron)] (single cube).
+        At zoom>1, the clicked object is a molecule (fresh Neuron
+        from `_aggregate_neurons_with_groups`) — we find its index in
+        `_displayed_neurons()` then look up `_displayed_groups`.
+        Falls back to a label-based search if the `is` lookup fails.
+        """
+        # Fast path : direct identity in originals (zoom=1 case)
+        for i, n in enumerate(self._neurons):
+            if n is neuron:
+                return [i]
+        # zoom>1 : neuron is a molecule, find its index in displayed list
+        displayed = self._displayed_neurons()
+        for mol_idx, m in enumerate(displayed):
+            if m is neuron:
+                if mol_idx < len(self._displayed_groups):
+                    return list(self._displayed_groups[mol_idx])
+                return []
+        # Last-resort label fallback (shouldn't happen)
+        try:
+            return [self._neurons.index(neuron)]
+        except ValueError:
+            return []
+
     def _handle_neuron_click(self, neuron: Neuron, modifiers):
-        idx = self._neurons.index(neuron)
+        # CHUNK D5 (2026-05-19 remediation) — resolve to a SET of original
+        # indices (a single cube at zoom=1, a whole group at zoom>1).
+        # Q1 B acté : click on a molecule selects all its constituent cubes.
+        target_indices = set(self._resolve_clicked_originals(neuron))
+        if not target_indices:
+            return  # neuron not in current state — ignore silently
+
         if modifiers & Qt.KeyboardModifier.ShiftModifier:
-            if idx in self._selected:
-                self._selected.discard(idx)
+            # Shift = toggle membership for the whole group
+            if target_indices.issubset(self._selected):
+                self._selected -= target_indices
             else:
-                self._selected.add(idx)
+                self._selected |= target_indices
         else:
-            if idx in self._selected and len(self._selected) == 1:
+            if target_indices.issubset(self._selected) and (
+                self._selected == target_indices
+            ):
                 self._selected.clear()
                 self.neuron_deselected.emit()
             else:
-                self._selected = {idx}
-                self.neuron_selected.emit(neuron)
+                self._selected = set(target_indices)
+                # Emit selection event for the first original (DetailPanel
+                # focuses on one cube at a time ; molecules pick the first).
+                first_idx = min(target_indices)
+                if first_idx < len(self._neurons):
+                    self.neuron_selected.emit(self._neurons[first_idx])
 
         self._push_history()
         self._cache_dirty = True
