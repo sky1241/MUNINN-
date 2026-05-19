@@ -3,6 +3,21 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D8/11 — Q2 A acté)
+>
+> **Workflow `perf.yml` weekly cron pour `MUNINN_RUN_PERF=1`**.
+>
+> **Fichier nouveau** :
+> - `.github/workflows/perf.yml` :
+>   - Schedule `cron '0 8 * * 0'` (dimanche 08:00 UTC).
+>   - `workflow_dispatch` pour trigger manuel.
+>   - `MUNINN_RUN_PERF: "1"` dans step pytest.
+>   - Reset `.muninn` state avant run.
+>
+> **Reste remediation** : D5 (C12 hover/click groups), D6 (forge tri 44),
+> D7 (E2E pipeline_trace réel), D10 (mock_ollama + test C0 runtime).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D11/11)
 >
 > **`update_cube_details` refire `neuron_selected` if cube already selected**.

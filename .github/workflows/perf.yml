@@ -1,0 +1,51 @@
+name: MUNINN Perf weekly
+
+# CHUNK D8 (2026-05-19 remediation) — runs the opt-in perf gate every
+# Sunday morning to catch performance regressions on the cube hot path
+# (record_cycles batch, subdivide_file, fuse_risks).
+#
+# Local-only runs (`MUNINN_RUN_PERF=1 pytest tests/test_perf_*`) don't
+# have an enforced gate — this workflow does.
+#
+# Thresholds in tests/test_perf_cube_run_2026-05-19.py are SLACK (5-100x
+# nominal Sky measured locally). If GHA runners are slower and this job
+# goes red consistently, bump the slack ; do NOT skip the run.
+
+on:
+  schedule:
+    # Sundays 08:00 UTC = 09:00/10:00 Geneva. Avoids weekday CI noise.
+    - cron: '0 8 * * 0'
+  workflow_dispatch:
+
+jobs:
+  perf:
+    name: Perf gate (opt-in via MUNINN_RUN_PERF=1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install pytest + runtime deps (mirror of ci.yml)
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -c constraints.txt \
+            pytest hypothesis tiktoken anthropic numpy cryptography freezegun \
+            forge-shield mcp
+
+      - name: Configure git identity (sync_backend tests need it)
+        run: |
+          git config --global user.email "ci-perf@muninn.local"
+          git config --global user.name "MUNINN Perf CI"
+
+      - name: Reset .muninn state (avoid cross-test mycelium pollution)
+        run: rm -rf .muninn
+
+      - name: Run opt-in perf tests
+        env:
+          MUNINN_RUN_PERF: "1"
+        run: |
+          python3 -m pytest tests/test_perf_cube_run_2026-05-19.py -v --tb=short

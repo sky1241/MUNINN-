@@ -1,5 +1,33 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D8/11) — Workflow `perf.yml` weekly cron (Q2 A acté)
+
+Septième chunk de remediation. Audit a flag : `MUNINN_RUN_PERF=1` n'était
+invoqué nulle part dans `.github/workflows/`. Les 3 perf tests
+(`test_perf_cube_run_2026-05-19.py`) skippaient toujours en CI. Claim
+"battle plan complete + benchmark" partiellement vide.
+
+**Décision Sky (Q2 A, 2026-05-19 PM)** : "j'aime pas que des trucs traînent"
+→ ajouter workflow weekly pour que les tests SERVENT, pas suppression.
+
+**Fix** : nouveau `.github/workflows/perf.yml`.
+- Schedule : `cron '0 8 * * 0'` (dimanche 08:00 UTC = 09:00/10:00 Geneva).
+- `workflow_dispatch` pour trigger manuel via UI/`gh workflow run`.
+- `MUNINN_RUN_PERF: "1"` setté dans le step pytest.
+- Reset `.muninn` state avant run (avoid cross-test mycelium pollution).
+
+**Critère done** :
+```bash
+gh workflow run "MUNINN Perf weekly"
+# Lance les 3 perf tests (record_cycles batch <5s, subdivide_file <200ms,
+# fuse_risks <500ms). Exit 0 si tous passent.
+```
+
+**Pas de mirror BUG-091** (workflow YAML).
+**Pas de nouveau env var production** (MUNINN_RUN_PERF était déjà documenté
+en C13 hotfix `bb29edc`, juste pas wired).
+
+
 ## 2026-05-19 (Remediation D11/11) — `update_cube_details` refire `neuron_selected` if selected
 
 Sixième chunk de remediation. Audit a flag : si l'utilisateur clique sur
