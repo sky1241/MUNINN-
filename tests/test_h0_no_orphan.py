@@ -67,6 +67,8 @@ WHITELIST_DOC_ONLY_ENV_VARS = {
     "MUNINN_RUN_PERF",            # CHUNK C13 (2026-05-19) perf opt-in
     "MUNINN_TEST_REPOS",          # test harness only
     "MUNINN_BENCH_N",             # benchmark scripts
+    "MUNINN_BENCH_FILE",          # F4 (REMEDIATION-3) — bench script gitignored
+    "MUNINN_BENCH_MODELS",        # F4 (REMEDIATION-3) — bench script gitignored
     "MUNINN_EVAL_MODE",           # eval harness
     "MUNINN_EVAL_MODEL",          # eval harness
     "MUNINN_EVAL_RUNS",           # eval harness
