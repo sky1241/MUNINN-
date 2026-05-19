@@ -1,5 +1,68 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D6/11) — Tri 44 forge no-op tests + handbook 🎉 REMEDIATION COMPLETE
+
+**Onzième et dernier chunk de remediation** post-audit C8→C13.
+
+Audit avait flag : `tests/test_props_cube.py` (12 tests), `test_props_cube_analysis.py`
+(25 tests), `test_props_cube_providers.py` (7 tests) — **44 tests total,
+0 `assert` statement, 100% pattern `try: f(...) except Exception: pass`**.
+
+Tous suivaient `forge --gen-props` auto-output : stratégies
+`st.text(max_size=50)` sur des paramètres TYPÉS (`Cube`, `CubeStore`,
+`Mycelium`, `list[Cube]`). Le code raisait `AttributeError` au 1er
+accès → swallowed → test passe sans rien tester. 44 tests no-op qui
+prouvaient juste que `import` marche.
+
+**Fix** : triage manuel des 44, on garde uniquement les helpers purs
+(string/numeric in/out) avec vraies post-conditions :
+
+- `tests/test_props_cube_providers.py` : 7 → **6 tests** :
+  - `test_compute_ncd_bounded_and_self_zero` (bounded [0,1] + symétrie)
+  - `test_compute_ncd_empty_vs_empty` (case = 0.0)
+  - `test_compute_ncd_empty_vs_nonempty` (case = 1.0)
+  - `test_compute_ncd_long_self_is_small` (NCD(x,x) < 0.20 pour x≥200 chars)
+  - `test_validate_reconstruction_returns_bool` (+ reflexivity)
+  - `test_validate_reconstruction_reflexive`
+- `tests/test_props_cube.py` : 12 → **4 tests** :
+  - `test_normalize_content_returns_str` + `_idempotent`
+  - `test_sha256_hash_returns_hex64` + `_deterministic`
+- `tests/test_props_cube_analysis.py` : 25 → **0 test** (toutes fonctions
+  prennent objets typés, out of scope D6, documenté dans le file
+  docstring + handbook).
+
+**Nouveau** : `docs/FORGE_REGEN_HANDBOOK.md` documente la procédure
+manuelle obligatoire après chaque `forge --gen-props` sur cube/
+cube_analysis/cube_providers. **Avant de re-run forge, sauvegarder
+le baseline de tests valides** sinon le tri est perdu.
+
+**Total** : 44 tests no-op → **10 tests réels avec ~24 assertions**.
+
+**Tests verbatim** :
+```
+pytest tests/test_props_cube.py tests/test_props_cube_providers.py \
+       tests/test_props_cube_analysis.py -v
+→ 10 passed in 1.47s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 171 passed in 7.98s (no regression)
+```
+
+**Bonus runtime catch** : Hypothesis a trouvé que mon assert initial
+`NCD(x, x) == 0.0` était trop fort (`NCD("0", "0") ≈ 0.11` à cause
+de zlib per-stream overhead). Post-condition relâchée à `< 0.20` pour
+strings ≥200 chars + cases explicites `("", "")` et `("", "x")`.
+Validation : Hypothesis ne triggere plus de counter-example.
+
+**🎉 Remediation 2026-05-19 COMPLETE : 11/11 chunks D1-D11 livrés.**
+
+Pas de mirror BUG-091 (test files uniquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D5/11) — C12 hover/click via groups (Q1 B acté)
 
 Dixième chunk de remediation. Décision Sky Q1 = B (2026-05-19 PM) :

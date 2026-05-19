@@ -3,6 +3,37 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D6/11 🎉 11/11 COMPLET)
+>
+> **Tri 44 forge no-op tests + handbook**.
+>
+> **Fichiers touchés** :
+> - `tests/test_props_cube_providers.py` : 7 → 6 tests (helpers purs
+>   compute_ncd + validate_reconstruction avec vraies post-conditions).
+> - `tests/test_props_cube.py` : 12 → 4 tests (normalize_content +
+>   sha256_hash post-conditions).
+> - `tests/test_props_cube_analysis.py` : 25 → 0 test (toutes fonctions
+>   prennent objets typés, hors-scope D6).
+> - `docs/FORGE_REGEN_HANDBOOK.md` (NOUVEAU) : procédure manuelle
+>   obligatoire après chaque `forge --gen-props` sur ces 3 modules.
+>
+> **Avant** : 44 tests no-op, 0 assertion.
+> **Après** : 10 tests réels, ~24 assertions.
+>
+> **🎉 REMEDIATION COMPLETE : 11/11 chunks D1-D11 livrés.**
+> Tous les RED de l'audit C8→C13 fixed. Sky a maintenant :
+> - C10+C11 affichent du vrai contenu (D1)
+> - Shim cold-start fonctionne (D2)
+> - DetailPanel sans bruit syntaxique (D3+D4)
+> - C12 hover/click fonctionnel à zoom>1 (D5)
+> - Forge re-gen documenté (D6)
+> - E2E test prouve vraiment quelque chose (D7)
+> - Perf gate weekly enforcé (D8)
+> - options_applied trace propre (D9)
+> - C0 prouvé runtime via mock_ollama (D10)
+> - DetailPanel auto-refresh sur late CYCLE_END (D11)
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D5/11 — Q1 B acté)
 >
 > **C12 hover/click via groups : clic sur molécule sélectionne le groupe entier**.
