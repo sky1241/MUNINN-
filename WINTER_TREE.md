@@ -3,6 +3,21 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D3/11)
+>
+> **Filter language keywords + min length 4 in `_extract_unknown_identifiers`**.
+>
+> **Fichier touché** :
+> - `engine/core/cube_providers.py` :
+>   - `_COMMON_LANG_KEYWORDS` frozenset (Python + Go + JS/TS + C-family, ~40 mots).
+>   - `_extract_unknown_identifiers` : regex `{2,}` → `{3,}` + filter keywords.
+>
+> **Tests** : 4 nouveaux `test_d3_*` dans `tests/test_chunk_2026-05-19_C10_recon_extras.py`.
+> **Forge** : 7 props cube_providers re-gen, OK.
+>
+> **Reste** : D4-D11.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D2/11)
 >
 > **Shim `muninn.cube_providers` ImportError circular fix**.

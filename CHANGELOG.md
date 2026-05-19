@@ -1,5 +1,58 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D3/11) — Filter language keywords + min length 4 in unknown_identifiers
+
+Troisième chunk de remediation. Le DetailPanel "Unknown idents" affichait
+du bruit syntaxique (`def`, `pass`, `return`, `func`, `defer`, …) au lieu
+des vrais identifiants inventés par le LLM.
+
+**Reproduction pré-fix** :
+```bash
+python -c "
+import sys; sys.path.insert(0, 'engine/core'); import cube
+from cube_providers import _extract_unknown_identifiers
+print(_extract_unknown_identifiers('def foo(): pass', {'identifiers': ['sentinel']}))
+# → ['def', 'foo', 'pass']  ← mots-clés Python comptés comme idents inconnus
+"
+```
+
+**Fix** :
+- `engine/core/cube_providers.py:_extract_unknown_identifiers` :
+  - Regex `{2,}` (3-char min) → `{3,}` (4-char min). Élimine "if", "or",
+    "to", "is", "in" qui sont du bruit même hors keywords.
+  - Nouveau frozenset `_COMMON_LANG_KEYWORDS` (Python + Go + JS/TS +
+    C-family, ~40 mots). Filtré après le set diff.
+
+**Cohérent avec Bonus B (D1)** : la heatmap rouge + le DetailPanel doivent
+montrer **uniquement** ce que le LLM a vraiment inventé, pas la syntaxe
+triviale que n'importe quel junior dev sait. Mission Muninn = mémoire dev senior.
+
+**Tests** (`tests/test_chunk_2026-05-19_C10_recon_extras.py` +4) :
+- `test_d3_extract_unknown_identifiers_filters_python_keywords`
+- `test_d3_extract_unknown_identifiers_filters_go_keywords`
+- `test_d3_extract_unknown_identifiers_min_length_4`
+- `test_d3_extract_unknown_identifiers_keeps_real_idents`
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py -k "test_d3" -v
+→ 4 passed in 0.43s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube_providers.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 151 passed in 7.99s (no regression)
+
+forge --gen-props engine/core/cube_providers.py
+pytest tests/test_props_cube_providers.py
+→ 7 passed in 2.78s
+```
+
+Pas de mirror BUG-091 (helper privé, signature inchangée — wildcard import propage).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D2/11) — Shim `muninn.cube_providers` ImportError circular fix
 
 Deuxième chunk de remediation post-audit. Le shim

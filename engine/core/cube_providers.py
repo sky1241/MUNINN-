@@ -991,19 +991,50 @@ def _extract_gap_lines(anchor_map: dict, n_lines: int) -> list:
     return [i for i in range(n_lines) if i not in pinned]
 
 
+# CHUNK D3 (2026-05-19 remediation) — language keywords filtered out of
+# unknown_identifiers. Pre-D3, the DetailPanel "Unknown idents" field
+# was polluted with 'def', 'pass', 'return', 'func', 'defer', etc.
+# These are syntactic noise, NOT senior-dev memory. Aligned with Bonus B
+# decision (mission Muninn = visualize what the LLM had to INVENT, not
+# what any junior dev would write trivially).
+_COMMON_LANG_KEYWORDS = frozenset({
+    # Python
+    "def", "pass", "return", "elif", "else", "import", "from", "lambda",
+    "yield", "raise", "True", "False", "None", "with", "while", "class",
+    "async", "await", "global", "nonlocal", "assert", "break", "continue",
+    "finally", "except",
+    # Go
+    "func", "defer", "range", "switch", "case", "default", "select",
+    "chan", "type", "struct", "interface", "package", "const",
+    "import", "return", "break", "continue", "fallthrough",
+    # JS / TS
+    "function", "const", "let", "export", "import", "return", "typeof",
+    "instanceof", "await", "async", "void", "null", "undefined",
+    # C-family (subset that's NOT also a useful 3-letter ident)
+    "void", "char", "long", "short", "float", "double", "extern",
+    "static", "const", "unsigned", "signed", "inline", "typedef",
+    "struct", "union", "enum", "sizeof", "return",
+})
+
+
 def _extract_unknown_identifiers(reconstruction: str,
                                  ast_hints: dict | None) -> list:
     """CHUNK C10 (2026-05-19) — identifiants présents dans la
     reconstruction mais absents des `ast_hints['identifiers']`. Sert au
     DetailPanel pour signaler les "inventions" du LLM (souvent symptôme
     d'une hallucination).
+
+    CHUNK D3 (2026-05-19 remediation) — bumped min length from 3 to 4
+    chars (regex {2,} → {3,}) AND filter `_COMMON_LANG_KEYWORDS` so
+    syntactic noise (def, pass, func, defer, …) doesn't leak.
     """
     if not ast_hints or not ast_hints.get("identifiers"):
         return []
     import re as _re
     known = set(ast_hints["identifiers"])
-    found = set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", reconstruction or ""))
-    return sorted(found - known)
+    # D3 : 4+ chars (regex {3,} = 1 leading + 3 trailing = 4 min).
+    found = set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", reconstruction or ""))
+    return sorted((found - known) - _COMMON_LANG_KEYWORDS)
 
 
 def reconstruct_cube(cube: Cube, neighbors: list[Cube],

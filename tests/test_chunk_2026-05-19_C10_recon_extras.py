@@ -269,3 +269,69 @@ def test_d1_gap_lines_no_typeerror_on_missing_file_origin():
     r = reconstruct_cube(c, [], MockLLMProvider(), ast_hints={})
     assert isinstance(r.gap_lines, list)
     assert isinstance(r.unknown_identifiers, list)
+
+
+# CHUNK D3 (2026-05-19 remediation) — filter common language keywords +
+# bump min identifier length from 3 to 4 chars. Pre-D3, calls like
+# `_extract_unknown_identifiers('def foo(): pass', {'identifiers':['foo']})`
+# returned `['def', 'pass']` — Python keywords leaking as "unknown idents"
+# noise in the DetailPanel.
+
+def test_d3_extract_unknown_identifiers_filters_python_keywords():
+    """Python keywords (def, pass, return, …) must NOT leak as unknowns."""
+    from cube_providers import _extract_unknown_identifiers
+    # Non-empty hints list required to bypass the early-return guard.
+    r = _extract_unknown_identifiers(
+        "def helper():\n    return some_var\n    pass",
+        {"identifiers": ["sentinel"]},
+    )
+    assert "def" not in r, f"keyword 'def' leaked : {r}"
+    assert "return" not in r, f"keyword 'return' leaked : {r}"
+    assert "pass" not in r, f"keyword 'pass' leaked : {r}"
+    # Real identifiers must still come through (4+ chars):
+    assert "helper" in r
+    assert "some_var" in r
+
+
+def test_d3_extract_unknown_identifiers_filters_go_keywords():
+    """Go keywords (func, defer, range, …) must NOT leak as unknowns."""
+    from cube_providers import _extract_unknown_identifiers
+    r = _extract_unknown_identifiers(
+        "func F() { defer mu.Unlock(); for i := range items { print(i) } }",
+        {"identifiers": ["sentinel"]},
+    )
+    for kw in ("func", "defer", "range"):
+        assert kw not in r, f"Go keyword {kw!r} leaked : {r}"
+    # Real idents come through:
+    assert "items" in r
+    assert "Unlock" in r or "print" in r  # something non-keyword
+
+
+def test_d3_extract_unknown_identifiers_min_length_4():
+    """Short noise (<4 chars : if, or, in, is, to, …) must NOT leak."""
+    from cube_providers import _extract_unknown_identifiers
+    r = _extract_unknown_identifiers(
+        "if x == 0 or y == 1: return z to a",
+        {"identifiers": ["sentinel"]},
+    )
+    # short noise that the previous regex `{2,}` (3-char min) caught:
+    for short in ("if", "or", "to"):
+        assert short not in r, f"short noise {short!r} leaked : {r}"
+    # 1-char idents naturally filtered:
+    for tok in ("x", "y", "z", "a"):
+        assert tok not in r
+
+
+def test_d3_extract_unknown_identifiers_keeps_real_idents():
+    """Genuine 4+ char identifiers NOT in hints must come through."""
+    from cube_providers import _extract_unknown_identifiers
+    r = _extract_unknown_identifiers(
+        "result = magic_constant * helper_function(input_var)",
+        {"identifiers": ["result"]},  # only 'result' is known
+    )
+    # 'result' is known → not in unknowns
+    assert "result" not in r
+    # The others are unknown :
+    assert "magic_constant" in r
+    assert "helper_function" in r
+    assert "input_var" in r
