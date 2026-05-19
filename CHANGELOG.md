@@ -1,5 +1,70 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E2/8) — Fix R2 bare engine/core cold-start circular import
+
+Deuxième chunk REMEDIATION-2. L'audit Build/Integration a flag : le D2
+fix (`muninn/cube_providers.py` pré-import `cube`) ne couvrait QUE le
+path `muninn.cube_providers`. Bare import depuis `engine/core` crashait
+toujours :
+
+```bash
+python -c "import sys; sys.path.insert(0, 'engine/core'); from cube_providers import OllamaProvider"
+# ImportError: cannot import name 'LLMProvider' from partially initialized module
+```
+
+Chaîne : `cube_providers:20 (from cube import Cube, sha256_hash)` →
+`cube:1825 (from cube_analysis import *)` → `cube_analysis:32
+(from cube_providers import LLMProvider, ...)` ← cube_providers
+partially initialized → ImportError.
+
+**Fix** (`engine/core/cube_providers.py`) :
+- `from __future__ import annotations` au top : toutes les annotations
+  deviennent forward references (strings), `Cube` n'est plus résolu
+  au module load time.
+- Retiré `from cube import Cube, sha256_hash` ligne 20.
+- `Cube` mis sous `if TYPE_CHECKING:` (résolu seulement par type checker).
+- `sha256_hash` lazy-importé dans les 3 fonctions qui l'appellent :
+  `reconstruct_cube`, `validate_reconstruction`, `reconstruct_line_by_line`.
+
+Le module cube_providers se charge maintenant SANS dépendre de `cube` au
+module-level. La chaîne circulaire est cassée.
+
+**Tests** (`tests/test_bug_091_shim_first_import.py` +3) :
+- `test_e2_bare_engine_core_cube_providers_first_import` : subprocess
+  cold-start `python -c "import sys; sys.path.insert(0, 'engine/core');
+  from cube_providers import OllamaProvider"` → exit 0.
+- `test_e2_bare_engine_core_cube_providers_dataclasses` : idem pour
+  `ReconstructionResult` + `WaveResult`.
+- `test_e2_bare_engine_core_cube_analysis_first_import` : idem pour
+  `from cube_analysis import fuse_risks`.
+
+**Bonus Hypothesis** : `forge --gen-props engine/core/cube_providers.py`
+re-généré (forge a écrasé D6 cleanup, restauré via `git checkout HEAD --
+tests/test_props_cube_providers.py`). Hypothesis a trouvé un counter-example
+sur NCD symmetry : `NCD("1", "0000") = 0.17` vs `NCD("0000", "1") = 0.33`
+— vraie asymmetry zlib due à per-stream header. Test split :
+- `test_compute_ncd_bounded` (strong, any-length, bounded [0, 1]).
+- `test_compute_ncd_approx_symmetric_for_long_strings` (min 50 chars,
+  tolerance 0.05 zlib overhead).
+
+**Tests verbatim** :
+```
+pytest tests/test_bug_091_shim_first_import.py -v
+→ 9 passed in 1.38s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 177 passed in 7.54s (no regression)
+```
+
+Pas de mirror BUG-091 (modif engine/core, shim wildcard propage
+automatiquement ; le shim D2 pré-import est désormais redondant mais
+on le garde pour double-protection).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E1/8) — Narrow except + log_event sur swallow gap_lines
 
 Premier chunk du battle plan REMEDIATION-2 (post-audit 4-agents 24h).

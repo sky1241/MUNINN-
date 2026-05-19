@@ -89,3 +89,46 @@ def test_d4_shim_exposes_extract_unknown_identifiers():
     # D3 fix : 'def' filtered (keyword), 'magic_var' kept
     assert "magic_var" in r.stdout
     assert "'def'" not in r.stdout
+
+
+# CHUNK E2 (REMEDIATION-2) — fix R2 bare engine/core import circular.
+# Audit a flag : `python -c "import sys; sys.path.insert(0,'engine/core');
+# from cube_providers import OllamaProvider"` crashait avec ImportError
+# parce que le D2 fix (pre-import dans muninn/cube_providers.py) ne
+# couvrait QUE le path muninn.cube_providers. Tests/scripts/hooks qui
+# font bare import depuis engine/core crashaient.
+
+def test_e2_bare_engine_core_cube_providers_first_import():
+    """E2 regression : bare `from cube_providers import X` après mettre
+    engine/core sur sys.path (sans `import cube` warmup) doit succeed."""
+    r = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; sys.path.insert(0, 'engine/core'); "
+         "from cube_providers import OllamaProvider; print('OK')"],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=15,
+    )
+    assert r.returncode == 0, f"stderr: {r.stderr[-700:]}"
+    assert "OK" in r.stdout
+
+
+def test_e2_bare_engine_core_cube_providers_dataclasses():
+    """E2 regression : ReconstructionResult + WaveResult resolve cold via
+    bare engine/core import."""
+    r = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; sys.path.insert(0, 'engine/core'); "
+         "from cube_providers import ReconstructionResult, WaveResult; print('OK')"],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=15,
+    )
+    assert r.returncode == 0, f"stderr: {r.stderr[-700:]}"
+
+
+def test_e2_bare_engine_core_cube_analysis_first_import():
+    """E2 regression : bare `from cube_analysis import X` doit succeed cold."""
+    r = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; sys.path.insert(0, 'engine/core'); "
+         "from cube_analysis import fuse_risks; print('OK')"],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=15,
+    )
+    assert r.returncode == 0, f"stderr: {r.stderr[-700:]}"

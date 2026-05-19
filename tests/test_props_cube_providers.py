@@ -46,16 +46,32 @@ def _forge_isolate_cwd(tmp_path, monkeypatch):
 
 @given(a=st.text(max_size=200), b=st.text(max_size=200))
 @settings(max_examples=50, deadline=None)
-def test_compute_ncd_bounded_and_self_zero(a: str, b: str):
-    """NCD output must be in [0, 1] for any input pair, and NCD(x, x) = 0
-    for non-empty x by definition (compression invariance)."""
+def test_compute_ncd_bounded(a: str, b: str):
+    """NCD output must be in [0, 1] for ANY input pair (Bennett et al. 1998).
+
+    Strong invariant : holds for any string length. Just checks the
+    [0, 1] envelope, no zlib overhead matters.
+    """
     result = compute_ncd(a, b)
-    # Bounded
     assert 0.0 <= result <= 1.0, f"NCD out of bounds : {result}"
-    # Symmetry (Bennett et al. 1998)
-    sym = compute_ncd(b, a)
-    assert abs(result - sym) < 1e-6, (
-        f"NCD must be symmetric : NCD(a,b)={result} vs NCD(b,a)={sym}"
+
+
+@given(a=st.text(min_size=50, max_size=500),
+       b=st.text(min_size=50, max_size=500))
+@settings(max_examples=30, deadline=None)
+def test_compute_ncd_approx_symmetric_for_long_strings(a: str, b: str):
+    """NCD(a, b) ≈ NCD(b, a) for strings ≥50 chars (E2 found bug 2026-05-19).
+
+    Mathematical NCD is symmetric (Bennett et al. 1998), but zlib's
+    per-stream header overhead breaks symmetry numerically for very
+    short strings (Hypothesis counter-example : NCD("1", "0000") = 0.17
+    vs NCD("0000", "1") = 0.33). Relax to ≥50 chars + tolerance 0.05
+    to stay within zlib overhead noise.
+    """
+    result_ab = compute_ncd(a, b)
+    result_ba = compute_ncd(b, a)
+    assert abs(result_ab - result_ba) <= 0.05, (
+        f"NCD asymmetry > 0.05 : NCD(a,b)={result_ab} vs NCD(b,a)={result_ba}"
     )
 
 

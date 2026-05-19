@@ -5,7 +5,18 @@ Classes: LLMProvider (ABC), OllamaProvider, ClaudeProvider, OpenAIProvider,
          FIMReconstructor, MockLLMProvider, ReconstructionResult.
 Functions: reconstruct_cube, reconstruct_cube_waves, run_progressive_levels,
            validate_reconstruction, compute_hotness, compute_ncd.
+
+CHUNK E2 (REMEDIATION-2) — `from __future__ import annotations` makes all
+type annotations forward references (strings) so `Cube` is never resolved
+at module load time. Combined with the removal of the module-level
+`from cube import Cube, sha256_hash`, this breaks the cold-start
+circular chain `cube_providers → cube → cube_analysis → cube_providers`.
+
+`sha256_hash` is now imported lazily inside the 3 functions that call
+it (`reconstruct_cube`, `validate_reconstruction`, `reconstruct_line_by_line`).
+Bare `from cube_providers import …` now works cold without pre-loading `cube`.
 """
+from __future__ import annotations
 
 import json
 import os
@@ -15,9 +26,13 @@ import urllib.request
 import zlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from cube import Cube, sha256_hash
+# E2 : `Cube` only needed for type annotations (now lazy-resolved via
+# `from __future__ import annotations`). `sha256_hash` is imported
+# locally inside the 3 functions that call it (see below).
+if TYPE_CHECKING:  # pragma: no cover
+    from cube import Cube
 
 try:
     from engine.core.lang_lexicons import get_lexicon, format_lexicon_prompt
@@ -1086,8 +1101,9 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
         temperature=temperature,
     )
 
-    # B17: SHA-256 validation
-    recon_sha256 = sha256_hash(reconstruction)
+    # B17: SHA-256 validation (E2 : lazy import to break circular chain)
+    from cube import sha256_hash as _sha256_hash
+    recon_sha256 = _sha256_hash(reconstruction)
     exact_match = (recon_sha256 == cube.sha256)
 
     # B19: NCD fallback
@@ -1177,7 +1193,9 @@ def validate_reconstruction(original: str, reconstruction: str) -> bool:
 
     Both strings are normalized before hashing.
     """
-    return sha256_hash(original) == sha256_hash(reconstruction)
+    # E2 : lazy import to break circular chain
+    from cube import sha256_hash as _sha256_hash
+    return _sha256_hash(original) == _sha256_hash(reconstruction)
 
 
 # ─── B18: Scoring perplexite (hotness) ───────────────────────────────
@@ -1389,7 +1407,9 @@ def reconstruct_line_by_line(cube: Cube, neighbors: list[Cube],
             target_line=orig_lines[idx], ast_hints=ast_hints)
 
     reconstruction = '\n'.join(result_lines)
-    recon_sha = sha256_hash(reconstruction)
+    # E2 : lazy import to break circular chain
+    from cube import sha256_hash as _sha256_hash
+    recon_sha = _sha256_hash(reconstruction)
     exact_match = (recon_sha == cube.sha256)
     ncd = compute_ncd(cube.content, reconstruction)
 

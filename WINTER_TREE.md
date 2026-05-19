@@ -3,6 +3,26 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E2/8)
+>
+> **Fix R2 bare engine/core cold-start circular import**.
+>
+> **Fichier touché** :
+> - `engine/core/cube_providers.py:9-39` :
+>   - `from __future__ import annotations` (forward refs partout).
+>   - Retiré `from cube import Cube, sha256_hash` module-level.
+>   - `Cube` sous `if TYPE_CHECKING:` (type checker only).
+>   - `sha256_hash` lazy-importé dans `reconstruct_cube` (l.1105),
+>     `validate_reconstruction` (l.1198), `reconstruct_line_by_line` (l.1411).
+>
+> **Tests** : 3 nouveaux `test_e2_*` dans `tests/test_bug_091_shim_first_import.py`.
+> Bonus : 1 counter-example Hypothesis trouvé sur NCD symmetry (asymmetric
+> pour short strings via zlib overhead) → test split en `_bounded` (strong)
+> + `_approx_symmetric_for_long_strings` (≥50 chars).
+>
+> **Reste REMEDIATION-2** : E3-E8.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E1/8)
 >
 > **Narrow except + log_event sur swallow gap_lines / unknown_idents**.
