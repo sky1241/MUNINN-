@@ -1,5 +1,52 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C2/14 : Batch record_cycles via executemany
+
+Troisième chunk. Pré-fix, `run_destruction_cycle` appelait
+`store.record_cycle(...)` (singulier) une fois par cube, chacun avec
+son propre `INSERT + commit()`. À 2.5ms par execute+commit × 1000 cubes
+× 10 cycles, ça gaspille ~25s par run sur SQLite.
+
+**Fix** :
+- `engine/core/cube.py` : nouvelle méthode `CubeStore.record_cycles(batch)`
+  qui prend `list[tuple[str, int, bool, str, float]]` et fait UN
+  `executemany` + UN `commit`. `record_cycle` (singulier) conservé pour
+  backward-compat des tests legacy.
+- `engine/core/cube_analysis.py` : `run_destruction_cycle` accumule les
+  results dans `cycle_batch: list[tuple]` puis appelle
+  `store.record_cycles(cycle_batch)` une seule fois après la boucle.
+
+**Tests verbatim** (5 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C2_record_cycles_batch.py -q
+→ 5 passed in 0.46s
+  test_record_cycles_plural_method_exists ✓
+  test_record_cycles_batch_persists_all_rows ✓
+  test_record_cycles_batch_is_at_least_2x_faster_than_singular ✓
+  test_record_cycle_singular_still_works_for_backward_compat ✓
+  test_run_destruction_cycle_uses_batch_record ✓
+
+pytest tests/test_cube_b16_b19.py tests/test_cube_b32_b39.py
+       tests/test_cube_wiring.py tests/test_props_cube.py
+       tests/test_props_cube_analysis.py
+→ 110 passed in 5.04s
+
+forge --gen-props engine/core/cube.py
+→ Generated 11 property tests
+→ Skipped 4 destructive: scan_repo, format_code, check_formatters, install_formatters
+
+pytest tests/test_props_cube.py
+→ 11 passed in 1.31s (deadline=None ajouté à test_subdivide_file_no_crash
+  qui était flaky sur cold tokenizer cache)
+```
+
+**Pas de feature flag** (fix mécanique, pas tunable). La méthode singulière
+reste accessible pour les callers legacy. Pas de breaking change.
+
+Mirror BUG-091 : non applicable, `muninn/cube.py` et `muninn/cube_analysis.py`
+sont des shims qui re-importent automatiquement.
+
+
 ## 2026-05-19 (PM) — CHUNK C1/14 : BUG WAGON SHA-256 fix
 
 Deuxième chunk du plan unifié. Bug latent depuis longtemps : dans

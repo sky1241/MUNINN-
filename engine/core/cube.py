@@ -1077,12 +1077,47 @@ class CubeStore:
 
     def record_cycle(self, cube_id: str, cycle_num: int, success: bool,
                      reconstruction: str = '', perplexity: float = 0.0):
-        """Record a reconstruction cycle result."""
+        """Record a reconstruction cycle result.
+
+        Singular path — kept for backward compatibility (tests and
+        ad-hoc callers). The hot path in `run_destruction_cycle` uses
+        `record_cycles` (plural) batch since CHUNK C2 (2026-05-19).
+        """
         with self._lock:
             self.conn.execute(
                 "INSERT INTO cycles (cube_id, cycle_num, success, reconstruction, perplexity, timestamp) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (cube_id, cycle_num, int(success), reconstruction, perplexity, _time.time())
+            )
+            self.conn.commit()
+            self._wal_monitor.on_write()
+
+    def record_cycles(self, batch: list) -> None:
+        """CHUNK C2 (2026-05-19) — Batch record cycles via executemany.
+
+        Replaces N×(INSERT+commit) loop on the hot path of
+        run_destruction_cycle. ~2.5ms/execute+commit × 1000 cubes ×
+        10 cycles ≈ 25s gaspillés par run pré-fix.
+
+        Args:
+            batch: list of (cube_id, cycle_num, success, reconstruction,
+                   perplexity) tuples. Timestamp is stamped per-row at
+                   write time so all rows in one batch share the same
+                   `_time.time()` snapshot (acceptable: cycles are
+                   batched per cube_id within one run anyway).
+        """
+        if not batch:
+            return
+        ts = _time.time()
+        rows = [
+            (cube_id, cycle_num, int(success), reconstruction, perplexity, ts)
+            for cube_id, cycle_num, success, reconstruction, perplexity in batch
+        ]
+        with self._lock:
+            self.conn.executemany(
+                "INSERT INTO cycles (cube_id, cycle_num, success, reconstruction, perplexity, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
             )
             self.conn.commit()
             self._wal_monitor.on_write()

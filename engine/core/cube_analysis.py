@@ -100,6 +100,11 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
         ast_hints = {}
 
     results = []
+    # CHUNK C2 (2026-05-19) — accumulate cycle records and flush via
+    # store.record_cycles(batch) in one executemany after the cube loop.
+    # Replaces the N×(INSERT+commit) pattern that wasted ~25s per
+    # 1000-cube run pre-fix.
+    cycle_batch: list = []
 
     for cube in cubes:
         # Skip already healed cubes
@@ -128,9 +133,9 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
                                   ncd_threshold, ast_hints=hints)
         results.append(result)
 
-        # Record in store
-        store.record_cycle(cube.id, cycle_num, result.success,
-                           result.reconstruction, result.perplexity)
+        # CHUNK C2 (2026-05-19) — accumulate, flush via batch after loop
+        cycle_batch.append((cube.id, cycle_num, result.success,
+                            result.reconstruction, result.perplexity))
 
         # Quarantine: save corrupted block before healing
         _q_enabled = config.quarantine_enabled if config else True
@@ -163,6 +168,11 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
         store.update_score(cube.id, result.perplexity)
         cube.temperature = new_temp
         cube.score = result.perplexity
+
+    # CHUNK C2 (2026-05-19) — flush all cycle records in one executemany
+    # batch. Pre-fix this was N×(INSERT+commit) inline above.
+    if cycle_batch:
+        store.record_cycles(cycle_batch)
 
     # ─── Post-cycle: wire the learning bricks ─────────────────────
 

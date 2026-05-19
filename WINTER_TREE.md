@@ -3,6 +3,30 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C2/14)
+>
+> Troisième chunk exécuté. Hot path record_cycle batché.
+>
+> **Fichiers touchés** :
+> - `engine/core/cube.py` — nouvelle méthode publique
+>   `CubeStore.record_cycles(batch: list[tuple])` qui fait
+>   `executemany + commit` une fois pour N rows. `record_cycle`
+>   (singulier) conservé en backward-compat.
+> - `engine/core/cube_analysis.py::run_destruction_cycle` — accumule
+>   les results dans `cycle_batch: list[tuple]` puis flush via
+>   `store.record_cycles(cycle_batch)` une fois après la boucle.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C2_record_cycles_batch.py` (5 tests).
+> Bonus : `tests/test_props_cube.py::test_subdivide_file_no_crash` a
+> reçu `@settings(deadline=None)` car flaky sur cold tokenizer cache.
+>
+> **Forge** : 11 props générées (cube.py), 4 destructives skipped
+> (scan_repo, format_code, check_formatters, install_formatters).
+>
+> **Pas de feature flag** : pure perf fix, le singulier reste
+> accessible pour legacy callers.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C1/14)
 >
 > Deuxième chunk exécuté. BUG WAGON SHA-256 fixé.

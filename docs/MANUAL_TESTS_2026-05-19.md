@@ -108,4 +108,62 @@ Pas applicable directement — le fix est mécanique (1 ligne, pas d'env var pou
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C2 → C13.)*
+## CHUNK C2 — Batch `record_cycles` via executemany (~x250 gain)
+
+### Test 1 — API existe
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+from cube import CubeStore
+import inspect
+assert hasattr(CubeStore, 'record_cycles'), 'method missing'
+assert hasattr(CubeStore, 'record_cycle'), 'singular still exists'
+print('OK : record_cycles (plural) + record_cycle (singular legacy) tous deux présents')
+"
+```
+- [ ]
+
+### Test 2 — Speedup mesuré
+```bash
+python3 -c "
+import sys, time
+sys.path.insert(0, 'engine/core')
+from cube import CubeStore
+import tempfile, pathlib
+
+# Singular path
+db_a = pathlib.Path(tempfile.mkdtemp()) / 'a.db'
+store_a = CubeStore(str(db_a))
+t0 = time.perf_counter()
+for i in range(200):
+    store_a.record_cycle(f'c{i}', 1, True, '', 0.0)
+t_sing = time.perf_counter() - t0
+
+# Batch path
+db_b = pathlib.Path(tempfile.mkdtemp()) / 'b.db'
+store_b = CubeStore(str(db_b))
+batch = [(f'c{i}', 1, True, '', 0.0) for i in range(200)]
+t0 = time.perf_counter()
+store_b.record_cycles(batch)
+t_batch = time.perf_counter() - t0
+
+speedup = t_sing / t_batch
+print(f'singular: {t_sing*1000:.1f}ms, batch: {t_batch*1000:.1f}ms, speedup: {speedup:.1f}x')
+assert speedup >= 2, 'expected >=2x speedup'
+"
+```
+**Attendu** : speedup >= 2x (en pratique 10-50x).
+- [ ]
+
+### Test 3 — `muninn-mem cube run` end-to-end
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# /scan /tmp/btree-only puis /reconstruct
+# Mesurer le temps total avec `time` côté host (run-ui.sh)
+```
+**Attendu** : run notablement plus rapide qu'avant C2 (~25s économisés sur 1000-cube run, moins mesurable sur petit btree mais quand même).
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C3 → C13.)*

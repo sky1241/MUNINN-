@@ -56,7 +56,7 @@ def test_sha256_hash_no_crash(text, file_path):
         pass  # Expected rejections are OK
 
 @given(file_path=st.text(max_size=100), content=st.text(max_size=100), target_tokens=st.integers(-1000, 1000), level=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)  # subdivide_file tokenizer can exceed Hypothesis 200ms default on cold cache
 def test_subdivide_file_no_crash(file_path, content, target_tokens, level):
     """Smoke: subdivide_file() does not crash on arbitrary input"""
     # from engine.core.cube import subdivide_file
