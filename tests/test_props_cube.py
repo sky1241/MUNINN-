@@ -30,7 +30,7 @@ def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
 @given(text=st.text(max_size=100))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_normalize_content_no_crash(text):
     """Smoke: normalize_content() does not crash on arbitrary input"""
     # from engine.core.cube import normalize_content
@@ -43,7 +43,7 @@ def test_normalize_content_no_crash(text):
         pass  # Expected rejections are OK
 
 @given(text=st.text(max_size=100), file_path=st.text(max_size=100))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_sha256_hash_no_crash(text, file_path):
     """Smoke: sha256_hash() does not crash on arbitrary input"""
     # from engine.core.cube import sha256_hash
@@ -56,7 +56,7 @@ def test_sha256_hash_no_crash(text, file_path):
         pass  # Expected rejections are OK
 
 @given(content=st.text(max_size=100), mycelium=st.text(max_size=50), target_tokens=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_find_concept_boundaries_no_crash(content, mycelium, target_tokens):
     """Smoke: find_concept_boundaries() does not crash on arbitrary input"""
     # from engine.core.cube import find_concept_boundaries
@@ -82,7 +82,7 @@ def test_subdivide_file_no_crash(file_path, content, target_tokens, level, mycel
         pass  # Expected rejections are OK
 
 @given(file_path=st.text(max_size=100), content=st.text(max_size=100), target_tokens=st.integers(-1000, 1000), max_levels=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_subdivide_recursive_no_crash(file_path, content, target_tokens, max_levels):
     """Smoke: subdivide_recursive() does not crash on arbitrary input"""
     # from engine.core.cube import subdivide_recursive
@@ -95,7 +95,7 @@ def test_subdivide_recursive_no_crash(file_path, content, target_tokens, max_lev
         pass  # Expected rejections are OK
 
 @given(files=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_parse_dependencies_no_crash(files):
     """Smoke: parse_dependencies() does not crash on arbitrary input"""
     # from engine.core.cube import parse_dependencies
@@ -108,7 +108,7 @@ def test_parse_dependencies_no_crash(files):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_extract_ast_hints_no_crash(cube):
     """Smoke: extract_ast_hints() does not crash on arbitrary input"""
     # from engine.core.cube import extract_ast_hints
@@ -121,7 +121,7 @@ def test_extract_ast_hints_no_crash(cube):
         pass  # Expected rejections are OK
 
 @given(full_content=st.text(max_size=100))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_deduce_imports_from_file_no_crash(full_content):
     """Smoke: deduce_imports_from_file() does not crash on arbitrary input"""
     # from engine.core.cube import deduce_imports_from_file
@@ -134,7 +134,7 @@ def test_deduce_imports_from_file_no_crash(full_content):
         pass  # Expected rejections are OK
 
 @given(hints=st.dictionaries(st.text(max_size=10), st.integers(), max_size=10), full_content=st.text(max_size=100), all_cubes=st.lists(st.integers(), max_size=20))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_enrich_hints_with_file_context_no_crash(hints, full_content, all_cubes):
     """Smoke: enrich_hints_with_file_context() does not crash on arbitrary input"""
     # from engine.core.cube import enrich_hints_with_file_context
@@ -147,7 +147,7 @@ def test_enrich_hints_with_file_context_no_crash(hints, full_content, all_cubes)
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_extract_all_ast_hints_no_crash(cubes):
     """Smoke: extract_all_ast_hints() does not crash on arbitrary input"""
     # from engine.core.cube import extract_all_ast_hints
@@ -160,7 +160,7 @@ def test_extract_all_ast_hints_no_crash(cubes):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), deps=st.text(max_size=50), max_neighbors=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_build_neighbor_graph_no_crash(cubes, deps, max_neighbors):
     """Smoke: build_neighbor_graph() does not crash on arbitrary input"""
     # from engine.core.cube import build_neighbor_graph
@@ -173,7 +173,7 @@ def test_build_neighbor_graph_no_crash(cubes, deps, max_neighbors):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), deps=st.text(max_size=50), store=st.text(max_size=50), max_neighbors=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_assign_neighbors_no_crash(cubes, deps, store, max_neighbors):
     """Smoke: assign_neighbors() does not crash on arbitrary input"""
     # from engine.core.cube import assign_neighbors

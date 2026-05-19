@@ -690,4 +690,72 @@ pas de crash.
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C13.)*
+## CHUNK C13 — E2E pipeline + benchmark + sandbox smoke (BATTLE PLAN COMPLETE 🎉)
+
+**Objectif** : preuve globale C0→C12 wirent ensemble + 3 patterns
+test établis (mock_ollama, pipeline_trace reader, perf opt-in) +
+sandbox smoke documenté.
+
+### Test 1 — Tests E2E automatisés
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_pipeline_e2e_2026-05-19.py -v
+```
+**Attendu** : 7 passed.
+- [ ]
+
+### Test 2 — Tests perf (opt-in)
+```bash
+# Par défaut : skip (CI run normal)
+python -m pytest tests/test_perf_cube_run_2026-05-19.py
+# → 3 skipped
+
+# Opt-in
+MUNINN_RUN_PERF=1 python -m pytest tests/test_perf_cube_run_2026-05-19.py
+# → 3 passed
+```
+- [ ]
+
+### Test 3 — Helpers
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '.')
+from tests._helpers.pipeline_trace import read_trace_events, has_event
+from tests._helpers.mock_ollama import mock_ollama_session
+print('helpers OK')
+"
+```
+**Attendu** : `helpers OK`.
+- [ ]
+
+### Test 4 — Forge re-gen
+```bash
+forge --gen-props engine/core/cube_analysis.py engine/core/cube.py \
+                  engine/core/cube_providers.py
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_props_cube_analysis.py tests/test_props_cube.py \
+  tests/test_props_cube_providers.py -q
+```
+**Attendu** : 44 passed. Si forge re-strip `deadline=None`, restaurer
+via `sed -i 's/@settings(max_examples=50)/@settings(max_examples=50, deadline=None)/g'`
+sur les 3 fichiers.
+- [ ]
+
+### Test 5 — Sandbox smoke complet (manuel)
+Suivre `docs/SANDBOX_SMOKE_2026-05-19.md` (9 étapes) et joindre un
+screenshot final.
+- [ ]
+
+---
+
+## 🎉 Battle plan 2026-05-19 complet
+
+**14/14 chunks livrés** : C0 (LLM mode collapse) → C13 (E2E preuve globale).
+
+Sky peut maintenant re-tester end-to-end sans dépendance externe :
+- ce fichier (`MANUAL_TESTS_2026-05-19.md`) : checklist par chunk.
+- `docs/SANDBOX_SMOKE_2026-05-19.md` : checklist sandbox UI.
+- `tests/test_pipeline_e2e_2026-05-19.py` : preuve automatisée du wire.
+- `tests/test_perf_cube_run_2026-05-19.py` : perf opt-in.
+- `tests/test_chunk_2026-05-19_C0...C13_*.py` : 14 fichiers de test, 1 par chunk.
+

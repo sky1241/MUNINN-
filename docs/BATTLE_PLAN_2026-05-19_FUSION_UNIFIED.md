@@ -546,10 +546,20 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
 
 ---
 
-### CHUNK 13 — E2E pipeline + benchmark + sandbox smoke test
+### CHUNK 13 — E2E pipeline + benchmark + sandbox smoke test ✅ LIVRÉ 2026-05-19 🎉 BATTLE PLAN COMPLET
 
 **Sévérité** 🔴 Haute (preuve globale — sans ça on commit sur foi) •
 **LOC** ~150 + helpers • **Risque** Bas • **Estimation 2h30**
+
+> ✅ Livré : 3 helpers `tests/_helpers/{__init__,pipeline_trace,
+> mock_ollama}.py`. `tests/test_pipeline_e2e_2026-05-19.py` (7 tests).
+> `tests/test_perf_cube_run_2026-05-19.py` (3 perf opt-in).
+> `docs/SANDBOX_SMOKE_2026-05-19.md` (9 étapes manuelles).
+> Forge re-gen sur cube_analysis + cube + cube_providers → 44 props.
+>
+> **14/14 chunks du battle plan 2026-05-19 livrés** ✅.
+> Sky a la liste manuelle complète (`MANUAL_TESTS_2026-05-19.md`)
+> pour re-tester end-to-end sans dépendre de moi.
 
 #### Pré-établir 3 patterns test (audit 2026-05-19 : aucun n'existe aujourd'hui)
 1. **HTTP mocking Ollama** : pas de pattern actuel (pas de `responses` lib, pas de monkeypatch urllib). Établir un helper `tests/_helpers/mock_ollama.py` qui patch `urllib.request.urlopen` pour retourner un payload Ollama JSON simulé. Utilisable depuis C0 (xfail jusqu'à C13 si pas dispo).

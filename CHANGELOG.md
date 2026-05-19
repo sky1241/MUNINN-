@@ -1,5 +1,83 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C13/14 : E2E pipeline + benchmark + sandbox smoke 🎉 BATTLE PLAN COMPLETE
+
+Quatorzième et **dernier** chunk du battle plan unifié 2026-05-19.
+Sky avait demandé une preuve globale que C0-C12 wirent ensemble
+et qu'on ne commitait pas sur la foi seule. 3 patterns test
+établis (aucun n'existait avant cet audit), test E2E, perf opt-in,
+et smoke sandbox documenté.
+
+**Helpers test (établis ici car aucun n'existait — audit 2026-05-19)** :
+- `tests/_helpers/__init__.py` (doc d'intention).
+- `tests/_helpers/pipeline_trace.py` : `read_trace_events(repo)`,
+  `has_event(events, name)`, `count_events(events, name)`,
+  `events_by_prefix(events, prefix)`. Lit `<repo>/.muninn/pipeline_trace.jsonl`.
+- `tests/_helpers/mock_ollama.py` : `mock_ollama_session(models,
+  generate_text, chat_text)` context manager qui patch
+  `urllib.request.urlopen` pour fake les endpoints `/api/tags`,
+  `/api/generate`, `/api/chat`. Utilisable pour tester `OllamaProvider`
+  sans daemon Ollama vivant.
+
+**Test E2E** (`tests/test_pipeline_e2e_2026-05-19.py`, 7 tests) :
+- `test_subdivide_file_accepts_mycelium_kwarg` (C7 wire).
+- `test_reconstruct_adaptive_accepts_new_kwargs` (C6 + C10 wire).
+- `test_record_cycles_batch_persists` (C2 wire).
+- `test_pipeline_trace_emits_during_reco` (trace helper smoke).
+- `test_pipeline_metrics_match_flag_toggles` (C6 + C7 flags toggle).
+- `test_recon_result_has_c10_fields` (C10 dataclass).
+- `test_wave_result_has_c10_fields` (C10 WaveResult propagation).
+
+**Perf tests** (`tests/test_perf_cube_run_2026-05-19.py`, opt-in via
+`MUNINN_RUN_PERF=1`, sinon skip silencieux) :
+- `test_perf_record_cycles_batch_under_5s_for_1000` (C2).
+- `test_perf_subdivide_file_under_200ms_for_btree` (C7).
+- `test_perf_fuse_risks_under_500ms_for_100_cubes` (C6).
+
+**Smoke sandbox** : `docs/SANDBOX_SMOKE_2026-05-19.md` documente 9
+étapes manuelles à faire dans muninn-sandbox après chaque chunk UX.
+
+**Forge re-gen** : `forge --gen-props engine/core/{cube_analysis,
+cube,cube_providers}.py` → 44 props pass (+ `deadline=None` restauré
+là où forge l'avait stripé).
+
+**Tests verbatim** :
+```
+pytest tests/test_pipeline_e2e_2026-05-19.py
+→ 7 passed in 0.69s
+
+MUNINN_RUN_PERF=1 pytest tests/test_perf_cube_run_2026-05-19.py
+→ 3 passed in 0.58s
+pytest tests/test_perf_cube_run_2026-05-19.py  # default
+→ 3 skipped in 0.31s
+
+forge --gen-props engine/core/cube_analysis.py engine/core/cube.py \
+                  engine/core/cube_providers.py
+pytest tests/test_props_cube_analysis.py tests/test_props_cube.py \
+       tests/test_props_cube_providers.py
+→ 44 passed in 5.10s
+
+pytest tests/test_chunk_2026-05-19_C*.py \
+       tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_perf_cube_run_2026-05-19.py \
+       tests/test_props_cube_analysis.py tests/test_props_cube.py \
+       tests/test_props_cube_providers.py \
+       tests/test_h8_api_bloat_baseline.py \
+       tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 177 passed, 3 skipped in 12.17s (perf skip par défaut, no regression)
+```
+
+**Battle plan unifié 2026-05-19** : **14/14 chunks livrés** (C0→C13).
+Sky a maintenant une checklist manuelle complète
+(`docs/MANUAL_TESTS_2026-05-19.md` + `docs/SANDBOX_SMOKE_2026-05-19.md`)
+pour re-tester end-to-end sans dépendre de moi.
+
+Pas de mirror BUG-091 (helpers + tests purement test-side).
+Pas de nouveau env var (MUNINN_RUN_PERF est documentée comme
+convention test, pas un knob production).
+
+
 ## 2026-05-19 (PM) — CHUNK C12/14 : Fractal x1/x2/x3 zoom (visual aggregation)
 
 Treizième chunk. Sky voulait pouvoir zoom-out la heatmap pour voir des

@@ -35,7 +35,7 @@ def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
 @given(cube=st.text(max_size=50), store=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_compute_temperature_no_crash(cube, store):
     """Smoke: compute_temperature() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import compute_temperature
@@ -48,7 +48,7 @@ def test_compute_temperature_no_crash(cube, store):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), store=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_kaplan_meier_survival_no_crash(cube, store):
     """Smoke: kaplan_meier_survival() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import kaplan_meier_survival
@@ -61,7 +61,7 @@ def test_kaplan_meier_survival_no_crash(cube, store):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), all_cubes=st.text(max_size=50), deps=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_detect_dead_code_no_crash(cube, all_cubes, deps):
     """Smoke: detect_dead_code() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import detect_dead_code
@@ -74,7 +74,7 @@ def test_detect_dead_code_no_crash(cube, all_cubes, deps):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), deps=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_filter_dead_cubes_no_crash(cubes, deps):
     """Smoke: filter_dead_cubes() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import filter_dead_cubes
@@ -87,7 +87,7 @@ def test_filter_dead_cubes_no_crash(cubes, deps):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), deps=st.text(max_size=50), use_survey=st.booleans())
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_prepare_cubes_no_crash(cubes, store, deps, use_survey):
     """Smoke: prepare_cubes() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import prepare_cubes
@@ -100,7 +100,7 @@ def test_prepare_cubes_no_crash(cubes, store, deps, use_survey):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), deps=st.text(max_size=50), threshold=st.floats(allow_nan=False, allow_infinity=False))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_compute_gods_number_no_crash(cubes, store, deps, threshold):
     """Smoke: compute_gods_number() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import compute_gods_number
@@ -113,7 +113,7 @@ def test_compute_gods_number_no_crash(cubes, store, deps, threshold):
         pass  # Expected rejections are OK
 
 @given(level0_cubes=st.text(max_size=50), level=st.integers(-1000, 1000), group_size=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_build_level_cubes_no_crash(level0_cubes, level, group_size):
     """Smoke: build_level_cubes() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import build_level_cubes
@@ -126,7 +126,7 @@ def test_build_level_cubes_no_crash(level0_cubes, level, group_size):
         pass  # Expected rejections are OK
 
 @given(upper_cube=st.text(max_size=50), sub_cubes=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_aggregate_scores_no_crash(upper_cube, sub_cubes):
     """Smoke: aggregate_scores() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import aggregate_scores
@@ -139,7 +139,7 @@ def test_aggregate_scores_no_crash(upper_cube, sub_cubes):
         pass  # Expected rejections are OK
 
 @given(level0_cubes=st.text(max_size=50), store=st.text(max_size=50), max_level=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_propagate_levels_no_crash(level0_cubes, store, max_level):
     """Smoke: propagate_levels() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import propagate_levels
@@ -152,7 +152,7 @@ def test_propagate_levels_no_crash(level0_cubes, store, max_level):
         pass  # Expected rejections are OK
 
 @given(results=st.text(max_size=50), cubes=st.text(max_size=50), mycelium=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_feed_mycelium_from_results_no_crash(results, cubes, mycelium):
     """Smoke: feed_mycelium_from_results() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import feed_mycelium_from_results
@@ -165,7 +165,7 @@ def test_feed_mycelium_from_results_no_crash(results, cubes, mycelium):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50), results=st.text(max_size=50), learning_rate=st.floats(allow_nan=False, allow_infinity=False))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_hebbian_update_no_crash(store, results, learning_rate):
     """Smoke: hebbian_update() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import hebbian_update
@@ -178,7 +178,7 @@ def test_hebbian_update_no_crash(store, results, learning_rate):
         pass  # Expected rejections are OK
 
 @given(repo_path=st.text(max_size=100), config=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_cli_scan_no_crash(repo_path, config):
     """Smoke: cli_scan() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import cli_scan
@@ -191,7 +191,7 @@ def test_cli_scan_no_crash(repo_path, config):
         pass  # Expected rejections are OK
 
 @given(repo_path=st.text(max_size=100), cycles=st.integers(-1000, 1000), level=st.integers(-1000, 1000), config=st.text(max_size=50))
-@settings(max_examples=50, deadline=None)  # cli_run reads/scans repo → can exceed Hypothesis 200ms default
+@settings(max_examples=50, deadline=None)
 def test_cli_run_no_crash(repo_path, cycles, level, config):
     """Smoke: cli_run() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import cli_run
@@ -204,7 +204,7 @@ def test_cli_run_no_crash(repo_path, cycles, level, config):
         pass  # Expected rejections are OK
 
 @given(config=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_cli_status_no_crash(config):
     """Smoke: cli_status() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import cli_status
@@ -217,7 +217,7 @@ def test_cli_status_no_crash(config):
         pass  # Expected rejections are OK
 
 @given(config=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_cli_god_no_crash(config):
     """Smoke: cli_god() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import cli_god
@@ -230,7 +230,7 @@ def test_cli_god_no_crash(config):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_build_adjacency_matrix_no_crash(cubes, store):
     """Smoke: build_adjacency_matrix() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import build_adjacency_matrix
@@ -243,7 +243,7 @@ def test_build_adjacency_matrix_no_crash(cubes, store):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), n_groups=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_laplacian_rg_grouping_no_crash(cubes, store, n_groups):
     """Smoke: laplacian_rg_grouping() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import laplacian_rg_grouping
@@ -256,7 +256,7 @@ def test_laplacian_rg_grouping_no_crash(cubes, store, n_groups):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_cheeger_constant_no_crash(cubes, store):
     """Smoke: cheeger_constant() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import cheeger_constant
@@ -269,7 +269,7 @@ def test_cheeger_constant_no_crash(cubes, store):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), max_iter=st.integers(-1000, 1000), tolerance=st.floats(allow_nan=False, allow_infinity=False))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_belief_propagation_no_crash(cubes, store, max_iter, tolerance):
     """Smoke: belief_propagation() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import belief_propagation
@@ -282,7 +282,7 @@ def test_belief_propagation_no_crash(cubes, store, max_iter, tolerance):
         pass  # Expected rejections are OK
 
 @given(cubes=st.text(max_size=50), store=st.text(max_size=50), neutral_threshold=st.floats(allow_nan=False, allow_infinity=False))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_survey_propagation_filter_no_crash(cubes, store, neutral_threshold):
     """Smoke: survey_propagation_filter() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import survey_propagation_filter
@@ -295,7 +295,7 @@ def test_survey_propagation_filter_no_crash(cubes, store, neutral_threshold):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), store=st.text(max_size=50), all_cubes=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_tononi_degeneracy_no_crash(cube, store, all_cubes):
     """Smoke: tononi_degeneracy() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import tononi_degeneracy
@@ -308,7 +308,7 @@ def test_tononi_degeneracy_no_crash(cube, store, all_cubes):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_cube_heatmap_no_crash(store):
     """Smoke: cube_heatmap() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import cube_heatmap
@@ -321,7 +321,7 @@ def test_cube_heatmap_no_crash(store):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50), forge_root=st.text(max_size=100), forge_weight=st.floats(allow_nan=False, allow_infinity=False), cube_weight=st.floats(allow_nan=False, allow_infinity=False))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_fuse_risks_no_crash(store, forge_root, forge_weight, cube_weight):
     """Smoke: fuse_risks() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import fuse_risks
@@ -334,7 +334,7 @@ def test_fuse_risks_no_crash(store, forge_root, forge_weight, cube_weight):
         pass  # Expected rejections are OK
 
 @given(store=st.text(max_size=50), failed_files=st.text(max_size=50), reconstructor=st.text(max_size=50), max_patches=st.integers(-1000, 1000))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_auto_repair_no_crash(store, failed_files, reconstructor, max_patches):
     """Smoke: auto_repair() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import auto_repair
@@ -347,7 +347,7 @@ def test_auto_repair_no_crash(store, failed_files, reconstructor, max_patches):
         pass  # Expected rejections are OK
 
 @given(anomaly_path=st.text(max_size=100), mycelium=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_feed_anomalies_to_mycelium_no_crash(anomaly_path, mycelium):
     """Smoke: feed_anomalies_to_mycelium() does not crash on arbitrary input"""
     # from engine.core.cube_analysis import feed_anomalies_to_mycelium

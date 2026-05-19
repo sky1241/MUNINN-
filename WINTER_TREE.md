@@ -3,6 +3,26 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C13/14 🎉 COMPLET)
+>
+> **E2E pipeline + perf opt-in + sandbox smoke documenté**.
+>
+> **Fichiers nouveaux** :
+> - `tests/_helpers/__init__.py`, `pipeline_trace.py`, `mock_ollama.py` :
+>   3 patterns test établis (aucun n'existait pré-audit 2026-05-19).
+> - `tests/test_pipeline_e2e_2026-05-19.py` (7 tests E2E).
+> - `tests/test_perf_cube_run_2026-05-19.py` (3 perf tests opt-in via
+>   `MUNINN_RUN_PERF=1`).
+> - `docs/SANDBOX_SMOKE_2026-05-19.md` (9 étapes manuelles dans
+>   muninn-sandbox).
+>
+> **Forge** : `forge --gen-props` re-tourné sur cube_analysis,
+> cube, cube_providers → 44 props pass, `deadline=None` restauré.
+>
+> **Battle plan 2026-05-19** : **14/14 chunks** (C0→C13) ✅.
+> Voir snapshots C0…C12 ci-dessous.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C12/14)
 >
 > **Fractal x1/x2/x3 zoom : molécules visuelles à la molette Ctrl+wheel**.
