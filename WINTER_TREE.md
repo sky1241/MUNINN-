@@ -3,6 +3,33 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C8/14)
+>
+> **Mycelium neighbors live refresh entre cycles**.
+>
+> **Fichiers touchés** :
+> - `muninn/ui/cube_live.py` :
+>   - `_NEIGHBORS_LIVE_REFRESH_ENABLED` (env flag, default `1`).
+>   - `_compute_mycelium_neighbors(cubes, mycelium)` (module-level helper,
+>     extrait de l'inline `ReconstructionWorker.run`).
+>   - Signal `ReconstructionWorker.cube_neighbors_refreshed = pyqtSignal(list)`.
+>   - `on_cube` détecte `CYCLE_END` → recompute + emit payload
+>     `[{idx, mycelium_neighbors}, …]`.
+> - `muninn/ui/neuron_map.py` :
+>   - `NeuronMapWidget.refresh_neighbors(payload)` rebuild edges +
+>     relance Laplacien (sans toucher `self._neurons` → couleurs
+>     NCD/SHA préservées).
+> - `muninn/ui/terminal.py` + `muninn/ui/main_window.py` : signal bubblé.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C8_neighbors_refresh.py` (7 tests).
+> **Forge** : skip (UI files, pas de fonctions publiques).
+> **Feature flag** : `MUNINN_NEIGHBORS_LIVE_REFRESH` (default `1`).
+>
+> **Reste C9-C13** : UI toggle Mycelium↔Reconstruction (C9), DetailPanel
+> SHA/NCD (C10), file line-by-line heatmap (C11), fractal x1/x2/x3 (C12),
+> E2E + benchmark + sandbox smoke (C13).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C7/14)
 >
 > **THE archi fix livré**. Scan-aware subdivide_file: pure zone-based.

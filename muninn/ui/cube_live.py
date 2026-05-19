@@ -44,6 +44,67 @@ _MYCELIUM_CONCEPT_LIMIT = 200_000
 # the resulting graph is too dense/sparse, tune here, not at call sites.
 _MYCELIUM_JACCARD_THRESHOLD = 0.10
 
+# CHUNK C8 (2026-05-19) — live refresh feature flag.
+# When enabled, ReconstructionWorker recomputes mycelium_neighbors at
+# the end of every cycle (the mycelium has been fed via observe_text +
+# observe_failure since the previous refresh, so the graph is denser).
+# Emits `cube_neighbors_refreshed(list)` so the heatmap can re-edge
+# without rebuilding the neurons. Set MUNINN_NEIGHBORS_LIVE_REFRESH=0
+# to revert to legacy (one calc pre-reco only).
+import os as _os
+_NEIGHBORS_LIVE_REFRESH_ENABLED = _os.environ.get(
+    "MUNINN_NEIGHBORS_LIVE_REFRESH", "1"
+) != "0"
+
+
+def _compute_mycelium_neighbors(cubes, mycelium) -> list:
+    """CHUNK C8 (2026-05-19) — extracted from ReconstructionWorker.run.
+
+    For each cube, returns the list of indices of other cubes that
+    share concepts in the mycelium graph (Jaccard > threshold).
+    Falls back to empty lists when the mycelium DB is empty or the
+    lookup fails. Pure function, no side effects, safe to call from
+    any thread that holds a Mycelium reference.
+    """
+    import re as _re
+    n = len(cubes)
+    result: list = [[] for _ in range(n)]
+    if not cubes or mycelium is None:
+        return result
+
+    concepts_set: set = set()
+    try:
+        with mycelium._db._lock:
+            concepts_set = {
+                row[0] for row in mycelium._db._conn.execute(
+                    f"SELECT name FROM concepts LIMIT {_MYCELIUM_CONCEPT_LIMIT}"
+                )
+            }
+    except Exception:
+        return result
+
+    cube_concept_sets = []
+    for c in cubes:
+        words = set(_re.findall(_MYCELIUM_CONCEPT_REGEX, c.content.lower()))
+        cube_concept_sets.append(words & concepts_set)
+
+    for i in range(n):
+        a = cube_concept_sets[i]
+        if not a:
+            continue
+        for j in range(i + 1, n):
+            b = cube_concept_sets[j]
+            if not b:
+                continue
+            inter = len(a & b)
+            if inter == 0:
+                continue
+            union = len(a | b)
+            if union and (inter / union) > _MYCELIUM_JACCARD_THRESHOLD:
+                result[i].append(j)
+                result[j].append(i)
+    return result
+
 # --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
 try:  # PIPELINE_TRACE
     _muninn_root = Path(__file__).resolve().parent.parent.parent  # PIPELINE_TRACE
@@ -77,6 +138,10 @@ class ReconstructionWorker(QObject):
     status = pyqtSignal(str, str)
     token = pyqtSignal(str)               # reserved (reconstruct_adaptive uses generate, not stream)
     cube_done = pyqtSignal(int, float, bool)
+    # CHUNK C8 (2026-05-19) — emitted after each CYCLE_END when the live
+    # refresh flag is on. Payload: [{idx, mycelium_neighbors}, ...]. The
+    # heatmap rebuilds edges + Laplacien without dropping neurons.
+    cube_neighbors_refreshed = pyqtSignal(list)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -225,45 +290,11 @@ class ReconstructionWorker(QObject):
             # Compute mycelium-derived neighbors per cube so the heatmap's
             # Laplacian spectral layout can cluster cubes by shared concepts
             # instead of collapsing the layout to a 1D sequential chain.
-            # See module-level constants `_MYCELIUM_*` for the three knobs;
-            # they intentionally mirror engine/core/mycelium.py choices so
-            # this stays aligned with how concepts were originally observed.
-            # Falls back to an empty list per cube if the mycelium DB is
-            # empty (fresh scan) — set_reconstruction_cubes then keeps the
-            # sequential chain as a continuity backbone.
-            import re as _re
-            mycelium_concepts: set[str] = set()
-            try:
-                with mycelium._db._lock:
-                    mycelium_concepts = {
-                        row[0] for row in mycelium._db._conn.execute(
-                            f"SELECT name FROM concepts LIMIT {_MYCELIUM_CONCEPT_LIMIT}"
-                        )
-                    }
-            except Exception:
-                pass
-
-            cube_concept_sets = []
-            for c in cubes:
-                words = set(_re.findall(_MYCELIUM_CONCEPT_REGEX, c.content.lower()))
-                cube_concept_sets.append(words & mycelium_concepts)
-
-            mycelium_neighbors: list[list[int]] = [[] for _ in range(len(cubes))]
-            for i in range(len(cubes)):
-                a = cube_concept_sets[i]
-                if not a:
-                    continue
-                for j in range(i + 1, len(cubes)):
-                    b = cube_concept_sets[j]
-                    if not b:
-                        continue
-                    inter = len(a & b)
-                    if inter == 0:
-                        continue
-                    union = len(a | b)
-                    if union and (inter / union) > _MYCELIUM_JACCARD_THRESHOLD:
-                        mycelium_neighbors[i].append(j)
-                        mycelium_neighbors[j].append(i)
+            # CHUNK C8 (2026-05-19) — body extracted to module-level
+            # `_compute_mycelium_neighbors`. The same function is reused on
+            # each CYCLE_END so the graph reflects what observe_text +
+            # observe_failure have just added to the mycelium.
+            mycelium_neighbors = _compute_mycelium_neighbors(cubes, mycelium)
 
             # Expose cube descriptors to the heatmap. UX needs idx, lines, sha,
             # and the mycelium-derived neighbors for the Laplacian layout.
@@ -359,6 +390,26 @@ class ReconstructionWorker(QObject):
                             f"\n[cycle {cycle}] end — {int(ncd)} new SHA this cycle",
                             self._COL_INFO,
                         )
+                        # CHUNK C8 (2026-05-19) — mycelium grew during the
+                        # cycle (observe_text + observe_failure); recompute
+                        # neighbors and let the heatmap re-edge without
+                        # rebuilding neurons. Flag-gated so legacy can be
+                        # restored via MUNINN_NEIGHBORS_LIVE_REFRESH=0.
+                        if _NEIGHBORS_LIVE_REFRESH_ENABLED:
+                            try:
+                                fresh = _compute_mycelium_neighbors(cubes, mycelium)
+                                payload = [
+                                    {"idx": i, "mycelium_neighbors": fresh[i]}
+                                    for i in range(len(cubes))
+                                ]
+                                n_edges = sum(len(x) for x in fresh) // 2
+                                log_event(
+                                    "pipeline.ui.cube_live.neighbors_refreshed",
+                                    {"cycle": cycle, "n_edges_new": n_edges},
+                                )  # PIPELINE_TRACE
+                                self.cube_neighbors_refreshed.emit(payload)
+                            except Exception:
+                                pass
                     return
                 if status == "SHA":
                     tag = "AUTO-SHA" if attempts == 0 else f"SHA (attempt {attempts})"

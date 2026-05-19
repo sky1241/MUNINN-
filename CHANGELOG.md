@@ -1,5 +1,44 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C8/14 : Mycelium neighbors live refresh entre cycles
+
+Neuvième chunk du battle plan unifié. Pré-fix, `cube_live.py` calculait
+`mycelium_neighbors` une seule fois avant le 1er cycle de reconstruction
+puis le graphe restait figé pendant que le mycelium grossissait via
+`observe_text` / `observe_failure` à chaque cycle. Le résultat : la
+heatmap dans l'UI 3-in-1 ne reflétait jamais les nouvelles connexions
+sémantiques apprises pendant la reco.
+
+**Fix** :
+- `muninn/ui/cube_live.py` :
+  - Constante `_NEIGHBORS_LIVE_REFRESH_ENABLED` (env
+    `MUNINN_NEIGHBORS_LIVE_REFRESH`, default `1`).
+  - Helper module-level `_compute_mycelium_neighbors(cubes, mycelium)`
+    extrait du corps inline de `ReconstructionWorker.run`.
+  - Signal `ReconstructionWorker.cube_neighbors_refreshed = pyqtSignal(list)`.
+  - `on_cube(... status='CYCLE_END' ...)` recompute et émet
+    `[{idx, mycelium_neighbors}, …]`. PIPELINE_TRACE event
+    `pipeline.ui.cube_live.neighbors_refreshed`.
+- `muninn/ui/neuron_map.py` : slot
+  `NeuronMapWidget.refresh_neighbors(payload)` rebuild `self._edges` +
+  `_neighbor_cache` + relance le Laplacien sans toucher `self._neurons`
+  → les couleurs NCD/SHA accumulées par `update_cube_ncd` survivent.
+- `muninn/ui/terminal.py` + `muninn/ui/main_window.py` : signal bubblé
+  depuis le worker → `TerminalWidget` → `NeuronMapWidget.refresh_neighbors`.
+
+**Tests verbatim** (7 nouveaux):
+```
+QT_QPA_PLATFORM=offscreen pytest tests/test_chunk_2026-05-19_C8_neighbors_refresh.py
+→ 7 passed in 0.44s
+```
+
+**Feature flag (§4bis)** : `MUNINN_NEIGHBORS_LIVE_REFRESH=0` revient au
+one-shot pré-reco. Documenté CLAUDE.md.
+
+Forge skip (UI files, pas de fonctions publiques).
+Pas de mirror BUG-091 (`muninn/ui/*` n'a pas de pendant `engine/core/`).
+
+
 ## 2026-05-19 (PM) — CHUNK C7/14 : Scan-aware subdivide_file (THE archi fix)
 
 Huitième chunk. **THE** correction architecturale que Sky demandait

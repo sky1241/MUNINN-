@@ -143,6 +143,8 @@ class MainWindow(QMainWindow):
         # Cube reconstruction -> heatmap live (docs/CUBE_UX_HEATMAP_PLAN.md Phase 1)
         self.terminal_panel.cubes_ready.connect(self.neuron_panel.set_reconstruction_cubes)
         self.terminal_panel.cube_progress.connect(self.neuron_panel.update_cube_ncd)
+        # CHUNK C8 (2026-05-19) — live refresh edges (mycelium grows during cycles)
+        self.terminal_panel.cube_neighbors_refreshed.connect(self.neuron_panel.refresh_neighbors)
         # Navi animation monopolises the main thread (30fps orb paint); hide
         # her while a reconstruction is running so the heatmap stays snappy.
         self.terminal_panel.reconstruction_started.connect(self._on_reco_started)

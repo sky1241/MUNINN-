@@ -317,7 +317,16 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
   def subdivide_file(file_path, content, target_tokens=TARGET_TOKENS,
                      level=0, mycelium=None) -> list[Cube]:
   ```
-  Si mycelium fourni : boundaries = `find_concept_boundaries()` puis snap au split point le plus proche dans ±20% de target_tokens. Sinon fallback actuel.
+  **Si mycelium fourni : pure zone-based découpage** (révision Sky 2026-05-19) :
+  - boundaries = `find_concept_boundaries(content, mycelium, target_tokens)` — line numbers où la zone dominante change.
+  - Cubes = ranges entre 2 boundaries consécutives, **peu importe le token count**.
+  - `target_tokens` devient un **plafond** : si une zone > 2 × target_tokens, split intra-zone par minima locaux de densité conceptuelle (points dans la zone où le moins de concepts mycelium sont actifs — probable transition logique mineure).
+  - Zones petites (< target_tokens / 2) → fusion avec la zone voisine **la plus cohérente sémantiquement** (Jaccard concepts > 0.3).
+  - Cubes peuvent être hétérogènes (60 tokens / 200 tokens / 400 tokens) — c'est OK, c'est cohérent sémantiquement.
+
+  Sinon (mycelium=None) fallback comportement actuel token-uniform.
+
+  **Justification du pure zone-based** : 1 cube = 1 unité logique du code (fonction, méthode, bloc cohérent). Le LLM reconstruit mieux une fonction entière qu'un fragment de 112 tokens coupé en plein milieu d'une boucle. SHA match ne dépend pas de la taille du cube. C'est l'idée originale du pipeline Muninn — scan définit la structure, reco s'aligne dessus.
 
 - 4 call sites mis à jour pour passer `mycelium=mycelium` quand dispo :
   - cube_live.py:143
@@ -345,9 +354,14 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
 
 ---
 
-### CHUNK 8 — `mycelium_neighbors` live refresh entre cycles
+### CHUNK 8 — `mycelium_neighbors` live refresh entre cycles ✅ LIVRÉ 2026-05-19
 
 **Sévérité** 🟡 Moyenne (UX vivante) • **LOC** ~40 • **Risque** Bas • **Estimation 1h30**
+
+> ✅ Livré : helper `_compute_mycelium_neighbors`, signal
+> `cube_neighbors_refreshed`, slot `NeuronMapWidget.refresh_neighbors`,
+> wiring terminal→main_window. Flag `MUNINN_NEIGHBORS_LIVE_REFRESH`.
+> 7/7 tests `test_chunk_2026-05-19_C8_neighbors_refresh.py`.
 
 #### Spec
 - [cube_live.py:246](../muninn/ui/cube_live.py#L246) : extraire calc en méthode `_compute_neighbors(cubes_payload)`.
@@ -453,7 +467,7 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
     - Rouge : gap (NON dans anchor_map).
     - Orange : gap mais SHA match quand même (faux positif chanceux).
   - Click sur ligne → emit `line_clicked(int)`.
-- [main_window.py](../muninn/ui/main_window.py) : ajouter widget dans tab ou bottom panel.
+- [main_window.py](../muninn/ui/main_window.py) : ajouter widget en **bottom panel** (split horizontal sous le cube 3D, tranché 2026-05-19). Sync visuelle cube ↔ fichier en parallèle.
 - [cube_live.py](../muninn/ui/cube_live.py) : nouveau signal `file_heatmap_ready(path, dict[int, str])`.
 
 #### Tests à ajouter
@@ -829,8 +843,8 @@ le travail technique — il suffit de pasted son output.
 2. **Granularité commit** : 1 commit par chunk (recommandé), ou regrouper certains (ex: C4+C5+C6 forge bundle) ?
 3. **Push intermédiaire** : OK après chaque chunk vert (recommandé), ou push final unique ?
 4. **C0 LLM repeat_penalty default** : `1.15` est conservatif. Tu veux plus agressif `1.3` ou plus doux `1.05` ? (1.15 = standard recommandation Ollama)
-5. **C7 granularité subdivide** : token-based avec hint de zone (current spec), ou pure zone-based (peut donner cubes très inégaux) ?
-6. **C11 file view UX** : tab à côté du cube 3D, ou bottom panel, ou fenêtre flottante ?
+5. ~~**C7 granularité subdivide**~~ — **TRANCHÉ 2026-05-19** : pure zone-based, `target_tokens` comme plafond, zones petites fusionnées, zones grosses splittées par minima de densité conceptuelle. Cubes hétérogènes acceptés.
+6. ~~**C11 file view UX**~~ — **TRANCHÉ 2026-05-19** : bottom panel (split horizontal sous le cube 3D). Sync visuelle cube ↔ fichier en parallèle, pas de fenêtre flottante à gérer.
 7. **C13 sandbox smoke** : tu accepte de relancer le container et faire les 5 actions manuelles après chaque chunk UX (C9-C12), ou tu préfères que je fasse les screenshots via xdotool moi-même ?
 
 Co-Authored-By: Claude Opus 4.7

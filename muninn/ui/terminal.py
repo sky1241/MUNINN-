@@ -121,6 +121,8 @@ class TerminalWidget(QWidget):
     # Cube reconstruction signals (bubbled up to MainWindow for heatmap wiring)
     cubes_ready = pyqtSignal(list)              # list[dict] of cube descriptors
     cube_progress = pyqtSignal(int, float, bool)  # idx, ncd, sha_match
+    # CHUNK C8 (2026-05-19) — payload [{idx, mycelium_neighbors}, ...] per CYCLE_END
+    cube_neighbors_refreshed = pyqtSignal(list)
     reconstruction_started = pyqtSignal()        # Navi hide during /reconstruct
     reconstruction_ended = pyqtSignal()          # Navi show again
     # Palette /scan: emits scan output path so MainWindow.load_scan() can
@@ -685,6 +687,8 @@ class TerminalWidget(QWidget):
 
         self._reco_worker.cubes_ready.connect(self.cubes_ready)           # bubble up
         self._reco_worker.cube_done.connect(self.cube_progress)           # bubble up
+        # CHUNK C8 (2026-05-19) — bubble up per-cycle neighbor refresh
+        self._reco_worker.cube_neighbors_refreshed.connect(self.cube_neighbors_refreshed)
         self._reco_worker.token.connect(self._on_chunk)                   # stream tokens
         self._reco_worker.status.connect(
             lambda msg, col: self._append_text(msg, color=col)

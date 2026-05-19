@@ -418,4 +418,58 @@ les transitions conceptuelles).
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C8 → C13.)*
+## CHUNK C8 — Mycelium neighbors live refresh entre cycles
+
+**Objectif** : la heatmap se met à jour à chaque CYCLE_END pour refléter
+les nouvelles connexions mycelium apprises pendant la reconstruction.
+
+### Test 1 — Tests automatisés
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_chunk_2026-05-19_C8_neighbors_refresh.py -v
+```
+**Attendu** : 7 passed.
+- [ ]
+
+### Test 2 — Flag ON par défaut
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '.')
+import os; os.environ['QT_QPA_PLATFORM']='offscreen'
+from muninn.ui import cube_live
+assert cube_live._NEIGHBORS_LIVE_REFRESH_ENABLED is True
+print('OK: flag ON')
+"
+```
+- [ ]
+
+### Test 3 — Bascule legacy MUNINN_NEIGHBORS_LIVE_REFRESH=0
+```bash
+MUNINN_NEIGHBORS_LIVE_REFRESH=0 QT_QPA_PLATFORM=offscreen python3 -c "
+import sys; sys.path.insert(0, '.')
+from muninn.ui import cube_live
+assert cube_live._NEIGHBORS_LIVE_REFRESH_ENABLED is False
+print('OK: flag OFF')
+"
+```
+- [ ]
+
+### Test 4 — Refresh sandbox visuel (à 4 yeux avec Sky)
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# 1. /scan /tmp/btree-only → mycelium populé
+# 2. /reconstruct /tmp/btree-only/btree_google.go --max-cycles=3
+# 3. Observer la heatmap dans le panneau gauche :
+#    - À la fin du cycle 1, les neurones ne doivent PAS disparaître
+#    - Les ARÊTES doivent se redessiner (re-Laplacien)
+#    - Les couleurs NCD/SHA déjà acquises restent
+# 4. Comparer avec MUNINN_NEIGHBORS_LIVE_REFRESH=0 → graphe figé sur
+#    le calcul pré-reco, aucun re-Laplacien entre cycles.
+```
+**Attendu** : edges qui changent entre fin de cycle 1 et cycle 2,
+neurones préservés, couleurs préservées.
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C9 → C13.)*

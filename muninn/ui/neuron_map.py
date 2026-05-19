@@ -1152,6 +1152,56 @@ class NeuronMapWidget(QWidget):
                 pass
         self.update()
 
+    def refresh_neighbors(self, payload: list):
+        """CHUNK C8 (2026-05-19) — live edge refresh between cycles.
+
+        Slot wired to `ReconstructionWorker.cube_neighbors_refreshed`.
+        Rebuilds `self._edges` from the new mycelium_neighbors payload
+        + the sequential chain backbone, then relaunches the Laplacian
+        layout. `self._neurons` is preserved — the colours (NCD/SHA)
+        accumulated by `update_cube_ncd` survive across refreshes.
+
+        Payload: list of `{idx, mycelium_neighbors}` dicts emitted at
+        each CYCLE_END by the reconstruction worker.
+        """
+        n = len(self._neurons)
+        if n == 0 or not payload:
+            return
+
+        seen: set[tuple[int, int]] = set()
+        edges: list[tuple[int, int, float]] = []
+        for entry in payload:
+            i = entry.get("idx")
+            if i is None or i < 0 or i >= n:
+                continue
+            for j in entry.get("mycelium_neighbors", []):
+                if i == j or j < 0 or j >= n:
+                    continue
+                key = (min(i, j), max(i, j))
+                if key in seen:
+                    continue
+                seen.add(key)
+                edges.append((key[0], key[1], _EDGE_WEIGHT_MYCELIUM))
+        for i in range(n - 1):
+            key = (i, i + 1)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append((key[0], key[1], _EDGE_WEIGHT_CHAIN))
+        self._edges = edges
+
+        self._neighbor_cache = {}
+        for ia, ib, _ in self._edges:
+            self._neighbor_cache.setdefault(ia, set()).add(ib)
+            self._neighbor_cache.setdefault(ib, set()).add(ia)
+
+        if n >= 3 and hasattr(self, "_start_laplacian"):
+            try:
+                self._start_laplacian()
+            except Exception:
+                pass
+        self.update()
+
     def update_cube_ncd(self, idx: int, ncd: float, sha_match: bool):
         """Update the colour of cube `idx` after reconstruction completes.
 
