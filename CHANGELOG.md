@@ -1,5 +1,50 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C1/14 : BUG WAGON SHA-256 fix
+
+Deuxième chunk du plan unifié. Bug latent depuis longtemps : dans
+`run_destruction_cycle` (cube_analysis.py:148), quand un cube est
+"healed" (reconstruction réussie), `cube.content = result.reconstruction`
+remplaçait le contenu mais `cube.sha256` n'était JAMAIS recalculé. Le
+store persistait `(sha_OLD, content_NEW)` incohérents.
+
+**Conséquence** : cycle 2+ comparait `recon_sha256 = sha256(NEW)` à
+`cube.sha256 = OLD` → `exact_match` toujours False → cube re-traité
+inutilement à chaque cycle. Estimé x2-x5 appels LLM gaspillés par run
+multi-cycle.
+
+**Fix** : 1 ligne ajoutée à cube_analysis.py:148 après le content swap :
+`cube.sha256 = sha256_hash(result.reconstruction)`. La fonction
+`sha256_hash` est déjà importée en tête du module.
+
+**Tests verbatim** (3 nouveaux dans `tests/test_chunk_2026-05-19_C1_wagon_sha.py`):
+- `test_cube_sha256_updated_after_successful_reconstruction` ✓
+- `test_cube_sha256_in_db_matches_new_content` ✓
+- `test_failed_reconstruction_does_not_update_sha` ✓ (negative case)
+
+```
+pytest tests/test_chunk_2026-05-19_C1_wagon_sha.py -q
+→ 3 passed in 0.45s
+
+pytest tests/test_cube_b16_b19.py tests/test_cube_wiring.py tests/test_props_cube_analysis.py
+→ 79 passed in 4.44s
+
+forge --gen-props engine/core/cube_analysis.py
+→ Generated 25 property tests
+→ Skipped 9 destructive functions:
+  - run_destruction_cycle, post_cycle_analysis, update_all_temperatures
+  - git_blame_cube, git_log_value, record_quarantine
+  - purge_old_anomalies, record_anomaly (+1)
+
+pytest tests/test_props_cube_analysis.py -q
+→ 25 passed in 2.28s
+```
+
+**Pas de feature flag** pour C1 — le fix est mécanique, pas tunable.
+Pour tester le legacy il faut revert le commit (documenté dans
+docs/MANUAL_TESTS_2026-05-19.md).
+
+
 ## 2026-05-19 (PM) — CHUNK C0 du battle plan unifié : LLM mode collapse fix
 
 Premier chunk exécuté du plan `docs/BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md`.

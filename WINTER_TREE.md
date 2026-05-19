@@ -3,6 +3,20 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C1/14)
+>
+> Deuxième chunk exécuté. BUG WAGON SHA-256 fixé.
+>
+> **Fichier touché** :
+> - `engine/core/cube_analysis.py:148-156` — wagon effect maintenant met à jour cube.sha256 en plus de cube.content avant `store.save_cube(cube)`. 1 ligne ajoutée, commentaire 5 lignes.
+>
+> **Test pin** : `tests/test_chunk_2026-05-19_C1_wagon_sha.py` (3 tests).
+> **Forge** : 25 props générées, 9 destructives skipped.
+> **Impact** : cycle 2+ skip les cubes déjà SHA-matchés cycle 1 (x2-x5
+> appels LLM économisés par run multi-cycle).
+> **Pas de feature flag** : fix mécanique, pas tunable.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C0/14)
 >
 > Premier chunk du `BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md` exécuté.

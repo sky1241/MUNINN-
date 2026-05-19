@@ -146,6 +146,12 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
         if result.success:
             healed.add(cube.id)
             cube.content = result.reconstruction
+            # CHUNK C1 (2026-05-19) — BUG WAGON SHA fix.
+            # Pre-fix: sha256 was never recomputed after content swap.
+            # store.save_cube(cube) persisted (sha_OLD, content_NEW)
+            # → cycle 2+ saw exact_match=False on every healed cube and
+            # re-processed it uselessly (~x2-x5 wasted LLM calls).
+            cube.sha256 = sha256_hash(result.reconstruction)
             store.save_cube(cube)
 
         # Update temperature: hotter if reconstruction fails
