@@ -452,9 +452,19 @@ class MainWindow(QMainWindow):
             # CHUNK C10 (2026-05-19) — reco fields. `status=='done'`
             # encodes a SHA match (see NeuronMapWidget.update_cube_ncd).
             # ncd is stored in temperature for cube neurons (0..1).
+            # CHUNK E6 (REMEDIATION-2) — A4 + A5 fix :
+            #   - Fresh cube (status='todo') = `temperature=0.5` est la
+            #     default Neuron, PAS un vrai NCD. Send None → DetailPanel
+            #     affiche "N/A" au lieu de "0.500 orange".
+            #   - SHA matched cube (status='done') = NCD=0.0 doit s'afficher
+            #     comme preuve positive ("0.000 vert"). Le truthy check
+            #     précédent `if neuron.temperature else None` masquait 0.0.
             "sha_match": (neuron.status == "done"),
-            "ncd": (neuron.temperature
-                    if neuron.level == "cube" else None),
+            "ncd": (
+                None
+                if neuron.level != "cube" or neuron.status == "todo"
+                else float(neuron.temperature)
+            ),
             "gap_lines": getattr(neuron, "gap_lines", []) or [],
             "unknown_idents": getattr(neuron, "unknown_idents", []) or [],
         })

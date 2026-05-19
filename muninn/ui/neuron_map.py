@@ -1515,12 +1515,25 @@ class NeuronMapWidget(QWidget):
         selected when its details arrive (late CYCLE_END), refire
         `neuron_selected` so the DetailPanel refreshes without a manual
         re-click. Pre-D11 user had to click again to see the late data.
+
+        CHUNK E6/A6 (REMEDIATION-2) — at zoom>1 the user sees a molecule
+        (aggregated cubes), not the cube original. Refire with the
+        MOLECULE so the DetailPanel stays consistent with what's painted.
+        Pre-E6 D11 emitted the original cube, contournant Q1 B.
         """
         if idx < 0 or idx >= len(self._neurons):
             return
         n = self._neurons[idx]
         n.gap_lines = list(gap_lines or [])
         n.unknown_idents = list(unknown_idents or [])
-        # D11 : if user already focused this cube, push updated payload
-        if idx in self._selected:
-            self.neuron_selected.emit(n)
+        if idx not in self._selected:
+            return
+        # E6/A6 : at zoom>1, refire with the molecule containing `idx`
+        if self._zoom_level > 1 and self._displayed_groups:
+            displayed = self._displayed_neurons()
+            for mol_idx, group in enumerate(self._displayed_groups):
+                if idx in group and mol_idx < len(displayed):
+                    self.neuron_selected.emit(displayed[mol_idx])
+                    return
+        # zoom=1 or no molecule found : standard D11 behavior
+        self.neuron_selected.emit(n)

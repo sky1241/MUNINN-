@@ -3,6 +3,24 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E6/8)
+>
+> **3 UI fixes : NCD display preuve positive + fresh cube N/A + D11 mol-aware**.
+>
+> **Fichiers touchés** :
+> - `muninn/ui/main_window.py:450-465` :
+>   - A4 fix : `ncd=0.0` envoyé pour SHA matched (preuve positive)
+>   - A5 fix : `ncd=None` pour fresh cube (status='todo')
+> - `muninn/ui/neuron_map.py:update_cube_details` :
+>   - A6 fix : à zoom>1, refire `neuron_selected.emit(molecule)` au
+>     lieu du cube original (Q1 B respecté en late-arrival).
+>
+> **Tests** : 5 nouveaux `test_e6_*` dans
+> `tests/test_chunk_2026-05-19_C10_recon_extras.py`.
+>
+> **Reste REMEDIATION-2** : E7 (tests C7+C8), E8 (untracked cleanup).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E5/8)
 >
 > **Dedup `_COMMON_LANG_KEYWORDS` + test structural AST**.

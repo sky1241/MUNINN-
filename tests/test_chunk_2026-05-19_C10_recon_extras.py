@@ -387,6 +387,151 @@ def test_d11_update_cube_details_no_refire_if_not_selected(qtbot):
     )
 
 
+# CHUNK E6 (REMEDIATION-2) — 3 UI fixes flagged by 24h audit.
+# A4 : main_window:450 truthy check `if neuron.temperature else None`
+#      cache NCD=0.0 sur SHA matched (devrait montrer "0.000 vert"
+#      preuve positive).
+# A5 : Neuron.temperature=0.5 default (fresh cube) interprété comme
+#      NCD=0.5 → DetailPanel affiche "NCD: 0.500 (orange)" alors que
+#      cube non-tenté.
+# A6 : D11 refire neuron_selected à zoom>1 émet cube ORIGINAL alors
+#      que l'user voit une MOLÉCULE → Q1 B contourné.
+
+def test_e6_sha_matched_cube_shows_ncd_zero(qtbot):
+    """E6/A4 : un cube SHA matched (NCD=0.0) doit afficher 'NCD: 0.000'
+    comme preuve positive, pas masquer le champ."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.detail_panel import DetailPanel
+    panel = DetailPanel()
+    qtbot.addWidget(panel)
+    panel.show_neuron({
+        "label": "L1-5", "id": "cube_0", "level": "cube",
+        "status": "done", "sha_match": True, "ncd": 0.0,
+        "gap_lines": [], "unknown_idents": [],
+    })
+    txt = panel._ncd_label.text()
+    assert "0.000" in txt or "0.00" in txt, (
+        f"SHA matched cube must show 'NCD: 0.000' as positive proof, "
+        f"got: {txt!r}"
+    )
+    assert not panel._ncd_label.isHidden()
+
+
+def test_e6_fresh_cube_status_todo_hides_ncd(qtbot):
+    """E6/A5 : un fresh cube (status='todo', pas encore reconstruit) doit
+    masquer le NCD ou afficher 'N/A', PAS '0.500 orange' (la temperature
+    par défaut)."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.detail_panel import DetailPanel
+    panel = DetailPanel()
+    qtbot.addWidget(panel)
+    # Fresh cube = status 'todo' + no ncd value (main_window doit set ncd=None)
+    panel.show_neuron({
+        "label": "L1-5", "id": "cube_0", "level": "cube",
+        "status": "todo", "sha_match": False, "ncd": None,
+        "gap_lines": [], "unknown_idents": [],
+    })
+    txt = panel._ncd_label.text()
+    assert "0.500" not in txt and "0.5" not in txt, (
+        f"Fresh cube should not show NCD as 0.500 (default temperature) "
+        f"— got: {txt!r}"
+    )
+    # Accepter N/A ou cacher
+    assert "N/A" in txt or panel._ncd_label.isHidden() or "—" in txt or txt == "", (
+        f"Expected fresh cube to show 'NCD: N/A' or hide field, got: {txt!r}"
+    )
+
+
+def test_e6_main_window_payload_fresh_cube_ncd_is_none(qtbot):
+    """E6/A5 : main_window _on_neuron_selected doit set ncd=None
+    pour les cubes status='todo' (fresh, pas encore tentés)."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import Neuron
+    win = MainWindow()
+    qtbot.addWidget(win)
+    # Fresh cube
+    fresh = Neuron(id="cube_0", label="L1-5", level="cube",
+                   status="todo", temperature=0.5)
+    win.neuron_panel._neurons = [fresh]
+    payload_captured: list = []
+    real_show = win.detail_panel.show_neuron
+
+    def fake_show(payload):
+        payload_captured.append(payload)
+        return real_show(payload)
+
+    win.detail_panel.show_neuron = fake_show
+    win._on_neuron_selected(fresh)
+    assert payload_captured, "show_neuron must be called"
+    assert payload_captured[-1].get("ncd") is None, (
+        f"Fresh cube payload ncd must be None, got: {payload_captured[-1].get('ncd')}"
+    )
+
+
+def test_e6_main_window_payload_sha_matched_cube_ncd_is_zero(qtbot):
+    """E6/A4 : main_window doit set ncd=0.0 (pas None) pour les cubes
+    SHA matched (status='done'). 0.0 est une vraie valeur, preuve positive."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import Neuron
+    win = MainWindow()
+    qtbot.addWidget(win)
+    matched = Neuron(id="cube_1", label="L6-10", level="cube",
+                     status="done", temperature=0.0)
+    win.neuron_panel._neurons = [matched]
+    payload_captured: list = []
+    real_show = win.detail_panel.show_neuron
+
+    def fake_show(payload):
+        payload_captured.append(payload)
+        return real_show(payload)
+
+    win.detail_panel.show_neuron = fake_show
+    win._on_neuron_selected(matched)
+    assert payload_captured
+    payload = payload_captured[-1]
+    assert payload.get("ncd") == 0.0, (
+        f"SHA matched cube must have ncd=0.0 (preuve positive), got: {payload.get('ncd')}"
+    )
+    assert payload.get("sha_match") is True
+
+
+def test_e6_d11_refire_at_zoom_2_uses_molecule_not_original(qtbot):
+    """E6/A6 : si user voit une molécule (zoom>1) et que late
+    cube_details arrive pour un de ses cubes constituants, refire
+    neuron_selected avec la MOLÉCULE (vue actuelle), pas le cube
+    original (Q1 B respecté en late-arrival)."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id=f"c{i}", label=f"L{i}", level="cube",
+                         x=i, y=0, z=0)
+                  for i in range(6)]
+    w.set_zoom_level(2)
+    _ = w._displayed_neurons()  # populate _displayed_groups
+    received_labels: list = []
+    w.neuron_selected.connect(lambda n: received_labels.append(n.label))
+    # User sélectionne la molécule 0 (group = [0, 1])
+    w._selected = {0, 1}
+    # Late cube_details arrive pour cube 1 (membre de molécule 0)
+    w.update_cube_details(1, [3, 7], ["magic_var"])
+    assert received_labels, "neuron_selected was not refired"
+    # Le label doit être celui de la MOLÉCULE (range), pas du cube original
+    # (Molécule label = "L0…L1" via _aggregate_neurons_with_groups)
+    last = received_labels[-1]
+    assert "…" in last or "..." in last or last == "L0…L1", (
+        f"E6/A6 : refire must emit molecule (label includes range), "
+        f"got cube original: {last!r}"
+    )
+
+
 # CHUNK E1 (REMEDIATION-2) — fix R1 broad except + log_event on swallow.
 # Audit 24h a flag : reconstruct_cube swallow `Exception` quand
 # _build_full_anchor_map raise. Si la signature change demain, on

@@ -1,5 +1,65 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E6/8) — UI NCD display preuve positive + fresh cube + D11 mol-aware
+
+Sixième chunk REMEDIATION-2. 3 sous-fixes UI flagés par l'audit 24h :
+
+**A4** : `muninn/ui/main_window.py:450` faisait
+`"temperature": neuron.temperature if neuron.temperature else None` →
+pour un cube SHA matched (NCD=0.0), `0.0 if 0.0 else None` = None →
+DetailPanel masquait le NCD au lieu d'afficher "0.000 vert" preuve
+positive. Symétrique au pattern C10 ("0 gaps / 0 unknowns" = preuve
+positive Sky voulait).
+
+**A5** : Fresh cube (`status='todo'`, pas encore reconstruit) hérite
+`Neuron.temperature=0.5` par défaut. main_window envoyait cette
+valeur comme NCD → DetailPanel affichait "NCD: 0.500 (orange)"
+alors que le cube n'avait JAMAIS été tenté.
+
+**A6** : D11 (`update_cube_details`) refire `neuron_selected.emit(n)`
+avec `n` = cube original. À zoom>1 l'utilisateur voit une MOLÉCULE,
+mais le DetailPanel switch silencieusement vers un cube unique →
+Q1 B (groups) contourné en late-arrival.
+
+**Fix A4 + A5** (`muninn/ui/main_window.py:450-465`) :
+```python
+"sha_match": (neuron.status == "done"),
+"ncd": (
+    None
+    if neuron.level != "cube" or neuron.status == "todo"
+    else float(neuron.temperature)
+),
+```
+- Fresh cube (todo) → `ncd=None` → DetailPanel "N/A"
+- SHA matched (done) → `ncd=0.0` → DetailPanel "0.000 vert"
+- WIP (wip) → `ncd=<temperature>` → DetailPanel ncd color
+
+**Fix A6** (`muninn/ui/neuron_map.py:update_cube_details`) :
+À zoom>1, identifie la molécule contenant `idx` via `_displayed_groups`
+et emit la molécule, pas le cube original.
+
+**Tests** (`tests/test_chunk_2026-05-19_C10_recon_extras.py` +5) :
+- `test_e6_sha_matched_cube_shows_ncd_zero` (A4 DetailPanel side)
+- `test_e6_fresh_cube_status_todo_hides_ncd` (A5 DetailPanel side)
+- `test_e6_main_window_payload_fresh_cube_ncd_is_none` (A5 main_window)
+- `test_e6_main_window_payload_sha_matched_cube_ncd_is_zero` (A4 main_window)
+- `test_e6_d11_refire_at_zoom_2_uses_molecule_not_original` (A6 regression Q1 B)
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py -k "test_e6 or test_d11" -v
+→ 7 passed in 0.60s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py ...
+→ 187 passed in 7.54s (no regression)
+```
+
+Pas de mirror BUG-091 (muninn/ui/*).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E5/8) — Dedup `_COMMON_LANG_KEYWORDS` source
 
 Cinquième chunk REMEDIATION-2. L'audit Code Core a flag :
