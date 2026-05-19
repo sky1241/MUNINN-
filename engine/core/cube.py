@@ -1122,6 +1122,42 @@ class CubeStore:
             self.conn.commit()
             self._wal_monitor.on_write()
 
+    # CHUNK C3 (2026-05-19) — healed-set persistance defaults.
+    # Tunable via env in cube_analysis (feature flag MUNINN_HEALED_PERSISTENT).
+    _HEALED_MIN_SUCCESS_COUNT_DEFAULT = 3
+
+    def get_healed_cubes(self, min_success_count: int = 3,
+                         min_success_rate: float = 1.0) -> set:
+        """CHUNK C3 (2026-05-19) — cubes considered "healed" from DB history.
+
+        A cube is healed iff:
+          - it has been processed at least `min_success_count` times
+          - all those cycles succeeded (rate >= min_success_rate, default 1.0)
+
+        Returns a set of cube_id strings. Empty set if the DB is fresh
+        or no cube qualifies.
+
+        Used by run_destruction_cycle (via cli_run) to skip cubes that
+        are already known stable from previous runs — saves x3-x5 LLM
+        calls on incremental runs.
+        """
+        # min_success_rate=1.0 ⇔ MIN(success)=1 (all rows success=1).
+        # Configurable threshold below 1.0 falls back to AVG semantics.
+        with self._lock:
+            if min_success_rate >= 1.0:
+                rows = self.conn.execute(
+                    "SELECT cube_id FROM cycles GROUP BY cube_id "
+                    "HAVING COUNT(*) >= ? AND MIN(success)=1 AND MAX(success)=1",
+                    (min_success_count,)
+                ).fetchall()
+            else:
+                rows = self.conn.execute(
+                    "SELECT cube_id FROM cycles GROUP BY cube_id "
+                    "HAVING COUNT(*) >= ? AND AVG(success) >= ?",
+                    (min_success_count, min_success_rate)
+                ).fetchall()
+        return {r[0] for r in rows}
+
     def get_cycles(self, cube_id: str) -> list[dict]:
         """Get cycle history for a cube."""
         with self._lock:

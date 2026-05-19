@@ -3,6 +3,22 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C3/14)
+>
+> Quatrième chunk exécuté. Healed set chargé depuis DB cross-run.
+>
+> **Fichiers touchés** :
+> - `engine/core/cube.py::CubeStore.get_healed_cubes(min_success_count=3, min_success_rate=1.0) -> set[str]` (nouvelle méthode publique).
+> - `engine/core/cube_analysis.py` : constante module-level
+>   `_HEALED_PERSISTENT_ENABLED` (env `MUNINN_HEALED_PERSISTENT`),
+>   `cli_run` charge `healed` depuis DB quand actif.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C3_healed_persistent.py` (6 tests, flag ON+OFF tous deux testés per §8.B).
+>
+> **Feature flag** : `MUNINN_HEALED_PERSISTENT` (default `1`, mettre `0`
+> pour legacy).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C2/14)
 >
 > Troisième chunk exécuté. Hot path record_cycle batché.

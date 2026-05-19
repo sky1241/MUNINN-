@@ -56,6 +56,14 @@ except ImportError:
 _quarantine_lock = threading.Lock()
 _anomaly_lock = threading.Lock()
 
+# CHUNK C3 (2026-05-19) — Feature flag for cross-run healed persistence.
+# Default ON: cli_run loads healed cubes from CubeStore DB (skips cubes
+# with N successful cycles, 0 failures). Set MUNINN_HEALED_PERSISTENT=0
+# to revert to legacy empty-set initialization.
+_HEALED_PERSISTENT_ENABLED = os.environ.get(
+    "MUNINN_HEALED_PERSISTENT", "1"
+) != "0"
+
 __all__ = [
     "run_destruction_cycle", "_add_semantic_neighbors",
     "post_cycle_analysis", "compute_temperature", "update_all_temperatures",
@@ -1129,7 +1137,13 @@ def cli_run(repo_path: str, cycles: int = 1, level: int = 0,
         ast_hints = extract_all_ast_hints(active_cubes)
 
         # ─── Cycle loop ────────────────────────────────────────────
-        healed = set()
+        # CHUNK C3 (2026-05-19) — load healed cubes from DB history when
+        # MUNINN_HEALED_PERSISTENT=1 (default). Saves x3-x5 LLM calls on
+        # incremental runs by skipping cubes 100% successful in past runs.
+        if _HEALED_PERSISTENT_ENABLED:
+            healed = store.get_healed_cubes()
+        else:
+            healed = set()
         all_results = []
         for cycle_num in range(1, cycles + 1):
             # run_destruction_cycle already does B30+B29+B23+B24+B22+B38

@@ -1,5 +1,51 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C3/14 : Healed set persistent cross-run
+
+Quatrième chunk. Pré-fix, `cli_run` faisait `healed = set()` à chaque
+invocation. Sur un run incrémental, les cubes 100% successful du run
+précédent étaient re-traités à zéro → x3-x5 LLM calls gaspillés.
+
+**Fix** :
+- `engine/core/cube.py` : nouvelle méthode publique
+  `CubeStore.get_healed_cubes(min_success_count=3, min_success_rate=1.0)`
+  qui interroge la table `cycles` et retourne `set[str]` des cube_ids
+  qui ont été N+ fois successful avec 0 failure.
+- `engine/core/cube_analysis.py` : feature flag module-level
+  `_HEALED_PERSISTENT_ENABLED` (env `MUNINN_HEALED_PERSISTENT`,
+  default `1`). `cli_run` charge `healed = store.get_healed_cubes()`
+  quand activé, sinon legacy `set()`.
+
+**Tests verbatim** (6 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C3_healed_persistent.py
+→ 6 passed in 0.34s
+  test_get_healed_cubes_method_exists ✓
+  test_get_healed_cubes_empty_on_fresh_db ✓
+  test_get_healed_cubes_returns_fully_successful_cubes ✓
+  test_get_healed_cubes_threshold_configurable ✓
+  test_cli_run_loads_healed_from_db_by_default ✓ (flag ON)
+  test_legacy_flag_disabled_restores_empty_healed ✓ (flag OFF, §8.B)
+
+pytest tests/test_cube_b16_b19.py tests/test_cube_wiring.py
+       tests/test_props_cube_analysis.py tests/test_props_cube.py
+→ 90 passed in 3.81s
+
+forge --gen-props engine/core/cube.py
+→ Generated 11 property tests
+→ Skipped 4 destructive: scan_repo, format_code, check_formatters,
+  install_formatters
+
+pytest tests/test_props_cube.py
+→ 11 passed in 1.30s
+```
+
+**Feature flag (§4bis)** : `MUNINN_HEALED_PERSISTENT=0` revient au legacy.
+Documenté CLAUDE.md.
+
+**Pas de mirror BUG-091** : cube.py et cube_analysis.py shimmés.
+
+
 ## 2026-05-19 (PM) — CHUNK C2/14 : Batch record_cycles via executemany
 
 Troisième chunk. Pré-fix, `run_destruction_cycle` appelait

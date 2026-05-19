@@ -166,4 +166,49 @@ cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C3 → C13.)*
+## CHUNK C3 — Healed set persistent cross-run (x3-x5 gain)
+
+### Test 1 — get_healed_cubes() retourne 100% successful
+```bash
+python3 -c "
+import sys, tempfile, pathlib
+sys.path.insert(0, 'engine/core')
+from cube import CubeStore
+db = pathlib.Path(tempfile.mkdtemp()) / 'cube.db'
+store = CubeStore(str(db))
+for cycle in (1,2,3):
+    store.record_cycle('cubeA', cycle, True, '', 0.0)
+store.record_cycle('cubeB', 1, True, '', 0.0)
+store.record_cycle('cubeB', 2, False, '', 0.0)
+store.record_cycle('cubeB', 3, True, '', 0.0)
+healed = store.get_healed_cubes(min_success_count=3)
+print(f'healed={healed}')
+assert healed == {'cubeA'}, 'cubeB excluded (1 failure history)'
+print('OK')
+"
+```
+- [ ]
+
+### Test 2 — Bascule legacy MUNINN_HEALED_PERSISTENT=0
+```bash
+MUNINN_HEALED_PERSISTENT=0 python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+import cube_analysis
+assert cube_analysis._HEALED_PERSISTENT_ENABLED is False
+print('OK : legacy mode activated')
+"
+```
+- [ ]
+
+### Test 3 — `cube run` incremental (visuel sandbox)
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# Run 1: /scan /tmp/btree-only puis /reconstruct → mesure le temps total
+# Run 2 (sans tout fermer): /reconstruct à nouveau → mesure le temps total
+```
+**Attendu** : Run 2 notablement plus rapide que Run 1 (les cubes SHA-matchés au run 1 sont skippés au run 2). Si MUNINN_HEALED_PERSISTENT=0, run 2 = run 1 (preuve bascule).
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C4 → C13.)*
