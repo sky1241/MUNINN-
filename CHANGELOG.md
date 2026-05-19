@@ -1,5 +1,57 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D2/11) — Shim `muninn.cube_providers` ImportError circular fix
+
+Deuxième chunk de remediation post-audit. Le shim
+`muninn/cube_providers.py` raisait `ImportError: cannot import name
+'LLMProvider' from partially initialized module 'cube_providers'` sur
+cold-start (chaîne circulaire `cube_providers → cube → cube_analysis →
+cube_providers`).
+
+Aujourd'hui ça marchait en pytest parce que `muninn.cube` était
+warmé avant — purement par chance d'ordre. Tout consumer externe qui
+faisait `from muninn.cube_providers import OllamaProvider` en first
+import crashait.
+
+**Reproduction pré-fix** :
+```bash
+python -c "from muninn.cube_providers import OllamaProvider; print('OK')"
+# ImportError: cannot import name 'LLMProvider' from partially initialized
+# module 'cube_providers' (most likely due to a circular import)
+```
+
+**Fix** : pre-import `cube` (`import cube as _cube_warmup`) AVANT le
+`from cube_providers import *` dans `muninn/cube_providers.py`.
+Charger `cube` déclenche la chaîne complète (cube → cube_analysis →
+cube_providers) ; quand le contrôle revient au shim, les 3 modules
+sont entièrement initialisés dans `sys.modules`.
+
+**Tests** (`tests/test_bug_091_shim_first_import.py` — nouveau, 4) :
+- `test_muninn_cube_first_import` (smoke).
+- `test_muninn_cube_providers_first_import` (D2 regression).
+- `test_muninn_cube_analysis_first_import` (smoke).
+- `test_muninn_cube_providers_first_import_dataclasses`
+  (`ReconstructionResult` + `WaveResult` resolvent cold).
+
+Chaque test spawn son propre subprocess via `subprocess.run` pour éviter
+toute warmup contamination par les tests précédents.
+
+**Tests verbatim** :
+```
+pytest tests/test_bug_091_shim_first_import.py -v
+→ 4 passed in 1.22s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube_providers.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 147 passed in 11.07s (no regression)
+```
+
+Pas de mirror BUG-091 (le fix EST le shim).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D1/11) — Fix `gap_lines` TypeError swallowed + full anchor map (Bonus B)
 
 Premier chunk de remediation post-audit C8→C13. Le commit C10 (`08f28a1`)

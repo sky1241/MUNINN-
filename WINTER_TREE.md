@@ -3,6 +3,21 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D2/11)
+>
+> **Shim `muninn.cube_providers` ImportError circular fix**.
+>
+> **Fichier touché** :
+> - `muninn/cube_providers.py:14-17` : pre-import `cube` AVANT
+>   `from cube_providers import *`. Casse la chaîne circulaire
+>   cold-start (cube_providers → cube → cube_analysis → cube_providers).
+>
+> **Tests** : `tests/test_bug_091_shim_first_import.py` (NOUVEAU, 4 tests
+> subprocess `python -c "..."` pour éviter le warmup contamination).
+>
+> **Reste** : D3-D11 du plan REMEDIATION.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D1/11)
 >
 > **Fix `gap_lines` TypeError swallowed (Bonus B = full anchor map)**.
