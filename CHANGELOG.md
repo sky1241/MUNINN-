@@ -1,5 +1,76 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D1/11) — Fix `gap_lines` TypeError swallowed + full anchor map (Bonus B)
+
+Premier chunk de remediation post-audit C8→C13. Le commit C10 (`08f28a1`)
+avait introduit dans `engine/core/cube_providers.py` un appel à
+`_build_full_anchor_map(ast_hints, lines, n_lines)` — **3 args alors que
+la signature exige 4** (`..., ext: str`). `TypeError` swallowed par le
+broad `except Exception: gap_lines = []`. Cascade : `WaveResult.gap_lines = []`
+→ `cube_details` émettait `[]` → `_compute_line_colors_for_cube` retournait
+tout vert → `FileHeatmapView` ne montrait jamais de rouge/orange.
+
+**Audit reproduction runtime** (`b497719..HEAD`) :
+```bash
+python -c "
+import sys; sys.path.insert(0, 'engine/core'); import cube
+from cube_providers import reconstruct_cube, MockLLMProvider
+from cube import Cube
+c = Cube(id='t', content='def f():\n  return 1', sha256='x',
+         file_origin='t.py', line_start=1, line_end=2)
+r = reconstruct_cube(c, [], MockLLMProvider(),
+                     ast_hints={'first_line': 'def f():', 'identifiers': ['f']})
+print('gap_lines:', r.gap_lines)
+"
+# Pré-fix : gap_lines: []
+# Post-fix : gap_lines: [1]  (line idx 1 = 'return 1' = unique code, unanchored)
+```
+
+**Décision Sky (Bonus B 2026-05-19 PM)** : utiliser `_build_full_anchor_map`
+(version complète) au lieu de `_build_anchor_map` (version simple). Raison :
+mission Muninn = retenir la mémoire des dev seniors. Le full anchor map
+capture les lignes structurellement triviales (`}`, `defer mutex.Unlock()`,
+struct tags `json:"…"`, constantes, blanks) comme "anchored", donc
+`gap_lines` ne contient QUE les lignes que le LLM a vraiment dû inventer
+— c'est ÇA la mémoire dev senior qu'on veut visualiser en rouge.
+
+**Fix** :
+- `engine/core/cube_providers.py:1070-1085` : passer le 4ème arg `ext`
+  via `os.path.splitext(cube.file_origin)[1]`. Fallback gracieux si
+  `file_origin` est vide → `ext=""`.
+
+**Tests** (`tests/test_chunk_2026-05-19_C10_recon_extras.py` +3) :
+- `test_d1_gap_lines_populated_when_ast_hints_provided` : 5 lignes uniques
+  de code → ≥2 doivent être en gaps (pre-fix : 0).
+- `test_d1_gap_lines_full_anchor_map_catches_closing_brace` : `}` doit
+  être anchored (Fix 6) ET unique code lines doivent être en gaps.
+- `test_d1_gap_lines_no_typeerror_on_missing_file_origin` : edge case
+  `file_origin=""`, pas de crash.
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py -v
+→ 14 passed in 0.61s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_props_cube_providers.py tests/test_h8_api_bloat_baseline.py \
+       tests/test_brick19_dead_code_audit.py tests/test_chunk13_claude_rules_split.py
+→ 143 passed in 8.34s (no regression)
+
+forge --gen-props engine/core/cube_providers.py
+→ 7 props, 1 destructive skipped
+
+pytest tests/test_props_cube_providers.py
+→ 7 passed in 2.33s
+```
+
+Plan de remediation complet : `docs/BATTLE_PLAN_REMEDIATION_2026-05-19.md`
+(11 chunks D1→D11). C'est D1 livré ; D2-D11 enchaînent.
+
+Pas de mirror BUG-091 (fix d'un call site privé dans
+`reconstruct_cube`, signature publique inchangée).
+
+
 ## 2026-05-19 (PM) — CHUNK C13/14 : E2E pipeline + benchmark + sandbox smoke 🎉 BATTLE PLAN COMPLETE
 
 Quatorzième et **dernier** chunk du battle plan unifié 2026-05-19.

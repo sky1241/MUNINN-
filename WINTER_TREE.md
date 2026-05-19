@@ -3,6 +3,30 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D1/11)
+>
+> **Fix `gap_lines` TypeError swallowed (Bonus B = full anchor map)**.
+>
+> **Fichier touché** :
+> - `engine/core/cube_providers.py:1070-1085` :
+>   - Ajout du 4ème argument `ext` à `_build_full_anchor_map(...)`.
+>   - `ext = os.path.splitext(cube.file_origin)[1]` (graceful si vide).
+>   - Le `try/except` reste mais ne swallow plus le `TypeError` (signature fix).
+>
+> **Avant** : `gap_lines = []` toujours → toute la chaîne C10+C11 affichait vide.
+> **Après** : `gap_lines = [1, 2]` sur un cube avec 2 unique code lines + `}` + first_line.
+>
+> **Mission Muninn cohérente** : full anchor map ancre les triviaux (closing
+> braces, defer, struct tags, constants) → rouge = mémoire dev seniors uniquement.
+>
+> **Tests** : 3 nouveaux dans `tests/test_chunk_2026-05-19_C10_recon_extras.py`
+> (`test_d1_gap_lines_*`). Total C10 file = 14 tests.
+> **Forge** : 7 props cube_providers (1 destructive skipped).
+>
+> **Plan de remediation** : `docs/BATTLE_PLAN_REMEDIATION_2026-05-19.md`
+> (11 chunks D1→D11). D1 livré, D2-D11 enchainent.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C13/14 🎉 COMPLET)
 >
 > **E2E pipeline + perf opt-in + sandbox smoke documenté**.

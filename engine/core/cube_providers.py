@@ -1067,10 +1067,20 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
     # pour le DetailPanel UI. Calculé même en cas de exact_match (cheap)
     # pour que l'UX puisse afficher "0 gaps / 0 unknowns" comme preuve
     # positive plutôt qu'un champ vide ambigu.
+    # CHUNK D1 (2026-05-19 remediation, Bonus B acté) — passe les 4 args
+    # à _build_full_anchor_map (manquait `ext`, TypeError swallowed →
+    # gap_lines toujours []). Full anchor map capture aussi closing braces,
+    # defer, struct tags, blank lines, constants — pour que gap_lines
+    # ne contienne QUE les lignes que le LLM a vraiment dû inventer
+    # (mission Muninn : montrer la mémoire des dev seniors).
     try:
+        import os.path as _osp
         cube_lines = cube.content.split("\n") if cube.content else []
         n_lines = len(cube_lines)
-        anchor_map = _build_full_anchor_map(ast_hints or {}, cube_lines, n_lines)
+        ext = _osp.splitext(getattr(cube, "file_origin", "") or "")[1]
+        anchor_map = _build_full_anchor_map(
+            ast_hints or {}, cube_lines, n_lines, ext,
+        )
         gap_lines = _extract_gap_lines(anchor_map, n_lines)
     except Exception:
         gap_lines = []
