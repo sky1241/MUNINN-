@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 import zlib
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from cube import Cube, sha256_hash
@@ -971,6 +971,39 @@ class ReconstructionResult:
     ncd_score: float      # 0.0 = identical, 1.0 = completely different
     perplexity: float
     success: bool         # exact_match OR ncd_score < threshold
+    # CHUNK C10 (2026-05-19) — diagnostics surfacés au DetailPanel UI :
+    # gap_lines = lignes du cube qu'aucun anchor n'a pu pinner (LLM avait
+    # le champ libre), unknown_identifiers = identifiants que la reco a
+    # inventés en dehors de ce que les ast_hints fournissaient.
+    gap_lines: list = field(default_factory=list)
+    unknown_identifiers: list = field(default_factory=list)
+
+
+def _extract_gap_lines(anchor_map: dict, n_lines: int) -> list:
+    """CHUNK C10 (2026-05-19) — lignes du cube NON couvertes par le
+    anchor_map. C'est l'inverse de `_build_full_anchor_map` : les lignes
+    pour lesquelles le LLM a dû générer sans contrainte. Plus la liste
+    est longue, plus la reco a navigué dans le vide.
+    """
+    if n_lines <= 0:
+        return []
+    pinned = set(anchor_map.keys()) if anchor_map else set()
+    return [i for i in range(n_lines) if i not in pinned]
+
+
+def _extract_unknown_identifiers(reconstruction: str,
+                                 ast_hints: dict | None) -> list:
+    """CHUNK C10 (2026-05-19) — identifiants présents dans la
+    reconstruction mais absents des `ast_hints['identifiers']`. Sert au
+    DetailPanel pour signaler les "inventions" du LLM (souvent symptôme
+    d'une hallucination).
+    """
+    if not ast_hints or not ast_hints.get("identifiers"):
+        return []
+    import re as _re
+    known = set(ast_hints["identifiers"])
+    found = set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", reconstruction or ""))
+    return sorted(found - known)
 
 
 def reconstruct_cube(cube: Cube, neighbors: list[Cube],
@@ -1030,6 +1063,22 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
 
     success = exact_match or ncd < ncd_threshold
 
+    # CHUNK C10 (2026-05-19) — surface gap_lines + unknown_identifiers
+    # pour le DetailPanel UI. Calculé même en cas de exact_match (cheap)
+    # pour que l'UX puisse afficher "0 gaps / 0 unknowns" comme preuve
+    # positive plutôt qu'un champ vide ambigu.
+    try:
+        cube_lines = cube.content.split("\n") if cube.content else []
+        n_lines = len(cube_lines)
+        anchor_map = _build_full_anchor_map(ast_hints or {}, cube_lines, n_lines)
+        gap_lines = _extract_gap_lines(anchor_map, n_lines)
+    except Exception:
+        gap_lines = []
+    try:
+        unknown_idents = _extract_unknown_identifiers(reconstruction, ast_hints)
+    except Exception:
+        unknown_idents = []
+
     return ReconstructionResult(
         cube_id=cube.id,
         original_sha256=cube.sha256,
@@ -1039,6 +1088,8 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
         ncd_score=ncd,
         perplexity=perplexity,
         success=success,
+        gap_lines=gap_lines,
+        unknown_identifiers=unknown_idents,
     )
 
 
@@ -1290,6 +1341,10 @@ class WaveResult:
     total_attempts: int       # total attempts across all waves
     best_ncd: float           # best NCD seen across all attempts
     best_reconstruction: str  # the closest reconstruction so far
+    # CHUNK C10 (2026-05-19) — propagated from the winning attempt's
+    # ReconstructionResult so the UI DetailPanel can surface them.
+    gap_lines: list = field(default_factory=list)
+    unknown_identifiers: list = field(default_factory=list)
 
 
 @dataclass
@@ -1814,6 +1869,10 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
     extra_fb: list[str] | None = None
     lines_fb: str | None = None
     ncd_fb: str | None = None
+    # CHUNK C10 (2026-05-19) — track best attempt's diagnostics so the
+    # final WaveResult can carry them even when no SHA match was found.
+    best_gap_lines: list = []
+    best_unknown_idents: list = []
 
     for wave in range(1, max_waves + 1):
         for attempt in range(1, n + 1):
@@ -1833,6 +1892,11 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                 if result.ncd_score < best_ncd:
                     best_ncd = result.ncd_score
                     best_reconstruction = result.reconstruction
+                    # CHUNK C10 — snapshot diagnostics of the new best.
+                    best_gap_lines = list(getattr(result, "gap_lines", []) or [])
+                    best_unknown_idents = list(
+                        getattr(result, "unknown_identifiers", []) or []
+                    )
                 if on_attempt:
                     on_attempt(wave, attempt, result.ncd_score, result.exact_match)
                 if result.exact_match:
@@ -1842,6 +1906,10 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
                         total_attempts=total_attempts,
                         best_ncd=result.ncd_score,
                         best_reconstruction=result.reconstruction,
+                        gap_lines=list(getattr(result, "gap_lines", []) or []),
+                        unknown_identifiers=list(
+                            getattr(result, "unknown_identifiers", []) or []
+                        ),
                     )
                 if ast_hints and result.reconstruction:
                     _learn_anchors_from_reconstruction(
@@ -1855,12 +1923,17 @@ def reconstruct_cube_waves(cube: Cube, neighbors: list[Cube],
         if best_ncd > ncd_give_up:
             break  # this cube needs a bigger level, stop wasting calls
 
+    # CHUNK C10 (2026-05-19) — propagate the best attempt's diagnostics
+    # even on failure so the UX can show "we got 30% there but here's
+    # what we missed" instead of an empty panel.
     return WaveResult(
         cube_id=cube.id, sha_matched=False,
         wave_number=0, attempt_in_wave=0,
         total_attempts=total_attempts,
         best_ncd=best_ncd,
         best_reconstruction=best_reconstruction,
+        gap_lines=best_gap_lines,
+        unknown_identifiers=best_unknown_idents,
     )
 
 
@@ -1965,7 +2038,8 @@ def _run_level_pass(cubes: list[Cube], to_test: list[int], store,
                     provider: LLMProvider, attempts_per_cube: int,
                     full_content: str, mycelium,
                     on_cube_cb,
-                    sha_ranges: set, cycle: int, level: int) -> int:
+                    sha_ranges: set, cycle: int, level: int,
+                    on_cube_extras_cb=None) -> int:
     """One pass of reconstruct_cube_waves over the to_test indices.
     Mutates sha_ranges in place when a cube SHA-matches.
     Returns the number of new SHA matches in this level pass."""
@@ -1995,6 +2069,13 @@ def _run_level_pass(cubes: list[Cube], to_test: list[int], store,
                 mycelium.observe_text(wr.best_reconstruction)
             if on_cube_cb:
                 on_cube_cb(cycle, level, i, 'SHA', wr.attempt_in_wave, 0.0)
+            # CHUNK C10 (2026-05-19) — surface diagnostics to UX layer.
+            if on_cube_extras_cb:
+                on_cube_extras_cb(
+                    i,
+                    list(getattr(wr, "gap_lines", []) or []),
+                    list(getattr(wr, "unknown_identifiers", []) or []),
+                )
         else:
             # Phase 3 (2026-05-14): failed cubes feed the mycelium as
             # NEGATIVE signal (observe_failure → failures table) so the
@@ -2005,6 +2086,14 @@ def _run_level_pass(cubes: list[Cube], to_test: list[int], store,
                 mycelium.observe_failure(c.content)
             if on_cube_cb:
                 on_cube_cb(cycle, level, i, 'FAIL', wr.total_attempts, wr.best_ncd)
+            # CHUNK C10 (2026-05-19) — also emit on FAIL so the UX gets
+            # partial info ("we got 30% there but here's what we missed").
+            if on_cube_extras_cb:
+                on_cube_extras_cb(
+                    i,
+                    list(getattr(wr, "gap_lines", []) or []),
+                    list(getattr(wr, "unknown_identifiers", []) or []),
+                )
     return level_sha
 
 
@@ -2015,7 +2104,8 @@ def reconstruct_adaptive(file_path: str, content: str,
                          attempts_per_cube: int = 11,
                          mycelium=None,
                          forge_root=None,
-                         on_cube: callable = None) -> dict:
+                         on_cube: callable = None,
+                         on_cube_extras: callable = None) -> dict:
     """B43: Adaptive multi-level reconstruction with restart cycles.
 
     Algorithm (Sky's design):
@@ -2084,7 +2174,8 @@ def reconstruct_adaptive(file_path: str, content: str,
             to_test = _sort_to_test_by_risk(to_test, cubes, store, forge_root)
             level_sha = _run_level_pass(
                 cubes, to_test, store, provider, attempts_per_cube,
-                content, mycelium, on_cube, sha_ranges, cycle, level)
+                content, mycelium, on_cube, sha_ranges, cycle, level,
+                on_cube_extras_cb=on_cube_extras)
             cycle_new_sha += level_sha
 
             cycle_data['per_level'][level] = {

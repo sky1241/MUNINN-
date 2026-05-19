@@ -142,6 +142,10 @@ class ReconstructionWorker(QObject):
     # refresh flag is on. Payload: [{idx, mycelium_neighbors}, ...]. The
     # heatmap rebuilds edges + Laplacien without dropping neurons.
     cube_neighbors_refreshed = pyqtSignal(list)
+    # CHUNK C10 (2026-05-19) — per-cube reco diagnostics for the
+    # DetailPanel: idx, gap_lines, unknown_idents. Fired from the
+    # engine's on_cube_extras callback alongside cube_done.
+    cube_details = pyqtSignal(int, list, list)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -426,6 +430,20 @@ class ReconstructionWorker(QObject):
                     )
                     self.cube_done.emit(cube_idx, float(ncd), False)
 
+            # CHUNK C10 (2026-05-19) — emit per-cube reco diagnostics for
+            # the DetailPanel (sha/ncd already in cube_done; this adds
+            # gap_lines + unknown_idents). Fires alongside cube_done.
+            def on_cube_extras(cube_idx, gap_lines, unknown_idents):
+                if self._stop:
+                    return
+                if cube_idx is None or cube_idx < 0 or cube_idx >= len(cubes):
+                    return
+                self.cube_details.emit(
+                    int(cube_idx),
+                    list(gap_lines or []),
+                    list(unknown_idents or []),
+                )
+
             # Cap cubes to what we showed the user (the engine will still
             # receive the full file, but it keeps the event/result stream
             # aligned with the heatmap indices).
@@ -443,6 +461,7 @@ class ReconstructionWorker(QObject):
                     mycelium=mycelium,
                     forge_root=str(repo_root) if repo_root else None,
                     on_cube=on_cube,
+                    on_cube_extras=on_cube_extras,
                 )
                 log_event("pipeline.ui.cube_live.reconstruct_end", {"file": str(self._file), "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
             except ConnectionError as e:

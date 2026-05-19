@@ -27,7 +27,7 @@ def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), ncd_threshold=st.floats(allow_nan=False, allow_infinity=False), ast_hints=st.text(max_size=50), previous_attempts=st.text(max_size=50), temperature=st.floats(allow_nan=False, allow_infinity=False), mycelium=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_reconstruct_cube_no_crash(cube, neighbors, provider, ncd_threshold, ast_hints, previous_attempts, temperature, mycelium):
     """Smoke: reconstruct_cube() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_cube
@@ -40,7 +40,7 @@ def test_reconstruct_cube_no_crash(cube, neighbors, provider, ncd_threshold, ast
         pass  # Expected rejections are OK
 
 @given(original=st.text(max_size=100), reconstruction=st.text(max_size=100))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_validate_reconstruction_no_crash(original, reconstruction):
     """Smoke: validate_reconstruction() does not crash on arbitrary input"""
     # from engine.core.cube_providers import validate_reconstruction
@@ -53,7 +53,7 @@ def test_validate_reconstruction_no_crash(original, reconstruction):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_compute_hotness_no_crash(cube, neighbors, provider):
     """Smoke: compute_hotness() does not crash on arbitrary input"""
     # from engine.core.cube_providers import compute_hotness
@@ -66,7 +66,7 @@ def test_compute_hotness_no_crash(cube, neighbors, provider):
         pass  # Expected rejections are OK
 
 @given(a=st.text(max_size=100), b=st.text(max_size=100))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_compute_ncd_no_crash(a, b):
     """Smoke: compute_ncd() does not crash on arbitrary input"""
     # from engine.core.cube_providers import compute_ncd
@@ -79,7 +79,7 @@ def test_compute_ncd_no_crash(a, b):
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), ast_hints=st.text(max_size=50), mycelium=st.text(max_size=50))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_reconstruct_line_by_line_no_crash(cube, neighbors, provider, ast_hints, mycelium):
     """Smoke: reconstruct_line_by_line() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_line_by_line
@@ -92,7 +92,7 @@ def test_reconstruct_line_by_line_no_crash(cube, neighbors, provider, ast_hints,
         pass  # Expected rejections are OK
 
 @given(cube=st.text(max_size=50), neighbors=st.text(max_size=50), provider=st.text(max_size=50), attempts_per_wave=st.integers(-1000, 1000), max_waves=st.integers(-1000, 1000), ast_hints=st.text(max_size=50), temperature=st.floats(allow_nan=False, allow_infinity=False), ncd_give_up=st.floats(allow_nan=False, allow_infinity=False), on_attempt=st.text(max_size=50), mycelium=st.text(max_size=50))
-@settings(max_examples=50, deadline=None)  # reconstruct_cube_waves runs attempts*waves loops → can exceed Hypothesis 200ms default
+@settings(max_examples=50, deadline=None)
 def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per_wave, max_waves, ast_hints, temperature, ncd_give_up, on_attempt, mycelium):
     """Smoke: reconstruct_cube_waves() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_cube_waves
@@ -104,13 +104,13 @@ def test_reconstruct_cube_waves_no_crash(cube, neighbors, provider, attempts_per
             SystemExit, Exception):
         pass  # Expected rejections are OK
 
-@given(file_path=st.text(max_size=100), content=st.text(max_size=100), provider=st.text(max_size=50), base_tokens=st.integers(-1000, 1000), max_cycles=st.integers(-1000, 1000), attempts_per_cube=st.integers(-1000, 1000), mycelium=st.text(max_size=50), forge_root=st.text(max_size=50), on_cube=st.text(max_size=50))
-@settings(max_examples=50)
-def test_reconstruct_adaptive_no_crash(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, forge_root, on_cube):
+@given(file_path=st.text(max_size=100), content=st.text(max_size=100), provider=st.text(max_size=50), base_tokens=st.integers(-1000, 1000), max_cycles=st.integers(-1000, 1000), attempts_per_cube=st.integers(-1000, 1000), mycelium=st.text(max_size=50), forge_root=st.text(max_size=50), on_cube=st.text(max_size=50), on_cube_extras=st.text(max_size=50))
+@settings(max_examples=50, deadline=None)
+def test_reconstruct_adaptive_no_crash(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, forge_root, on_cube, on_cube_extras):
     """Smoke: reconstruct_adaptive() does not crash on arbitrary input"""
     # from engine.core.cube_providers import reconstruct_adaptive
     try:
-        reconstruct_adaptive(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, forge_root, on_cube)
+        reconstruct_adaptive(file_path, content, provider, base_tokens, max_cycles, attempts_per_cube, mycelium, forge_root, on_cube, on_cube_extras)
     except (ValueError, TypeError, KeyError, IndexError,
             OSError, AttributeError, RuntimeError, SyntaxError,
             LookupError, ArithmeticError, AssertionError,

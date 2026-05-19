@@ -528,4 +528,64 @@ cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C10 → C13.)*
+## CHUNK C10 — DetailPanel enrichi (SHA / NCD / gaps / unknown idents)
+
+**Objectif** : sélectionner un cube de reconstruction dans la heatmap doit
+afficher dans le DetailPanel : ✓/✗ SHA, NCD coloré, nombre de gap_lines,
+nombre + preview d'unknown_idents.
+
+### Test 1 — Tests automatisés
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_chunk_2026-05-19_C10_recon_extras.py -v
+```
+**Attendu** : 11 passed.
+- [ ]
+
+### Test 2 — Helpers extraction
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+from cube_providers import _extract_gap_lines, _extract_unknown_identifiers
+print('gaps:', _extract_gap_lines({0: 'def foo:', 2: 'return 1'}, 5))
+print('unk:',  _extract_unknown_identifiers('def foo(): return magic',
+                                            {'identifiers': ['foo']}))
+"
+```
+**Attendu** : `gaps: [1, 3, 4]` puis `unk: ['magic', 'return']`
+(seuls les idents NON dans hints sont retournés ; `def` est trop court).
+- [ ]
+
+### Test 3 — Reco props (forge)
+```bash
+forge --gen-props engine/core/cube_providers.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_props_cube_providers.py -q
+```
+**Attendu** : 7 props générées (1 destructive skipped),
+toutes passent en ≤ 30s.
+- [ ]
+
+### Test 4 — Sandbox visuel (à 4 yeux avec Sky)
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# 1. /scan /tmp/btree-only
+# 2. /reconstruct /tmp/btree-only/btree_google.go --max-cycles=2
+# 3. Cliquer sur un cube SHA matched → DetailPanel doit afficher :
+#    - SHA: ✓ match (vert)
+#    - NCD: 0.000 (vert)
+#    - Gap lines: 0 (ou un petit nombre)
+#    - Unknown idents: 0
+# 4. Cliquer sur un cube NCD>0.3 (rouge) → DetailPanel doit afficher :
+#    - SHA: ✗ no match (rouge)
+#    - NCD: 0.XXX (orange/rouge selon valeur)
+#    - Gap lines: N>0
+#    - Unknown idents: N (preview)
+# 5. Cliquer sur un neuron mycelium normal (level != 'cube') → les
+#    4 champs reco doivent être MASQUÉS.
+```
+**Attendu** : panel reactif, couleurs cohérentes, fields hidden hors cube.
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C11 → C13.)*

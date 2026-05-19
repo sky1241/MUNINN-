@@ -132,6 +132,37 @@ class DetailPanel(QWidget):
         self._zone_label.setStyleSheet(f"color: {TEXT_SECONDARY}; background: transparent; border: none;")
         ext_layout.addWidget(self._zone_label)
 
+        # CHUNK C10 (2026-05-19) — Reconstruction diagnostics. Only shown
+        # for neurons with level == 'cube' (reconstruction mode). Visible
+        # state is governed by show_neuron(), not _build_ui.
+        self._sha_label = QLabel()
+        self._sha_label.setFont(QFont(FONT_BODY, 13))
+        self._sha_label.setStyleSheet(
+            f"color: {TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        ext_layout.addWidget(self._sha_label)
+
+        self._ncd_label = QLabel()
+        self._ncd_label.setFont(QFont(FONT_BODY, 13))
+        self._ncd_label.setStyleSheet(
+            f"color: {TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        ext_layout.addWidget(self._ncd_label)
+
+        self._gaps_label = QLabel()
+        self._gaps_label.setFont(QFont(FONT_BODY, 13))
+        self._gaps_label.setStyleSheet(
+            f"color: {TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        ext_layout.addWidget(self._gaps_label)
+
+        self._unknowns_label = QLabel()
+        self._unknowns_label.setFont(QFont(FONT_BODY, 13))
+        self._unknowns_label.setStyleSheet(
+            f"color: {TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        ext_layout.addWidget(self._unknowns_label)
+
         # Neighbors section
         neighbors_header = QLabel("Neighbors")
         neighbors_header.setFont(QFont(FONT_BODY, 14))
@@ -245,6 +276,55 @@ class DetailPanel(QWidget):
             self._zone_label.show()
         else:
             self._zone_label.hide()
+
+        # CHUNK C10 (2026-05-19) — Reconstruction diagnostics, visible
+        # only when this neuron is a reco cube. Cube neurons are emitted
+        # with level == 'cube' by `set_reconstruction_cubes`.
+        is_cube = (neuron_data.get("level") == "cube")
+        if is_cube:
+            sha_match = bool(neuron_data.get("sha_match"))
+            ncd = neuron_data.get("ncd")
+            gap_lines = neuron_data.get("gap_lines") or []
+            unknowns = neuron_data.get("unknown_idents") or []
+
+            sha_text = "SHA: ✓ match" if sha_match else "SHA: ✗ no match"
+            sha_color = SUCCESS if sha_match else ERROR
+            self._sha_label.setText(sha_text)
+            self._sha_label.setStyleSheet(
+                f"color: {sha_color}; font-weight: 600; background: transparent; border: none;"
+            )
+            self._sha_label.show()
+
+            if ncd is None:
+                self._ncd_label.setText("NCD: N/A")
+                self._ncd_label.setStyleSheet(
+                    f"color: {TEXT_SECONDARY}; background: transparent; border: none;"
+                )
+            else:
+                ncd_v = float(ncd)
+                ncd_color = (SUCCESS if ncd_v < 0.10 else
+                             WARNING if ncd_v < 0.30 else ERROR)
+                self._ncd_label.setText(f"NCD: {ncd_v:.3f}")
+                self._ncd_label.setStyleSheet(
+                    f"color: {ncd_color}; background: transparent; border: none;"
+                )
+            self._ncd_label.show()
+
+            n_gaps = len(gap_lines)
+            self._gaps_label.setText(f"Gap lines: {n_gaps}")
+            self._gaps_label.show()
+
+            n_unk = len(unknowns)
+            preview = ", ".join(unknowns[:3])
+            self._unknowns_label.setText(
+                f"Unknown idents: {n_unk}" + (f" ({preview}…)" if preview else "")
+            )
+            self._unknowns_label.show()
+        else:
+            self._sha_label.hide()
+            self._ncd_label.hide()
+            self._gaps_label.hide()
+            self._unknowns_label.hide()
 
         # Clear and rebuild neighbors
         self._clear_layout(self._neighbors_layout)

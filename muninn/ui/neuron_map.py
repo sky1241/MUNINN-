@@ -65,6 +65,10 @@ class Neuron:
     category: str = ""
     temperature: float = 0.0  # CHUNK 3: from scan frequency ratio
     zone: str = ""  # CHUNK 3: from pattern type
+    # CHUNK C10 (2026-05-19) — diagnostics surfacés au DetailPanel pour
+    # les neurons de mode reconstruction (level == 'cube').
+    gap_lines: list = field(default_factory=list)
+    unknown_idents: list = field(default_factory=list)
 
 
 # Shape constants for daltonism support
@@ -1266,3 +1270,16 @@ class NeuronMapWidget(QWidget):
         n.degree = 0 if sha_match else int(round(clamped * 10))
         n.status = "done" if sha_match else ("wip" if clamped < 0.3 else "todo")
         self.update()
+
+    def update_cube_details(self, idx: int, gap_lines: list, unknown_idents: list):
+        """CHUNK C10 (2026-05-19) — store reco diagnostics on the cube
+        neuron so the DetailPanel can surface them on selection.
+
+        No repaint trigger (these fields don't affect the visual);
+        consumed lazily by `_on_neuron_selected` in main_window.
+        """
+        if idx < 0 or idx >= len(self._neurons):
+            return
+        n = self._neurons[idx]
+        n.gap_lines = list(gap_lines or [])
+        n.unknown_idents = list(unknown_idents or [])

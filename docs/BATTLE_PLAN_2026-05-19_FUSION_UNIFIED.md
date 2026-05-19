@@ -421,9 +421,19 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
 
 ---
 
-### CHUNK 10 — DetailPanel enrichi (SHA / NCD / gaps / unknown identifiers)
+### CHUNK 10 — DetailPanel enrichi (SHA / NCD / gaps / unknown identifiers) ✅ LIVRÉ 2026-05-19
 
 **Sévérité** 🟠 Moyenne (info critique) • **LOC** ~180 (engine + UI) • **Risque** Moyen • **Estimation 3h**
+
+> ✅ Livré : `ReconstructionResult` + `WaveResult` gagnent `gap_lines` +
+> `unknown_identifiers` (defaults []). Helpers
+> `_extract_gap_lines` / `_extract_unknown_identifiers`. Callback
+> `on_cube_extras` opt-in dans `reconstruct_adaptive`. UI : signal
+> `cube_details` (worker → terminal → main_window →
+> `NeuronMapWidget.update_cube_details`), `Neuron.gap_lines` +
+> `unknown_idents`, 4 labels DetailPanel masqués hors mode cube.
+> 11/11 tests `test_chunk_2026-05-19_C10_recon_extras.py`. Forge :
+> 7 props cube_providers.
 
 #### Spec engine
 - [cube_providers.py::ReconstructionResult](../engine/core/cube_providers.py) : ajouter

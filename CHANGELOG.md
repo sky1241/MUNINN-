@@ -1,5 +1,73 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C10/14 : DetailPanel enrichi (SHA / NCD / gaps / unknowns)
+
+Onzième chunk. `ReconstructionResult` exposait juste sha256/ncd/exact_match.
+Aucune trace des lignes que la reco n'avait pas pu ancrer ni des
+identifiants que le LLM avait inventés. Côté UI le `DetailPanel`
+n'avait aucun champ reco-spécifique — sélectionner un cube ne montrait
+rien d'utile pour comprendre POURQUOI il a échoué.
+
+**Fix engine** :
+- `engine/core/cube_providers.py` :
+  - `ReconstructionResult` : 2 nouveaux champs
+    `gap_lines: list[int]` + `unknown_identifiers: list[str]`
+    (defaults `[]` → backward compat).
+  - Helpers module-level `_extract_gap_lines(anchor_map, n_lines)`
+    (inverse de `_build_full_anchor_map`) et
+    `_extract_unknown_identifiers(reconstruction, ast_hints)` (diff
+    contre `ast_hints['identifiers']`).
+  - `reconstruct_cube` populate les 2 champs depuis l'anchor_map et
+    la diff identifiants. Calculé même sur exact_match (cheap) pour
+    que l'UX puisse afficher "0 gaps / 0 unknowns" comme preuve
+    positive.
+  - `WaveResult` propage `gap_lines` + `unknown_identifiers` depuis
+    l'attempt gagnant (et best attempt en cas de fail).
+  - `reconstruct_adaptive` + `_run_level_pass` gagnent un kwarg
+    `on_cube_extras: callable = None` — backward compat préservée
+    (default `None` → no-op).
+
+**Fix UI** :
+- `muninn/ui/neuron_map.py` :
+  - `Neuron` dataclass : `gap_lines: list[int]` + `unknown_idents: list[str]`
+    (defaults `[]`).
+  - `update_cube_details(idx, gap_lines, unknown_idents)` slot.
+- `muninn/ui/cube_live.py` : signal
+  `cube_details = pyqtSignal(int, list, list)` ; callback
+  `on_cube_extras` passé à `reconstruct_adaptive`.
+- `muninn/ui/terminal.py` + `muninn/ui/main_window.py` : signal
+  bubblé worker→UI, connect vers `neuron_panel.update_cube_details`.
+- `muninn/ui/detail_panel.py` : 4 nouveaux labels (`_sha_label`,
+  `_ncd_label`, `_gaps_label`, `_unknowns_label`). `show_neuron`
+  les peuple quand `level == 'cube'` (cube de reco), les hide
+  sinon (neurons mycelium classiques).
+- `muninn/ui/main_window.py::_on_neuron_selected` : enrichit le
+  payload `show_neuron` avec `sha_match`, `ncd`, `gap_lines`,
+  `unknown_idents`. SHA dérivé de `neuron.status == "done"`,
+  NCD de `neuron.temperature`.
+
+**Tests verbatim** (11 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py
+→ 11 passed in 0.47s
+
+forge --gen-props engine/core/cube_providers.py
+→ 7 props générées, 1 destructive skipped (run_progressive_levels)
+
+pytest tests/test_props_cube_providers.py
+       tests/test_chunk_2026-05-19_C*.py
+       tests/test_cube_b1_b6.py tests/test_cube_b16_b19.py
+       tests/test_cube_wiring.py tests/test_h8_api_bloat_baseline.py
+       tests/test_brick19_dead_code_audit.py
+       tests/test_chunk13_claude_rules_split.py
+→ 212 passed in 23.04s (no regression)
+```
+
+Pas de mirror BUG-091 (cube_providers.py shimmé via `muninn/_engine.py`).
+Pas de nouveau env var (pas de feature flag — diagnostics toujours calculés,
+peu importe le mode).
+
+
 ## 2026-05-19 (PM) — CHUNK C9/14 : UI toggle Mycelium↔Reconstruction (color mode)
 
 Dixième chunk. `NeuronMapWidget` peignait toujours par `n.degree` (color

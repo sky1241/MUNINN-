@@ -3,6 +3,39 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C10/14)
+>
+> **DetailPanel enrichi reco : SHA / NCD / gaps / unknown identifiers**.
+>
+> **Fichiers touchés** :
+> - `engine/core/cube_providers.py` :
+>   - `ReconstructionResult` : `gap_lines`, `unknown_identifiers` (default []).
+>   - `WaveResult` : propage les 2 champs depuis l'attempt gagnant.
+>   - `_extract_gap_lines(anchor_map, n_lines)` helper.
+>   - `_extract_unknown_identifiers(reconstruction, ast_hints)` helper.
+>   - `reconstruct_cube` populate les 2 champs.
+>   - `reconstruct_adaptive` + `_run_level_pass` kwarg
+>     `on_cube_extras: callable = None`.
+> - `muninn/ui/neuron_map.py` :
+>   - `Neuron.gap_lines` + `Neuron.unknown_idents`.
+>   - `NeuronMapWidget.update_cube_details(idx, gap, unknown)` slot.
+> - `muninn/ui/cube_live.py` : signal `cube_details = pyqtSignal(int, list, list)`,
+>   callback `on_cube_extras` passé à `reconstruct_adaptive`.
+> - `muninn/ui/terminal.py` + `main_window.py` : bubblé worker → UI.
+> - `muninn/ui/detail_panel.py` : 4 labels reco (`_sha_label`, `_ncd_label`,
+>   `_gaps_label`, `_unknowns_label`) ; affichés ssi `level == 'cube'`.
+> - `muninn/ui/main_window.py::_on_neuron_selected` : enrichit payload
+>   `show_neuron` (sha_match dérivé de `status == 'done'`, ncd de
+>   `temperature`).
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C10_recon_extras.py` (11 tests).
+> **Forge** : `forge --gen-props engine/core/cube_providers.py` → 7 props,
+> 1 destructive skipped (`run_progressive_levels`).
+>
+> **Reste C11-C13** : file line-by-line heatmap (C11), fractal x1/x2/x3 (C12),
+> E2E + benchmark + sandbox (C13).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C9/14)
 >
 > **Toggle Mycelium↔Reconstruction wirée + bouton visible**.

@@ -166,6 +166,8 @@ class MainWindow(QMainWindow):
         self.terminal_panel.cube_progress.connect(self.neuron_panel.update_cube_ncd)
         # CHUNK C8 (2026-05-19) — live refresh edges (mycelium grows during cycles)
         self.terminal_panel.cube_neighbors_refreshed.connect(self.neuron_panel.refresh_neighbors)
+        # CHUNK C10 (2026-05-19) — surface per-cube reco diagnostics on the neuron
+        self.terminal_panel.cube_details.connect(self.neuron_panel.update_cube_details)
         # Navi animation monopolises the main thread (30fps orb paint); hide
         # her while a reconstruction is running so the heatmap stays snappy.
         self.terminal_panel.reconstruction_started.connect(self._on_reco_started)
@@ -409,7 +411,7 @@ class MainWindow(QMainWindow):
                 secondary_ids.add(self.neuron_panel.neurons[idx].id)
         self.tree_panel.highlight_concept(neuron.id, secondary_ids)
 
-        # Update detail panel (B-UI-12/13)
+        # Update detail panel (B-UI-12/13 + CHUNK C10 reco diagnostics)
         self.detail_panel.show_neuron({
             "label": neuron.label,
             "id": neuron.id,
@@ -423,6 +425,14 @@ class MainWindow(QMainWindow):
             "files": [neuron.entry] if neuron.entry else [],
             "temperature": neuron.temperature if neuron.temperature else None,
             "zone": neuron.zone if neuron.zone else None,
+            # CHUNK C10 (2026-05-19) — reco fields. `status=='done'`
+            # encodes a SHA match (see NeuronMapWidget.update_cube_ncd).
+            # ncd is stored in temperature for cube neurons (0..1).
+            "sha_match": (neuron.status == "done"),
+            "ncd": (neuron.temperature
+                    if neuron.level == "cube" else None),
+            "gap_lines": getattr(neuron, "gap_lines", []) or [],
+            "unknown_idents": getattr(neuron, "unknown_idents", []) or [],
         })
 
         # Status bar
