@@ -1,17 +1,28 @@
 """CHUNK D10 — drift audit: muninn/_engine.py vs engine/core/muninn.py.
 
-The two files share 23 top-level functions but their bodies have drifted
-since BUG-091. Full shim reduction is deferred (see docs/D10_DRIFT_AUDIT.md
-for the migration plan); this file just locks in the current invariants
-so future drift can't grow silently.
+SUPERSEDED 2026-05-19 — `muninn/_engine.py` was shimified (47-line shim
+re-exporting from `engine/core/muninn.py`). Drift between the two files
+is now impossible by construction: the shim copies every attribute at
+import time via `dir(_canonical)`. The runtime equivalent is covered by
+`test_engine_shim_reexports_canonical_muninn` in test_chunk_d11_shim_drift.py.
 
-Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §D10
+This whole module is skipped collectively. Don't delete: keeps the
+historical audit context discoverable for future archeology.
 """
 import ast
 import re
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason=(
+        "Obsolete after _engine.py shimification (2026-05-19). The drift "
+        "this module was guarding can no longer occur — see "
+        "test_engine_shim_reexports_canonical_muninn in "
+        "test_chunk_d11_shim_drift.py for the runtime equivalent."
+    )
+)
 
 
 REPO = Path(__file__).resolve().parent.parent

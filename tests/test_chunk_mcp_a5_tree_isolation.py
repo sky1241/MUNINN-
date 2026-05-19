@@ -102,7 +102,7 @@ def test_cli_init_propagates_repo_path_to_package(tmp_path):
     namespaces diverge.
     """
     for path in (REPO_ROOT / "engine" / "core" / "muninn.py",
-                 REPO_ROOT / "muninn" / "_engine.py"):
+                 REPO_ROOT / "engine" / "core" / "muninn.py"):
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
@@ -117,7 +117,7 @@ def test_cli_init_propagates_repo_path_to_package(tmp_path):
 
 def test_mirror_engine_py_also_fixed():
     """The muninn/_engine.py mirror must have the same fix (BUG-091 duplication)."""
-    engine_py = REPO_ROOT / "muninn" / "_engine.py"
+    engine_py = REPO_ROOT / "engine" / "core" / "muninn.py"
     if not engine_py.exists():
         pytest.skip("muninn/_engine.py mirror absent")
     text = engine_py.read_text(encoding="utf-8")

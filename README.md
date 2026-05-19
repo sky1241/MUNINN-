@@ -487,8 +487,8 @@ engine/
       lexicons/
         fr_en.json        K.1 + K.1.bis offline FR→EN dict (1336 entries)
         fr_en_wikidata.json K.1.bis Wikidata-only output (CC0 traceability)
-muninn/                   pip-installable package (mirrors engine/core — BUG-091 graduated cleanup)
-  _engine.py              Mirror of engine/core/muninn.py for entry point
+muninn/                   pip-installable package — shims re-export from engine/core (BUG-091 closed 2026-05-09, _engine 2026-05-19)
+  _engine.py              Shim of engine/core/muninn.py (entry point muninn-mem)
   mycelium.py             Shim
   vault.py                Shim
   ui/

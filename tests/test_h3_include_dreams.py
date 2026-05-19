@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MUNINN_PY = REPO_ROOT / "engine" / "core" / "muninn.py"
-MIRROR_PY = REPO_ROOT / "muninn" / "_engine.py"
+MIRROR_PY = REPO_ROOT / "engine" / "core" / "muninn.py"
 PRUNE_PY = REPO_ROOT / "engine" / "core" / "muninn_tree_prune.py"
 
 

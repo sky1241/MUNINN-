@@ -179,3 +179,39 @@ def test_shim_re_exports_canonical_public_names(name):
         f"{sorted(missing)[:10]}"
         + (f" (and {len(missing) - 10} more)" if len(missing) > 10 else "")
     )
+
+
+def test_engine_shim_reexports_canonical_muninn():
+    """muninn/_engine.py is an asymmetrically-named shim of engine/core/muninn.py.
+
+    Created 2026-05-19 to close the last remaining BUG-091 duplicate (the
+    1801-line _engine.py that had drifted from engine/core/muninn.py).
+    The naming is asymmetric (canonical=muninn.py, shim=_engine.py) because
+    pyproject.toml's `muninn-mem = muninn._engine:main` console_script
+    pins the shim path, and we can't rename engine/core/muninn.py without
+    breaking every `from muninn import ...` import that the package's
+    _ProxyModule (muninn/__init__.py) forwards there.
+
+    The shim re-exports every attribute (public AND private) because
+    _ProxyModule forwards all getattr calls to _engine, including private
+    helpers like `_safe_path`. Public-only re-export would break
+    `import muninn; muninn._safe_path(...)`.
+    """
+    canonical = _load_engine_core("muninn")
+    if canonical is None:
+        pytest.skip("engine/core/muninn.py not loadable in this env")
+    shim = _load_muninn_shim("_engine")
+    if shim is None:
+        pytest.skip("muninn._engine not importable in this env")
+
+    canonical_names = _public_names(canonical)
+    shim_names = set(dir(shim))
+    missing = [n for n in canonical_names if n not in shim_names]
+    assert not missing, (
+        f"muninn/_engine.py shim does NOT re-export canonical names from "
+        f"engine/core/muninn.py: {sorted(missing)[:10]}"
+        + (f" (and {len(missing) - 10} more)" if len(missing) > 10 else "")
+    )
+
+    # CLI entry point must be accessible (pyproject.toml pin).
+    assert hasattr(shim, "main"), "muninn._engine.main missing (CLI entry breaks)"

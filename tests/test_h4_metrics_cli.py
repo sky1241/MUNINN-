@@ -88,7 +88,7 @@ def test_h4_metrics_end_to_end_returns_json(tmp_path: Path) -> None:
 
 
 def test_h4_mirror_engine() -> None:
-    mirror_src = (REPO_ROOT / "muninn" / "_engine.py").read_text(encoding="utf-8")
+    mirror_src = (REPO_ROOT / "engine" / "core" / "muninn.py").read_text(encoding="utf-8")
     assert 'args.command == "metrics"' in mirror_src, (
         "muninn/_engine.py missing metrics handler (BUG-091 mirror)"
     )

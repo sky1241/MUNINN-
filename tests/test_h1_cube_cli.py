@@ -92,7 +92,7 @@ def test_h1_cube_default_action_is_status(tmp_path: Path) -> None:
 
 def test_h1_mirror_engine_muninn(tmp_path: Path) -> None:
     """BUG-091 mirror discipline: muninn/_engine.py must mirror the cube wiring."""
-    mirror_src = (REPO_ROOT / "muninn" / "_engine.py").read_text(encoding="utf-8")
+    mirror_src = (REPO_ROOT / "engine" / "core" / "muninn.py").read_text(encoding="utf-8")
     assert 'args.command == "cube"' in mirror_src, (
         "muninn/_engine.py missing cube handler (BUG-091 mirror)"
     )
