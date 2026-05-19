@@ -1034,19 +1034,27 @@ def _extract_gap_lines(anchor_map: dict, n_lines: int) -> list:
 _COMMON_LANG_KEYWORDS = frozenset({
     # Python-specific (not in other languages)
     "def", "pass", "elif", "lambda", "yield", "global", "nonlocal",
-    "finally", "except", "True", "False", "None",
+    "finally", "except", "True", "False", "None", "match",
     # Go-specific
-    "func", "defer", "range", "chan", "package", "fallthrough", "select",
+    "func", "defer", "range", "chan", "fallthrough", "select",
     # JS / TS-specific
-    "function", "let", "typeof", "instanceof", "null", "undefined", "export",
+    "function", "let", "typeof", "instanceof", "undefined",
+    "export", "this", "super",
     # C-family-specific
     "char", "long", "short", "float", "double", "extern", "static",
     "unsigned", "signed", "inline", "typedef", "union", "enum", "sizeof",
+    # CHUNK F3 (REMEDIATION-3) — Java/Kotlin
+    "public", "private", "protected", "final", "abstract", "volatile",
+    "synchronized", "throws", "extends", "implements", "package",
+    # CHUNK F3 (REMEDIATION-3) — Ruby/Swift/Crystal
+    "begin", "rescue", "unless", "until", "guard", "ensure", "fileprivate",
+    # Built-ins courants (print fonction, length 5)
+    "print", "println",
     # Shared keywords (multi-language : Python + Go + JS + C/C++)
     "return", "import", "from", "while", "class", "switch", "case",
     "default", "break", "continue", "with", "raise", "assert",
     "async", "await", "type", "struct", "interface", "const", "void",
-    "else",
+    "else", "true", "false", "null",
 })
 
 
@@ -1144,6 +1152,13 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
     # KeyError, AttributeError, IndexError) ET on émet un trace event
     # 'pipeline.engine.reco.gap_extraction_failed' pour rendre les
     # régressions visibles dans la sandbox.
+    # CHUNK F1 (REMEDIATION-3) — élargir whitelist E1 :
+    #   - `ValueError` : `_build_full_anchor_map:488` fait
+    #     `for ln, lt in ast_hints['anchors']` ; un anchor malformé
+    #     (1-tuple, 3-tuple) raise ValueError, pas TypeError.
+    #   - `re.error` : `_extract_unknown_identifiers` utilise `re.findall`
+    #     qui peut raise re.error sur regex corrompue.
+    import re as _re_mod
     try:
         import os.path as _osp
         cube_lines = cube.content.split("\n") if cube.content else []
@@ -1153,7 +1168,8 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
             ast_hints or {}, cube_lines, n_lines, ext,
         )
         gap_lines = _extract_gap_lines(anchor_map, n_lines)
-    except (TypeError, KeyError, AttributeError, IndexError) as _e:
+    except (TypeError, KeyError, AttributeError, IndexError,
+            ValueError, _re_mod.error) as _e:
         gap_lines = []
         log_event(  # PIPELINE_TRACE
             "pipeline.engine.reco.gap_extraction_failed",  # PIPELINE_TRACE
@@ -1165,7 +1181,8 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
         )  # PIPELINE_TRACE
     try:
         unknown_idents = _extract_unknown_identifiers(reconstruction, ast_hints)
-    except (TypeError, KeyError, AttributeError, IndexError) as _e:
+    except (TypeError, KeyError, AttributeError, IndexError,
+            ValueError, _re_mod.error) as _e:
         unknown_idents = []
         log_event(  # PIPELINE_TRACE
             "pipeline.engine.reco.unknown_idents_extraction_failed",  # PIPELINE_TRACE

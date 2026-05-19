@@ -482,7 +482,8 @@ def test_e6_main_window_payload_sha_matched_cube_ncd_is_zero(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     matched = Neuron(id="cube_1", label="L6-10", level="cube",
-                     status="done", temperature=0.0)
+                     status="done", temperature=0.0,
+                     cube_ncd_set=True)  # F2 : flag mis par update_cube_ncd
     win.neuron_panel._neurons = [matched]
     payload_captured: list = []
     real_show = win.detail_panel.show_neuron
@@ -617,6 +618,177 @@ def test_e5_common_lang_keywords_source_has_no_duplicates():
                     return
     # Si on n'a pas trouvé l'assignment dans le source, c'est suspect
     raise AssertionError("could not locate _COMMON_LANG_KEYWORDS assignment in source")
+
+
+def test_f1_gap_extraction_catches_value_error(monkeypatch):
+    """F1/REMEDIATION-3 : E1 whitelist élargie pour catch ValueError.
+
+    _build_full_anchor_map:488 fait `for ln, lt in ast_hints['anchors']`
+    qui raise ValueError si tuple malformé (1-elem ou 3-elem). Pré-F1
+    E1 ne catchait que (TypeError, KeyError, AttributeError, IndexError)
+    → ValueError propageait → crash reconstruct_cube.
+    """
+    from cube_providers import reconstruct_cube, MockLLMProvider
+    from cube import Cube
+    import cube_providers as cp
+
+    captured: list = []
+    def fake_log_event(name, data=None, level="info"):
+        captured.append((name, level))
+    monkeypatch.setattr(cp, "log_event", fake_log_event)
+
+    def raising_value_error(*a, **kw):
+        raise ValueError("simulated malformed anchor tuple")
+
+    monkeypatch.setattr(cp, "_extract_gap_lines", raising_value_error)
+
+    c = Cube(id="t", content="def f():\n    pass",
+             sha256="x", file_origin="t.py", line_start=1, line_end=2)
+    # Doit NE PAS crash
+    r = reconstruct_cube(c, [], MockLLMProvider(),
+                         ast_hints={"first_line": "def f():"})
+    assert r.gap_lines == []
+    # Event warn doit avoir été émis
+    warns = [n for n, l in captured if l == "warn"]
+    assert any("gap_extraction_failed" in n for n in warns), (
+        f"F1 regression : ValueError swallow doit log_event warn, "
+        f"got: {captured}"
+    )
+
+
+def test_f3_extended_keywords_filter_java():
+    """F3/REMEDIATION-3 : Java keywords (public/private/protected/extends/...)
+    doivent être filtrés du DetailPanel."""
+    from cube_providers import _extract_unknown_identifiers
+    r = _extract_unknown_identifiers(
+        "public class MyService extends ParentService { "
+        "private final int counter_value; }",
+        {"identifiers": ["sentinel"]},
+    )
+    for kw in ("public", "private", "final", "extends", "class"):
+        assert kw not in r, f"Java keyword {kw!r} leaked : {r}"
+    # Real idents come through (≥4 chars regex)
+    assert "MyService" in r
+    assert "ParentService" in r
+    assert "counter_value" in r
+
+
+def test_f3_extended_keywords_filter_ruby():
+    """F3 : Ruby keywords (begin/rescue/unless/until)."""
+    from cube_providers import _extract_unknown_identifiers
+    r = _extract_unknown_identifiers(
+        "begin; do_something; rescue StandardError => e; unless cond then x; end",
+        {"identifiers": ["sentinel"]},
+    )
+    for kw in ("begin", "rescue", "unless", "unless"):
+        assert kw not in r, f"Ruby keyword {kw!r} leaked : {r}"
+
+
+def test_f3_no_regression_on_real_identifiers():
+    """F3 negative : Foo/Bar/Helper_func ne sont pas des keywords, doivent rester."""
+    from cube_providers import _extract_unknown_identifiers
+    r = _extract_unknown_identifiers(
+        "Helper_func(input_data, magic_constant)",
+        {"identifiers": ["sentinel"]},
+    )
+    assert "Helper_func" in r
+    assert "input_data" in r
+    assert "magic_constant" in r
+
+
+def test_f2_failed_cube_shows_real_ncd_not_na(qtbot):
+    """F2/REMEDIATION-3 : un cube reconstruit avec NCD ≥ 0.3 (échec
+    partiel) a `status='todo'` (cf update_cube_ncd:1507) MAIS `cube_ncd_set=True`.
+    main_window doit afficher la VRAIE valeur NCD (preuve positive même
+    en échec), pas N/A. Pré-F2, status=='todo' était proxy pour "fresh"
+    → cachait le NCD réel sur fail.
+    """
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import Neuron
+    win = MainWindow()
+    qtbot.addWidget(win)
+    # Cube reconstruit avec NCD=0.42 (échec, ≥0.3 → status='todo' par
+    # update_cube_ncd) MAIS cube_ncd_set=True (vraie reconstruction).
+    failed = Neuron(id="cube_1", label="L6-10", level="cube",
+                    status="todo", temperature=0.42,
+                    cube_ncd_set=True)
+    win.neuron_panel._neurons = [failed]
+    payload_captured: list = []
+    real_show = win.detail_panel.show_neuron
+    win.detail_panel.show_neuron = lambda p: (payload_captured.append(p), real_show(p))
+    win._on_neuron_selected(failed)
+    payload = payload_captured[-1]
+    assert payload.get("ncd") == 0.42, (
+        f"F2 regression : failed cube (NCD=0.42, status='todo' mais "
+        f"cube_ncd_set=True) doit afficher VRAIE NCD, pas N/A. "
+        f"Got ncd={payload.get('ncd')}"
+    )
+
+
+def test_f2_fresh_cube_unchanged(qtbot):
+    """F2 negative test : un fresh cube (cube_ncd_set=False) garde
+    ncd=None (comportement E6 préservé)."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.main_window import MainWindow
+    from muninn.ui.neuron_map import Neuron
+    win = MainWindow()
+    qtbot.addWidget(win)
+    fresh = Neuron(id="cube_0", label="L1-5", level="cube",
+                   status="todo", temperature=0.5,
+                   cube_ncd_set=False)  # fresh
+    win.neuron_panel._neurons = [fresh]
+    payload_captured: list = []
+    real_show = win.detail_panel.show_neuron
+    win.detail_panel.show_neuron = lambda p: (payload_captured.append(p), real_show(p))
+    win._on_neuron_selected(fresh)
+    assert payload_captured[-1].get("ncd") is None
+
+
+def test_f2_update_cube_ncd_sets_flag(qtbot):
+    """F2 : `update_cube_ncd` doit marquer `cube_ncd_set=True`."""
+    pytest_qt = __import__("pytest")
+    pytest_qt.importorskip("PyQt6")
+    from muninn.ui.neuron_map import NeuronMapWidget, Neuron
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w._neurons = [Neuron(id="c0", label="L1", level="cube")]
+    assert w._neurons[0].cube_ncd_set is False  # fresh
+    w.update_cube_ncd(0, 0.5, sha_match=False)
+    assert w._neurons[0].cube_ncd_set is True, (
+        "update_cube_ncd must set cube_ncd_set=True (F2 regression)"
+    )
+
+
+def test_f1_unknown_idents_catches_re_error(monkeypatch):
+    """F1 : `_extract_unknown_identifiers` peut raise `re.error` sur
+    regex corrompue. Pré-F1 propageait → crash."""
+    import re as _re
+    from cube_providers import reconstruct_cube, MockLLMProvider
+    from cube import Cube
+    import cube_providers as cp
+
+    captured: list = []
+    def fake_log_event(name, data=None, level="info"):
+        captured.append((name, level))
+    monkeypatch.setattr(cp, "log_event", fake_log_event)
+
+    def raising_re_error(*a, **kw):
+        raise _re.error("simulated regex compile failure")
+
+    monkeypatch.setattr(cp, "_extract_unknown_identifiers", raising_re_error)
+
+    c = Cube(id="t", content="x = 1", sha256="x",
+             file_origin="t.py", line_start=1, line_end=1)
+    r = reconstruct_cube(c, [], MockLLMProvider(), ast_hints={"identifiers": ["x"]})
+    assert r.unknown_identifiers == []
+    warns = [n for n, l in captured if l == "warn"]
+    assert any("unknown_idents_extraction_failed" in n for n in warns), (
+        f"F1 regression : re.error swallow doit log_event warn, "
+        f"got: {captured}"
+    )
 
 
 def test_e1_unknown_identifiers_logs_event_on_internal_error(monkeypatch):

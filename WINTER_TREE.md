@@ -3,6 +3,35 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-3 F1-F5 — post-3ème-audit)
+>
+> **3ème audit 4-agents → 5 chunks fix F1-F5 (+ docs out-of-scope)**.
+>
+> **Rapport complet** : `docs/AUDIT_REPORT_2026-05-19_VAGUE3.md`.
+>
+> **Fichiers touchés** :
+> - `engine/core/cube_providers.py` :
+>   - F1 : whitelist E1 élargie `(TypeError, KeyError, AttributeError,
+>     IndexError, ValueError, re.error)`.
+>   - F3 : `_COMMON_LANG_KEYWORDS` Java/Kotlin/Ruby/Swift + print/println.
+> - `muninn/ui/neuron_map.py` : F2 `Neuron.cube_ncd_set: bool = False` flag
+>   + `update_cube_ncd` le set `True`.
+> - `muninn/ui/main_window.py` : F2 guard `cube_ncd_set` au lieu de
+>   `status == "todo"`.
+> - `tests/test_chunk_2026-05-19_C10_recon_extras.py` : +8 tests
+>   (F1×2, F2×3, F3×3).
+> - `tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py` : F5 cleanup
+>   monkeypatch mort.
+> - `CLAUDE.md` : F4 +2 lignes MUNINN_BENCH_FILE/MODELS.
+> - `tests/test_chunk13_claude_rules_split.py` : cap 365→370.
+>
+> **Sanity finale** : 195/195 tests verts local.
+>
+> **Out-of-scope** documenté : AMBER-2 (mock thread-safe),
+> AMBER-4 (UI mouseClick test), AMBER-5 (real Ollama CI),
+> T3 (FakeMycelium tautologie), S1+S2 (stash drop + history gitignore).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E8/8 🎉 COMPLETE)
 >
 > **Untracked cleanup + .gitignore working docs**.

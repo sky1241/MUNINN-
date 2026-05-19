@@ -272,6 +272,8 @@ muninn-mem install-cron        # Systemd-user timer hebdo (Linux)
 | `MUNINN_EMBEDDINGS_THRESHOLD` | K.2 (2026-05-14) : seuil cosine pour déclencher une fusion cross-lingual au write-time. Mesuré 2026-05-14 sur LaBSE : `arbre↔tree=0.96`, `árbol↔tree=0.96`, `木↔tree=0.86`, `Datei↔file≈0.86` → 0.85 capture FR/EN/ES/JP/DE-courant. Baisser à 0.80 pour capturer DE/jargon (`Baum↔tree=0.75`) au prix de faux positifs sémantiques (`voiture↔camion=0.80`). Clampé à `[0, 1]`. | `0.85` |
 | `MUNINN_TEST_REPOS` | Liste de repos pour test_l9_full.py (`name1:/path1,name2:/path2`) | repo courant |
 | `MUNINN_BENCH_N` | Nombre d'iterations pour le benchmark CI | depend du script |
+| `MUNINN_BENCH_FILE` | CHUNK F4 (2026-05-19 REMEDIATION-3) : path du fichier cible pour `tests/run_bench_multi_llm_2026_05_14.py` (script bench multi-LLM opt-in, jamais lancé en CI). Local-only. | unset |
+| `MUNINN_BENCH_MODELS` | CHUNK F4 (2026-05-19 REMEDIATION-3) : liste CSV de modèles Ollama pour le bench multi-LLM (ex: `llama3.2:1b,qwen2.5-coder:1.5b`). Local-only. | défauts script |
 | `MUNINN_EVAL_MODE` / `MUNINN_EVAL_MODEL` / `MUNINN_EVAL_RUNS` / `MUNINN_EVAL_ONLY_IDS` | Parametres du eval harness chunk 9/11 | depend du script |
 
 ## Etat du projet (mai 2026, post-P3 split + BUG-104 fix + forge v2.1.2)

@@ -69,6 +69,13 @@ class Neuron:
     # les neurons de mode reconstruction (level == 'cube').
     gap_lines: list = field(default_factory=list)
     unknown_idents: list = field(default_factory=list)
+    # CHUNK F2 (REMEDIATION-3) — distingue "cube jamais reconstruit"
+    # (False, fresh init) de "cube reconstruit mais NCD réel" (True,
+    # set par update_cube_ncd). Pré-F2, E6 utilisait `status == "todo"`
+    # comme proxy mais update_cube_ncd re-set "todo" pour NCD ≥ 0.3
+    # (échec partiel) — confondant les 2 cas → DetailPanel cachait
+    # le vrai NCD sur fail. Flag explicite résout l'ambiguïté.
+    cube_ncd_set: bool = False
 
 
 # Shape constants for daltonism support
@@ -1505,6 +1512,10 @@ class NeuronMapWidget(QWidget):
         n.temperature = clamped
         n.degree = 0 if sha_match else int(round(clamped * 10))
         n.status = "done" if sha_match else ("wip" if clamped < 0.3 else "todo")
+        # F2 (REMEDIATION-3) — marque le cube comme "reconstruit avec NCD réel"
+        # pour que main_window distingue "fresh todo" (cube_ncd_set=False)
+        # de "reconstructed-but-failed todo" (cube_ncd_set=True, status='todo').
+        n.cube_ncd_set = True
         self.update()
 
     def update_cube_details(self, idx: int, gap_lines: list, unknown_idents: list):

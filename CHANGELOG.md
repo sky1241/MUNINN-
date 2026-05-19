@@ -1,5 +1,82 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-3 F1-F5) — Post-3ème-audit fixes (rapport docs/AUDIT_REPORT_2026-05-19_VAGUE3.md)
+
+3ème audit 4-agents ruthless commandé par Sky crevé ("demmerde-toi").
+Le code MARCHE runtime (10/10 commandes exit 0 — UI boot, pipeline,
+imports, neighbors, click groups, CI verte). MAIS 2 RED résiduels +
+5 AMBER + 4 trous tests détectés. Rapport complet :
+`docs/AUDIT_REPORT_2026-05-19_VAGUE3.md`.
+
+REMEDIATION-3 fixe 5 chunks F1-F5 (~1h10). Le reste (AMBER-2,
+AMBER-4, AMBER-5, T3, S1, S2) est documenté comme out-of-scope
+explicit avec justifications.
+
+**F1 — Élargir whitelist E1 narrow except** :
+`engine/core/cube_providers.py:1156` post-E1 catchait
+`(TypeError, KeyError, AttributeError, IndexError)`. Mais
+`_build_full_anchor_map:488` peut raise `ValueError` (anchor tuple
+malformé `(1,)` → not enough values to unpack). Et regex helpers
+peuvent raise `re.error`. Les 2 manquaient → crash silencieux.
+Whitelist élargie : `(TypeError, KeyError, AttributeError, IndexError,
+ValueError, re.error)`. 2 tests F1.
+
+**F2 — Distinguer "fresh todo" et "reconstructed-but-failed todo"** :
+E6 utilisait `status == 'todo'` comme proxy "cube jamais reconstruit"
+→ `ncd=None` → DetailPanel "N/A". MAIS `update_cube_ncd:1507` re-set
+`status='todo'` pour NCD ≥ 0.3 (échec partiel) → CACHAIT le vrai NCD
+sur fail, l'INVERSE de l'intention E6 ("preuve positive même en échec").
+Fix : nouveau champ `Neuron.cube_ncd_set: bool = False`, mis `True`
+par `update_cube_ncd`. main_window guard utilise le flag explicite. 3 tests F2.
+
+**F3 — Étendre `_COMMON_LANG_KEYWORDS`** : ajout des keywords
+Java/Kotlin (`public`, `private`, `protected`, `final`, `abstract`,
+`volatile`, `synchronized`, `throws`, `extends`, `implements`,
+`package`), Ruby/Swift/Crystal (`begin`, `rescue`, `unless`, `until`,
+`guard`, `ensure`, `fileprivate`), et built-ins (`print`, `println`).
+3 tests F3.
+
+**F4 — Documenter MUNINN_BENCH_FILE + MUNINN_BENCH_MODELS** :
+`tests/run_bench_multi_llm_2026_05_14.py` (gitignored E8) contient ces
+env vars. Le test `test_chunk_c10_c11_doc_drift` scanne le disque,
+pas l'index → FAIL silencieux sur HEAD. Vars ajoutées à CLAUDE.md
+(370 lignes max, cap bumped via test_chunk13_claude_rules_split).
+
+**F5 — Nettoyer monkeypatch mort test C7** :
+`tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py` ligne 123
+patchait `cube.concept_to_file_lines` mais `find_concept_boundaries`
+fait `from mycelium import concept_to_file_lines` LOCALEMENT (cube.py:806)
+→ le patch sur `cube.*` est mort, le test marchait que grâce au 2nd
+patch `mycelium.*`. Code mort retiré, garde uniquement le patch utile.
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py \
+       tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py \
+       -k "test_f1 or test_f2 or test_f3 or test_e1 or test_d1 or test_d3 \
+           or test_e5 or test_e6 or test_d11 or test_find_concept_boundaries" -v
+→ 28 passed in 1.06s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py tests/test_h8_api_bloat_baseline.py \
+       tests/test_brick19_dead_code_audit.py tests/test_chunk13_claude_rules_split.py
+→ 195 passed in 7.61s (no regression)
+```
+
+**Hors-scope explicit** (documenté dans rapport audit) :
+- AMBER-2 (mock_ollama global patch) : pytest-xdist pas utilisé.
+- AMBER-4 (vrai QTest.mouseClick) : projet UI-test dédié, gros LOC.
+- AMBER-5 (real Ollama in CI) : trop coûteux.
+- T3 (FakeMycelium tautologie) : test passe runtime, à investiguer.
+- S1 (drop stash entries) : destructif, demande Sky.
+- S2 (.test_intelligence history files .gitignore) : destructif, demande Sky.
+
+Pas de mirror BUG-091 (modif engine/core, shim wildcard propage).
+Pas de nouveau env var production (MUNINN_BENCH_* sont doc-only,
+les vraies vars existent dans le bench script gitignored).
+
+
 ## 2026-05-19 (REMEDIATION-2 E8/8) — Untracked cleanup + .gitignore 🎉 REMEDIATION-2 COMPLETE
 
 Huitième et **dernier** chunk REMEDIATION-2. L'audit Build/Runtime 24h

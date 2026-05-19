@@ -201,12 +201,17 @@ def test_claude_md_still_under_360_lines():
     per règle §8.A du plan unifié — chaque nouvelle env var doit
     être listée. +4 lignes (1 par var).
 
+    Bumped to 370 (2026-05-19 PM, REMEDIATION-3 F4) : ajout de
+    MUNINN_BENCH_FILE et MUNINN_BENCH_MODELS (env vars locales
+    pour tests/run_bench_multi_llm_2026_05_14.py, gitignored mais
+    détectées par test_chunk_c10_c11_doc_drift). 2 lignes ajoutées.
+
     Cap stays binding so the file doesn't grow without intent.
     """
     text = CLAUDE_MD.read_text(encoding="utf-8")
     line_count = len(text.splitlines())
-    assert line_count <= 365, (
-        f"CLAUDE.md should stay under 365 lines, got {line_count}. "
+    assert line_count <= 370, (
+        f"CLAUDE.md should stay under 370 lines, got {line_count}. "
         f"If you added content, justify it in the test docstring before "
         f"bumping the cap."
     )

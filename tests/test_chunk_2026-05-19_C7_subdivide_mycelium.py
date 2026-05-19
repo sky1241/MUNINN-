@@ -119,16 +119,15 @@ def test_find_concept_boundaries_detects_zone_transition(monkeypatch):
     def stub_concept_to_file_lines(content, mycelium):
         return line_concepts
 
-    # Patch dans le module cube (importé par find_concept_boundaries)
-    monkeypatch.setattr(cube, "concept_to_file_lines",
+    # CHUNK F5 (REMEDIATION-3) — patch UNIQUEMENT `mycelium.concept_to_file_lines`.
+    # `find_concept_boundaries` fait `from mycelium import concept_to_file_lines`
+    # à l'intérieur de la fonction (cube.py:806-808), donc patcher `cube.*`
+    # ne sert à rien (le nom n'existe pas au scope module de cube).
+    # Pré-F5 le test avait un patch mort sur `cube.*` + un patch utile
+    # sur `mycelium.*` ; on garde uniquement le second.
+    import mycelium as _myc
+    monkeypatch.setattr(_myc, "concept_to_file_lines",
                         stub_concept_to_file_lines, raising=False)
-    # Aussi dans mycelium si l'import était local
-    try:
-        import mycelium as _myc
-        monkeypatch.setattr(_myc, "concept_to_file_lines",
-                            stub_concept_to_file_lines, raising=False)
-    except ImportError:
-        pass
 
     class FakeMycelium:
         def has_concept(self, c):
