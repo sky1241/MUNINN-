@@ -60,3 +60,32 @@ def test_muninn_cube_providers_first_import_dataclasses():
     )
     assert r.returncode == 0, f"stderr: {r.stderr[-500:]}"
     assert "OK" in r.stdout
+
+
+# CHUNK D4 (2026-05-19 remediation) — shim must re-export the C10 + D3
+# helpers (`_extract_gap_lines`, `_extract_unknown_identifiers`). Pre-D4,
+# `from cube_providers import *` skipped them (PEP 8 underscore rule)
+# and the explicit re-export block didn't list them.
+
+def test_d4_shim_exposes_extract_gap_lines():
+    """D4 regression : _extract_gap_lines reachable via the shim."""
+    r = _subprocess_import(
+        "from muninn.cube_providers import _extract_gap_lines; "
+        "result = _extract_gap_lines({0: 'x'}, 3); "
+        "print('result:', result)"
+    )
+    assert r.returncode == 0, f"stderr: {r.stderr[-500:]}"
+    assert "[1, 2]" in r.stdout  # gaps = lines NOT in anchor_map
+
+
+def test_d4_shim_exposes_extract_unknown_identifiers():
+    """D4 regression : _extract_unknown_identifiers reachable via the shim."""
+    r = _subprocess_import(
+        "from muninn.cube_providers import _extract_unknown_identifiers; "
+        "result = _extract_unknown_identifiers('def foo(): magic_var', {'identifiers': ['foo']}); "
+        "print('result:', result)"
+    )
+    assert r.returncode == 0, f"stderr: {r.stderr[-500:]}"
+    # D3 fix : 'def' filtered (keyword), 'magic_var' kept
+    assert "magic_var" in r.stdout
+    assert "'def'" not in r.stdout

@@ -1,5 +1,36 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D4/11) — Shim re-export `_extract_*` helpers
+
+Quatrième chunk de remediation. Audit avait flag : `muninn/cube_providers.py`
+fait `from cube_providers import *` qui skip les `_*` (PEP 8), et la liste
+explicite ne contenait pas `_extract_gap_lines` ni `_extract_unknown_identifiers`.
+Donc tout consumer qui faisait `from muninn.cube_providers import _extract_gap_lines`
+crashait avec ImportError. Violation discipline BUG-091 mirror.
+
+**Fix** (`muninn/cube_providers.py`) : ajout explicite des 2 helpers
+au bloc de re-export public.
+
+**Tests** (`tests/test_bug_091_shim_first_import.py` +2) :
+- `test_d4_shim_exposes_extract_gap_lines` : subprocess cold-start import + call.
+- `test_d4_shim_exposes_extract_unknown_identifiers` : idem + check filter D3.
+
+**Tests verbatim** :
+```
+pytest tests/test_bug_091_shim_first_import.py -v
+→ 6 passed in 1.79s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube_providers.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 153 passed in 7.25s (no regression)
+```
+
+Pas de mirror BUG-091 (le fix EST le shim).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D3/11) — Filter language keywords + min length 4 in unknown_identifiers
 
 Troisième chunk de remediation. Le DetailPanel "Unknown idents" affichait

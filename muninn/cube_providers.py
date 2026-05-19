@@ -42,4 +42,8 @@ from cube_providers import (  # explicit re-export of public surface
     validate_reconstruction,
     compute_hotness,
     compute_ncd,
+    # CHUNK D4 (2026-05-19 remediation) — surface C10 + D3 helpers for
+    # shim consumers (wildcard `import *` skips `_*` per PEP 8).
+    _extract_gap_lines,
+    _extract_unknown_identifiers,
 )
