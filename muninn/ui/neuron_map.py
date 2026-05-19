@@ -223,6 +223,49 @@ class NeuronMapWidget(QWidget):
         # Max degree (for color gradient)
         self._max_degree = 1
 
+        # CHUNK C9 (2026-05-19) — color source toggle (mycelium ↔ reconstruction).
+        # Default mycelium = paint by `n.degree` (existing behavior); switch
+        # to reconstruction = paint by `n.temperature` (NCD from update_cube_ncd).
+        # Persisted in ~/.muninn/ui_config.json via muninn.ui.ai_config.
+        self._color_mode = "mycelium"
+        try:
+            from muninn.ui import ai_config as _ai_cfg
+            _cfg = _ai_cfg.load_config()
+            _persisted = _cfg.get("neuron_color_mode")
+            if _persisted in ("mycelium", "reconstruction"):
+                self._color_mode = _persisted
+        except Exception:
+            pass
+
+    def set_color_mode(self, mode: str) -> None:
+        """CHUNK C9 (2026-05-19) — switch the neuron paint source.
+
+        Accepts only 'mycelium' or 'reconstruction' (invalid silently
+        ignored). Persists the choice to ~/.muninn/ui_config.json so the
+        next session reopens with the same mode. Triggers a repaint
+        without rebuilding the layout.
+        """
+        if mode not in ("mycelium", "reconstruction"):
+            return
+        if mode == self._color_mode:
+            return
+        self._color_mode = mode
+        try:
+            from muninn.ui import ai_config as _ai_cfg
+            _cfg = _ai_cfg.load_config()
+            _cfg["neuron_color_mode"] = mode
+            _ai_cfg.save_config(_cfg)
+        except Exception:
+            pass
+        self._cache_dirty = True
+        self.update()
+
+    def toggle_color_mode(self) -> None:
+        """CHUNK C9 (2026-05-19) — flip between mycelium and reconstruction."""
+        self.set_color_mode(
+            "reconstruction" if self._color_mode == "mycelium" else "mycelium"
+        )
+
     def closeEvent(self, event):  # R4: cleanup
         self._cancel_laplacian()
         self._anim_timer.stop()
@@ -588,8 +631,15 @@ class NeuronMapWidget(QWidget):
                 if i not in neighbors:
                     alpha = int(depth_alpha * 0.2)
 
-            # B-UI-03: Color by degree (not status)
-            color = _degree_color(n.degree, self._max_degree)
+            # B-UI-03 + CHUNK C9 (2026-05-19) : color source depends on
+            # `_color_mode`. mycelium = paint by `n.degree` (default);
+            # reconstruction = paint by `n.temperature` mapped to the same
+            # 10-step DEGREE_GRADIENT so the heatmap stays readable.
+            if self._color_mode == "reconstruction":
+                temp_bucket = int(round(max(0.0, min(1.0, n.temperature)) * 10))
+                color = _degree_color(temp_bucket, 10)
+            else:
+                color = _degree_color(n.degree, self._max_degree)
             color.setAlpha(alpha)
 
             # Search match: orange ring (B-UI-25)

@@ -168,3 +168,59 @@ class ForestToggle(QWidget):
     @property
     def mode(self) -> str:
         return self._mode
+
+
+class ColorModeToggle(QWidget):
+    """CHUNK C9 (2026-05-19) — Mycelium ↔ Reconstruction color source.
+
+    Companion to ForestToggle. Flips the neuron paint between
+    'mycelium' (color by degree, mycelium-driven layout) and
+    'reconstruction' (color by NCD temperature from the reco run).
+    Designed to sit top-right of the neuron panel, mirroring the
+    ForestToggle on the top-left.
+    """
+
+    mode_changed = pyqtSignal(str)  # "mycelium" or "reconstruction"
+
+    def __init__(self, parent=None, initial_mode: str = "mycelium"):
+        super().__init__(parent)
+        self._mode = initial_mode if initial_mode in ("mycelium", "reconstruction") else "mycelium"
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        self._btn = QPushButton(self._label())
+        self._btn.setFixedSize(110, 28)
+        self._btn.setFont(QFont(FONT_BODY, 10))
+        self._btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn.clicked.connect(self.toggle)
+        self._update_style()
+        layout.addWidget(self._btn)
+
+        self.setFixedHeight(36)
+
+    def toggle(self):
+        self._mode = "reconstruction" if self._mode == "mycelium" else "mycelium"
+        self._btn.setText(self._label())
+        self._update_style()
+        self.mode_changed.emit(self._mode)
+
+    def _label(self) -> str:
+        return "MYCELIUM" if self._mode == "mycelium" else "RECO"
+
+    def _update_style(self):
+        if self._mode == "mycelium":
+            self._btn.setStyleSheet(
+                f"QPushButton {{ background: rgba(0,220,255,0.15); color: {ACCENT_CYAN_HEX}; "
+                f"border: 1px solid {ACCENT_CYAN_HEX}; border-radius: 8px; font-weight: 600; }}"
+            )
+        else:
+            self._btn.setStyleSheet(
+                "QPushButton { background: rgba(245,158,11,0.15); color: #F59E0B; "
+                "border: 1px solid #F59E0B; border-radius: 8px; font-weight: 600; }"
+            )
+
+    @property
+    def mode(self) -> str:
+        return self._mode

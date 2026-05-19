@@ -102,6 +102,21 @@ class MainWindow(QMainWindow):
         self._navi.show()
         self._navi.show_first_launch()
 
+        # CHUNK C9 (2026-05-19) — ColorModeToggle overlay top-right of
+        # the neuron panel. Mirrors NaviWidget (overlay parented to the
+        # neuron_panel, raised above its content). Click toggles between
+        # mycelium (default) and reconstruction color sources.
+        from muninn.ui.forest import ColorModeToggle
+        self._color_mode_toggle = ColorModeToggle(
+            self.neuron_panel,
+            initial_mode=getattr(self.neuron_panel, "_color_mode", "mycelium"),
+        )
+        self._color_mode_toggle.mode_changed.connect(
+            self.neuron_panel.set_color_mode
+        )
+        self._color_mode_toggle.raise_()
+        self._color_mode_toggle.show()
+
         # Keep Navi sized to neuron panel
         self.neuron_panel.installEventFilter(self)
 
@@ -114,11 +129,17 @@ class MainWindow(QMainWindow):
         self._about_dialog = None
 
     def eventFilter(self, obj, event):
-        """Resize Navi overlay when neuron panel resizes."""
+        """Resize Navi + ColorModeToggle overlays when neuron panel resizes."""
         from PyQt6.QtCore import QEvent
         if obj is self.neuron_panel and event.type() == QEvent.Type.Resize:
             if hasattr(self, '_navi'):
                 self._navi.setGeometry(self.neuron_panel.rect())
+            # CHUNK C9 (2026-05-19) — pin ColorModeToggle top-right
+            if hasattr(self, '_color_mode_toggle'):
+                tw = self._color_mode_toggle.sizeHint().width() or 120
+                th = self._color_mode_toggle.sizeHint().height() or 36
+                pw = self.neuron_panel.width()
+                self._color_mode_toggle.setGeometry(pw - tw - 8, 8, tw, th)
         return super().eventFilter(obj, event)
 
     def _wire_signals(self):
@@ -251,7 +272,8 @@ class MainWindow(QMainWindow):
         """Execute command palette action."""
         actions = {
             "zoom_to_fit": lambda: self.neuron_panel._zoom_to_fit_animated(),
-            "toggle_mode": lambda: None,
+            # CHUNK C9 (2026-05-19) — flip neuron color source (mycelium↔reco)
+            "toggle_mode": lambda: self.neuron_panel.toggle_color_mode(),
             "focus_search": lambda: None,
             "clear_terminal": lambda: self.terminal_panel._output.clear(),
             "export_screenshot": lambda: self._export_panel_screenshot(),

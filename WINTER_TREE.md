@@ -3,6 +3,29 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C9/14)
+>
+> **Toggle Mycelium↔Reconstruction wirée + bouton visible**.
+>
+> **Fichiers touchés** :
+> - `muninn/ui/neuron_map.py` :
+>   - `self._color_mode` (default `"mycelium"`, persistance via ai_config).
+>   - `set_color_mode(mode)`, `toggle_color_mode()`.
+>   - `_paint_neurons` branche sur `_color_mode` (degree vs NCD temperature).
+> - `muninn/ui/forest.py` : `ColorModeToggle` widget companion (cyan↔orange).
+> - `muninn/ui/main_window.py` :
+>   - Instantie `_color_mode_toggle` overlay top-right neuron_panel.
+>   - `eventFilter` reposition sur resize.
+>   - Palette `toggle_mode` → `neuron_panel.toggle_color_mode()`.
+> - `~/.muninn/ui_config.json` : clé `neuron_color_mode`.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C9_color_mode_toggle.py` (10 tests).
+> **Forge** : skip (UI files).
+>
+> **Reste C10-C13** : DetailPanel SHA/NCD/gaps (C10), file line-by-line
+> heatmap (C11), fractal x1/x2/x3 (C12), E2E + benchmark + sandbox (C13).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C8/14)
 >
 > **Mycelium neighbors live refresh entre cycles**.

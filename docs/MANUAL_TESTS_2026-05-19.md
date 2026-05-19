@@ -472,4 +472,60 @@ neurones préservés, couleurs préservées.
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C9 → C13.)*
+## CHUNK C9 — UI toggle Mycelium↔Reconstruction (color mode)
+
+**Objectif** : un bouton visible top-right du neuron panel bascule
+la heatmap entre couleur par mycelium degree (cyan) et couleur par
+NCD reconstruction (orange). Persisté entre sessions.
+
+### Test 1 — Tests automatisés
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_chunk_2026-05-19_C9_color_mode_toggle.py -v
+```
+**Attendu** : 10 passed.
+- [ ]
+
+### Test 2 — Defaults
+```bash
+QT_QPA_PLATFORM=offscreen python3 -c "
+import sys; sys.path.insert(0, '.')
+from muninn.ui.neuron_map import NeuronMapWidget
+from PyQt6.QtWidgets import QApplication
+app = QApplication.instance() or QApplication([])
+w = NeuronMapWidget()
+assert w._color_mode == 'mycelium'
+w.toggle_color_mode()
+assert w._color_mode == 'reconstruction'
+w.set_color_mode('nonsense')
+assert w._color_mode == 'reconstruction'  # invalid ignored
+print('OK')
+"
+```
+- [ ]
+
+### Test 3 — Sandbox visuel (à 4 yeux avec Sky)
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# 1. Observer le bouton top-right du panneau gauche (neuron map)
+# 2. Cliquer dessus : couleurs des neurones doivent basculer instantanément
+# 3. Lancer une reco /reconstruct <file>
+# 4. Mode "RECO" → couleurs reflètent NCD (rouge = haut NCD = mal reconstruit)
+# 5. Mode "MYCELIUM" → couleurs reflètent degree mycelium
+# 6. Fermer + rouvrir l'UI → le bouton doit garder le dernier mode choisi
+#    (~/.muninn/ui_config.json: "neuron_color_mode": "...")
+```
+**Attendu** : bouton visible, click répond, persistance OK.
+- [ ]
+
+### Test 4 — Space shortcut (toggle_mode palette)
+```bash
+# Dans l'UI, ouvrir command palette (Ctrl+P ou équivalent)
+# Sélectionner "toggle_mode" ou taper "toggle"
+# Doit flipper le color mode
+```
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C10 → C13.)*

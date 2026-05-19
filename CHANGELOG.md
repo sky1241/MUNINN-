@@ -1,5 +1,48 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C9/14 : UI toggle Mycelium↔Reconstruction (color mode)
+
+Dixième chunk. `NeuronMapWidget` peignait toujours par `n.degree` (color
+from mycelium graph). Aucun moyen de voir la heatmap NCD côté reco sans
+attendre la fin du run. `ForestToggle` existait mais n'était jamais
+instancié et la `toggle_mode` action du command palette était un
+`lambda: None`.
+
+**Fix** :
+- `muninn/ui/neuron_map.py` :
+  - Champ `self._color_mode = "mycelium"` (default, persisté).
+  - Méthode `set_color_mode(mode: str)` accepte
+    `"mycelium"|"reconstruction"`, invalid ignoré, persist
+    `~/.muninn/ui_config.json` via `ai_config.save_config`.
+  - Méthode `toggle_color_mode()` flip entre les deux modes.
+  - `_paint_neurons` : color = `n.temperature * 10` mappé sur
+    `DEGREE_GRADIENT` si mode=reconstruction, sinon `n.degree`.
+  - Chargement du mode au boot depuis `ai_config.load_config()`.
+- `muninn/ui/forest.py` : nouveau widget `ColorModeToggle(parent,
+  initial_mode)` companion de `ForestToggle`. Boutons stylés cyan
+  (mycelium) ou orange (reco), signal `mode_changed(str)`.
+- `muninn/ui/main_window.py` :
+  - Instantie `_color_mode_toggle` comme overlay du `neuron_panel`,
+    raise above content.
+  - `eventFilter` repositionne le toggle top-right sur resize.
+  - Palette `toggle_mode` action → `neuron_panel.toggle_color_mode()`.
+
+**Tests verbatim** (10 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C9_color_mode_toggle.py
+→ 10 passed in 0.56s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_h8_api_bloat_baseline.py \
+       tests/test_brick19_dead_code_audit.py tests/test_chunk13_claude_rules_split.py
+→ 92 passed in 4.04s (no regression)
+```
+
+Forge skip : `muninn/ui/neuron_map.py` + `forest.py` pas de fonctions
+publiques module-level.
+
+Pas de mirror BUG-091 (muninn/ui/* n'a pas de pendant engine/core/).
+
+
 ## 2026-05-19 (PM) — CHUNK C8/14 : Mycelium neighbors live refresh entre cycles
 
 Neuvième chunk du battle plan unifié. Pré-fix, `cube_live.py` calculait

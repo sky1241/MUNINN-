@@ -384,9 +384,15 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
 
 ---
 
-### CHUNK 9 — UI toggle Mycelium↔Reconstruction (vrai bouton)
+### CHUNK 9 — UI toggle Mycelium↔Reconstruction (vrai bouton) ✅ LIVRÉ 2026-05-19
 
 **Sévérité** 🟡 Moyenne • **LOC** ~50 • **Risque** Bas • **Estimation 1h**
+
+> ✅ Livré : `NeuronMapWidget._color_mode` + `set_color_mode` +
+> `toggle_color_mode` ; widget `ColorModeToggle` companion overlay
+> top-right neuron panel ; palette `toggle_mode` action wirée.
+> Persistance via `~/.muninn/ui_config.json` (`neuron_color_mode`).
+> 10/10 tests `test_chunk_2026-05-19_C9_color_mode_toggle.py`.
 
 #### Spec (audit 2026-05-19 : clarification — `ForestToggle` solo/forest existe DÉJÀ, on l'étend)
 - [muninn/ui/forest.py:123-171](../muninn/ui/forest.py#L123-L171) `ForestToggle` existe déjà avec signal `mode_changed(str)` ("solo"/"forest"). Le Space shortcut ([shortcuts.py:26-29](../muninn/ui/shortcuts.py#L26-L29) → `_toggle_mode` l.56-58) appelle déjà `_forest_toggle.toggle()`.
