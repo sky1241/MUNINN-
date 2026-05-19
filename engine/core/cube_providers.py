@@ -1025,23 +1025,28 @@ def _extract_gap_lines(anchor_map: dict, n_lines: int) -> list:
 # These are syntactic noise, NOT senior-dev memory. Aligned with Bonus B
 # decision (mission Muninn = visualize what the LLM had to INVENT, not
 # what any junior dev would write trivially).
+# CHUNK E5 (REMEDIATION-2) — dedup. Pré-E5 le set contenait `return` × 4,
+# `const`/`import`/`struct`/`void`/`break`/`continue`/`async`/`await` en
+# doublon (l'audit a flag le C&P smell). Frozenset dédupliquait au runtime
+# mais la lecture du source était trompeuse — un keyword pouvait sembler
+# manquer dans une section alors qu'il était listé ailleurs.
+# Re-organisé par section linguistique disjointe + commentaires.
 _COMMON_LANG_KEYWORDS = frozenset({
-    # Python
-    "def", "pass", "return", "elif", "else", "import", "from", "lambda",
-    "yield", "raise", "True", "False", "None", "with", "while", "class",
-    "async", "await", "global", "nonlocal", "assert", "break", "continue",
-    "finally", "except",
-    # Go
-    "func", "defer", "range", "switch", "case", "default", "select",
-    "chan", "type", "struct", "interface", "package", "const",
-    "import", "return", "break", "continue", "fallthrough",
-    # JS / TS
-    "function", "const", "let", "export", "import", "return", "typeof",
-    "instanceof", "await", "async", "void", "null", "undefined",
-    # C-family (subset that's NOT also a useful 3-letter ident)
-    "void", "char", "long", "short", "float", "double", "extern",
-    "static", "const", "unsigned", "signed", "inline", "typedef",
-    "struct", "union", "enum", "sizeof", "return",
+    # Python-specific (not in other languages)
+    "def", "pass", "elif", "lambda", "yield", "global", "nonlocal",
+    "finally", "except", "True", "False", "None",
+    # Go-specific
+    "func", "defer", "range", "chan", "package", "fallthrough", "select",
+    # JS / TS-specific
+    "function", "let", "typeof", "instanceof", "null", "undefined", "export",
+    # C-family-specific
+    "char", "long", "short", "float", "double", "extern", "static",
+    "unsigned", "signed", "inline", "typedef", "union", "enum", "sizeof",
+    # Shared keywords (multi-language : Python + Go + JS + C/C++)
+    "return", "import", "from", "while", "class", "switch", "case",
+    "default", "break", "continue", "with", "raise", "assert",
+    "async", "await", "type", "struct", "interface", "const", "void",
+    "else",
 })
 
 

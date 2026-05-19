@@ -1,5 +1,43 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E5/8) — Dedup `_COMMON_LANG_KEYWORDS` source
+
+Cinquième chunk REMEDIATION-2. L'audit Code Core a flag :
+`engine/core/cube_providers.py:_COMMON_LANG_KEYWORDS` listait `return` × 4,
+`const`/`import`/`struct`/`void`/`break`/`continue`/`async`/`await` en
+doublon. Frozenset dédupliquait au runtime mais la lecture du source était
+trompeuse (C&P smell signalé par l'agent).
+
+**Fix** (`engine/core/cube_providers.py:1022-1052`) :
+- Re-organisé par section linguistique DISJOINTE.
+- Section "shared" pour les keywords multi-language (return, import, from,
+  while, class, switch, case, default, break, continue, with, raise,
+  assert, async, await, type, struct, interface, const, void, else).
+- Chaque mot apparaît une seule fois dans le source.
+
+**Test structural** (`tests/test_chunk_2026-05-19_C10_recon_extras.py` +1) :
+- `test_e5_common_lang_keywords_source_has_no_duplicates` : AST inspection
+  de l'assignment `_COMMON_LANG_KEYWORDS = frozenset({...})`. Compte les
+  occurrences `Constant` ; asserte zéro duplicate.
+
+Comportement runtime préservé : tests D3 (filter keywords) tous verts
+(`'def', 'pass', 'return', 'func', 'defer', 'range'` toujours filtrés).
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py -k "test_e5 or test_d3 or test_e1" -v
+→ 7 passed in 0.39s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py ...
+→ 182 passed in 5.97s (no regression)
+```
+
+Pas de mirror BUG-091 (modif engine/core, shim wildcard propage).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E4/8) — Durcir e2e expected_any → assert C6 spécifique
 
 Quatrième chunk REMEDIATION-2. L'audit Tests 24h a flag : D7 avait durci

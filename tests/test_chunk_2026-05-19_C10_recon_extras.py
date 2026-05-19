@@ -438,6 +438,42 @@ def test_e1_gap_extraction_logs_event_on_internal_error(monkeypatch):
     assert "TypeError" in str(gap_warnings[0][2].get("error", ""))
 
 
+def test_e5_common_lang_keywords_source_has_no_duplicates():
+    """E5 regression : `_COMMON_LANG_KEYWORDS` source must not C&P-duplicate
+    a keyword. Pré-E5 le set listait `return` × 4, `const`/`import`/
+    `struct`/`void`/`break`/`continue`/`async`/`await` en doublon — frozenset
+    dédup au runtime mais la lecture du source était trompeuse.
+    """
+    import ast
+    import inspect
+    from cube_providers import _COMMON_LANG_KEYWORDS
+
+    # Re-parse the assignment AST to count source-level occurrences.
+    src = inspect.getsource(__import__("cube_providers"))
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "_COMMON_LANG_KEYWORDS"):
+            # node.value is a frozenset(set([...]))
+            # Walk to find the set literal node
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Set):
+                    literals = [e.value for e in sub.elts
+                                if isinstance(e, ast.Constant)]
+                    duplicates = [
+                        kw for kw in set(literals)
+                        if literals.count(kw) > 1
+                    ]
+                    assert not duplicates, (
+                        f"_COMMON_LANG_KEYWORDS source has duplicates : {duplicates}"
+                    )
+                    return
+    # Si on n'a pas trouvé l'assignment dans le source, c'est suspect
+    raise AssertionError("could not locate _COMMON_LANG_KEYWORDS assignment in source")
+
+
 def test_e1_unknown_identifiers_logs_event_on_internal_error(monkeypatch):
     """E1 same pattern for unknown_identifiers extraction."""
     from cube_providers import reconstruct_cube, MockLLMProvider

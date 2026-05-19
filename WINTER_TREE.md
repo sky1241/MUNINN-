@@ -3,6 +3,21 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E5/8)
+>
+> **Dedup `_COMMON_LANG_KEYWORDS` + test structural AST**.
+>
+> **Fichier touché** :
+> - `engine/core/cube_providers.py:1022-1052` : re-organisé par section
+>   disjointe (Python-specific / Go-specific / JS-TS / C-family / Shared
+>   multi-language). Chaque keyword listé une seule fois.
+> - `tests/test_chunk_2026-05-19_C10_recon_extras.py` : test_e5 AST
+>   inspect zero-duplicate.
+>
+> **Reste REMEDIATION-2** : E6 (UI NCD display + fresh cube + D11 mol),
+> E7 (harden tests C7+C8), E8 (untracked files cleanup).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E4/8)
 >
 > **Durcir e2e expected_any → 3 asserts spécifiques par event nommé**.
