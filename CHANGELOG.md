@@ -1,5 +1,51 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D10/11) — mock_ollama capture + test C0 runtime (Q3 B acté)
+
+Neuvième chunk de remediation. Décision Sky Q3 = B (2026-05-19 PM) :
+valoriser `tests/_helpers/mock_ollama.py` au lieu de supprimer le dead code.
+Audit avait flag : 92 LoC, zero consumer. Et C0 (`MUNINN_LLM_REPEAT_PENALTY`,
+`MUNINN_LLM_TEMPERATURE`) n'avait aucune preuve runtime que ces valeurs
+arrivaient dans le payload Ollama HTTP — uniquement des unit tests sur
+les constantes + provider._request stub.
+
+**Fix step 1 — augmenter mock_ollama** (`tests/_helpers/mock_ollama.py`) :
+- `_build_handler` : signature gagne un `captured` list.
+- Chaque `urlopen(req)` parse `req.data` en JSON et append
+  `{"url": str, "payload": dict|None}` dans `captured`.
+- `mock_ollama_session(...)` yield maintenant la `captured` list.
+
+**Fix step 2 — créer test C0 runtime**
+(`tests/test_chunk_2026-05-19_C0_llm_runtime.py`, NOUVEAU) :
+- 5 tests qui consume `mock_ollama_session` et asserte que :
+  - `OllamaProvider.generate()` envoie `options.repeat_penalty = 1.15`
+  - `.options.temperature = 0.2`
+  - `fim_generate()` carries both options
+  - `payload.model` = nom passé au constructor
+  - `mock_ollama_session` yield bien une list `captured`
+- Autouse fixture `_fresh_cube_providers_module` force reload propre
+  pour éviter test pollution de `tests/test_chunk_2026-05-19_C0_llm_no_collapse.py`
+  (qui utilise `_fresh_cube_providers` avec env overrides).
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C0_llm_runtime.py -v
+→ 5 passed in 0.43s
+
+pytest tests/test_chunk_2026-05-19_C0_llm_no_collapse.py \
+       tests/test_chunk_2026-05-19_C0_llm_runtime.py -v
+→ 13 passed in 0.44s (incl. cross-file no pollution)
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py ...
+→ 161 passed in 10.70s (no regression)
+```
+
+mock_ollama_session : pre-D10 = dead code, post-D10 = consumed by 5 tests.
+
+Pas de mirror BUG-091 (helper test + nouveau fichier test).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D7/11) — `test_pipeline_trace_emits_during_reco` durci (asserte vraiment)
 
 Huitième chunk de remediation. Audit a flag : le test E2E de

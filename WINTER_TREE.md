@@ -3,6 +3,23 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D10/11 — Q3 B acté)
+>
+> **mock_ollama capture + test C0 runtime**.
+>
+> **Fichiers touchés** :
+> - `tests/_helpers/mock_ollama.py` : `mock_ollama_session` yield
+>   maintenant une `captured` list ; chaque request body est parsée
+>   en JSON et appendée à `captured`.
+> - `tests/test_chunk_2026-05-19_C0_llm_runtime.py` (NOUVEAU) :
+>   5 tests qui consume mock_ollama_session et assertent que C0
+>   options (`repeat_penalty=1.15`, `temperature=0.2`) arrivent dans
+>   le payload HTTP `/api/generate`. Autouse fixture pour reload
+>   propre.
+>
+> **Reste remediation** : D5 (C12 hover/click groups), D6 (forge tri 44).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D7/11)
 >
 > **`test_pipeline_trace_emits_during_reco` durci**.
