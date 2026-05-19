@@ -1,5 +1,51 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E3/8) — Tri `test_props_forge_metrics.py` (D6 oublié)
+
+Troisième chunk REMEDIATION-2. L'audit Tests 24h a flag : D6 a oublié
+`tests/test_props_forge_metrics.py`. 5 tests `_no_crash` avec stratégie
+`st.text()` sur paramètres `Path` real-filesystem → string random → crash
+→ swallowed Exception → tests passent sans rien tester.
+
+Hypothesis avait laissé 4 patches non triés dans `.hypothesis/patches/`
+(2026-05-19 : `031be5e6`, `dadd3197`, `d07a90f1`, `1dbfd94b`) — bugs
+réels jamais regardés. Patches orphelins.
+
+**Fix** (`tests/test_props_forge_metrics.py`) :
+- Supprime 4 tests path-based (`get_repo_risk`, `get_file_risk_map`,
+  `forge_score_for_path`, `forge_color_for_path`) — out-of-scope sans
+  stratégie typée.
+- Garde + rewrite `color_for_score` (pure function float→hex string)
+  avec vraies post-conditions :
+  - `test_color_for_score_returns_hex_string` (property : 7-char `#RRGGBB`).
+  - `test_color_for_score_red_threshold` (0.70 → `#d62728`).
+  - `test_color_for_score_orange_threshold` (0.40-0.69 → `#ff7f0e`).
+  - `test_color_for_score_yellow_and_green` (0.20-0.39 → `#bcbd22`, <0.20 → `#2ca02c`).
+
+**Nettoyage** : suppression des 7 hypothesis patches orphelins
+2026-05-19 (counter-examples pour tests désormais inexistants).
+Patches 2026-05-13 + 2026-05-14 (3) gardés (pour autres modules).
+
+**Avant** : 5 tests no-op, 0 assertion.
+**Après** : 4 tests réels, 12 assertions vraies.
+
+**Tests verbatim** :
+```
+pytest tests/test_props_forge_metrics.py -v
+→ 4 passed in 0.43s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 181 passed in 5.78s (no regression)
+```
+
+Pas de mirror BUG-091 (test file uniquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E2/8) — Fix R2 bare engine/core cold-start circular import
 
 Deuxième chunk REMEDIATION-2. L'audit Build/Integration a flag : le D2

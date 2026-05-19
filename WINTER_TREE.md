@@ -3,6 +3,22 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E3/8)
+>
+> **Tri `test_props_forge_metrics.py` (oublié par D6) + cleanup hypothesis patches**.
+>
+> **Fichier touché** :
+> - `tests/test_props_forge_metrics.py` : 5 tests no-op → 4 tests réels
+>   sur `color_for_score` (4 thresholds + format hex).
+> - `.hypothesis/patches/2026-05-19--*.patch` × 7 supprimés (orphelins
+>   post-D6 + post-E2).
+>
+> **Avant** : 5 tests no-op + 0 assertion.
+> **Après** : 4 tests réels + 12 assertions sur post-conditions.
+>
+> **Reste REMEDIATION-2** : E4-E8.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E2/8)
 >
 > **Fix R2 bare engine/core cold-start circular import**.
