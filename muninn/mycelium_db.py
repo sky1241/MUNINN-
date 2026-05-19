@@ -1,13 +1,7 @@
-"""Compatibility shim — source of truth: engine/core/mycelium_db.py.
-
-Part of BUG-091 resync (2026-05-07): the canonical version uses
-threading.RLock() (re-entrant) where this copy used threading.Lock()
-which would deadlock on the chain
-  observe() -> transaction() -> _get_or_create_concept().
-Also has try/except in _Transaction.__enter__ that releases the lock
-on entry failure (this copy left it locked forever).
-Re-exporting from engine/core/ removes both deadlock risks.
-See docs/BATTLE_PLAN_BUG091_2026-05-07.md.
+"""Shim of engine/core/mycelium_db.py (BUG-091, 2026-05-07). Canonical
+uses RLock (re-entrant) — this copy used Lock which deadlocked the
+observe → transaction → _get_or_create_concept chain. Also has
+exception-safe lock release in _Transaction.__enter__.
 """
 import sys
 from pathlib import Path

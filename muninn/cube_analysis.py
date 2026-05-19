@@ -1,17 +1,6 @@
-"""Compatibility shim — source of truth: engine/core/cube_analysis.py.
-
-Part of BUG-091 resync (2026-05-07): the canonical version has fixes
-that were missing from this copy:
-  - C1: feed mechanical weight (success/failure) to mycelium via direct
-    upsert instead of just observe_text() (preserves the +1.0/-0.5 signal)
-  - C4: real FIMReconstructor passed to auto_repair() when provider
-    available (this copy always passed reconstructor=None)
-  - C6: feed_anomalies_to_mycelium() called from post_cycle_analysis()
-    when mycelium provided (close the loop on validated anomalies)
-  - post_cycle_analysis() signature: this copy lost the `provider` and
-    `mycelium` parameters that drive the C4/C6 fixes
-Re-exporting from engine/core/ brings them all back.
-See docs/BATTLE_PLAN_BUG091_2026-05-07.md.
+"""Shim of engine/core/cube_analysis.py (BUG-091, 2026-05-07). Canonical
+has 4 fixes: C1 (mechanical weight upsert), C4 (real FIMReconstructor),
+C6 (anomaly loop), post_cycle_analysis signature (provider + mycelium).
 """
 import sys
 from pathlib import Path

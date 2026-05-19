@@ -1,28 +1,9 @@
-"""Compatibility shim — source of truth: engine/core/vault.py.
-
-Part of BUG-091 resync (B1 fix 2026-05-09): the file diverged in LOGIC
-from engine/core/vault.py — engine canonical had 3 fixes that muninn/
-copy was missing (audit found this on 2026-05-09):
-
-  1. `verify = sha256(self._key)[:32]` (engine, 128-bit verify)
-     muninn was `[:16]` (64-bit, weaker)
-  2. H1 fix: `bytearray(fp.read_bytes())` so `_zero_bytes()` can wipe RAM
-     after decrypt (mutable). muninn passed bytes (immutable, can't wipe).
-  3. `failed_files = []` accumulator + audit log entry on partial failure.
-     muninn returned silent {decrypted, total_bytes} only.
-
-In practice muninn/vault.py was DEAD code: every consumer (muninn.py
-line 1565, _engine.py line 1603, tests/test_vault.py, tests/muninn_test_intelligence.py)
-imports via the bare `from vault import …` form which resolves to
-engine/core/vault.py through sys.path injection. Replacing the muninn/
-copy with a shim is therefore zero-impact prod (no behavioral change)
-+ closes the BUG-091 surface.
-
-If anyone ever did initialize a vault via `from muninn.vault import Vault`
-(unlikely per the grep), the verify-hash upgrade 64→128 bits will refuse
-to unlock with the old password — `vault rekey` solves that.
-
-See docs/BATTLE_PLAN_FINAL_PROD_v4_2026-05-09.md B1 for the audit plan.
+"""Shim of engine/core/vault.py (BUG-091 B1, 2026-05-09). Canonical has
+3 logic fixes the muninn/ copy was missing: 128-bit verify (was 64),
+bytearray+wipe RAM after decrypt, audit log on partial failure. Bare
+`from vault import …` already resolved to canonical via sys.path — this
+shim closes the BUG-091 surface with zero prod behavior change. Old
+passwords using the 64-bit verify need `vault rekey`.
 """
 import sys
 from pathlib import Path

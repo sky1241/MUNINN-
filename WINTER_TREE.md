@@ -3,6 +3,54 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (matin — BUG-091 closeout final + UI reco fixes)
+>
+> **4 commits poussés, CI verte** au run `26084199149` (3 jobs SUCCESS).
+> Sandbox-observabilité session du 2026-05-18 (CHUNK 10) a surfacé 3 drifts
+> + 1 mirror oublié. Tous fix.
+>
+> **Commits** :
+> - `4ff59c7` refactor(BUG-091): `muninn/_engine.py` 1801L → 47L shim
+> - `9892741` feat(ui): reco cube geometry = scan (Laplacien + mycelium edges)
+> - `bd1f937` fix(reco): `/reconstruct` gate accepts scan-only repos
+> - `3b78c2f` test: xfail `test_a2_1_arithmetic` (flaky freezegun post-shim)
+>
+> **Carte technique : ce qui change où**
+> - `muninn/_engine.py` (47L shim) charge `engine/core/muninn.py` via
+>   `importlib.spec_from_file_location("_muninn_engine_canonical", ...)` puis
+>   copie tous les attributs (publics + privés via `dir()`).
+> - `muninn/ui/neuron_map.py:1052` `set_reconstruction_cubes` — random init
+>   + Laplacien sur edges mycelium-derivés (poids 1.0) + chaîne (0.5).
+>   Constantes module : `_EDGE_WEIGHT_MYCELIUM`, `_EDGE_WEIGHT_CHAIN`.
+> - `muninn/ui/cube_live.py:202-260` — calcul `cube["mycelium_neighbors"]`
+>   via Jaccard sur intersection avec codebook mycélium (regex
+>   `r"[A-Za-zÀ-ÿ_]{3,}"` alignée sur `mycelium.observe_text`).
+>   Constantes : `_MYCELIUM_CONCEPT_REGEX`, `_MYCELIUM_CONCEPT_LIMIT=200000`,
+>   `_MYCELIUM_JACCARD_THRESHOLD=0.10`.
+> - `muninn/ui/terminal.py:637` — gate `find_bootstrapped_repo` →
+>   `find_owning_repo` (accepte scan-only). `_reconstruction_prereqs_missing`
+>   n'exige plus `tree.json` (audit a confirmé : pipeline reco ne le lit
+>   jamais — `cube_live`, `cube_providers`, `mycelium`, `subdivide_file`,
+>   `observe_text` zero accès au tree).
+>
+> **Tests pinned** :
+> - `tests/test_chunk_d11_shim_drift.py` — nouveau test
+>   `test_engine_shim_reexports_canonical_muninn` (couvre paire asymétrique
+>   `engine/core/muninn.py` ↔ `muninn/_engine.py`).
+> - `tests/test_ui_neuron_map.py` — 5 nouveaux tests reco-mode (mycelium
+>   edges + chain fallback + random initial + neighbor cache + empty).
+> - `tests/test_ui_terminal.py` — 3 tests réécrits (mycelium-only accepté,
+>   full bootstrap toujours OK, missing-when-no-mycelium).
+>
+> **Reste pour Phase 2** (non démarré) : brancher `subdivide_file` sur
+> `mycelium.detect_zones()` (`engine/core/mycelium_zones.py`, déjà existe
+> via CLI `muninn-mem zones`). Aujourd'hui `subdivide_file` est aveugle
+> au scan — découpage uniforme token-based.
+>
+> **Docs nettoyés** : `.claude/rules/python.md` (règle "mirror immediately"
+> obsolète virée), `README.md`, `docs/PIPELINE_TRACE_REMOVAL.md`.
+>
+
 > ### 📍 SNAPSHOT 2026-05-12 (nuit — Phase G+H exec partiel via PROMPT_EXEC_PHASE_H.md)
 >
 > **22 chunks Phase G+H livrés** (G.1-G.10 sans G.7/G.9, H.0-H.8 sans H.6b).

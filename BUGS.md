@@ -13,11 +13,13 @@
 - **Regression**: did the fix break anything else?
 -->
 
-## Status (2026-05-10 PM, après 17 commits sur main aujourd'hui) :
+## Status (2026-05-19 matin, BUG-091 final closeout) :
 
-**FIXED total** : 90 (12 audit passes 2026-03-18) + 10 (chunks 16+17 audit 2026-04-10) + 8 (BUG-102 à BUG-110, fixed 2026-04-10/11) + 1 (BUG-091 dual-tree FIXED 2026-05-09 via B1 shimification) + 1 (BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08) + 4 (CRIT-1, CRIT-2, CRIT-3, P2 fixed 2026-05-10 morning) + 7 (F1 numpy pin, F2/F3/F4 doc drift, F5 hooks audit trail, F6 forge_smoke matrix, F7 source-grep harmonize fixed 2026-05-10 PM).
+**FIXED total** : 90 (12 audit passes 2026-03-18) + 10 (chunks 16+17 audit 2026-04-10) + 8 (BUG-102 à BUG-110, fixed 2026-04-10/11) + 1 (BUG-091 dual-tree shimification 2026-05-09 B1, finalisé 2026-05-19 par `muninn/_engine.py` → shim 47L commit `4ff59c7`) + 1 (BUG-103 scrub_secrets false positives no longer reproducible 2026-05-08) + 4 (CRIT-1, CRIT-2, CRIT-3, P2 fixed 2026-05-10 morning) + 7 (F1 numpy pin, F2/F3/F4 doc drift, F5 hooks audit trail, F6 forge_smoke matrix, F7 source-grep harmonize fixed 2026-05-10 PM).
 
 **OPEN** : **0** (BUG-104 **FIXED 2026-05-10 PM via spill-to-tree**, voir entry détaillée ci-dessous).
+
+**2026-05-19** : `muninn/_engine.py` était le dernier mirror BUG-091 non shimifié (1801L drifté). Converti en shim 47L via `importlib.spec_from_file_location` (commit `4ff59c7`). Plus aucun fichier dupliqué dans `muninn/` — `tests/test_chunk_d11_shim_drift.py::test_engine_shim_reexports_canonical_muninn` garde le pair couvert. CI vert run `26084199149`. Voir `CHANGELOG.md` § 2026-05-19.
 
 **Détail des fixes 2026-05-10** :
 
@@ -584,35 +586,6 @@ anti-regression test in `test_chunk12_pre_tool_use_hooks.py` or
 ---
 
 ## Status: 90 bugs fixed across 12 audit passes (2026-03-18). 0 OPEN (pre-audit).
-
-## BUG-091: engine/core/ and muninn/ package fully duplicated [SUPERSEDED — see header]
-- **Status**: FIXED 2026-05-09 via B1 shimification (header L16).
-- **Symptom (historical)**: Modifying a file in `engine/core/` did NOT affect code paths
-  that `import muninn` (the pip package). Discovered during chunk 4 of leak
-  intel battle plan: chunk 3's anti-Adversa clamp had to be mirrored from
-  `engine/core/_secrets.py` to `muninn/_secrets.py` to be picked up by tests.
-- **Root cause**: Two parallel trees exist after the pip-package refactor
-  (commit history mentions `_ProxyModule`). The proxy bridges some functions
-  but NOT new ones added in either location after the refactor. Files affected:
-  - engine/core/muninn.py vs muninn/_engine.py
-  - engine/core/_secrets.py vs muninn/_secrets.py
-  - engine/core/muninn_tree.py vs muninn/muninn_tree.py
-  - engine/core/muninn_layers.py vs muninn/muninn_layers.py
-  - engine/core/muninn_feed.py vs muninn/muninn_feed.py
-  - engine/core/mycelium.py vs muninn/mycelium.py
-  - (and ~10 others)
-- **Workaround used by chunks 3-5**: every modif applied in BOTH trees by hand.
-  This is unsustainable for non-trivial changes.
-- **Fix (proposed, out of scope for chunk 5)**: pick one source of truth
-  (probably `muninn/` since it's the pip-installable package), delete the
-  other, and update all import paths to go through the package. The `engine/core`
-  path should become a symlink, an alias, or simply removed.
-- **Test**: NONE yet. A test that compares both files for byte-equality
-  would catch this regression: `test_engine_muninn_sync.py`.
-- **Regression risk**: tests that hardcode `engine/core/` paths (there are
-  some) need updating.
-
----
 
 ## Status (2026-03-18): 90 bugs fixed across 12 audit passes. 0 OPEN.
 

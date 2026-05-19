@@ -1,14 +1,7 @@
-"""Compatibility shim — source of truth: engine/core/cube_providers.py.
-
-Part of BUG-091 resync (B1 fix 2026-05-09): the file was a byte-identical
-copy (2124L, md5 confirmed) of engine/core/cube_providers.py. Replacing
-it with a 30-line shim removes drift risk on the Carmack-top-1 hotspot
-(38 bugfixes in 4 weeks per the post-H6 forge audit).
-
-Consumers all use bare `from cube_providers import …` (cube.py, cube_live.py
-etc.) and resolve via sys.path, so this is transparent.
-
-See docs/BATTLE_PLAN_FINAL_PROD_v4_2026-05-09.md B1 for the audit plan.
+"""Shim of engine/core/cube_providers.py (BUG-091 B1, 2026-05-09).
+2124L byte-identical copy → 30L shim. Carmack-top-1 hotspot (38 bugfixes
+in 4 weeks per H6 forge audit) — eliminating drift here is critical.
+Consumers use bare `from cube_providers import …` resolved via sys.path.
 """
 import sys
 from pathlib import Path

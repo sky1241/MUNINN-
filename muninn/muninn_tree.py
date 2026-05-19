@@ -1,37 +1,16 @@
-"""Compatibility shim — source of truth: engine/core/muninn_tree.py.
-
-Part of BUG-091 resync (2026-05-07): the canonical version has 8 fixes
-that were missing or regressed in this copy:
-  1. adaptive_boot_budget try/except on ValueError/TypeError around
-     int(MUNINN_CONTEXT_SIZE)
-  2. _tree_lock writes "L" byte before lock attempt (Windows file
-     locking via msvcrt.locking)
-  3. _tree_lock exception cleanup (close lock_f if acquire fails)
-  4. load_tree/save_tree honor `acquired` flag (warn on lock timeout)
-  5. _days_since uses datetime.now(timezone.utc) (timezone-stable
-     Ebbinghaus decay)
-  6. _atomic_json_write retries 3x on PermissionError (Windows
-     transient lock robustness)
-  7. os.path.normcase on path validation (case-insensitive on Windows
-     for path traversal defense)
-  8. _atomic_text_write function (atomic tempfile + os.replace pattern
-     used by 10+ call sites)
-
-Re-exporting from engine/core/ brings them all back.
-See docs/BATTLE_PLAN_BUG091_2026-05-07.md.
+"""Shim of engine/core/muninn_tree.py (BUG-091, 2026-05-07). Canonical
+has 8 fixes (adaptive_boot, Windows locking, atomic writes, Ebbinghaus
+timezone) — re-exporting brings them all back.
 """
 import sys
 from pathlib import Path
 
 _engine_core = str(Path(__file__).resolve().parent.parent / "engine" / "core")
 
-# CRIT-1 fix (2026-05-10) — same pattern as muninn/mycelium.py shim:
-# the shim may be loaded under the bare name "muninn_tree" (e.g. when
-# engine/core code does `from muninn_tree import …` and muninn/ is in
-# sys.path[0] from _engine.py:80). Python registers us in sys.modules
-# ['muninn_tree'] BEFORE executing this body, so the next `from muninn_tree
-# import *` re-finds OURSELF → ImportError "partially initialized" /
-# RecursionError. Pop self + force engine/core to sys.path[0].
+# CRIT-1 fix (2026-05-10): the shim may be loaded under the bare name
+# "muninn_tree" via sys.path injection — Python registers us in
+# sys.modules BEFORE executing this body, so `from muninn_tree import *`
+# re-finds OURSELF (RecursionError). Pop self + force engine/core to [0].
 if _engine_core in sys.path:
     sys.path.remove(_engine_core)
 sys.path.insert(0, _engine_core)

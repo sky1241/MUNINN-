@@ -1,15 +1,5 @@
-"""Compatibility shim — source of truth: engine/core/_secrets.py.
-
-Part of BUG-091 resync (B1 fix 2026-05-09): the file was a byte-identical
-copy of engine/core/_secrets.py (md5 confirmed) which is a recipe for
-silent drift the next time someone edits one side without the other.
-
-8 sites in engine/core/ + muninn/ consume `from _secrets import …` (or
-`from muninn._secrets import …` from `muninn/vault.py`) — the shim
-preserves all of them by re-exporting the public + private names that
-external callers reach for explicitly.
-
-See docs/BATTLE_PLAN_FINAL_PROD_v4_2026-05-09.md B1 for the audit plan.
+"""Shim of engine/core/_secrets.py (BUG-091 B1, 2026-05-09). Re-exports
+public + private names (8 consumer sites: engine/core/ + muninn/).
 """
 import sys
 from pathlib import Path

@@ -1,19 +1,9 @@
-"""Compatibility shim — source of truth: engine/core/cube.py.
-
-Part of BUG-091 resync (B1 fix 2026-05-09): the file was a byte-identical
-copy (1558L, md5 confirmed) of engine/core/cube.py. Replacing it with a
-shim removes drift risk on the cube core (scan/subdivide/store).
-
-cube.py itself re-exports cube_providers and cube_analysis at its tail
-(`from cube_providers import *`, `from cube_analysis import *`), so this
-shim transitively re-exports ~65 public symbols + 2 private helpers
-used by 14 test files (`from muninn.cube import …`).
-
-The `sys.modules.setdefault('cube', …)` trick at the bottom of the
-canonical file handles the cube/cube_providers/cube_analysis circular
-import — preserved here transitively via `from cube import *`.
-
-See docs/BATTLE_PLAN_FINAL_PROD_v4_2026-05-09.md B1 for the audit plan.
+"""Shim of engine/core/cube.py (BUG-091 B1, 2026-05-09). Transitively
+re-exports ~65 symbols from cube + cube_providers + cube_analysis. Used
+by 14 test files via `from muninn.cube import …`. Circular import in
+the canonical (cube ↔ cube_providers ↔ cube_analysis) handled by its
+own `sys.modules.setdefault('cube', …)` trick; preserved here via
+`from cube import *`.
 """
 import sys
 from pathlib import Path
