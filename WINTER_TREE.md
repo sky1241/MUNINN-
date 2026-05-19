@@ -3,6 +3,31 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-3 COMPLETE — F1-F5 + hotfix CI)
+>
+> **REMEDIATION-3 COMPLETE post-3ème-audit (`a6f7773` HEAD vert)** :
+>
+> 6 fixes livrés :
+> - F1 : whitelist E1 + `ValueError` + `re.error`
+> - F2 : `Neuron.cube_ncd_set` flag (fresh vs failed cube NCD)
+> - F3 : `_COMMON_LANG_KEYWORDS` Java/Ruby/Swift
+> - F4 : doc `MUNINN_BENCH_*` + cap CLAUDE.md 365→370
+> - F5 : cleanup monkeypatch mort test C7
+> - Hotfix CI : whitelist `MUNINN_BENCH_FILE/MODELS` doc-only
+>
+> **Out-of-scope explicit** (rapport `docs/AUDIT_REPORT_2026-05-19_VAGUE3.md`) :
+> - AMBER-2/4/5 (mock thread-safe, mouseClick test, real Ollama CI)
+> - T3 (FakeMycelium tautologie test C8)
+> - S1 (drop 2 stash entries) — destructif, attente Sky
+> - S2 (gitignore `.test_intelligence/*.json`) — destructif, attente Sky
+>
+> **Bilan 3 vagues audit (convergence)** :
+> - Audit 1 → 11 bugs → D1-D12
+> - Audit 2 → 12 bugs → E1-E8
+> - Audit 3 → 5 fix + 6 documented out-of-scope → F1-F6
+> Le pattern converge. 4ème audit aurait probablement <5 trucs résiduels.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-3 F1-F5 — post-3ème-audit)
 >
 > **3ème audit 4-agents → 5 chunks fix F1-F5 (+ docs out-of-scope)**.

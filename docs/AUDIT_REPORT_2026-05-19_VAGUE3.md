@@ -1,5 +1,25 @@
 # Audit Report 3ème vague — 2026-05-19 PM (post-REMEDIATION-2)
 
+> **🟢 STATUS FINAL (post-REMEDIATION-3)** : 5 fixes F1-F5 livrés
+> + hotfix CI (whitelist BENCH vars). HEAD = `a6f7773`, CI verte.
+> Voir CHANGELOG.md pour le détail des commits.
+>
+> **Reste out-of-scope explicit** :
+> - AMBER-2 (mock_ollama thread-safe) — pytest-xdist pas utilisé
+> - AMBER-4 (vrai QTest.mouseClick UI test) — projet dédié
+> - AMBER-5 (real Ollama in CI) — trop coûteux
+> - T3 (FakeMycelium tautologie test C8) — passe runtime, à investiguer
+> - **S1** (drop 2 stash entries obsolètes) — destructif, **attend OK Sky**
+> - **S2** (gitignore `.test_intelligence/*.json`) — destructif, **attend OK Sky**
+>
+> **Note numérotation** : "F6 (`git stash drop`)" mentionné dans le plan
+> initial du rapport (l.198) a été renommé en "S1" pour éviter la
+> confusion avec le hotfix CI réel (`a6f7773`) que j'ai appelé "F6
+> hotfix CI" dans CHANGELOG/WINTER_TREE. S1 = destructif, attend Sky.
+
+---
+
+
 > **Contexte** : Sky est crevé, m'a demandé de me débrouiller. 3ème audit
 > ruthless après C8-C13 → REMEDIATION D1-D12 → REMEDIATION-2 E1-E8.
 > Question centrale : le pattern "audit → fix → re-audit trouve d'autres

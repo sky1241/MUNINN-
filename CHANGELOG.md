@@ -1,5 +1,33 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-3 hotfix CI — whitelist BENCH vars)
+
+Post-F1-F5 CI fail prévisible : `tests/test_h0_no_orphan.py::test_h0_all_env_vars_documented_read`
+flagged `MUNINN_BENCH_FILE` + `MUNINN_BENCH_MODELS` comme "documented
+but unread" parce que le seul caller (`tests/run_bench_multi_llm_2026_05_14.py`)
+est gitignored E8 → pas checkout en CI.
+
+**Même pattern** que C13 hotfix v2 (`dbb2708`) pour `MUNINN_RUN_PERF` :
+ajouter les 2 vars à `WHITELIST_DOC_ONLY_ENV_VARS` dans
+`tests/test_h0_no_orphan.py`. J'aurais dû l'anticiper en F4. Note pour
+le futur : à chaque nouveau MUNINN_* doc-only-via-gitignored-script,
+ajouter d'office à la whitelist.
+
+**Tests verbatim** :
+```
+pytest tests/test_h0_no_orphan.py::test_h0_all_env_vars_documented_read -v
+→ 1 passed in 0.49s
+
+CI run 26128044605 → success in 4m12s (HEAD a6f7773)
+```
+
+**REMEDIATION-3 status final** : 6 fixes livrés (F1-F5 + hotfix),
+HEAD vert (`a6f7773`).
+
+Pas de mirror BUG-091 (test uniquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-3 F1-F5) — Post-3ème-audit fixes (rapport docs/AUDIT_REPORT_2026-05-19_VAGUE3.md)
 
 3ème audit 4-agents ruthless commandé par Sky crevé ("demmerde-toi").
