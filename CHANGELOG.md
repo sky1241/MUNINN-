@@ -1,5 +1,47 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D7/11) — `test_pipeline_trace_emits_during_reco` durci (asserte vraiment)
+
+Huitième chunk de remediation. Audit a flag : le test E2E de
+`tests/test_pipeline_e2e_2026-05-19.py:159` faisait
+`assert isinstance(events, list)` — no-op trivial (`read_trace_events`
+retourne `[]` même si le fichier n'existe pas).
+
+**Investigation runtime** : un vrai run `reconstruct_adaptive(btree_google.go,
+MockLLMProvider, max_cycles=1)` émet 17 events réels avec 3 noms distincts :
+- `pipeline.engine.reco.cube_ordering_applied` (C6 fuse_risks wire)
+- `pipeline.mycelium.spread.begin`
+- `pipeline.mycelium.spread.end`
+
+**Fix** : durcir les asserts.
+```python
+events = read_trace_events(isolated_repo)
+assert len(events) > 0, "no pipeline_trace events emitted (D7 regression)"
+event_names = {e.get("event") for e in events}
+expected_any = {
+    "pipeline.engine.reco.cube_ordering_applied",
+    "pipeline.mycelium.spread.begin",
+    "pipeline.mycelium.spread.end",
+}
+assert event_names & expected_any, f"got: {event_names}"
+```
+
+**Tests verbatim** :
+```
+pytest tests/test_pipeline_e2e_2026-05-19.py::test_pipeline_trace_emits_during_reco -v
+→ 1 passed in 0.57s
+
+pytest tests/test_pipeline_e2e_2026-05-19.py tests/test_chunk_2026-05-19_C*.py \
+       tests/test_bug_091_shim_first_import.py
+→ 124 passed in 3.20s
+```
+
+**Reste remediation** : D5, D6, D10.
+
+Pas de mirror BUG-091 (test uniquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D8/11) — Workflow `perf.yml` weekly cron (Q2 A acté)
 
 Septième chunk de remediation. Audit a flag : `MUNINN_RUN_PERF=1` n'était

@@ -3,6 +3,21 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D7/11)
+>
+> **`test_pipeline_trace_emits_during_reco` durci**.
+>
+> **Fichier touché** :
+> - `tests/test_pipeline_e2e_2026-05-19.py:131-180` :
+>   - `assert isinstance(events, list)` (no-op) → `assert len(events) > 0`
+>     + `assert event_names & expected_any`.
+>   - 3 events attendus : `pipeline.engine.reco.cube_ordering_applied`,
+>     `pipeline.mycelium.spread.begin/end`.
+>
+> **Reste remediation** : D5 (C12 hover/click groups), D6 (forge tri 44 no-op),
+> D10 (mock_ollama + test C0 runtime).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D8/11 — Q2 A acté)
 >
 > **Workflow `perf.yml` weekly cron pour `MUNINN_RUN_PERF=1`**.

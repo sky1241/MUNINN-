@@ -129,7 +129,19 @@ def test_record_cycles_batch_persists(isolated_repo):
 
 
 def test_pipeline_trace_emits_during_reco(btree_go_path, isolated_repo, monkeypatch):
-    """C5/C6/C10 wire proof — pipeline_trace events fire during reconstruction."""
+    """C5/C6/C10 wire proof — pipeline_trace events fire during reconstruction.
+
+    CHUNK D7 (2026-05-19 remediation) — durci : pré-D7 ce test ne faisait
+    que `assert isinstance(events, list)` (no-op : read_trace_events
+    retourne [] sur fichier absent). Post-D7, on asserte qu'au moins
+    UN event nommé attendu fire vraiment.
+
+    Events observés runtime sur une vraie session reconstruct_adaptive
+    avec MockLLMProvider sur btree_google.go (100 premières lignes) :
+      - pipeline.engine.reco.cube_ordering_applied  (C6 fuse_risks wire)
+      - pipeline.mycelium.spread.begin  (mycelium spread activation)
+      - pipeline.mycelium.spread.end
+    """
     # Point pipeline_trace at our isolated repo.
     monkeypatch.setenv("MUNINN_REPO", str(isolated_repo))
     # Force a fresh _resolve_repo cache.
@@ -152,11 +164,25 @@ def test_pipeline_trace_emits_during_reco(btree_go_path, isolated_repo, monkeypa
     )
 
     events = read_trace_events(isolated_repo)
-    # We can't guarantee every event fires (depends on engine internal
-    # paths taken) but at least the trace file should be writable + readable.
-    # Treat events as a smoke check : as long as read_trace_events returns
-    # a list (possibly empty), the helper + path resolution work.
-    assert isinstance(events, list)
+    # D7 : assert qu'au moins UN event fire vraiment (pas un no-op).
+    assert len(events) > 0, (
+        "no pipeline_trace events emitted during reconstruct_adaptive — "
+        "trace machinery not wired (D7 regression). Expected events like "
+        "pipeline.engine.reco.cube_ordering_applied or "
+        "pipeline.mycelium.spread.* to fire."
+    )
+    event_names = {e.get("event") for e in events}
+    # Au minimum un de ces 3 events DOIT fire pour que le wire-claim tienne.
+    expected_any = {
+        "pipeline.engine.reco.cube_ordering_applied",
+        "pipeline.mycelium.spread.begin",
+        "pipeline.mycelium.spread.end",
+    }
+    assert event_names & expected_any, (
+        f"expected at least one of {expected_any}, got: {event_names}"
+    )
+    # Bonus : has_event helper must agree
+    assert any(has_event(events, n) for n in expected_any)
     try:
         mycelium.close()
     except Exception:
