@@ -74,6 +74,13 @@ _CACHE_TTL_SECONDS = 24 * 60 * 60
 # Fusion weights — heuristic, see module docstring.
 _FUSION_WEIGHTS = {"carmack": 0.5, "locate": 0.4, "modularity": 0.1}
 
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 _FORGE_TIMEOUT_SECONDS = 120
 
 
@@ -299,6 +306,46 @@ def color_for_score(score: float) -> str:
 
 
 # ── H2 (2026-05-09): UI helpers ──────────────────────────────────
+
+
+def get_file_risk_map(repo: Path, ttl_seconds: int = _CACHE_TTL_SECONDS) -> dict[str, float]:
+    """CHUNK C4 (2026-05-19) — flat dict accessor for forge per-file risk.
+
+    Returns `{file_path: combined_risk_score}` for every file in the repo's
+    forge report, cached via get_repo_risk's 24h disk cache.
+
+    Used by:
+      - C5 (file-level priority): sort files by risk before scanning
+      - C6 (cube-level fuse_risks): pass to reconstruct_adaptive's
+        forge_root path so cubes inherit file-level risk
+
+    Graceful degradation: returns `{}` when forge-shield is unavailable
+    or the cache is empty. Callers should treat empty as "no signal,
+    fall back to default ordering".
+
+    Emits `pipeline.forge.risk_map_cached` once per call so the sandbox
+    monitor can confirm forge state without a full repo grep.
+    """
+    try:
+        report = get_repo_risk(Path(repo), ttl_seconds=ttl_seconds)
+    except Exception:
+        log_event("pipeline.forge.risk_map_cached", {
+            "repo": str(repo),
+            "n_files": 0,
+            "available": False,
+            "error": "get_repo_risk raised",
+        })
+        return {}
+
+    log_event("pipeline.forge.risk_map_cached", {
+        "repo": str(repo),
+        "n_files": len(report.fused),
+        "available": report.forge_available,
+    })
+
+    if not report.forge_available or not report.fused:
+        return {}
+    return dict(report.fused)
 
 
 def forge_score_for_path(repo: Path, file_path: str) -> Optional[float]:

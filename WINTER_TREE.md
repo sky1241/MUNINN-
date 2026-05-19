@@ -3,6 +3,26 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C4/14)
+>
+> Cinquième chunk. Forge cache infrastructure (F0) — prépare C5+C6.
+>
+> **Fichier touché** :
+> - `engine/core/forge_metrics.py` — nouvelle fonction publique
+>   `get_file_risk_map(repo, ttl_seconds=86400) -> dict[str, float]`.
+>   Wrap `get_repo_risk()` existant. Pipeline_trace event
+>   `pipeline.forge.risk_map_cached` émis 1x par appel.
+> - Ajout PIPELINE_TRACE block import au top du fichier.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C4_forge_cache.py` (6 tests).
+> **Forge** : 5 props générées, 0 destructive skipped.
+>
+> Bonus : `tests/test_props_forge_metrics.py` reçoit `@settings(deadline=None)`
+> sur 4 tests qui shell out à `forge` binary (lent).
+>
+> **Pas de feature flag** : addition pure d'API publique.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C3/14)
 >
 > Quatrième chunk exécuté. Healed set chargé depuis DB cross-run.

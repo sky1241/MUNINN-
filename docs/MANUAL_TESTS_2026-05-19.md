@@ -211,4 +211,43 @@ cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C4 → C13.)*
+## CHUNK C4 — Forge cache infrastructure (F0)
+
+### Test 1 — API existe
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'engine/core')
+import forge_metrics
+assert callable(forge_metrics.get_file_risk_map)
+print('OK : get_file_risk_map exposé')
+"
+```
+- [ ]
+
+### Test 2 — Retourne dict[str, float]
+```bash
+python3 -c "
+import sys, pathlib
+sys.path.insert(0, 'engine/core')
+import forge_metrics
+risk_map = forge_metrics.get_file_risk_map(pathlib.Path('.'))
+print(f'type={type(risk_map).__name__}, len={len(risk_map)}')
+if risk_map:
+    sample = list(risk_map.items())[:3]
+    print(f'sample: {sample}')
+"
+```
+**Attendu** : dict (peut être vide si forge unavailable, sinon ~30 entries pour MUNINN-).
+- [ ]
+
+### Test 3 — Pipeline trace event
+Après n'importe quel appel à `get_file_risk_map`, l'event suivant apparaît dans `pipeline_trace.jsonl`:
+```bash
+grep "pipeline.forge.risk_map_cached" /home/sandbox/.muninn/pipeline_trace.jsonl 2>/dev/null | tail -2
+```
+**Attendu** : `{"event": "pipeline.forge.risk_map_cached", "data": {"repo": "...", "n_files": N, "available": true|false}}`.
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C5 → C13.)*

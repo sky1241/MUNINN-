@@ -1,5 +1,37 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C4/14 : Forge cache infrastructure (F0)
+
+Cinquième chunk. Prépare la wiring forge → reco (C5 + C6) via un
+accessor flat `dict[file_path, score]` réutilisable.
+
+**Fix** :
+- `engine/core/forge_metrics.py` : nouvelle fonction publique
+  `get_file_risk_map(repo, ttl_seconds=86400) -> dict[str, float]`
+  qui wrap `get_repo_risk(repo).fused`. Cache 24h disque via
+  `.muninn/forge_cache.json` (existant). Graceful degradation : `{}`
+  si forge indispo.
+- Pipeline_trace event `pipeline.forge.risk_map_cached` émis 1x par
+  appel avec `{repo, n_files, available}`.
+
+**Tests verbatim** (6 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C4_forge_cache.py
+→ 6 passed in 0.30s
+
+forge --gen-props engine/core/forge_metrics.py
+→ Generated 5 property tests
+→ 0 destructive skipped
+
+pytest tests/test_props_forge_metrics.py
+→ 5 passed in 56.73s
+  (deadline=None restored on 4 tests qui shell out à `forge` binary)
+```
+
+**Pas de feature flag** (pure addition d'API, le wrapping de
+`get_repo_risk` existant).
+
+
 ## 2026-05-19 (PM) — CHUNK C3/14 : Healed set persistent cross-run
 
 Quatrième chunk. Pré-fix, `cli_run` faisait `healed = set()` à chaque

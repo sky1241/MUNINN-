@@ -21,7 +21,7 @@ def _forge_isolate_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
 @given(repo=st.text(max_size=50))
-@settings(max_examples=50, deadline=None)  # shells out to `forge`, slow
+@settings(max_examples=50, deadline=None)  # shells out to forge
 def test_get_repo_risk_no_crash(repo):
     """Smoke: get_repo_risk() does not crash on arbitrary input"""
     # from engine.core.forge_metrics import get_repo_risk
@@ -46,8 +46,21 @@ def test_color_for_score_no_crash(score):
             SystemExit, Exception):
         pass  # Expected rejections are OK
 
+@given(repo=st.text(max_size=50), ttl_seconds=st.integers(-1000, 1000))
+@settings(max_examples=50, deadline=None)  # shells out to forge
+def test_get_file_risk_map_no_crash(repo, ttl_seconds):
+    """Smoke: get_file_risk_map() does not crash on arbitrary input"""
+    # from engine.core.forge_metrics import get_file_risk_map
+    try:
+        get_file_risk_map(repo, ttl_seconds)
+    except (ValueError, TypeError, KeyError, IndexError,
+            OSError, AttributeError, RuntimeError, SyntaxError,
+            LookupError, ArithmeticError, AssertionError,
+            SystemExit, Exception):
+        pass  # Expected rejections are OK
+
 @given(repo=st.text(max_size=50), file_path=st.text(max_size=100))
-@settings(max_examples=50, deadline=None)  # shells out to `forge`, slow
+@settings(max_examples=50, deadline=None)  # shells out to forge
 def test_forge_score_for_path_no_crash(repo, file_path):
     """Smoke: forge_score_for_path() does not crash on arbitrary input"""
     # from engine.core.forge_metrics import forge_score_for_path
@@ -60,7 +73,7 @@ def test_forge_score_for_path_no_crash(repo, file_path):
         pass  # Expected rejections are OK
 
 @given(repo=st.text(max_size=50), file_path=st.text(max_size=100), default=st.text(max_size=100))
-@settings(max_examples=50, deadline=None)  # shells out to `forge`, slow
+@settings(max_examples=50, deadline=None)  # shells out to forge
 def test_forge_color_for_path_no_crash(repo, file_path, default):
     """Smoke: forge_color_for_path() does not crash on arbitrary input"""
     # from engine.core.forge_metrics import forge_color_for_path
