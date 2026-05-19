@@ -3,6 +3,31 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E8/8 🎉 COMPLETE)
+>
+> **Untracked cleanup + .gitignore working docs**.
+>
+> **Fichiers touchés** :
+> - `tests/test_props__engine.py` + `tests/test_props_analytics.py` :
+>   supprimés (forge re-gen no-op, hors scope D6/E3).
+> - `.gitignore` : ajout patterns explicites pour 5 working docs Sky
+>   + `tests/run_bench_multi_llm_2026_05_14.py`.
+>
+> **Vérif `git status` clean** : seulement les fichiers tracked modifiés.
+>
+> **🎉 REMEDIATION-2 COMPLETE : 8/8 chunks E1-E8 livrés.**
+>
+> Récap :
+> - E1 : narrow except + log_event swallow gap_lines/unknown_idents
+> - E2 : bare engine/core cube_providers cold-start circular fix
+> - E3 : tri test_props_forge_metrics no-op + cleanup hypothesis patches
+> - E4 : durcir e2e expected_any → assert cube_ordering_applied spécifique
+> - E5 : dedup _COMMON_LANG_KEYWORDS source
+> - E6 : UI NCD preuve positive + fresh cube N/A + D11 mol-aware
+> - E7 : harden tests C7+C8 tautologies + shape-only
+> - E8 : untracked cleanup + .gitignore
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E7/8)
 >
 > **Harden C7+C8 tests (remove tautologies + shape-only)**.

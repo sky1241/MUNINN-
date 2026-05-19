@@ -1,5 +1,58 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E8/8) — Untracked cleanup + .gitignore 🎉 REMEDIATION-2 COMPLETE
+
+Huitième et **dernier** chunk REMEDIATION-2. L'audit Build/Runtime 24h
+a flag 5 fichiers untracked qui traînaient dans `git status` :
+- `ANTI-BULLSHIT-BATTLE-PLAN.md` (Sky working doc)
+- `docs/BATTLE_PLAN_2026-05-19_RECO_SCAN_FUSION.md` (legacy ref)
+- `docs/BATTLE_PLAN_CUBE_TRUE_ONE_PIPELINE.md` (legacy ref)
+- `docs/BATTLE_PLAN_PHASE_L_2026-05-14.md` (legacy ref)
+- `docs/STATUS_2026-05-18_RECO_GEOMETRY.md` (snapshot historique)
+- `tests/run_bench_multi_llm_2026_05_14.py` (script bench opt-in)
+- `tests/test_props__engine.py` (forge re-gen no-op, 0 assertion)
+- `tests/test_props_analytics.py` (forge re-gen no-op, 0 assertion)
+
+**Décision** :
+- Supprime les 2 forge re-gen no-op (`test_props__engine.py` +
+  `test_props_analytics.py`) — même pattern que D6/E3, helpers
+  path-based, fuzz `st.text()` = no-op. Hors scope production.
+- Ajoute au `.gitignore` les 5 working docs / scripts Sky pour
+  qu'ils ne traînent plus dans `git status`. Patterns explicites
+  (pas blanket `*BATTLE_PLAN*` pour préserver les plans tracked
+  `BATTLE_PLAN_REMEDIATION_2026-05-19.md` +
+  `BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md`).
+
+**Vérif** :
+```bash
+git status --short | grep "^??" | grep -v ".test_intelligence"
+# → vide ✅
+```
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py ...
+→ 187 passed in 5.60s (no regression)
+```
+
+**🎉 REMEDIATION-2 COMPLETE : 8/8 chunks E1-E8 livrés.**
+
+Récap des fixes :
+- E1 (R1) : narrow except + log_event sur swallow gap_lines/unknown_idents
+- E2 (R2) : bare engine/core cube_providers cold-start circular fix
+- E3 (A1) : tri test_props_forge_metrics no-op
+- E4 (A2) : durcir e2e expected_any → assert cube_ordering_applied spécifique
+- E5 (A3) : dedup _COMMON_LANG_KEYWORDS source
+- E6 (A4+A5+A6) : UI NCD preuve positive + fresh cube N/A + D11 mol-aware
+- E7 (A7+A8) : harden tests C7+C8 tautologies + shape-only
+- E8 (A9+A10) : untracked cleanup + .gitignore + hypothesis patches (faits en E3)
+
+Pas de mirror BUG-091 (cleanup files only).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E7/8) — Harden C7+C8 tests (remove tautologies)
 
 Septième chunk REMEDIATION-2. L'audit Tests 24h a flag 2 tautologies +

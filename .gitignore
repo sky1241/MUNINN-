@@ -48,6 +48,19 @@ build/
 
 # Phase B brick 11 (2026-04-10): runtime locks + auto-backups
 memory/*.lock
+
+# CHUNK E8 (REMEDIATION-2 2026-05-19) — working docs Sky local-only.
+# Sky maintains personal battle plans + status snapshots that don't
+# need to live in git history. Add specific patterns rather than a
+# blanket `*BATTLE_PLAN*` to avoid catching legitimate tracked plans
+# (BATTLE_PLAN_REMEDIATION_2026-05-19.md, BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md).
+/ANTI-BULLSHIT-BATTLE-PLAN.md
+/docs/BATTLE_PLAN_2026-05-19_RECO_SCAN_FUSION.md
+/docs/BATTLE_PLAN_CUBE_TRUE_ONE_PIPELINE.md
+/docs/BATTLE_PLAN_PHASE_L_2026-05-14.md
+/docs/STATUS_2026-05-18_RECO_GEOMETRY.md
+# Local bench scripts (opt-in, never run in CI)
+/tests/run_bench_multi_llm_2026_05_14.py
 .claude/settings.local.json.backup-*
 
 # Claude Code runtime locks
