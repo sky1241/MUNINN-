@@ -172,17 +172,27 @@ def test_pipeline_trace_emits_during_reco(btree_go_path, isolated_repo, monkeypa
         "pipeline.mycelium.spread.* to fire."
     )
     event_names = {e.get("event") for e in events}
-    # Au minimum un de ces 3 events DOIT fire pour que le wire-claim tienne.
-    expected_any = {
-        "pipeline.engine.reco.cube_ordering_applied",
-        "pipeline.mycelium.spread.begin",
-        "pipeline.mycelium.spread.end",
-    }
-    assert event_names & expected_any, (
-        f"expected at least one of {expected_any}, got: {event_names}"
+    # CHUNK E4 (REMEDIATION-2) — durcir l'assertion. Pré-E4, on faisait
+    # `expected_any = {...} ; assert event_names & expected_any` qui passait
+    # si SEUL `pipeline.mycelium.spread.begin` firait (le moins informatif).
+    # Si le C6 wire (`cube_ordering_applied`) était cassé, on ne le voyait
+    # pas. Post-E4 : asserter SPÉCIFIQUEMENT chaque event nommé qui prouve
+    # un chunk wire.
+    # C6 wire proof : cube ordering by forge fuse_risks
+    assert "pipeline.engine.reco.cube_ordering_applied" in event_names, (
+        f"C6 wire broken : pipeline.engine.reco.cube_ordering_applied "
+        f"missing from emitted events. got: {sorted(event_names)}"
     )
-    # Bonus : has_event helper must agree
-    assert any(has_event(events, n) for n in expected_any)
+    # Mycelium spread (existant) doit aussi fire car reconstruct_adaptive
+    # appelle observe_text → spread_activation.
+    assert "pipeline.mycelium.spread.begin" in event_names, (
+        f"mycelium spread.begin missing : {sorted(event_names)}"
+    )
+    assert "pipeline.mycelium.spread.end" in event_names, (
+        f"mycelium spread.end missing : {sorted(event_names)}"
+    )
+    # has_event helper sanity (regression on the helper itself)
+    assert has_event(events, "pipeline.engine.reco.cube_ordering_applied")
     try:
         mycelium.close()
     except Exception:

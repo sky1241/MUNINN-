@@ -1,5 +1,40 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E4/8) — Durcir e2e expected_any → assert C6 spécifique
+
+Quatrième chunk REMEDIATION-2. L'audit Tests 24h a flag : D7 avait durci
+`test_pipeline_trace_emits_during_reco` à `expected_any` mais c'était
+**1-sur-3 events** suffisant (set intersection). Si C6 wire (`pipeline.
+engine.reco.cube_ordering_applied`) cassait mais que `pipeline.mycelium.
+spread.begin` continuait à fire, le test passait sans détecter le bug C6.
+
+**Fix** (`tests/test_pipeline_e2e_2026-05-19.py:175-195`) :
+Remplacer `assert event_names & expected_any` (intersection 1-sur-3) par
+3 asserts spécifiques :
+```python
+assert "pipeline.engine.reco.cube_ordering_applied" in event_names  # C6
+assert "pipeline.mycelium.spread.begin" in event_names               # mycelium
+assert "pipeline.mycelium.spread.end" in event_names                 # mycelium
+```
+
+Si C6 wire casse demain, le test FAIL **explicitement** sur le bon
+event, avec le set complet émis pour debug.
+
+**Tests verbatim** :
+```
+pytest tests/test_pipeline_e2e_2026-05-19.py::test_pipeline_trace_emits_during_reco -v
+→ 1 passed in 0.56s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py ...
+→ 181 passed in 5.80s (no regression)
+```
+
+Pas de mirror BUG-091 (test uniquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E3/8) — Tri `test_props_forge_metrics.py` (D6 oublié)
 
 Troisième chunk REMEDIATION-2. L'audit Tests 24h a flag : D6 a oublié

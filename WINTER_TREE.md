@@ -3,6 +3,19 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E4/8)
+>
+> **Durcir e2e expected_any → 3 asserts spécifiques par event nommé**.
+>
+> **Fichier touché** :
+> - `tests/test_pipeline_e2e_2026-05-19.py:175-195` :
+>   - `assert event_names & expected_any` (1-sur-3) →
+>     3 asserts par nom d'event (cube_ordering_applied + spread.begin + spread.end).
+>   - Si C6 wire casse, test FAIL sur le bon event spécifiquement.
+>
+> **Reste REMEDIATION-2** : E5-E8.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E3/8)
 >
 > **Tri `test_props_forge_metrics.py` (oublié par D6) + cleanup hypothesis patches**.
