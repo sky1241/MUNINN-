@@ -1,5 +1,46 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C0 du battle plan unifié : LLM mode collapse fix
+
+Premier chunk exécuté du plan `docs/BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md`.
+
+**Problème** : qwen2.5-coder:1.5b et :7b bouclaient sur des tokens uniques
+(`returning, returning, returning…`) pendant la reco, parce qu'Ollama tournait
+en mode déterministe rigide (temperature=0.0, aucun repeat_penalty).
+
+**Fix** : `engine/core/cube_providers.py::OllamaProvider` ajoute
+`repeat_penalty=1.15` + `temperature=0.2` par default dans les 3 sites
+de requête (`generate`, `stream`, `fim_generate`). Tunable via env
+`MUNINN_LLM_REPEAT_PENALTY` et `MUNINN_LLM_TEMPERATURE` (legacy : mettre
+`1.0` et `0.0` pour reproduire le comportement pré-fix).
+
+**Trace event** : `pipeline.engine.llm.options_applied` émis 1 fois au
+boot du provider avec model + options actuelles. Permet à la sandbox de
+vérifier sans relancer une reco que le fix est wiré.
+
+**Tests (7 nouveaux, tous PASS)** :
+- `test_generate_sends_repeat_penalty_in_options` — option présente
+- `test_generate_default_temperature_is_02` — défaut 0.2
+- `test_fim_generate_includes_repeat_penalty` — fim path aussi
+- `test_env_repeat_penalty_overrides_default` — env override
+- `test_env_temperature_overrides_default` — env override
+- `test_pipeline_trace_event_emitted_on_provider_init` — event lu
+- `test_legacy_mode_flag_off_restores_pre_fix_behavior` — bascule legacy testée
+
+**Forge** : `forge --gen-props engine/core/cube_providers.py` →
+generated 7 props, skipped 1 destructive (`run_progressive_levels`,
+matches `/^run_/` pattern).
+
+**Baseline** : 2871 passed, 14 failed (11 pré-existants + 4 nouveaux
+liés à la suppression des `tests/benchmark/PHASE_B_*.md` à la demande
+de Sky — pas régression C0).
+
+`docs/MANUAL_TESTS_2026-05-19.md` créé : checklist 5 tests manuels
+pour Sky, s'enrichira chunk par chunk jusqu'à C13.
+
+**Commit** : `<HASH>` (chunk C0/14 du plan unifié).
+
+
 ## 2026-05-19 — BUG-091 final shimify + reco cube geometry + /reconstruct gate
 
 Closeout du dernier mirror BUG-091 + deux drifts UI surfacés par la session

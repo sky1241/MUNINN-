@@ -3,6 +3,25 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C0/14)
+>
+> Premier chunk du `BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md` exécuté.
+>
+> **Fichiers touchés** :
+> - `engine/core/cube_providers.py` (top du fichier + `OllamaProvider`) :
+>   - L.38-43 : constantes `_OLLAMA_REPEAT_PENALTY=1.15`, `_OLLAMA_TEMPERATURE=0.2` (env-driven).
+>   - L.45-50 : PIPELINE_TRACE block.
+>   - `OllamaProvider.__init__` : émet `pipeline.engine.llm.options_applied`.
+>   - `OllamaProvider.generate` : `repeat_penalty` ajouté à options, `temperature` default `_OLLAMA_TEMPERATURE`.
+>   - `OllamaProvider.stream` : `repeat_penalty` ajouté.
+>   - `OllamaProvider.fim_generate` : `temperature=0.0` → `_OLLAMA_TEMPERATURE`, `repeat_penalty` ajouté.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C0_llm_no_collapse.py` (7 tests).
+> **Env vars nouvelles** : `MUNINN_LLM_REPEAT_PENALTY`, `MUNINN_LLM_TEMPERATURE` (table CLAUDE.md mise à jour).
+>
+> **Reste du plan** : C1-C13 (voir `docs/BATTLE_PLAN_2026-05-19_FUSION_UNIFIED.md`).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (matin — BUG-091 closeout final + UI reco fixes)
 >
 > **4 commits poussés, CI verte** au run `26084199149` (3 jobs SUCCESS).

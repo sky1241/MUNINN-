@@ -247,6 +247,8 @@ muninn-mem install-cron        # Systemd-user timer hebdo (Linux)
 | `MUNINN_TRANSLATE_FALLBACK_API` | Opt-in fallback Anthropic Haiku API pour traduire les concepts FR absents du static lexicon K.1 (~946 mots dev-vocab MIT-clean). `1` = active l'API (besoin `ANTHROPIC_API_KEY` + crédits), unset = dict-only passthrough. | unset (dict-only, zéro API) |
 | `MUNINN_DEMO_REPO` | Repo cible pour les scripts dans `examples/` (chunk MCP D.5) | `/tmp/muninn-quickstart` |
 | `MUNINN_GOOGLE_JAVA_FORMAT_JAR` | CHUNK 10 phase 3 (2026-05-18) : path du jar `google-java-format` pour la reco Java précise. Le sandbox Dockerfile le télécharge à `/opt/`. Si le jar manque, `format_code('.java')` tombe sur le fallback `normalize_content` (no crash). | `/opt/google-java-format.jar` |
+| `MUNINN_LLM_REPEAT_PENALTY` | CHUNK C0 (2026-05-19) : pénalité Ollama anti mode-collapse. Pré-C0, qwen2.5-coder bouclait sur `returning, returning, returning…` car defaults Ollama (pas de penalty + temperature=0.0) → déterministe rigide. `1.15` = standard recommandé. Mettre `1.0` = comportement legacy. Appliqué dans `OllamaProvider.generate / stream / fim_generate`. | `1.15` |
+| `MUNINN_LLM_TEMPERATURE` | CHUNK C0 (2026-05-19) : temperature Ollama default pour casser le déterminisme rigide qui contribue au mode collapse. `0.2` = léger sampling. `0.0` = comportement legacy (déterministe, reproduit le mode collapse sur petits modèles). | `0.2` |
 | `MUNINN_RUN_REAL_API_TESTS` | Active les tests qui appellent vraiment Anthropic API ($) | `0` (skip) |
 | `MUNINN_RUN_REAL_LLM_TESTS` | Active les tests LLM compression complets ($) | `0` (skip) |
 | `MUNINN_SKIP_META_SYNC` | Opt-out de la sync auto vers meta-mycelium dans SessionEnd/Stop hooks (chunk MCP A.2) | unset (sync actif) |

@@ -35,6 +35,22 @@ __all__ = [
     "validate_reconstruction", "compute_hotness", "compute_ncd",
 ]
 
+# CHUNK C0 (2026-05-19) — LLM mode collapse fix.
+# Pre-fix: qwen2.5-coder:1.5b/:7b looped on single tokens
+# ("returning, returning, returning…") in the reco terminal because the
+# Ollama defaults were temperature=0.0 (deterministic) and no
+# repeat_penalty. Setting both fixes the collapse. Tunable via env so
+# users can revert to deterministic legacy with repeat=1.0, temp=0.0.
+_OLLAMA_REPEAT_PENALTY = float(os.environ.get("MUNINN_LLM_REPEAT_PENALTY", "1.15"))
+_OLLAMA_TEMPERATURE = float(os.environ.get("MUNINN_LLM_TEMPERATURE", "0.2"))
+
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
 class LLMProvider(ABC):
     """
     B11: Abstract LLM provider interface for cube reconstruction.
@@ -96,6 +112,17 @@ class OllamaProvider(LLMProvider):
         self.model = model
         self.base_url = base_url.rstrip('/')
         self._available = None
+        # CHUNK C0 (2026-05-19): trace the active LLM options once at boot
+        # so the sandbox monitor can confirm the mode-collapse fix is wired.
+        log_event(  # PIPELINE_TRACE
+            "pipeline.engine.llm.options_applied",  # PIPELINE_TRACE
+            {  # PIPELINE_TRACE
+                "provider": "ollama",  # PIPELINE_TRACE
+                "model": model,  # PIPELINE_TRACE
+                "repeat_penalty": _OLLAMA_REPEAT_PENALTY,  # PIPELINE_TRACE
+                "temperature": _OLLAMA_TEMPERATURE,  # PIPELINE_TRACE
+            },  # PIPELINE_TRACE
+        )  # PIPELINE_TRACE
 
     @property
     def name(self) -> str:
@@ -125,7 +152,7 @@ class OllamaProvider(LLMProvider):
     NUM_CTX = 16384
 
     def generate(self, prompt: str, max_tokens: int = 256,
-                 temperature: float = 0.0) -> str:
+                 temperature: float = _OLLAMA_TEMPERATURE) -> str:
         resp = self._request('/api/generate', {
             'model': self.model,
             'prompt': prompt,
@@ -133,6 +160,7 @@ class OllamaProvider(LLMProvider):
                 'num_predict': max_tokens,
                 'temperature': temperature,
                 'num_ctx': self.NUM_CTX,
+                'repeat_penalty': _OLLAMA_REPEAT_PENALTY,
             },
             'stream': False,
         })
@@ -172,6 +200,7 @@ class OllamaProvider(LLMProvider):
                 'num_predict': max_tokens,
                 'temperature': temperature,
                 'num_ctx': self.NUM_CTX,
+                'repeat_penalty': _OLLAMA_REPEAT_PENALTY,
             },
             'stream': True,
         }
@@ -215,8 +244,9 @@ class OllamaProvider(LLMProvider):
             'raw': True,
             'options': {
                 'num_predict': max_tokens,
-                'temperature': 0.0,
+                'temperature': _OLLAMA_TEMPERATURE,
                 'num_ctx': self.NUM_CTX,
+                'repeat_penalty': _OLLAMA_REPEAT_PENALTY,
             },
             'stream': False,
         })
