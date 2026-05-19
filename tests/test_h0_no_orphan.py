@@ -64,6 +64,7 @@ WHITELIST_DOC_ONLY_ENV_VARS = {
     "MUNINN_RUN_REAL_API_TESTS",  # pytest skip marker, read in test files
     "MUNINN_RUN_REAL_LLM_TESTS",  # same
     "MUNINN_RUN_E2E",             # e2e pytest opt-in
+    "MUNINN_RUN_PERF",            # CHUNK C13 (2026-05-19) perf opt-in
     "MUNINN_TEST_REPOS",          # test harness only
     "MUNINN_BENCH_N",             # benchmark scripts
     "MUNINN_EVAL_MODE",           # eval harness
