@@ -109,6 +109,14 @@ class LLMProvider(ABC):
 
 # ─── B12: Backend Ollama ──────────────────────────────────────────────
 
+# CHUNK D9 (2026-05-19 remediation) — module-level guard so the
+# options_applied trace event fires ONCE per module session, not on
+# every OllamaProvider() instantiation. Pre-D9 the comment claimed
+# "once at boot" but the log_event was inside __init__ → polluted
+# pipeline_trace.jsonl with N identical lines for N providers.
+_OPTIONS_TRACE_EMITTED = False
+
+
 class OllamaProvider(LLMProvider):
     """
     B12: LLM provider for Ollama (local models).
@@ -122,15 +130,20 @@ class OllamaProvider(LLMProvider):
         self._available = None
         # CHUNK C0 (2026-05-19): trace the active LLM options once at boot
         # so the sandbox monitor can confirm the mode-collapse fix is wired.
-        log_event(  # PIPELINE_TRACE
-            "pipeline.engine.llm.options_applied",  # PIPELINE_TRACE
-            {  # PIPELINE_TRACE
-                "provider": "ollama",  # PIPELINE_TRACE
-                "model": model,  # PIPELINE_TRACE
-                "repeat_penalty": _OLLAMA_REPEAT_PENALTY,  # PIPELINE_TRACE
-                "temperature": _OLLAMA_TEMPERATURE,  # PIPELINE_TRACE
-            },  # PIPELINE_TRACE
-        )  # PIPELINE_TRACE
+        # CHUNK D9 (2026-05-19 remediation) — guarded by module-level
+        # _OPTIONS_TRACE_EMITTED so only the FIRST provider emits.
+        global _OPTIONS_TRACE_EMITTED
+        if not _OPTIONS_TRACE_EMITTED:
+            log_event(  # PIPELINE_TRACE
+                "pipeline.engine.llm.options_applied",  # PIPELINE_TRACE
+                {  # PIPELINE_TRACE
+                    "provider": "ollama",  # PIPELINE_TRACE
+                    "model": model,  # PIPELINE_TRACE
+                    "repeat_penalty": _OLLAMA_REPEAT_PENALTY,  # PIPELINE_TRACE
+                    "temperature": _OLLAMA_TEMPERATURE,  # PIPELINE_TRACE
+                },  # PIPELINE_TRACE
+            )  # PIPELINE_TRACE
+            _OPTIONS_TRACE_EMITTED = True  # PIPELINE_TRACE
 
     @property
     def name(self) -> str:

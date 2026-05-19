@@ -150,6 +150,39 @@ def test_pipeline_trace_event_emitted_on_provider_init(monkeypatch):
     assert data["provider"] == "ollama"
 
 
+def test_d9_options_applied_emitted_only_once_per_session(monkeypatch):
+    """D9 regression : the `options_applied` event must fire ONCE per
+    module session, not on every OllamaProvider instantiation.
+
+    Pre-D9 : every OllamaProvider() emitted a fresh event → trace JSONL
+    polluted with N identical lines if N providers were created.
+    Pre-D9 comment claimed "trace … once at boot" — was a lie.
+
+    Post-D9 : module-level _OPTIONS_TRACE_EMITTED guard ensures the
+    event fires only the first time.
+    """
+    cp = _fresh_cube_providers(monkeypatch, repeat=None, temp=None)
+    captured_events: list[tuple[str, dict]] = []
+
+    def fake_log_event(name, data=None, level="info"):
+        captured_events.append((name, data or {}))
+
+    monkeypatch.setattr(cp, "log_event", fake_log_event)
+    # 3 instanciations dans la même session de module
+    cp.OllamaProvider(model="qwen2.5-coder:1.5b")
+    cp.OllamaProvider(model="qwen2.5-coder:7b")
+    cp.OllamaProvider(model="codellama:13b")
+
+    options_events = [
+        (n, d) for n, d in captured_events
+        if n == "pipeline.engine.llm.options_applied"
+    ]
+    assert len(options_events) == 1, (
+        f"expected exactly 1 options_applied event for 3 providers, "
+        f"got {len(options_events)} : {options_events}"
+    )
+
+
 def test_legacy_mode_flag_off_restores_pre_fix_behavior(monkeypatch):
     """Setting both env to 1.0 / 0.0 simulates legacy pre-C0 behavior
     for users who need deterministic output (e.g. cached SHA testing).

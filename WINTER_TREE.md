@@ -3,6 +3,20 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D9/11)
+>
+> **`options_applied` trace fires ONCE per session (module-level guard)**.
+>
+> **Fichier touché** :
+> - `engine/core/cube_providers.py` : `_OPTIONS_TRACE_EMITTED = False`
+>   module-level + check/set dans `OllamaProvider.__init__`.
+>
+> **Tests** : 1 nouveau `test_d9_options_applied_emitted_only_once_per_session`
+> dans `tests/test_chunk_2026-05-19_C0_llm_no_collapse.py`. Total = 8 tests.
+>
+> **Reste** : D5, D6, D7, D8, D10, D11.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D4/11)
 >
 > **Shim re-export `_extract_gap_lines` + `_extract_unknown_identifiers`**.

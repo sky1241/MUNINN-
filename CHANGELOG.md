@@ -1,5 +1,42 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D9/11) — `options_applied` trace fires ONCE per session
+
+Cinquième chunk de remediation (D5-D8 enchainent après). Audit a montré
+que `pipeline.engine.llm.options_applied` event était re-émis à chaque
+`OllamaProvider(...)` au lieu d'une fois — le comment "once at boot"
+était un mensonge. Si une session crée N providers, le fichier
+`.muninn/pipeline_trace.jsonl` se pollue de N lignes identiques.
+
+**Reproduction pré-fix** (reproduit avec test D9) :
+```python
+cp.OllamaProvider(model="qwen2.5-coder:1.5b")
+cp.OllamaProvider(model="qwen2.5-coder:7b")
+cp.OllamaProvider(model="codellama:13b")
+# → 3 events 'options_applied' émis, pas 1
+```
+
+**Fix** (`engine/core/cube_providers.py`) :
+- Module-level guard `_OPTIONS_TRACE_EMITTED = False`.
+- `OllamaProvider.__init__` check + set ; émet `log_event` seulement
+  si pas encore émis cette session.
+
+**Tests** (`tests/test_chunk_2026-05-19_C0_llm_no_collapse.py` +1) :
+- `test_d9_options_applied_emitted_only_once_per_session` : 3
+  instanciations dans le même reload de module → exactement 1 event.
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C0_llm_no_collapse.py -v
+→ 8 passed in 0.37s (incl. test_pipeline_trace_event_emitted_on_provider_init,
+  garantissant que le 1er provider émet bien)
+```
+
+Pas de mirror BUG-091 (modif `engine/core/cube_providers.py`, shim
+wildcard import propage automatiquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D4/11) — Shim re-export `_extract_*` helpers
 
 Quatrième chunk de remediation. Audit avait flag : `muninn/cube_providers.py`
