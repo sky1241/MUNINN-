@@ -44,20 +44,29 @@ def test_compute_mycelium_neighbors_helper_exists():
 
 
 def test_compute_mycelium_neighbors_returns_list_of_lists():
-    """Returns list[list[int]] — one neighbor list per cube."""
+    """Returns list[list[int]] — one neighbor list per cube.
+
+    CHUNK E7 (REMEDIATION-2) durcissement : pré-E7 ce test vérifiait
+    juste la SHAPE (len == 3, isinstance list). Si l'impl retournait
+    `[[], [], []]` pour TOUT input, le test passait. Post-E7 : asserter
+    le CONTENU sémantique — cubes 0 et 1 partagent le concept 'alpha'
+    via le mycelium, doivent être neighbors l'un de l'autre. Cube 2 ne
+    partage rien, doit être isolé.
+    """
     pytest_qt = __import__("pytest")
     pytest_qt.importorskip("PyQt6")
     from muninn.ui import cube_live
     from types import SimpleNamespace
 
     class FakeMycelium:
-        _vocab = {"alpha", "beta", "gamma"}
+        _vocab = {"alpha", "beta", "gamma", "delta", "epsilon", "zeta"}
         class _Lock:
             def __enter__(self): return self
             def __exit__(self, *a): return False
         class _Conn:
             def execute(self, *a):
-                return [("alpha",), ("beta",), ("gamma",)]
+                return [("alpha",), ("beta",), ("gamma",),
+                        ("delta",), ("epsilon",), ("zeta",)]
         class _DB:
             _lock = None
             _conn = None
@@ -68,15 +77,34 @@ def test_compute_mycelium_neighbors_returns_list_of_lists():
         def __init__(self):
             self._db = FakeMycelium._DB()
 
+    # Cubes 0 et 1 partagent {alpha, beta} ; cube 2 isolé.
+    # Pour passer le seuil Jaccard > 0.10, l'intersection doit être
+    # ≥ 11% de l'union. Avec 2 mots partagés sur 3 total → Jaccard = 2/3 ≈ 0.67.
     cubes = [
-        SimpleNamespace(content="alpha beta", line_start=1, line_end=1, sha256="x"),
-        SimpleNamespace(content="alpha gamma", line_start=2, line_end=2, sha256="y"),
-        SimpleNamespace(content="nothing here", line_start=3, line_end=3, sha256="z"),
+        SimpleNamespace(content="alpha beta gamma", line_start=1, line_end=1, sha256="x"),
+        SimpleNamespace(content="alpha beta delta", line_start=2, line_end=2, sha256="y"),
+        SimpleNamespace(content="epsilon zeta only", line_start=3, line_end=3, sha256="z"),
     ]
     result = cube_live._compute_mycelium_neighbors(cubes, FakeMycelium())
+    # Shape preserved
     assert isinstance(result, list)
     assert len(result) == 3
     assert all(isinstance(l, list) for l in result)
+    # CONTENT : cubes 0 et 1 doivent être neighbors mutuellement
+    assert 1 in result[0], (
+        f"cube 0 must have cube 1 as neighbor (shared 'alpha' + 'beta'), "
+        f"got result[0]={result[0]!r}"
+    )
+    assert 0 in result[1], (
+        f"cube 1 must have cube 0 as neighbor (symmetric), "
+        f"got result[1]={result[1]!r}"
+    )
+    # Cube 2 isolé (ne partage rien avec 0 ou 1)
+    assert result[2] == [], (
+        f"cube 2 (no shared concepts) must be isolated, got result[2]={result[2]!r}"
+    )
+    assert 2 not in result[0]
+    assert 2 not in result[1]
 
 
 def test_cube_neighbors_refreshed_signal_exists(qtbot):

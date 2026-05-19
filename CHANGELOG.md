@@ -1,5 +1,56 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E7/8) — Harden C7+C8 tests (remove tautologies)
+
+Septième chunk REMEDIATION-2. L'audit Tests 24h a flag 2 tautologies +
+1 shape-only assertion :
+
+**A7** : `tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py:84`
+   `assert result == [] or result == [len(content.split("\n"))]`
+   — 2 valeurs très différentes acceptées, tautologie.
+
+**A7 bis** : ligne 105 même fichier — `if result:` rend les
+   assertions conditionnelles, si l'impl retourne `[]` le test passe
+   sans vérifier le contenu attendu.
+
+**A8** : `tests/test_chunk_2026-05-19_C8_neighbors_refresh.py:46`
+   `test_compute_mycelium_neighbors_returns_list_of_lists` ne vérifie
+   que la SHAPE (`len == 3`, isinstance list). Si l'impl retournait
+   `[[], [], []]` pour TOUT input, le test passait.
+
+**Fix C7** (`test_chunk_2026-05-19_C7_subdivide_mycelium.py`) :
+- `test_find_concept_boundaries_empty_when_no_mycelium_signal` :
+  monkeypatch `cube.concept_to_file_lines` → `{}` (signal vide).
+  Asserter EXACTEMENT `result == []` (contract fallback).
+- `test_find_concept_boundaries_detects_zone_transition` (renommé) :
+  monkeypatch `cube.concept_to_file_lines` avec line_concepts
+  contrôlées (zone alpha 0-5 / zone beta 6-11, Jaccard inter = 0.0).
+  Asserter `len(result) >= 1` (≥1 boundary détectée) + sorted +
+  in-range.
+
+**Fix C8** (`test_chunk_2026-05-19_C8_neighbors_refresh.py`) :
+- `test_compute_mycelium_neighbors_returns_list_of_lists` durci :
+  cubes 0 et 1 partagent {alpha, beta} (Jaccard ~0.67 > 0.10 seuil).
+  Cube 2 isolé (epsilon zeta).
+  Asserter `1 in result[0]` ET `0 in result[1]` (mutuels) +
+  `result[2] == []` (isolé) + `2 not in result[0/1]`.
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py \
+       tests/test_chunk_2026-05-19_C8_neighbors_refresh.py -v
+→ 16 passed in 1.08s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_props_forge_metrics.py ...
+→ 187 passed in 5.65s (no regression)
+```
+
+Pas de mirror BUG-091 (tests uniquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (REMEDIATION-2 E6/8) — UI NCD display preuve positive + fresh cube + D11 mol-aware
 
 Sixième chunk REMEDIATION-2. 3 sous-fixes UI flagés par l'audit 24h :

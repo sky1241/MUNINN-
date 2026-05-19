@@ -71,39 +71,87 @@ def test_find_concept_boundaries_helper_exists():
     assert hasattr(cube, "find_concept_boundaries")
 
 
-def test_find_concept_boundaries_empty_when_no_mycelium_signal():
-    """If mycelium returns empty concepts everywhere, return [] (fallback)."""
+def test_find_concept_boundaries_empty_when_no_mycelium_signal(monkeypatch):
+    """If mycelium signal is too weak (no concepts), return [] (fallback).
+
+    CHUNK E7 (REMEDIATION-2) durcissement : pré-E7 le test acceptait
+    `[] or [len(content.split("\\n"))]` — 2 valeurs très différentes,
+    tautologie. Post-E7 : signal vide → contract est EXACTEMENT [].
+    """
     import cube
+
+    # Stub concept_to_file_lines pour signal vide (0 line_concepts).
+    monkeypatch.setattr(
+        cube, "concept_to_file_lines" if hasattr(cube, "concept_to_file_lines") else "_unused",
+        lambda content, mycelium: {},
+        raising=False,
+    )
 
     class FakeMycelium:
         def has_concept(self, c):
             return False
 
-    content = "line1\nline2\nline3\n"
+    content = "line1\nline2\nline3\nline4\nline5\n"
     result = cube.find_concept_boundaries(content, FakeMycelium(), target_tokens=112)
-    assert result == [] or result == [len(content.split("\n"))]
+    # Signal-strength gate : <30% lines with concepts → return []
+    assert result == [], (
+        f"empty mycelium signal must return [] (fallback), got: {result!r}"
+    )
 
 
-def test_find_concept_boundaries_returns_line_numbers():
-    """Returns sorted list[int] of line numbers (1-indexed) where zone changes."""
+def test_find_concept_boundaries_detects_zone_transition(monkeypatch):
+    """find_concept_boundaries doit retourner ≥1 boundary entre 2 zones
+    sémantiques disjointes (E7 durcissement : remplace `if result:`
+    tautologie par vraie assertion non-conditionnelle)."""
     import cube
 
-    class FakeMycelium:
-        # Lines 0-2 share concept "alpha"; lines 3-5 share "beta"
-        _line_concepts = {
-            0: {"alpha"}, 1: {"alpha"}, 2: {"alpha"},
-            3: {"beta"}, 4: {"beta"}, 5: {"beta"},
-        }
-        def has_concept(self, c):
-            return c.lower() in {"alpha", "beta"}
+    # Inject controlled line_concepts via monkeypatch sur
+    # `concept_to_file_lines` (utilisé par find_concept_boundaries).
+    # Lignes 0-5 zone "alpha" / lignes 6-11 zone "beta" — disjoint
+    # → Jaccard(line_5_concepts, line_6_concepts) = 0.0 < 0.20 → boundary.
+    line_concepts = {
+        i: {"alpha", "shared_a"} for i in range(6)
+    }
+    line_concepts.update({
+        i: {"beta", "shared_b"} for i in range(6, 12)
+    })
 
-    content = "alpha\nalpha here\nalpha again\nbeta start\nbeta\nbeta end\n"
-    result = cube.find_concept_boundaries(content, FakeMycelium(), target_tokens=200)
-    # Should contain a boundary around line 4 (transition alpha→beta)
+    def stub_concept_to_file_lines(content, mycelium):
+        return line_concepts
+
+    # Patch dans le module cube (importé par find_concept_boundaries)
+    monkeypatch.setattr(cube, "concept_to_file_lines",
+                        stub_concept_to_file_lines, raising=False)
+    # Aussi dans mycelium si l'import était local
+    try:
+        import mycelium as _myc
+        monkeypatch.setattr(_myc, "concept_to_file_lines",
+                            stub_concept_to_file_lines, raising=False)
+    except ImportError:
+        pass
+
+    class FakeMycelium:
+        def has_concept(self, c):
+            return c in {"alpha", "beta", "shared_a", "shared_b"}
+
+    # Content avec 12 lignes (un par concept zone, identifiers triggables)
+    content = "\n".join(f"line_{i}_token" for i in range(12)) + "\n"
+    result = cube.find_concept_boundaries(content, FakeMycelium(), target_tokens=50)
+
+    # Vraie post-condition : returns sorted list[int] non-vide
     assert isinstance(result, list)
     assert all(isinstance(x, int) for x in result)
-    if result:
-        assert all(x > 0 for x in result)
+    # PRINCIPALE : zone transition détectée
+    assert len(result) >= 1, (
+        f"expected ≥1 boundary at zone transition alpha→beta, got: {result!r}"
+    )
+    # Sorted strict
+    assert result == sorted(result), f"boundaries must be sorted, got: {result!r}"
+    # Chaque boundary doit être dans [1, n_lines]
+    n_lines = len(content.split("\n"))
+    assert all(0 < x <= n_lines for x in result), (
+        f"boundaries out of range [1, {n_lines}] : {result!r}"
+    )
 
 
 def test_subdivide_file_accepts_mycelium_kwarg():

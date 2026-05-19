@@ -3,6 +3,23 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E7/8)
+>
+> **Harden C7+C8 tests (remove tautologies + shape-only)**.
+>
+> **Fichiers touchés** :
+> - `tests/test_chunk_2026-05-19_C7_subdivide_mycelium.py` :
+>   - `test_find_concept_boundaries_empty_when_no_mycelium_signal` :
+>     `result == [] or [...]` → strict `result == []`.
+>   - `test_find_concept_boundaries_detects_zone_transition` : monkeypatch
+>     `concept_to_file_lines` + assertion `len(result) >= 1` non-conditionnelle.
+> - `tests/test_chunk_2026-05-19_C8_neighbors_refresh.py` :
+>   - `test_compute_mycelium_neighbors_returns_list_of_lists` :
+>     shape-only → CONTENT (cubes 0+1 mutuels, cube 2 isolé).
+>
+> **Reste REMEDIATION-2** : E8 (untracked files cleanup).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E6/8)
 >
 > **3 UI fixes : NCD display preuve positive + fresh cube N/A + D11 mol-aware**.
