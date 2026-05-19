@@ -34,7 +34,10 @@ BASELINES = {
     ("mycelium_db.py", "MyceliumDB"): 56,
     # Phase 3 (2026-05-14): +1 = observe_failure (public API for negative
     # learning, mirrors observe_text). _record_failure stays private.
-    ("mycelium.py", "Mycelium"): 21,
+    # CHUNK C7 (2026-05-19): +1 = has_concept (public API used by
+    # `concept_to_file_lines` to map source-line tokens to mycelium
+    # codebook for the scan-aware subdivide pipeline).
+    ("mycelium.py", "Mycelium"): 22,
     ("cube.py", "Cube"): 4,
 }
 
