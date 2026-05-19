@@ -136,60 +136,45 @@ def test_flash_timer(qtbot):
     assert w._flash_timer.interval() == 150
 
 
-def test_reco_prereqs_missing_both(tmp_path):
-    """Gate flags BOTH missing artifacts when fresh dir has nothing.
+def test_reco_prereqs_missing_when_no_mycelium(tmp_path):
+    """Gate flags missing mycelium.db when dir has nothing.
 
-    Covers drift #6 (stale legacy tree path) + #7 (wrong /scan advice)
-    found by the deep audit on 2026-05-18. CHUNK 4 introduced the gate
-    hardcoded to `memory/tree.json`; BUG-091 H.5b migrated to
-    `.muninn/tree/tree.json` 8 days later but forgot to update the gate.
+    2026-05-18 deep-audit fix: tree.json is no longer required. Tracing
+    the reco pipeline (cube_live → cube_providers → mycelium → cube)
+    shows zero reads of tree.json. Only mycelium.db is required.
     """
     from muninn.ui.terminal import TerminalWidget
     missing = TerminalWidget._reconstruction_prereqs_missing(tmp_path)
-    assert len(missing) == 2
-    assert any("tree" in m for m in missing)
-    assert any("mycelium.db" in m for m in missing)
-    # The advice must now say `bootstrap`, not `/scan` (drift #7).
-    assert any("bootstrap" in m for m in missing)
+    assert len(missing) == 1
+    assert "mycelium.db" in missing[0]
+    # Advice now points at `scan`, which IS what populates mycelium.db
+    # (scan_repo grows the mycelium since the CHUNK 10 fb2e668 fix).
+    assert "scan" in missing[0]
 
 
-def test_reco_prereqs_canonical_tree_satisfies(tmp_path):
-    """Gate accepts `.muninn/tree/tree.json` (canonical post-H.5b path)."""
+def test_reco_prereqs_mycelium_only_is_now_accepted(tmp_path):
+    """Mycelium-only `.muninn/` (typical fresh `scan` output) passes the gate.
+
+    2026-05-18 deep-audit fix. Pre-fix, the gate also demanded
+    tree.json — a freshly-scanned target dir (which writes mycelium.db
+    but no tree) was rejected with a misleading "Run bootstrap" message
+    even though all the reconstructor actually needs is mycelium.db.
+    """
+    from muninn.ui.terminal import TerminalWidget
+    (tmp_path / ".muninn").mkdir(parents=True)
+    (tmp_path / ".muninn" / "mycelium.db").write_bytes(b"")
+    missing = TerminalWidget._reconstruction_prereqs_missing(tmp_path)
+    assert missing == [], f"Expected empty, got {missing}"
+
+
+def test_reco_prereqs_full_bootstrap_still_passes(tmp_path):
+    """Fully-bootstrapped repos (tree + mycelium) keep passing."""
     from muninn.ui.terminal import TerminalWidget
     (tmp_path / ".muninn" / "tree").mkdir(parents=True)
     (tmp_path / ".muninn" / "tree" / "tree.json").write_text("{}")
     (tmp_path / ".muninn" / "mycelium.db").write_bytes(b"")
     missing = TerminalWidget._reconstruction_prereqs_missing(tmp_path)
     assert missing == [], f"Expected empty, got {missing}"
-
-
-def test_reco_prereqs_legacy_tree_still_accepted(tmp_path):
-    """Legacy `memory/tree.json` is still accepted as a fallback.
-
-    Some old repos may still have it before `cleanup_legacy_tree()` runs.
-    """
-    from muninn.ui.terminal import TerminalWidget
-    (tmp_path / "memory").mkdir()
-    (tmp_path / "memory" / "tree.json").write_text("{}")
-    (tmp_path / ".muninn").mkdir()
-    (tmp_path / ".muninn" / "mycelium.db").write_bytes(b"")
-    assert TerminalWidget._reconstruction_prereqs_missing(tmp_path) == []
-
-
-def test_reco_prereqs_mycelium_only_missing(tmp_path):
-    """Tree present, mycelium.db absent -> only mycelium reported missing.
-
-    The advice for that single missing item must say `bootstrap`, never
-    `scan` (drift #7 — `scan_repo` does not write mycelium.db).
-    """
-    from muninn.ui.terminal import TerminalWidget
-    (tmp_path / ".muninn" / "tree").mkdir(parents=True)
-    (tmp_path / ".muninn" / "tree" / "tree.json").write_text("{}")
-    missing = TerminalWidget._reconstruction_prereqs_missing(tmp_path)
-    assert len(missing) == 1
-    assert "mycelium.db" in missing[0]
-    assert "bootstrap" in missing[0]
-    assert "scan" not in missing[0].lower()
 
 
 def test_command_signal(qtbot, monkeypatch):

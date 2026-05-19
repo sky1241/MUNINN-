@@ -582,15 +582,20 @@ class TerminalWidget(QWidget):
 
         This helper is the single source of truth, extracted so the gate
         is unit-testable from tests/test_ui_terminal.py with tmp_path.
+
+        2026-05-18 deep-audit fix: `tree.json` is NO LONGER required.
+        Tracing the reconstruction pipeline (cube_live.ReconstructionWorker,
+        Mycelium.__init__, subdivide_file, reconstruct_adaptive, observe_text)
+        shows zero tree.json reads. The tree is only needed for boot/recall.
+        Requiring it here blocked legitimate scan-only repos (e.g. a fresh
+        `muninn-mem scan /tmp/btree-only` that wrote mycelium.db but no
+        tree) from ever reaching the reconstructor. Only mycelium.db is
+        a real technical dependency now.
         """
-        tree_canonical = repo_root / ".muninn" / "tree" / "tree.json"
-        tree_legacy = repo_root / "memory" / "tree.json"
         mycelium_db = repo_root / ".muninn" / "mycelium.db"
         missing = []
-        if not (tree_canonical.exists() or tree_legacy.exists()):
-            missing.append("tree (run `muninn-mem init`)")
         if not mycelium_db.exists():
-            missing.append("mycelium.db (run `muninn-mem bootstrap <repo>`)")
+            missing.append("mycelium.db (run `muninn-mem scan <repo>`)")
         return missing
 
     def _cmd_reconstruct(self, parts: list):
@@ -627,19 +632,21 @@ class TerminalWidget(QWidget):
         if not file_path.exists():
             self._append_text(f"File not found: {file_path}", color="#EF4444")
             return
-        # Use the stricter helper for the gate: a fully-bootstrapped
-        # repo has BOTH tree.json AND mycelium.db. Partial .muninn/
-        # directories created by `muninn-mem scan <somedir>` (only
-        # mycelium.db, no tree) are skipped — find_bootstrapped_repo
-        # walks past them looking for a real one. Fixes the 2026-05-18
-        # drift where scanning /tmp/btree-only made find_owning_repo
-        # match that incomplete .muninn/, making the gate fail forever.
-        repo_root = find_bootstrapped_repo(file_path)
+        # 2026-05-18 deep-audit fix: switched from find_bootstrapped_repo
+        # (strict: tree.json + mycelium.db required) to find_owning_repo
+        # (any .muninn/ marker). The strict gate was rejecting freshly-
+        # scanned target dirs (`muninn-mem scan /tmp/btree-only` writes
+        # mycelium.db only, no tree). Since tree.json is NOT used by the
+        # reconstruction pipeline (verified end-to-end in
+        # cube_live/cube_providers/mycelium/cube), the strict gate was
+        # protecting against an error that never existed. Walk-up from
+        # file matches the scan target first — exactly what we want.
+        repo_root = find_owning_repo(file_path)
         if repo_root is None:
             self._append_text(
-                f"[reco] No bootstrapped Muninn repo found anywhere above "
-                f"{file_path}. Run `muninn-mem init` then "
-                f"`muninn-mem bootstrap <repo>` (or set MUNINN_REPO).",
+                f"[reco] No Muninn repo found anywhere above "
+                f"{file_path} (looking for a `.muninn/` directory). "
+                f"Run `muninn-mem scan <repo>` first, or set MUNINN_REPO.",
                 color="#EF4444",
             )
             return
@@ -648,7 +655,7 @@ class TerminalWidget(QWidget):
             self._append_text(
                 "[reco] Reconstruction prerequisites missing in "
                 f"{repo_root}: " + ", ".join(missing)
-                + ". Once both exist, /reconstruct can run.",
+                + ". Run `muninn-mem scan <repo>` to populate mycelium.db.",
                 color="#EF4444",
             )
             return
