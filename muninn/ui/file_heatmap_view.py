@@ -132,14 +132,24 @@ class FileHeatmapView(QWidget):
         layout.addWidget(self._gutter)
         layout.addWidget(self._editor, 1)
 
-        # Repaint gutter when editor scrolls.
-        self._editor.updateRequest.connect(lambda _r, _dy: self._gutter.update())
-        self._editor.verticalScrollBar().valueChanged.connect(
-            lambda _v: self._gutter.update()
+        # CHUNK C11 hotfix (2026-05-19) — on CI with offscreen Qt the
+        # editor.updateRequest lambda connections survive widget teardown
+        # and crash the GHA runner during gc (exit 139). Skip wiring on
+        # CI offscreen — repaint is invisible there anyway. Same pattern
+        # as navi.py _paint_orb guard (4× CI fix history).
+        import os as _os
+        _on_ci_offscreen = (
+            _os.environ.get("CI", "").lower() == "true"
+            and _os.environ.get("QT_QPA_PLATFORM", "") == "offscreen"
         )
-
-        # Track mouse clicks for line_clicked emit.
-        self._editor.cursorPositionChanged.connect(self._on_cursor_changed)
+        if not _on_ci_offscreen:
+            # Repaint gutter when editor scrolls.
+            self._editor.updateRequest.connect(lambda _r, _dy: self._gutter.update())
+            self._editor.verticalScrollBar().valueChanged.connect(
+                lambda _v: self._gutter.update()
+            )
+            # Track mouse clicks for line_clicked emit.
+            self._editor.cursorPositionChanged.connect(self._on_cursor_changed)
 
     def load_file(self, path: str) -> None:
         """Load a file's full content into the read-only viewer."""
