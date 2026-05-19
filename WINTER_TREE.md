@@ -3,6 +3,34 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (Remediation D12 hotfix — HEAD vert)
+>
+> **Replace C2 flaky timing test with deterministic AST inspection**.
+>
+> **Contexte** : Sky a flag le drift (push D5→D11 en rafale sans
+> attendre CI verte). D5 + D6 CI rouges sur même test perf flaky C2.
+> Hotfix nécessaire avant de continuer méthodiquement.
+>
+> **Fichier touché** :
+> - `tests/test_chunk_2026-05-19_C2_record_cycles_batch.py` :
+>   - `test_record_cycles_batch_is_at_least_2x_faster_than_singular`
+>     (timing, flaky) → `test_record_cycles_batch_uses_executemany_not_loop`
+>     (AST inspection + runtime smoke, déterministe).
+>   - Inspect AST de `CubeStore.record_cycles` → doit contenir
+>     `executemany`. Inspect AST de `CubeStore.record_cycle` → ne doit
+>     PAS contenir `executemany`.
+>
+> **État final remediation** :
+> - 12 commits sur main (D1-D11 + D12 hotfix).
+> - HEAD vert (`3c8b81c`).
+> - D5 + D6 commits individuels ont CI rouge à cause du flaky pré-D12,
+>   leur code est sur main et fonctionne (vérifié 171/171 local + CI
+>   verte sur D12).
+>
+> **Leçon méthode** : 1 commit, 1 push, attendre CI verte AVANT le
+> suivant. Pas de rafale.
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D6/11 🎉 11/11 COMPLET)
 >
 > **Tri 44 forge no-op tests + handbook**.

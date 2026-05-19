@@ -1,5 +1,62 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (Remediation D12 hotfix) — Replace C2 flaky timing test with deterministic AST
+
+Hotfix post-D5 + D6 CI failures. **Sky m'a flag le drift** : j'avais
+poussé D5 → D11 (10 commits) en rafale sans attendre la CI verte entre
+chaque. D5 (`0df0ef5`) et D6 (`ffa9283`) ont échoué sur le MÊME test :
+
+```
+test_record_cycles_batch_is_at_least_2x_faster_than_singular
+AssertionError: batch (6.4ms) should be ≥2x faster than singular (6.2ms)
+  for 200 rows. speedup = 1.0x
+```
+
+Le test mesurait du timing sur 200 rows : sur ma machine locale speedup =
+13x net, sur GHA shared runners speedup tombe à 1.0x parce que SQLite WAL
++ page cache masquent la différence quand la load système varie. Le test
+était flaky depuis sa naissance C2, juste plus rare de fail.
+
+**Fix** (`tests/test_chunk_2026-05-19_C2_record_cycles_batch.py`) : remplacer
+la mesure timing par inspection AST déterministe.
+- Smoke runtime : `record_cycle(100 fois)` ET `record_cycles(batch=100)`
+  insèrent bien 100 rows chacun.
+- Structural : AST de `CubeStore.record_cycles` doit contenir `executemany`
+  (preuve perf du batch path).
+- Structural inverse : AST de `CubeStore.record_cycle` (singular) NE doit
+  PAS contenir `executemany` (sinon les 2 méthodes font la même chose).
+
+Déterministe, pas de dépendance hardware/timing/load CI.
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C2_record_cycles_batch.py -v
+→ 5 passed in 0.34s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 171 passed in 5.18s (no regression)
+
+CI run 26114558430 → success in 4m39s
+```
+
+**État final remediation 2026-05-19** : 12 commits sur main, **HEAD vert**
+(`3c8b81c`). 11 chunks D1-D11 livrés + D12 stabilise le test C2 flaky.
+
+CI individuels :
+- D1, D2, D3, D4, D7, D8, D9, D10, D11, D12 : verts ✅
+- D5, D6 : rouges (flaky C2, pas leur code) ; main est vert grâce à D12.
+
+**Méthode** : Sky a flag le push-en-rafale comme lazy. La leçon : 1 commit,
+1 push, **attendre la CI verte avant le suivant**. Documenté pour la
+prochaine session.
+
+Pas de mirror BUG-091.
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D6/11) — Tri 44 forge no-op tests + handbook 🎉 REMEDIATION COMPLETE
 
 **Onzième et dernier chunk de remediation** post-audit C8→C13.
