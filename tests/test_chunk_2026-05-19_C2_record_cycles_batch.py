@@ -53,45 +53,65 @@ def test_record_cycles_batch_persists_all_rows(tmp_path):
     assert rows[0] == 50, f"expected 50 rows, got {rows[0]}"
 
 
-def test_record_cycles_batch_is_at_least_2x_faster_than_singular(tmp_path):
-    """The batch path is observably faster than N×singular for the same
-    number of rows. This is THE perf invariant — the implementation
-    detail (executemany) matters only in service of this measurable
-    behavior.
+def test_record_cycles_batch_uses_executemany_not_loop(tmp_path):
+    """The batch path makes ONE SQL roundtrip (executemany + commit)
+    instead of N×(execute + commit). This is THE perf invariant.
 
-    Conservative threshold (2x) chosen to avoid CI flakiness on
-    burstable runners; in practice batch is ~10-50x faster locally.
+    Pre-D6 we measured timing here (`assert t_batch < t_singular / 2`),
+    but flaky on shared GHA runners where SQLite WAL + page cache hide
+    the difference (observed singular=6ms batch=6.8ms on CI run 26113822159).
+
+    Post-D6 = structural verification : inspect source AST of both
+    methods. record_cycles MUST call `executemany`, record_cycle MUST
+    NOT (else we lost the perf win). Plus a runtime smoke that both
+    paths insert the correct row count.
     """
-    import time
+    import ast
+    import inspect
     from cube import CubeStore
 
-    n_rows = 200
-
-    # Path A: singular (legacy)
+    # Runtime smoke : both paths insert all rows correctly
+    n_rows = 100
     store_a = CubeStore(str(tmp_path / "a.db"))
-    t0 = time.perf_counter()
     for i in range(n_rows):
         store_a.record_cycle(f"c{i}", 1, True, "", 0.0)
-    t_singular = time.perf_counter() - t0
+    count_a = store_a.conn.execute("SELECT COUNT(*) FROM cycles").fetchone()[0]
+    assert count_a == n_rows, f"singular path missed rows: {count_a}/{n_rows}"
 
-    # Path B: batch (new)
     store_b = CubeStore(str(tmp_path / "b.db"))
     batch = [(f"c{i}", 1, True, "", 0.0) for i in range(n_rows)]
-    t0 = time.perf_counter()
     store_b.record_cycles(batch)
-    t_batch = time.perf_counter() - t0
-
-    # Both paths must insert all N rows
-    count_a = store_a.conn.execute("SELECT COUNT(*) FROM cycles").fetchone()[0]
     count_b = store_b.conn.execute("SELECT COUNT(*) FROM cycles").fetchone()[0]
-    assert count_a == n_rows, f"singular path missed rows: {count_a}/{n_rows}"
     assert count_b == n_rows, f"batch path missed rows: {count_b}/{n_rows}"
 
-    # Batch must be at least 2x faster (in practice 10-50x)
-    assert t_batch < t_singular / 2, (
-        f"batch ({t_batch * 1000:.1f}ms) should be ≥2x faster than "
-        f"singular ({t_singular * 1000:.1f}ms) for {n_rows} rows. "
-        f"speedup = {t_singular / t_batch:.1f}x"
+    # Structural assertion : the implementation must call executemany
+    # for the batch path. AST inspection is deterministic, no flakiness.
+    batch_src = inspect.getsource(CubeStore.record_cycles)
+    batch_tree = ast.parse(batch_src.strip())
+    batch_calls = {
+        node.attr for node in ast.walk(batch_tree)
+        if isinstance(node, ast.Attribute)
+    }
+    assert "executemany" in batch_calls, (
+        f"CubeStore.record_cycles must call .executemany() ; "
+        f"calls found: {batch_calls}"
+    )
+
+    # And the singular path must NOT use executemany (else we'd have
+    # both methods doing the same thing — no point in keeping singular).
+    singular_src = inspect.getsource(CubeStore.record_cycle)
+    singular_tree = ast.parse(singular_src.strip())
+    singular_calls = {
+        node.attr for node in ast.walk(singular_tree)
+        if isinstance(node, ast.Attribute)
+    }
+    assert "execute" in singular_calls, (
+        f"CubeStore.record_cycle should call .execute() ; "
+        f"calls found: {singular_calls}"
+    )
+    assert "executemany" not in singular_calls, (
+        f"CubeStore.record_cycle must NOT call .executemany() (that's "
+        f"the batch path's job) ; calls found: {singular_calls}"
     )
 
 
