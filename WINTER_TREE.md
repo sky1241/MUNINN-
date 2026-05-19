@@ -3,6 +3,26 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-2 E1/8)
+>
+> **Narrow except + log_event sur swallow gap_lines / unknown_idents**.
+>
+> **Fichier touché** :
+> - `engine/core/cube_providers.py:1120-1158` :
+>   - Broad `except Exception` → `except (TypeError, KeyError, AttributeError, IndexError)`.
+>   - Sur swallow : `log_event("pipeline.engine.reco.gap_extraction_failed", level="warn")`
+>     avec `cube_id` + `error` (type + msg).
+>   - Idem pour `_extract_unknown_identifiers` :
+>     `pipeline.engine.reco.unknown_idents_extraction_failed`.
+>
+> **Tests** : 2 nouveaux `test_e1_*` dans `tests/test_chunk_2026-05-19_C10_recon_extras.py`.
+> Régression future = trace dans `.muninn/pipeline_trace.jsonl` au lieu de bug silencieux.
+>
+> **Reste REMEDIATION-2** : E2 (shim engine/core), E3 (forge_metrics props),
+> E4 (e2e expected_any), E5 (dedup keywords), E6 (UI NCD display), E7 (tests harden),
+> E8 (untracked + hypothesis patches).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (Remediation D12 hotfix — HEAD vert)
 >
 > **Replace C2 flaky timing test with deterministic AST inspection**.

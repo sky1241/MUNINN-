@@ -1,5 +1,50 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (REMEDIATION-2 E1/8) — Narrow except + log_event sur swallow gap_lines
+
+Premier chunk du battle plan REMEDIATION-2 (post-audit 4-agents 24h).
+
+L'audit code core a flag : `engine/core/cube_providers.py:1120-1134`
+gardait `try: ... except Exception: gap_lines=[]` post-D1. Si la
+signature de `_build_full_anchor_map` change à nouveau, on retombe
+sur le même bug silencieux que D1 a corrigé. Pattern qui causa le
+bug réintroduit identique. Pas de log_event pour signaler le swallow.
+
+**Fix** (`engine/core/cube_providers.py`) :
+- Catch précis : `(TypeError, KeyError, AttributeError, IndexError)`
+  au lieu de broad `Exception`.
+- `log_event("pipeline.engine.reco.gap_extraction_failed", {...}, level="warn")`
+  émis quand le swallow se déclenche, avec `cube_id` + `error` (type + msg).
+- Idem pour `_extract_unknown_identifiers` :
+  `pipeline.engine.reco.unknown_idents_extraction_failed`.
+
+Une régression future est désormais VISIBLE dans `.muninn/pipeline_trace.jsonl`,
+pas silencieuse.
+
+**Tests** (`tests/test_chunk_2026-05-19_C10_recon_extras.py` +2) :
+- `test_e1_gap_extraction_logs_event_on_internal_error` : monkeypatch
+  `_extract_gap_lines` → raise TypeError ; vérifie que `r.gap_lines == []`
+  ET qu'un event `gap_extraction_failed` est émis avec `level="warn"`.
+- `test_e1_unknown_identifiers_logs_event_on_internal_error` : idem
+  pour `_extract_unknown_identifiers` + event `unknown_idents_extraction_failed`.
+
+**Tests verbatim** :
+```
+pytest tests/test_chunk_2026-05-19_C10_recon_extras.py -k "test_e1 or test_d1" -v
+→ 7 passed in 0.59s
+
+pytest tests/test_chunk_2026-05-19_C*.py tests/test_pipeline_e2e_2026-05-19.py \
+       tests/test_bug_091_shim_first_import.py tests/test_props_cube*.py \
+       tests/test_h8_api_bloat_baseline.py tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 173 passed in 8.16s (no regression)
+```
+
+Pas de mirror BUG-091 (modif engine/core/cube_providers.py, shim wildcard
+propage automatiquement).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (Remediation D12 hotfix) — Replace C2 flaky timing test with deterministic AST
 
 Hotfix post-D5 + D6 CI failures. **Sky m'a flag le drift** : j'avais

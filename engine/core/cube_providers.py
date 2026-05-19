@@ -1117,6 +1117,12 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
     # defer, struct tags, blank lines, constants — pour que gap_lines
     # ne contienne QUE les lignes que le LLM a vraiment dû inventer
     # (mission Muninn : montrer la mémoire des dev seniors).
+    # CHUNK E1 (REMEDIATION-2) — narrow except + log_event on swallow.
+    # Pré-E1, broad `except Exception: gap_lines=[]` recachait le bug
+    # qu'on venait de fixer. Maintenant on catch précis (TypeError,
+    # KeyError, AttributeError, IndexError) ET on émet un trace event
+    # 'pipeline.engine.reco.gap_extraction_failed' pour rendre les
+    # régressions visibles dans la sandbox.
     try:
         import os.path as _osp
         cube_lines = cube.content.split("\n") if cube.content else []
@@ -1126,12 +1132,28 @@ def reconstruct_cube(cube: Cube, neighbors: list[Cube],
             ast_hints or {}, cube_lines, n_lines, ext,
         )
         gap_lines = _extract_gap_lines(anchor_map, n_lines)
-    except Exception:
+    except (TypeError, KeyError, AttributeError, IndexError) as _e:
         gap_lines = []
+        log_event(  # PIPELINE_TRACE
+            "pipeline.engine.reco.gap_extraction_failed",  # PIPELINE_TRACE
+            {  # PIPELINE_TRACE
+                "cube_id": getattr(cube, "id", "?"),  # PIPELINE_TRACE
+                "error": f"{type(_e).__name__}: {_e}",  # PIPELINE_TRACE
+            },  # PIPELINE_TRACE
+            level="warn",  # PIPELINE_TRACE
+        )  # PIPELINE_TRACE
     try:
         unknown_idents = _extract_unknown_identifiers(reconstruction, ast_hints)
-    except Exception:
+    except (TypeError, KeyError, AttributeError, IndexError) as _e:
         unknown_idents = []
+        log_event(  # PIPELINE_TRACE
+            "pipeline.engine.reco.unknown_idents_extraction_failed",  # PIPELINE_TRACE
+            {  # PIPELINE_TRACE
+                "cube_id": getattr(cube, "id", "?"),  # PIPELINE_TRACE
+                "error": f"{type(_e).__name__}: {_e}",  # PIPELINE_TRACE
+            },  # PIPELINE_TRACE
+            level="warn",  # PIPELINE_TRACE
+        )  # PIPELINE_TRACE
 
     return ReconstructionResult(
         cube_id=cube.id,

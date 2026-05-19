@@ -385,3 +385,87 @@ def test_d11_update_cube_details_no_refire_if_not_selected(qtbot):
     assert not received, (
         f"neuron_selected fired wrongly for non-selected cube : {received}"
     )
+
+
+# CHUNK E1 (REMEDIATION-2) — fix R1 broad except + log_event on swallow.
+# Audit 24h a flag : reconstruct_cube swallow `Exception` quand
+# _build_full_anchor_map raise. Si la signature change demain, on
+# retombe sur gap_lines=[] silencieusement. Le fix : catch précis
+# (TypeError, KeyError, AttributeError, IndexError) + log_event pour
+# tracer le swallow, pas le cacher.
+
+def test_e1_gap_extraction_logs_event_on_internal_error(monkeypatch):
+    """E1 regression : si l'extraction gap_lines raise (signature drift,
+    keyerror, etc.), reconstruct_cube doit log_event un warning au lieu
+    de silencer. Mock _extract_gap_lines (appelé seulement dans la D1
+    path) au lieu de _build_full_anchor_map (appelé aussi par
+    FIMReconstructor.reconstruct_with_neighbors)."""
+    from cube_providers import reconstruct_cube, MockLLMProvider
+    from cube import Cube
+    import cube_providers as cp
+
+    captured: list = []
+
+    def fake_log_event(name, data=None, level="info"):
+        captured.append((name, level, data or {}))
+
+    monkeypatch.setattr(cp, "log_event", fake_log_event)
+
+    def raising(*a, **kw):
+        raise TypeError("simulated signature drift")
+
+    monkeypatch.setattr(cp, "_extract_gap_lines", raising)
+
+    c = Cube(id="t", content="def f():\n    pass",
+             sha256="x", file_origin="t.py", line_start=1, line_end=2)
+    r = reconstruct_cube(
+        c, [], MockLLMProvider(),
+        ast_hints={"first_line": "def f():"},
+    )
+
+    # gap_lines doit toujours fallback à [] (graceful degradation)
+    assert r.gap_lines == []
+    # MAIS un event warning doit avoir été émis
+    gap_warnings = [
+        (n, l, d) for n, l, d in captured
+        if n == "pipeline.engine.reco.gap_extraction_failed"
+    ]
+    assert gap_warnings, (
+        f"E1 regression : expected log_event('pipeline.engine.reco.gap_extraction_failed', ...) "
+        f"but got: {[n for n, _, _ in captured]}"
+    )
+    assert gap_warnings[0][1] == "warn"
+    assert "TypeError" in str(gap_warnings[0][2].get("error", ""))
+
+
+def test_e1_unknown_identifiers_logs_event_on_internal_error(monkeypatch):
+    """E1 same pattern for unknown_identifiers extraction."""
+    from cube_providers import reconstruct_cube, MockLLMProvider
+    from cube import Cube
+    import cube_providers as cp
+
+    captured: list = []
+
+    def fake_log_event(name, data=None, level="info"):
+        captured.append((name, level, data or {}))
+
+    monkeypatch.setattr(cp, "log_event", fake_log_event)
+
+    def raising(*a, **kw):
+        raise TypeError("simulated drift")
+
+    monkeypatch.setattr(cp, "_extract_unknown_identifiers", raising)
+
+    c = Cube(id="t", content="def f(): pass",
+             sha256="x", file_origin="t.py", line_start=1, line_end=2)
+    r = reconstruct_cube(c, [], MockLLMProvider(), ast_hints={"identifiers": ["f"]})
+
+    assert r.unknown_identifiers == []
+    warnings = [
+        (n, l, d) for n, l, d in captured
+        if n == "pipeline.engine.reco.unknown_idents_extraction_failed"
+    ]
+    assert warnings, (
+        f"E1 regression : expected log_event for unknown_identifiers failure, "
+        f"got: {[n for n, _, _ in captured]}"
+    )
