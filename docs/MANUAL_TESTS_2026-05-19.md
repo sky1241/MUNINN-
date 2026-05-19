@@ -645,4 +645,49 @@ lignes vertes/orange dans le heatmap, cube rouge → ses lignes rouges).
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C12 → C13.)*
+## CHUNK C12 — Fractal x1/x2/x3 zoom visual
+
+**Objectif** : Ctrl+molette dans la heatmap cycle entre 3 niveaux de
+granularité — molécules x2 ou x3 agrègent les cubes consécutifs.
+
+### Test 1 — Tests automatisés
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_chunk_2026-05-19_C12_fractal_zoom.py -v
+```
+**Attendu** : 11 passed.
+- [ ]
+
+### Test 2 — Helper d'agrégation
+```bash
+QT_QPA_PLATFORM=offscreen python3 -c "
+import sys; sys.path.insert(0, '.')
+from muninn.ui.neuron_map import _aggregate_neurons_to_level, Neuron
+src = [Neuron(id='cube_0', label='L1', level='cube', temperature=0.2, degree=1),
+       Neuron(id='cube_1', label='L2', level='cube', temperature=0.8, degree=3)]
+out = _aggregate_neurons_to_level(src, 2)
+print(f'len={len(out)} temp={out[0].temperature:.3f} degree={out[0].degree}')
+"
+```
+**Attendu** : `len=1 temp=0.650 degree=3`.
+- [ ]
+
+### Test 3 — Sandbox visuel (à 4 yeux avec Sky)
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# 1. /scan + /reconstruct un fichier avec ≥6 cubes pour avoir un visuel net.
+# 2. Mettre le focus sur la heatmap (NeuronMap).
+# 3. Ctrl+roule-vers-le-haut → bascule x1 → x2 → x3 → x1 (cycle).
+#    Le nombre de neurones affichés divise par ~2 ou ~3 visuellement.
+# 4. Couleurs : les molécules paintent au degree max de leurs membres
+#    (worst NCD wins) — donc une molécule contenant un seul cube rouge
+#    sera rouge même si l'autre cube est vert.
+# 5. Click/hover restent sur les cubes originaux (molécules visuelles only).
+```
+**Attendu** : transitions fluides entre 3 niveaux, couleurs cohérentes,
+pas de crash.
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C13.)*

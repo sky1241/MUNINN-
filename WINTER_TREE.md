@@ -3,6 +3,25 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C12/14)
+>
+> **Fractal x1/x2/x3 zoom : molécules visuelles à la molette Ctrl+wheel**.
+>
+> **Fichiers touchés** :
+> - `muninn/ui/neuron_map.py` :
+>   - `_zoom_level: int = 1` (distinct de `_zoom` float).
+>   - `set_zoom_level(level)`, `_displayed_neurons()`.
+>   - `_aggregate_neurons_to_level(neurons, level)` module-level helper
+>     (token-weighted-avg NCD, max degree, centroid xyz).
+>   - `_paint_neurons` peint depuis `_displayed_neurons()`.
+>   - `wheelEvent` : `Ctrl+wheel` cycle 1→2→3→1.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C12_fractal_zoom.py` (11 tests).
+> **Forge** : skip (UI, helper privé `_`).
+>
+> **Reste C13** : E2E + benchmark + sandbox smoke (~2h30).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C11/14)
 >
 > **File line-by-line heatmap (bottom panel sous cube 3D)**.

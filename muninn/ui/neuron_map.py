@@ -107,6 +107,69 @@ DEGREE_GRADIENT = [
 ]
 
 
+def _aggregate_neurons_to_level(neurons: list, level: int) -> list:
+    """CHUNK C12 (2026-05-19) — fractal aggregation for x2/x3 zoom.
+
+    Groups consecutive neurons by `level` (1, 2 or 3) and produces a
+    smaller list of "molecule" Neurons. level=1 is identity (returns
+    the input list unchanged). Invalid levels also return the input.
+
+    Per molecule :
+      - `temperature` = token-weighted average NCD of group members
+        (weight = `degree` or `1` if all members have degree 0 so we
+        don't divide by zero on a fresh paint before any reco).
+      - `degree`      = max degree of group members (worst NCD wins,
+        so the molecule paints as bad as its worst constituent).
+      - `id`/`label`  = first member's id + range "Li-Lj" label.
+      - `level`       = "cube" (preserves cube semantics for paint).
+      - `x`/`y`/`z`   = centroid of member positions.
+      - `category`    = first member's category (shape).
+    """
+    if not neurons or level == 1 or level not in (2, 3):
+        return neurons if neurons else []
+
+    out: list = []
+    n = len(neurons)
+    for start in range(0, n, level):
+        group = neurons[start:start + level]
+        if not group:
+            continue
+        total_w = sum(max(1, m.degree) for m in group)
+        if total_w <= 0:
+            avg_temp = 0.0
+        else:
+            avg_temp = sum(
+                m.temperature * max(1, m.degree) for m in group
+            ) / total_w
+        max_deg = max(m.degree for m in group) if group else 0
+        first = group[0]
+        last = group[-1]
+        # Compose a range label like "L1-L3" when group spans >1 neuron.
+        if len(group) == 1:
+            label = first.label
+        else:
+            label = f"{first.label}…{last.label}"
+        molecule = Neuron(
+            id=first.id,
+            label=label,
+            level="cube",
+            status=first.status,
+            entry=first.entry,
+            confidence=first.confidence,
+            depth=first.depth,
+            depends=list(first.depends),
+            x=sum(m.x for m in group) / len(group),
+            y=sum(m.y for m in group) / len(group),
+            z=sum(m.z for m in group) / len(group),
+            degree=max_deg,
+            category=first.category or SHAPE_SQUARE,
+            temperature=avg_temp,
+            zone=first.zone,
+        )
+        out.append(molecule)
+    return out
+
+
 def _degree_color(degree: int, max_degree: int) -> QColor:
     """Interpolate color from degree gradient."""
     if max_degree <= 0:
@@ -241,6 +304,13 @@ class NeuronMapWidget(QWidget):
         except Exception:
             pass
 
+        # CHUNK C12 (2026-05-19) — fractal zoom level (1, 2, 3).
+        # 1 = one neuron per cube (default). 2/3 = consecutive cubes
+        # aggregated into "molecules" with token-weighted-avg NCD and
+        # max-degree (worst NCD wins). Distinct from self._zoom (float
+        # pan/zoom transform). See _aggregate_neurons_to_level helper.
+        self._zoom_level: int = 1
+
     def set_color_mode(self, mode: str) -> None:
         """CHUNK C9 (2026-05-19) — switch the neuron paint source.
 
@@ -269,6 +339,37 @@ class NeuronMapWidget(QWidget):
         self.set_color_mode(
             "reconstruction" if self._color_mode == "mycelium" else "mycelium"
         )
+
+    def set_zoom_level(self, level: int) -> None:
+        """CHUNK C12 (2026-05-19) — change fractal zoom level (1, 2, or 3).
+
+        Invalid values (anything outside {1, 2, 3} or non-int) are
+        silently ignored. Triggers a repaint without rebuilding any
+        underlying data — the displayed neurons are derived lazily
+        via `_displayed_neurons()`.
+        """
+        try:
+            lv = int(level)
+        except (TypeError, ValueError):
+            return
+        if lv not in (1, 2, 3):
+            return
+        if lv == self._zoom_level:
+            return
+        self._zoom_level = lv
+        self._cache_dirty = True
+        self.update()
+
+    def _displayed_neurons(self) -> list:
+        """CHUNK C12 (2026-05-19) — return the neuron list as shown to
+        the user, possibly aggregated when `_zoom_level > 1`.
+
+        x1 = identity (returns `self._neurons` directly, no copy).
+        x2/x3 = consecutive groups merged via `_aggregate_neurons_to_level`.
+        """
+        if self._zoom_level == 1:
+            return self._neurons
+        return _aggregate_neurons_to_level(self._neurons, self._zoom_level)
 
     def closeEvent(self, event):  # R4: cleanup
         self._cancel_laplacian()
@@ -601,10 +702,16 @@ class NeuronMapWidget(QWidget):
         fm = QFontMetrics(font)
         p.setFont(font)
 
+        # CHUNK C12 (2026-05-19) — paint source obeys fractal zoom level.
+        # x1 = self._neurons (default). x2/x3 = aggregated molecules from
+        # `_displayed_neurons()`. Click/hover/edges still operate on the
+        # original `self._neurons` — molecules are visual-only for now.
+        displayed = self._displayed_neurons()
+
         # Precompute hovered neuron index for fast neighbor lookup
         hovered_idx = None
         if self._hovered:
-            for i, n in enumerate(self._neurons):
+            for i, n in enumerate(displayed):
                 if n is self._hovered:
                     hovered_idx = i
                     break
@@ -612,7 +719,7 @@ class NeuronMapWidget(QWidget):
         viewport = self.rect()
 
         # Depth-sort: paint far neurons first (painter's algorithm)
-        indexed = list(enumerate(self._neurons))
+        indexed = list(enumerate(displayed))
         indexed.sort(key=lambda x: self._project_3d(x[1].x, x[1].y, x[1].z)[2])
 
         for i, n in indexed:
@@ -790,7 +897,15 @@ class NeuronMapWidget(QWidget):
     # --- Zoom + Drag (B-UI-04) ---
 
     def wheelEvent(self, event):
+        # CHUNK C12 (2026-05-19) — Ctrl+wheel cycles fractal zoom levels
+        # (1 → 2 → 3 → 1 on roll-up, reverse on roll-down). Plain wheel
+        # keeps doing pan/zoom transform (existing behavior).
         delta = event.angleDelta().y()
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            step = 1 if delta > 0 else -1
+            new_level = ((self._zoom_level - 1 + step) % 3) + 1
+            self.set_zoom_level(new_level)
+            return
         factor = 1.15 if delta > 0 else 1 / 1.15
         self._zoom = max(0.1, min(20.0, self._zoom * factor))
         self._cache_dirty = True

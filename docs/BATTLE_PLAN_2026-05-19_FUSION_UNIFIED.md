@@ -510,9 +510,15 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
 
 ---
 
-### CHUNK 12 — Fractal x1/x2/x3 zoom visual
+### CHUNK 12 — Fractal x1/x2/x3 zoom visual ✅ LIVRÉ 2026-05-19
 
 **Sévérité** 🟢 Basse (polish) • **LOC** ~130 • **Risque** Bas • **Estimation 2h30**
+
+> ✅ Livré : `NeuronMapWidget._zoom_level` (1/2/3), `set_zoom_level`,
+> `_displayed_neurons()`, helper module-level `_aggregate_neurons_to_level`
+> (token-weighted-avg NCD, max degree, centroid). `_paint_neurons` peint
+> depuis l'agrégat, `wheelEvent` avec `Ctrl+wheel` cycle 1→2→3→1.
+> 11/11 tests `test_chunk_2026-05-19_C12_fractal_zoom.py`.
 
 #### Spec
 - [neuron_map.py](../muninn/ui/neuron_map.py) :

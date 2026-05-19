@@ -1,5 +1,52 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C12/14 : Fractal x1/x2/x3 zoom (visual aggregation)
+
+Treizième chunk. Sky voulait pouvoir zoom-out la heatmap pour voir des
+"molécules" (2 ou 3 cubes consécutifs fusionnés en un point) au lieu
+d'un point par cube — utile sur fichiers longs où la vue x1 est trop
+dense.
+
+**Fix** :
+- `muninn/ui/neuron_map.py` :
+  - Champ `self._zoom_level: int = 1` (1, 2 ou 3).
+  - Distinct de `self._zoom` (float pan/zoom transform existant).
+  - `set_zoom_level(level: int)` — accepte 1/2/3, invalid silently
+    ignored, trigger repaint via `_cache_dirty + self.update()`.
+  - `_displayed_neurons()` retourne `self._neurons` à x1 ou
+    le résultat de `_aggregate_neurons_to_level(self._neurons, level)`
+    à x2/x3.
+  - Helper module-level `_aggregate_neurons_to_level(neurons, level)` :
+    pure, groups consecutive neurons par `level`, retourne ceil(N/level)
+    molécules.
+    - `temperature` = token-weighted-avg NCD (weight = `degree`
+      ou `1` si tous degree=0 pour éviter div-by-zero).
+    - `degree` = max degree des membres (worst NCD wins).
+    - `x/y/z` = centroïde des positions membres.
+    - `label` = `"L1…L3"` quand groupe > 1 neuron.
+  - `_paint_neurons` utilise `_displayed_neurons()` au lieu de
+    `self._neurons` (click/hover/edges/KD-tree restent sur original).
+  - `wheelEvent` : `Ctrl+wheel` cycle entre les 3 zoom levels
+    (1→2→3→1 sur roll-up). Plain wheel garde pan/zoom transform.
+
+**Tests verbatim** (11 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C12_fractal_zoom.py
+→ 11 passed in 0.36s
+
+pytest tests/test_chunk_2026-05-19_C*.py \
+       tests/test_h8_api_bloat_baseline.py \
+       tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 126 passed in 4.58s (no regression)
+```
+
+Forge skip : `muninn/ui/neuron_map.py` pas de fonctions publiques
+module-level (helper préfixé `_`).
+Pas de mirror BUG-091 (muninn/ui/* sans pendant engine/core/).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (PM) — CHUNK C11/14 : File line-by-line heatmap view (bottom panel)
 
 Douzième chunk. Sky voulait voir la géographie du fichier reconstruit :
