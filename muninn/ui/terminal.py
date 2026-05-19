@@ -125,6 +125,8 @@ class TerminalWidget(QWidget):
     cube_neighbors_refreshed = pyqtSignal(list)
     # CHUNK C10 (2026-05-19) — per-cube reco diagnostics: idx, gap_lines, unknown_idents
     cube_details = pyqtSignal(int, list, list)
+    # CHUNK C11 (2026-05-19) — accumulated file-line color map for FileHeatmapView
+    file_heatmap_ready = pyqtSignal(str, dict)
     reconstruction_started = pyqtSignal()        # Navi hide during /reconstruct
     reconstruction_ended = pyqtSignal()          # Navi show again
     # Palette /scan: emits scan output path so MainWindow.load_scan() can
@@ -693,6 +695,8 @@ class TerminalWidget(QWidget):
         self._reco_worker.cube_neighbors_refreshed.connect(self.cube_neighbors_refreshed)
         # CHUNK C10 (2026-05-19) — bubble up per-cube reco diagnostics
         self._reco_worker.cube_details.connect(self.cube_details)
+        # CHUNK C11 (2026-05-19) — bubble up file-line color map
+        self._reco_worker.file_heatmap_ready.connect(self.file_heatmap_ready)
         self._reco_worker.token.connect(self._on_chunk)                   # stream tokens
         self._reco_worker.status.connect(
             lambda msg, col: self._append_text(msg, color=col)

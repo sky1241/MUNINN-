@@ -105,6 +105,36 @@ def _compute_mycelium_neighbors(cubes, mycelium) -> list:
                 result[j].append(i)
     return result
 
+
+def _compute_line_colors_for_cube(line_start: int, line_end: int,
+                                  gap_lines: list,
+                                  sha_matched: bool) -> dict:
+    """CHUNK C11 (2026-05-19) — per-line color map for one cube.
+
+    `line_start`/`line_end` are 1-indexed absolute file line numbers
+    (Cube convention). `gap_lines` is the list of cube-relative line
+    indices (0-indexed) that the reco could not pin via an anchor.
+
+    Returns dict[int abs_line, str status] with status in
+    {"green", "red", "orange"} per the C11 spec:
+      - green : line covered by an anchor (NOT in gap_lines).
+      - red   : line in gap_lines AND cube failed.
+      - orange: line in gap_lines AND cube SHA matched (lucky guess).
+    """
+    if line_end < line_start:
+        return {}
+    gaps = set(gap_lines or [])
+    out: dict = {}
+    n_lines = line_end - line_start + 1
+    for rel in range(n_lines):
+        abs_line = line_start + rel
+        if rel in gaps:
+            out[abs_line] = "orange" if sha_matched else "red"
+        else:
+            out[abs_line] = "green"
+    return out
+
+
 # --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
 try:  # PIPELINE_TRACE
     _muninn_root = Path(__file__).resolve().parent.parent.parent  # PIPELINE_TRACE
@@ -146,6 +176,10 @@ class ReconstructionWorker(QObject):
     # DetailPanel: idx, gap_lines, unknown_idents. Fired from the
     # engine's on_cube_extras callback alongside cube_done.
     cube_details = pyqtSignal(int, list, list)
+    # CHUNK C11 (2026-05-19) — accumulated per-line color map for the
+    # file (1-indexed line → "green"|"red"|"orange"). Re-emitted at
+    # each CYCLE_END with the latest state across all known cubes.
+    file_heatmap_ready = pyqtSignal(str, dict)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -382,6 +416,14 @@ class ReconstructionWorker(QObject):
             provider.fim_generate = _wrap_fim
             provider.generate = _wrap_gen
 
+            # CHUNK C11 (2026-05-19) — accumulator for the per-file
+            # line color map. Updated by on_cube_extras (which has the
+            # gap_lines) and emitted to the FileHeatmapView at each
+            # CYCLE_END. Kept as local state so the heatmap survives
+            # cube re-runs across cycles (always the latest per cube).
+            _cube_sha_status: dict[int, bool] = {}
+            _file_heatmap: dict[int, str] = {}
+
             # Callback fired by reconstruct_adaptive for each cube event.
             # See tests/run_sanity_btree.py for the status vocabulary.
             def on_cube(cycle, level, cube_idx, status, attempts, ncd):
@@ -414,8 +456,21 @@ class ReconstructionWorker(QObject):
                                 self.cube_neighbors_refreshed.emit(payload)
                             except Exception:
                                 pass
+                        # CHUNK C11 (2026-05-19) — emit accumulated per-line
+                        # color map to the FileHeatmapView.
+                        try:
+                            self.file_heatmap_ready.emit(
+                                str(self._file), dict(_file_heatmap)
+                            )
+                            log_event(
+                                "pipeline.ui.cube_live.file_heatmap_ready",
+                                {"cycle": cycle, "n_lines": len(_file_heatmap)},
+                            )  # PIPELINE_TRACE
+                        except Exception:
+                            pass
                     return
                 if status == "SHA":
+                    _cube_sha_status[cube_idx] = True
                     tag = "AUTO-SHA" if attempts == 0 else f"SHA (attempt {attempts})"
                     self.status.emit(
                         f"  c{cycle} x{level} cube {cube_idx:>2}: {tag}",
@@ -423,6 +478,7 @@ class ReconstructionWorker(QObject):
                     )
                     self.cube_done.emit(cube_idx, 0.0, True)
                 else:
+                    _cube_sha_status[cube_idx] = False
                     col = self._COL_PARTIAL if ncd < 0.3 else self._COL_FAIL
                     self.status.emit(
                         f"  c{cycle} x{level} cube {cube_idx:>2}: NCD={ncd:.3f} ({attempts}a)",
@@ -443,6 +499,20 @@ class ReconstructionWorker(QObject):
                     list(gap_lines or []),
                     list(unknown_idents or []),
                 )
+                # CHUNK C11 (2026-05-19) — fold this cube's per-line colors
+                # into the file-level accumulator. The CYCLE_END branch in
+                # on_cube emits the merged map to the FileHeatmapView.
+                try:
+                    c = cubes[cube_idx]
+                    sha_ok = bool(_cube_sha_status.get(cube_idx, False))
+                    per_line = _compute_line_colors_for_cube(
+                        c.line_start, c.line_end,
+                        gap_lines or [],
+                        sha_ok,
+                    )
+                    _file_heatmap.update(per_line)
+                except Exception:
+                    pass
 
             # Cap cubes to what we showed the user (the engine will still
             # receive the full file, but it keeps the event/result stream

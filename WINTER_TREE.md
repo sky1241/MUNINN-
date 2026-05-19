@@ -3,6 +3,31 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C11/14)
+>
+> **File line-by-line heatmap (bottom panel sous cube 3D)**.
+>
+> **Fichiers touchés** :
+> - `muninn/ui/file_heatmap_view.py` (nouveau) :
+>   - `FileHeatmapView(QWidget)` : QPlainTextEdit + gutter colorisé.
+>   - `load_file(path)` + `set_line_colors(dict)` API.
+>   - Signal `line_clicked(int)`.
+> - `muninn/ui/cube_live.py` :
+>   - `_compute_line_colors_for_cube(start, end, gap_lines, sha)` helper.
+>   - Signal `file_heatmap_ready = pyqtSignal(str, dict)`.
+>   - Accumulateur `_file_heatmap` + `_cube_sha_status` dans run().
+> - `muninn/ui/terminal.py` + `main_window.py` : bubble signal +
+>   `_on_file_heatmap_ready` slot. FileHeatmapView placé dans
+>   `left_splitter` entre `neuron_panel` et `tree_panel`.
+>
+> **Couleurs** : green = ancré, red = gap+fail, orange = gap+SHA match.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C11_file_heatmap.py` (12 tests).
+> **Forge** : skip (UI, pas de fonctions publiques module-level).
+>
+> **Reste C12-C13** : fractal x1/x2/x3 (C12), E2E + benchmark + sandbox (C13).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C10/14)
 >
 > **DetailPanel enrichi reco : SHA / NCD / gaps / unknown identifiers**.

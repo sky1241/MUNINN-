@@ -588,4 +588,61 @@ cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C11 → C13.)*
+## CHUNK C11 — File line-by-line heatmap view (bottom panel sous cube 3D)
+
+**Objectif** : voir la géographie du fichier reconstruit — chaque
+ligne colorée selon que la reco l'a ancrée (vert), ratée (rouge), ou
+devinée juste sans anchor (orange = lucky guess).
+
+### Test 1 — Tests automatisés
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest \
+  tests/test_chunk_2026-05-19_C11_file_heatmap.py -v
+```
+**Attendu** : 12 passed.
+- [ ]
+
+### Test 2 — Helper de mapping
+```bash
+QT_QPA_PLATFORM=offscreen python3 -c "
+import sys; sys.path.insert(0, '.')
+from muninn.ui.cube_live import _compute_line_colors_for_cube
+print('green only:', _compute_line_colors_for_cube(1, 3, [], False))
+print('mixed fail:', _compute_line_colors_for_cube(1, 3, [0, 2], False))
+print('mixed sha:',  _compute_line_colors_for_cube(1, 3, [1], True))
+"
+```
+**Attendu** :
+```
+green only: {1: 'green', 2: 'green', 3: 'green'}
+mixed fail: {1: 'red', 2: 'green', 3: 'red'}
+mixed sha:  {1: 'green', 2: 'orange', 3: 'green'}
+```
+- [ ]
+
+### Test 3 — Sandbox visuel (à 4 yeux avec Sky)
+```bash
+cd /home/sky/Bureau/muninn-sandbox && ./run-ui.sh muninn-ui
+# 1. /scan /tmp/btree-only
+# 2. /reconstruct /tmp/btree-only/btree_google.go --max-cycles=2
+# 3. Observer le panneau gauche : 3 splits verticaux
+#    - top    : cube 3D (NeuronMap)
+#    - middle : NOUVEAU file heatmap view
+#    - bottom : tree view
+# 4. Pendant la reco : à chaque CYCLE_END, le file heatmap doit se
+#    mettre à jour. Chaque ligne du fichier doit avoir une bande
+#    couleur à gauche (gutter 14px) :
+#      - vert  = ligne ancrée
+#      - rouge = ligne gap, cube fail
+#      - orange= ligne gap, cube SHA match
+# 5. Cliquer sur une ligne → signal `line_clicked(int)` émis (visible
+#    via PIPELINE_TRACE événement si besoin).
+```
+**Attendu** : 3 splits visibles, heatmap se met à jour entre cycles,
+couleurs cohérentes avec les cubes (cube vert dans NeuronMap → ses
+lignes vertes/orange dans le heatmap, cube rouge → ses lignes rouges).
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C12 → C13.)*

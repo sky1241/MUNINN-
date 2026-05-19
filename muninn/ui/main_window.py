@@ -77,13 +77,18 @@ class MainWindow(QMainWindow):
         from muninn.ui.tree_view import TreeViewWidget
         from muninn.ui.detail_panel import DetailPanel
         from muninn.ui.terminal import TerminalWidget
+        from muninn.ui.file_heatmap_view import FileHeatmapView
 
         self.neuron_panel = NeuronMapWidget()
         self.tree_panel = TreeViewWidget()
         self.detail_panel = DetailPanel()
         self.terminal_panel = TerminalWidget()
+        # CHUNK C11 (2026-05-19) — bottom panel under cube 3D : file line-by-line
+        # heatmap that mirrors the reco state with green/red/orange per line.
+        self._file_heatmap = FileHeatmapView()
 
         self.left_splitter.addWidget(self.neuron_panel)
+        self.left_splitter.addWidget(self._file_heatmap)
         self.left_splitter.addWidget(self.tree_panel)
 
         self.right_splitter.addWidget(self.terminal_panel)
@@ -168,6 +173,10 @@ class MainWindow(QMainWindow):
         self.terminal_panel.cube_neighbors_refreshed.connect(self.neuron_panel.refresh_neighbors)
         # CHUNK C10 (2026-05-19) — surface per-cube reco diagnostics on the neuron
         self.terminal_panel.cube_details.connect(self.neuron_panel.update_cube_details)
+        # CHUNK C11 (2026-05-19) — file line-by-line heatmap panel : load
+        # the file once + apply the latest per-line color map. The signal
+        # fires at each CYCLE_END with the latest cube-merged state.
+        self.terminal_panel.file_heatmap_ready.connect(self._on_file_heatmap_ready)
         # Navi animation monopolises the main thread (30fps orb paint); hide
         # her while a reconstruction is running so the heatmap stays snappy.
         self.terminal_panel.reconstruction_started.connect(self._on_reco_started)
@@ -176,6 +185,21 @@ class MainWindow(QMainWindow):
         # like the "Scanner un repo" button path does. Closes the UX gap
         # where /scan completed silently with no visible refresh.
         self.terminal_panel.scan_data_ready.connect(self.load_scan)
+
+    def _on_file_heatmap_ready(self, path: str, line_colors: dict):
+        """CHUNK C11 (2026-05-19) — refresh the bottom file panel.
+
+        Load the file content once (if path changed) then push the new
+        per-line color map. Triggered at every CYCLE_END by the worker.
+        """
+        if not hasattr(self, "_file_heatmap"):
+            return
+        try:
+            if path and getattr(self._file_heatmap, "_current_path", "") != path:
+                self._file_heatmap.load_file(path)
+            self._file_heatmap.set_line_colors(line_colors or {})
+        except Exception:
+            pass
 
     def _on_reco_started(self):
         if hasattr(self, "_navi") and self._navi is not None:

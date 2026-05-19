@@ -471,9 +471,16 @@ dans `docs/STATUS_2026-05-18_RECO_GEOMETRY.md`.
 
 ---
 
-### CHUNK 11 — File line-by-line heatmap view
+### CHUNK 11 — File line-by-line heatmap view ✅ LIVRÉ 2026-05-19
 
 **Sévérité** 🟡 Moyenne (banquier UX) • **LOC** ~200 • **Risque** Moyen • **Estimation 4h**
+
+> ✅ Livré : `muninn/ui/file_heatmap_view.py` (FileHeatmapView avec
+> QPlainTextEdit + gutter custom). Helper `_compute_line_colors_for_cube`,
+> signal `file_heatmap_ready = pyqtSignal(str, dict)`, accumulateur dans
+> ReconstructionWorker.run émis à chaque CYCLE_END. Widget placé en bottom
+> panel du left_splitter (entre cube 3D et tree). Couleurs green/red/orange
+> par ligne. 12/12 tests `test_chunk_2026-05-19_C11_file_heatmap.py`.
 
 #### Spec
 - Nouveau widget `muninn/ui/file_heatmap_view.py` :

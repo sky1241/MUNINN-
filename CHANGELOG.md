@@ -1,5 +1,57 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C11/14 : File line-by-line heatmap view (bottom panel)
+
+Douzième chunk. Sky voulait voir la géographie du fichier reconstruit :
+quelles lignes le LLM a écrit avec un anchor (sûr), quelles lignes il
+a deviné (gap), et lesquelles il a deviné juste sans anchor (chanceux).
+Le DetailPanel (C10) donne les compteurs, mais pas la carte.
+
+**Fix** :
+- `muninn/ui/file_heatmap_view.py` (nouveau) :
+  - `FileHeatmapView(QWidget)` : `QPlainTextEdit` read-only + gutter
+    custom paintée par ligne. Vert/rouge/orange par ligne, signal
+    `line_clicked(int)` (1-indexed).
+  - `load_file(path)` / `set_line_colors(dict[int, str])` API.
+- `muninn/ui/cube_live.py` :
+  - Helper module-level `_compute_line_colors_for_cube(line_start,
+    line_end, gap_lines, sha_matched) -> dict[int abs_line, str]`.
+  - Nouveau signal `file_heatmap_ready = pyqtSignal(str, dict)`.
+  - Accumulateur local `_file_heatmap` + `_cube_sha_status` dans
+    `ReconstructionWorker.run` ; mis à jour à chaque `on_cube_extras`
+    et émis à chaque `CYCLE_END`. PIPELINE_TRACE event
+    `pipeline.ui.cube_live.file_heatmap_ready`.
+- `muninn/ui/terminal.py` : bubble `file_heatmap_ready` worker → UI.
+- `muninn/ui/main_window.py` :
+  - Instantie `_file_heatmap = FileHeatmapView()` et l'insère dans le
+    `left_splitter` ENTRE `neuron_panel` (cube 3D) et `tree_panel`
+    (placement bottom-panel tranché par Sky 2026-05-19).
+  - `_on_file_heatmap_ready(path, line_colors)` slot : load le fichier
+    si le path change + push les couleurs.
+
+Couleurs par ligne :
+- **green** : ligne ancrée (rel_idx PAS dans cube.gap_lines).
+- **red**   : gap + cube fail.
+- **orange**: gap + cube SHA match (le LLM a deviné juste sans anchor).
+
+**Tests verbatim** (12 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C11_file_heatmap.py
+→ 12 passed in 0.64s
+
+pytest tests/test_chunk_2026-05-19_C*.py \
+       tests/test_h8_api_bloat_baseline.py \
+       tests/test_brick19_dead_code_audit.py \
+       tests/test_chunk13_claude_rules_split.py
+→ 115 passed in 5.24s (no regression)
+```
+
+Forge skip : `muninn/ui/file_heatmap_view.py` + `cube_live.py` n'ont pas
+de fonctions publiques module-level (les 2 helpers sont préfixés `_`).
+Pas de mirror BUG-091 (`muninn/ui/*` sans pendant `engine/core/`).
+Pas de nouveau env var.
+
+
 ## 2026-05-19 (PM) — CHUNK C10/14 : DetailPanel enrichi (SHA / NCD / gaps / unknowns)
 
 Onzième chunk. `ReconstructionResult` exposait juste sha256/ncd/exact_match.
