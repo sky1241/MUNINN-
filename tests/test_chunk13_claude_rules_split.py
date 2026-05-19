@@ -193,12 +193,20 @@ def test_claude_md_still_under_360_lines():
     between doc and code. Same primacy-bias logic — new session must
     see the real surface, not a 25% subset.
 
+    Bumped to 365 (2026-05-19) for battle plan unifié 2026-05-19 :
+    chunks C0, C3, C5 ajoutent 3 nouvelles env vars
+    (MUNINN_LLM_REPEAT_PENALTY, MUNINN_LLM_TEMPERATURE,
+    MUNINN_HEALED_PERSISTENT, MUNINN_FORGE_FILE_ORDERING) à la
+    table § Variables d'environnement. Documentation obligatoire
+    per règle §8.A du plan unifié — chaque nouvelle env var doit
+    être listée. +4 lignes (1 par var).
+
     Cap stays binding so the file doesn't grow without intent.
     """
     text = CLAUDE_MD.read_text(encoding="utf-8")
     line_count = len(text.splitlines())
-    assert line_count <= 360, (
-        f"CLAUDE.md should stay under 360 lines, got {line_count}. "
+    assert line_count <= 365, (
+        f"CLAUDE.md should stay under 365 lines, got {line_count}. "
         f"If you added content, justify it in the test docstring before "
         f"bumping the cap."
     )
