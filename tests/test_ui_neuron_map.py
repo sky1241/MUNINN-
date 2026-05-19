@@ -425,3 +425,102 @@ def test_neighbor_cache(qtbot):
     w.load_neurons(neurons)
     assert 1 in w._neighbor_cache.get(0, set())
     assert 2 in w._neighbor_cache.get(1, set())
+
+
+# --- Reconstruction layout (geometry match with scan, 2026-05-18) ---
+
+
+def _make_reco_cubes(n: int, with_mycelium: bool = False) -> list[dict]:
+    """Helper: build n cube payload dicts. If with_mycelium=True, cubes
+    0,1,2 share a semantic cluster and 3,4 share another, so the edge
+    set is denser than a pure chain.
+    """
+    cubes = [
+        {"idx": i, "start": i * 10, "end": (i + 1) * 10 - 1,
+         "original": f"code block {i}", "sha": f"sha_{i}",
+         "mycelium_neighbors": []}
+        for i in range(n)
+    ]
+    if with_mycelium and n >= 5:
+        cubes[0]["mycelium_neighbors"] = [1, 2]
+        cubes[1]["mycelium_neighbors"] = [0, 2]
+        cubes[2]["mycelium_neighbors"] = [0, 1]
+        cubes[3]["mycelium_neighbors"] = [4]
+        cubes[4]["mycelium_neighbors"] = [3]
+    return cubes
+
+
+def test_set_reconstruction_cubes_uses_mycelium_neighbors(qtbot):
+    """Reco edges must include mycelium semantic links, not just the chain."""
+    from muninn.ui.neuron_map import NeuronMapWidget
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    cubes = _make_reco_cubes(5, with_mycelium=True)
+    w.set_reconstruction_cubes(cubes)
+    w._cancel_laplacian()  # stop background worker for test cleanup
+    edge_pairs = {(a, b) for a, b, _ in w._edges}
+    # Mycelium cluster edges (0-2 inside the first cluster)
+    assert (0, 2) in edge_pairs, "mycelium edge 0↔2 missing"
+    # Sequential chain edges still present as continuity
+    assert (0, 1) in edge_pairs and (3, 4) in edge_pairs, "chain backbone missing"
+
+
+def test_set_reconstruction_cubes_chain_fallback_without_mycelium(qtbot):
+    """Without mycelium_neighbors, edges fall back to the sequential chain."""
+    from muninn.ui.neuron_map import NeuronMapWidget
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    cubes = _make_reco_cubes(4, with_mycelium=False)
+    w.set_reconstruction_cubes(cubes)
+    w._cancel_laplacian()
+    edge_pairs = {(a, b) for a, b, _ in w._edges}
+    assert edge_pairs == {(0, 1), (1, 2), (2, 3)}, (
+        f"expected pure chain fallback, got {edge_pairs}"
+    )
+
+
+def test_set_reconstruction_cubes_initial_positions_not_grid(qtbot):
+    """Initial positions match load_scan's random layout, not the old grid.
+
+    Pins the geometry drift fix (2026-05-18): the old code computed
+    sqrt(n)-column grid coordinates as starting positions; the new code
+    uses _layout_random() like load_scan so reco and scan share the same
+    visual pipeline. A grid would give exactly aligned x or y values for
+    cubes on the same row/col — random does not.
+    """
+    from muninn.ui.neuron_map import NeuronMapWidget
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    cubes = _make_reco_cubes(9, with_mycelium=False)  # 3x3 grid would be obvious
+    w.set_reconstruction_cubes(cubes)
+    w._cancel_laplacian()
+    xs = [n.x for n in w._neurons]
+    ys = [n.y for n in w._neurons]
+    # A 3x3 grid would have only 3 distinct x values and 3 distinct y values.
+    # Random layout gives 9 distinct values for both (modulo astronomical luck).
+    assert len(set(xs)) >= 6, f"x positions look grid-aligned: {sorted(set(xs))}"
+    assert len(set(ys)) >= 6, f"y positions look grid-aligned: {sorted(set(ys))}"
+
+
+def test_set_reconstruction_cubes_neighbor_cache_built(qtbot):
+    """The neighbor cache reflects the edges (mycelium + chain)."""
+    from muninn.ui.neuron_map import NeuronMapWidget
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    cubes = _make_reco_cubes(5, with_mycelium=True)
+    w.set_reconstruction_cubes(cubes)
+    w._cancel_laplacian()
+    # Cube 0 is linked to 1 (chain) and 2 (mycelium)
+    assert 1 in w._neighbor_cache.get(0, set())
+    assert 2 in w._neighbor_cache.get(0, set())
+
+
+def test_set_reconstruction_cubes_empty_list(qtbot):
+    """Empty cubes list → empty state, no crash."""
+    from muninn.ui.neuron_map import NeuronMapWidget
+    w = NeuronMapWidget()
+    qtbot.addWidget(w)
+    w.set_reconstruction_cubes([])
+    assert w._empty is True
+    assert len(w._neurons) == 0
+    assert w._edges == []

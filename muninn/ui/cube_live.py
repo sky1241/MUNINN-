@@ -25,6 +25,25 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+# --- Mycelium-derived cube neighbor graph (CHUNK 10, 2026-05-18) ---
+# Three module-scoped constants instead of magic numbers in the function
+# body. Each value is tied to a real semantic claim:
+
+# Regex MUST match engine/core/mycelium.py observe_text() (l.618/641/689/709).
+# Any divergence silently drops valid matches — e.g. ASCII-only [A-Za-z_]
+# would skip every accented French identifier the mycelium has already stored.
+_MYCELIUM_CONCEPT_REGEX = r"[A-Za-zÀ-ÿ_]{3,}"
+
+# Cap on the codebook pulled from mycelium.db. 200K covers a ~15M-edge
+# prod mycelium (the upper bound observed so far); on a smaller DB the
+# query simply returns everything. Bump if a real DB exceeds this.
+_MYCELIUM_CONCEPT_LIMIT = 200_000
+
+# Two cubes are linked iff Jaccard(concepts_i, concepts_j) > this. 0.10
+# = "share at least ~10% of distinct concepts". Empirical default; if
+# the resulting graph is too dense/sparse, tune here, not at call sites.
+_MYCELIUM_JACCARD_THRESHOLD = 0.10
+
 # --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
 try:  # PIPELINE_TRACE
     _muninn_root = Path(__file__).resolve().parent.parent.parent  # PIPELINE_TRACE
@@ -198,7 +217,51 @@ class ReconstructionWorker(QObject):
                         color,
                     )
 
-            # Expose cube descriptors to the heatmap. UX only needs idx, lines, sha.
+            # Compute mycelium-derived neighbors per cube so the heatmap's
+            # Laplacian spectral layout can cluster cubes by shared concepts
+            # instead of collapsing the layout to a 1D sequential chain.
+            # See module-level constants `_MYCELIUM_*` for the three knobs;
+            # they intentionally mirror engine/core/mycelium.py choices so
+            # this stays aligned with how concepts were originally observed.
+            # Falls back to an empty list per cube if the mycelium DB is
+            # empty (fresh scan) — set_reconstruction_cubes then keeps the
+            # sequential chain as a continuity backbone.
+            import re as _re
+            mycelium_concepts: set[str] = set()
+            try:
+                with mycelium._db._lock:
+                    mycelium_concepts = {
+                        row[0] for row in mycelium._db._conn.execute(
+                            f"SELECT name FROM concepts LIMIT {_MYCELIUM_CONCEPT_LIMIT}"
+                        )
+                    }
+            except Exception:
+                pass
+
+            cube_concept_sets = []
+            for c in cubes:
+                words = set(_re.findall(_MYCELIUM_CONCEPT_REGEX, c.content.lower()))
+                cube_concept_sets.append(words & mycelium_concepts)
+
+            mycelium_neighbors: list[list[int]] = [[] for _ in range(len(cubes))]
+            for i in range(len(cubes)):
+                a = cube_concept_sets[i]
+                if not a:
+                    continue
+                for j in range(i + 1, len(cubes)):
+                    b = cube_concept_sets[j]
+                    if not b:
+                        continue
+                    inter = len(a & b)
+                    if inter == 0:
+                        continue
+                    union = len(a | b)
+                    if union and (inter / union) > _MYCELIUM_JACCARD_THRESHOLD:
+                        mycelium_neighbors[i].append(j)
+                        mycelium_neighbors[j].append(i)
+
+            # Expose cube descriptors to the heatmap. UX needs idx, lines, sha,
+            # and the mycelium-derived neighbors for the Laplacian layout.
             cubes_payload = [
                 {
                     "idx": i,
@@ -206,6 +269,7 @@ class ReconstructionWorker(QObject):
                     "end": c.line_end,
                     "original": c.content,
                     "sha": c.sha256,
+                    "mycelium_neighbors": mycelium_neighbors[i],
                 }
                 for i, c in enumerate(cubes)
             ]

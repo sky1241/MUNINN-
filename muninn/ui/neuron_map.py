@@ -36,6 +36,17 @@ from muninn.ui.theme import (
 )
 
 
+# --- Reconstruction-mode edge weights (CHUNK 10, 2026-05-18) ---
+# Two pools of edges feed the Laplacian spectral layout in reco mode:
+# mycelium-derived semantic links (strong) and the sequential-file chain
+# (weak continuity backbone). Pure-chain weights would collapse the
+# layout to a 1D line — this 2:1 ratio gives the Laplacian enough signal
+# to form clusters when mycelium edges exist, while still keeping the
+# narrative left-to-right reading order when they don't.
+_EDGE_WEIGHT_MYCELIUM = 1.0
+_EDGE_WEIGHT_CHAIN = 0.5
+
+
 @dataclass
 class Neuron:
     """A single neuron (concept/node) on the map."""
@@ -1052,10 +1063,18 @@ class NeuronMapWidget(QWidget):
     def set_reconstruction_cubes(self, cubes: list):
         """Populate the map with cubes from a reconstruction run.
 
-        Each cube is a dict with keys: idx, start, end, original, sha.
-        Layout: simple grid (sqrt(n) columns), one neuron per cube.
+        Each cube is a dict with keys: idx, start, end, original, sha,
+        and optionally mycelium_neighbors (list[int]) — indices of other
+        cubes that share concepts in the mycelium graph.
+
+        Layout pipeline matches `load_scan`: random initial positions,
+        then the Laplacian spectral worker relaxes them using the edges.
+        Edges prefer mycelium-derived semantic links (weight 1.0); the
+        sequential chain is added as a low-weight continuity backbone
+        (0.5) so files with empty mycelium still get a coherent layout.
+        Pure-chain edges alone collapse to a 1D line under the Laplacian
+        — that was the geometry drift between scan and reco.
         """
-        import math
         self._neurons = []
         self._edges = []
         self._neighbor_cache = {}
@@ -1063,8 +1082,7 @@ class NeuronMapWidget(QWidget):
 
         # Stop the idle cube rotation and pin to a clean isometric angle.
         # In reconstruction mode the user is reading code positions — a
-        # spinning cube fights that. ~pi/5 around Y gives a nice 3D feel
-        # without distorting the grid.
+        # spinning cube fights that. ~pi/5 around Y gives a nice 3D feel.
         if hasattr(self, "_cube_timer") and self._cube_timer.isActive():
             self._cube_timer.stop()
         self._cube_angle = math.pi / 5  # ~36° — isometric-ish, fixed
@@ -1079,45 +1097,54 @@ class NeuronMapWidget(QWidget):
         # the 10-step DEGREE_GRADIENT. Pending cubes start at 5 = mid-grey
         # so the user can distinguish "not yet processed" from "processed and red".
         self._max_degree = 10
-        self._empty = False  # trigger the neuron painter instead of the empty-state banner
+        self._empty = False
 
-        # Starting positions: small grid inside the cube wireframe
-        # (world coords in [-1, +1], wireframe at +/-0.85). The Laplacian
-        # worker will then relax the layout using the chain edges below.
-        cols = max(1, int(math.ceil(math.sqrt(n))))
-        rows = max(1, int(math.ceil(n / cols)))
-        extent = 1.2
-        dx = extent / cols if cols > 1 else 0.0
-        dy = extent / rows if rows > 1 else 0.0
         for cube in cubes:
             idx = cube["idx"]
-            row = idx // cols
-            col = idx % cols
-            x = -extent / 2 + (col + 0.5) * (dx if cols > 1 else 0.0)
-            y = -extent / 2 + (row + 0.5) * (dy if rows > 1 else 0.0)
             self._neurons.append(Neuron(
                 id=f"cube_{idx}",
                 label=f"L{cube['start']}-{cube['end']}",
                 level="cube",
-                status="todo",      # pending reconstruction
-                temperature=0.5,    # neutral until reconstructed
+                status="todo",
+                temperature=0.5,
                 zone="reconstruction",
-                x=x, y=y, z=0.0,
-                degree=5,           # mid-yellow until the cube is processed
-                category=SHAPE_SQUARE,  # render as squares (cubes of code)
+                x=0.0, y=0.0, z=0.0,
+                degree=5,
+                category=SHAPE_SQUARE,
             ))
 
-        # Chain-graph edges: each cube is connected to the next. This feeds
-        # the Laplacian spectral layout so the positions reflect the
-        # sequential structure of the file.
-        self._edges = [(i, i + 1, 1.0) for i in range(n - 1)]
-        self._neighbor_cache = {
-            i: {i - 1 for _ in [0] if i > 0} | {i + 1 for _ in [0] if i < n - 1}
-            for i in range(n)
-        }
+        # Random initial positions (same path as load_scan). The Laplacian
+        # worker relaxes them using the edges built below.
+        self._layout_random()
 
-        # Relax with the Laplacian worker if the graph is big enough
-        # (the worker needs >=3 nodes). Fallback: keep the grid.
+        # Edges: mycelium-derived semantic links (when the payload carries
+        # them) plus the sequential chain at low weight as continuity.
+        seen: set[tuple[int, int]] = set()
+        edges: list[tuple[int, int, float]] = []
+        for cube in cubes:
+            i = cube["idx"]
+            for j in cube.get("mycelium_neighbors", []):
+                if i == j or j < 0 or j >= n:
+                    continue
+                key = (min(i, j), max(i, j))
+                if key in seen:
+                    continue
+                seen.add(key)
+                edges.append((key[0], key[1], _EDGE_WEIGHT_MYCELIUM))
+        for i in range(n - 1):
+            key = (i, i + 1)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append((key[0], key[1], _EDGE_WEIGHT_CHAIN))
+        self._edges = edges
+
+        self._neighbor_cache = {}
+        for ia, ib, _ in self._edges:
+            self._neighbor_cache.setdefault(ia, set()).add(ib)
+            self._neighbor_cache.setdefault(ib, set()).add(ia)
+
+        # Relax with the Laplacian worker (needs ≥3 nodes).
         if n >= 3 and hasattr(self, "_start_laplacian"):
             try:
                 self._start_laplacian()
