@@ -1,5 +1,46 @@
 # MUNINN — Changelog
 
+## 2026-05-19 (PM) — CHUNK C5/14 : Forge file-level priority (F1)
+
+Sixième chunk. Trie `files_to_scan` par risk descendant avant les
+passes regex et LLM dans `engine/core/scanner/orchestrator.py`. Les
+fichiers à risque élevé sont attaqués en premier — l'effort va là où
+les bugs vivent.
+
+**Fix** :
+- `engine/core/scanner/orchestrator.py` (3 nouveaux helpers top-level) :
+  - `_FORGE_FILE_ORDERING_ENABLED` (env `MUNINN_FORGE_FILE_ORDERING`, default `1`)
+  - `_get_file_risk_map_safe(repo)` : wrap `forge_metrics.get_file_risk_map`
+    avec fallback `{}` sur ImportError ou Exception.
+  - `_sort_files_by_forge_risk(files, repo)` : sort stable par
+    `(-risk, original_index)`. Emet `pipeline.forge.file_ordering_applied`
+    avec `{repo, n_files, n_with_risk, top_3}`.
+- Insertion 1 ligne ligne 488 après `files_to_scan = _select_files(...)` :
+  `files_to_scan = _sort_files_by_forge_risk(files_to_scan, repo_path)`.
+
+**Tests verbatim** (7 nouveaux):
+```
+pytest tests/test_chunk_2026-05-19_C5_file_priority.py
+→ 7 passed in 0.64s
+  - test_forge_file_ordering_flag_default_enabled ✓
+  - test_sort_files_by_forge_risk_helper_exists ✓
+  - test_sort_files_by_forge_risk_orders_descending ✓
+  - test_sort_files_by_forge_risk_missing_files_get_zero ✓
+  - test_sort_files_by_forge_risk_empty_map_keeps_original_order ✓
+  - test_sort_files_by_forge_risk_flag_off_returns_unchanged ✓ (§8.B)
+  - test_sort_emits_pipeline_trace_event ✓
+
+forge --gen-props engine/core/scanner/orchestrator.py
+→ Generated 2 property tests, 0 destructive skipped
+
+pytest tests/test_props_orchestrator.py
+→ 2 passed in 1.05s
+```
+
+**Feature flag (§4bis)** : `MUNINN_FORGE_FILE_ORDERING=0` revient au
+legacy. Documenté CLAUDE.md.
+
+
 ## 2026-05-19 (PM) — CHUNK C4/14 : Forge cache infrastructure (F0)
 
 Cinquième chunk. Prépare la wiring forge → reco (C5 + C6) via un

@@ -250,4 +250,55 @@ grep "pipeline.forge.risk_map_cached" /home/sandbox/.muninn/pipeline_trace.jsonl
 
 ---
 
-*(Plus de chunks à ajouter ici au fur et à mesure C5 → C13.)*
+## CHUNK C5 — Forge file-level priority (F1)
+
+### Test 1 — Helpers exist
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'engine/core/scanner')
+import orchestrator
+assert hasattr(orchestrator, '_sort_files_by_forge_risk')
+assert hasattr(orchestrator, '_FORGE_FILE_ORDERING_ENABLED')
+print('OK')
+"
+```
+- [ ]
+
+### Test 2 — Tri par risk décroissant
+```bash
+python3 -c "
+import sys, pathlib
+sys.path.insert(0, 'engine/core/scanner')
+import orchestrator
+
+orchestrator._get_file_risk_map_safe = lambda repo: {'a.py': 0.2, 'b.py': 0.9, 'c.py': 0.5}
+result = orchestrator._sort_files_by_forge_risk(['a.py', 'b.py', 'c.py'], pathlib.Path('.'))
+assert result == ['b.py', 'c.py', 'a.py']
+print('OK: tri descendant par forge_risk')
+"
+```
+- [ ]
+
+### Test 3 — Bascule legacy MUNINN_FORGE_FILE_ORDERING=0
+```bash
+MUNINN_FORGE_FILE_ORDERING=0 python3 -c "
+import sys; sys.path.insert(0, 'engine/core/scanner')
+import importlib; importlib.reload(sys.modules.get('orchestrator', __import__('orchestrator')))
+import orchestrator
+assert orchestrator._FORGE_FILE_ORDERING_ENABLED is False
+print('OK: flag OFF = legacy')
+"
+```
+- [ ]
+
+### Test 4 — Pipeline trace event
+Après un `muninn-mem cube scan` sur un repo, vérifier l'event :
+```bash
+grep "pipeline.forge.file_ordering_applied" /home/sandbox/.muninn/pipeline_trace.jsonl 2>/dev/null | tail -2
+```
+**Attendu** : 1+ ligne avec `n_files`, `n_with_risk`, `top_3`.
+- [ ]
+
+---
+
+*(Plus de chunks à ajouter ici au fur et à mesure C6 → C13.)*

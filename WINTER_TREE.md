@@ -3,6 +3,27 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C5/14)
+>
+> Sixième chunk. Forge file-level priority (F1) — sort des files par
+> forge_risk descendant avant scan.
+>
+> **Fichier touché** :
+> - `engine/core/scanner/orchestrator.py` :
+>   - Constante module `_FORGE_FILE_ORDERING_ENABLED` (env flag).
+>   - Helper `_get_file_risk_map_safe(repo)` — wrap avec fallback {}.
+>   - Helper `_sort_files_by_forge_risk(files, repo)` — sort stable,
+>     emit pipeline.forge.file_ordering_applied.
+>   - PIPELINE_TRACE block import au top.
+>   - 1 ligne ajoutée après `files_to_scan = _select_files(...)` pour
+>     brancher le sort dans le pipeline scan.
+>
+> **Tests** : `tests/test_chunk_2026-05-19_C5_file_priority.py` (7 tests).
+> **Forge** : 2 props générées, 0 destructive.
+>
+> **Feature flag** : `MUNINN_FORGE_FILE_ORDERING` (default `1`).
+>
+
 > ### 📍 SNAPSHOT 2026-05-19 (PM — battle plan unifié C4/14)
 >
 > Cinquième chunk. Forge cache infrastructure (F0) — prépare C5+C6.

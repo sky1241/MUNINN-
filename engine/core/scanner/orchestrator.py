@@ -34,6 +34,84 @@ except ImportError:
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+# CHUNK C5 (2026-05-19) — feature flag for forge-driven file ordering.
+# When ON (default), files_to_scan is reordered by forge_risk descending
+# before regex and LLM passes — attacks dangerous code first. Set
+# MUNINN_FORGE_FILE_ORDERING=0 to disable (legacy alphabetical order).
+_FORGE_FILE_ORDERING_ENABLED = os.environ.get(
+    "MUNINN_FORGE_FILE_ORDERING", "1"
+) != "0"
+
+# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
+try:  # PIPELINE_TRACE
+    from pipeline_trace import log_event  # PIPELINE_TRACE
+except Exception:  # PIPELINE_TRACE
+    def log_event(*a, **kw): pass  # PIPELINE_TRACE
+# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
+
+
+def _get_file_risk_map_safe(repo) -> dict:
+    """Safe wrapper around forge_metrics.get_file_risk_map.
+
+    Returns {} on any import or runtime failure (e.g. forge-shield not
+    installed). Used by _sort_files_by_forge_risk so the scan pipeline
+    falls back to legacy alphabetical order rather than crash.
+    """
+    try:
+        from forge_metrics import get_file_risk_map  # absolute (sys.path)
+    except ImportError:
+        try:
+            from engine.core.forge_metrics import get_file_risk_map
+        except ImportError:
+            return {}
+    try:
+        return get_file_risk_map(repo)
+    except Exception:
+        return {}
+
+
+def _sort_files_by_forge_risk(files: list, repo) -> list:
+    """CHUNK C5 (2026-05-19) — reorder files by forge per-file risk
+    score, descending. Files missing from the risk map get 0.0
+    (sorted to the end, stable order among ties).
+
+    Honors the MUNINN_FORGE_FILE_ORDERING feature flag — returns
+    `files` unchanged when disabled.
+
+    Emits `pipeline.forge.file_ordering_applied` once with
+    {repo, n_files, n_with_risk, top_3} so the sandbox monitor sees
+    the ordering decision.
+    """
+    if not _FORGE_FILE_ORDERING_ENABLED:
+        return files
+
+    risk_map = _get_file_risk_map_safe(repo)
+    if not risk_map:
+        log_event("pipeline.forge.file_ordering_applied", {
+            "repo": str(repo),
+            "n_files": len(files),
+            "n_with_risk": 0,
+            "top_3": [],
+            "skipped_reason": "no_risk_data",
+        })
+        return list(files)
+
+    # Stable sort by (-risk_score, original_index): higher risk first,
+    # ties broken by original order (Python sort is stable).
+    indexed = list(enumerate(files))
+    indexed.sort(key=lambda iv: (-risk_map.get(str(iv[1]), 0.0), iv[0]))
+    sorted_files = [v for _, v in indexed]
+
+    n_with_risk = sum(1 for f in files if str(f) in risk_map)
+    log_event("pipeline.forge.file_ordering_applied", {
+        "repo": str(repo),
+        "n_files": len(files),
+        "n_with_risk": n_with_risk,
+        "top_3": sorted_files[:3],
+    })
+    return sorted_files
+
+
 # ── Import all briques with triple fallback ────────────────────────
 
 def _import_brick(abs_path, rel_path, names):
@@ -482,6 +560,11 @@ def scan(options: ScanOptions):
         errors.append(f"select_files: {e}")
         files_to_scan = sorted(file_langs.keys())
     timings["select_files"] = time.time() - t0
+
+    # CHUNK C5 (2026-05-19) — reorder files by forge per-file risk
+    # descending. Hot files attacked first. Flag-gated and graceful on
+    # forge absence (returns input unchanged).
+    files_to_scan = _sort_files_by_forge_risk(files_to_scan, repo_path)
 
     # ── Dry run: return file list without scanning ─────────────────
     if options.dry_run:
