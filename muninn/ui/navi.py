@@ -8,6 +8,7 @@ Respects Windows "reduce motion" setting.
 """
 
 import math
+import os
 import time
 import ctypes
 import random
@@ -467,17 +468,29 @@ class NaviWidget(QWidget):
         pulse = 0.7 + 0.3 * math.sin(self._phase * 2)
 
         # === 3 GLOW LAYERS (breathe animation, staggered) ===
-        for i, (size_mult, base_alpha) in enumerate([(5.5, 0.06), (3.5, 0.15), (2.0, 0.5)]):
-            breathe = 1.0 + 0.2 * math.sin(self._phase * 2 + i * 0.6)
-            gr = r * size_mult * breathe
-            glow = QRadialGradient(cx, cy, gr)
-            a = int(base_alpha * 255 * pulse)
-            glow.setColorAt(0.0, QColor(0, 255, 210, a))
-            glow.setColorAt(0.4, QColor(0, 150, 255, int(a * 0.5)))
-            glow.setColorAt(0.65, QColor(0, 100, 255, 0))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(glow))
-            p.drawEllipse(QPointF(cx, cy), gr, gr)
+        # 2026-05-19: skip the QRadialGradient+drawEllipse glow on
+        # GitHub Actions ubuntu-latest with QT_QPA_PLATFORM=offscreen.
+        # The combination segfaults inside the software-rendered Qt
+        # backend on that specific runner (reproductible 3× sur CI).
+        # The orb stays visible (the iridescent core + wings below
+        # still render); only the soft outer glow is dropped on CI.
+        # Real X11 / sandbox / desktop runs are untouched.
+        _skip_glow_on_ci = (
+            os.environ.get("CI") == "true"
+            and os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+        )
+        if not _skip_glow_on_ci:
+            for i, (size_mult, base_alpha) in enumerate([(5.5, 0.06), (3.5, 0.15), (2.0, 0.5)]):
+                breathe = 1.0 + 0.2 * math.sin(self._phase * 2 + i * 0.6)
+                gr = r * size_mult * breathe
+                glow = QRadialGradient(cx, cy, gr)
+                a = int(base_alpha * 255 * pulse)
+                glow.setColorAt(0.0, QColor(0, 255, 210, a))
+                glow.setColorAt(0.4, QColor(0, 150, 255, int(a * 0.5)))
+                glow.setColorAt(0.65, QColor(0, 100, 255, 0))
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QBrush(glow))
+                p.drawEllipse(QPointF(cx, cy), gr, gr)
 
         # === WINGS — seraph x firefly ===
         # Concept: 3 paires d'ailes empilees verticalement comme un seraphin
