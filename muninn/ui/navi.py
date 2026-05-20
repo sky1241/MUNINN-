@@ -691,7 +691,9 @@ class NaviWidget(QWidget):
             return
         self._load_bubble_frame()
         btn = QWidget(win)
-        btn.setFixedSize(220, 42)
+        # 2026-05-20 : 220→280 — le frame asset PNG dépassait 220px → clipping
+        # visible du côté droit (rapporté par Sky sur la sandbox UI).
+        btn.setFixedSize(280, 42)
         btn.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
