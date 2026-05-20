@@ -339,11 +339,12 @@ class MainWindow(QMainWindow):
 
     def _scan_folder_dialog(self):
         """Open a unified picker: scan a folder OR reconstruct a file.
-        CHUNK 10: DontUseNativeDialog (Wayland fix).
-        CHUNK 15: ask user up-front what they want to do, then open the
-        right Qt picker. Scan-only or file-only dialogs alone confused
-        users (Sky tried picking queue.go in the folder dialog and got
-        a greyed-out 'Choose' button — not clear that's by design)."""
+
+        2026-05-20 (Sky feedback) : labels ultra-explicites + détection
+        post-sélection — si l'utilisateur change d'avis dans le file dialog
+        et sélectionne un FICHIER dans la vue dossier (ou inversement),
+        on route automatiquement vers la bonne action au lieu de griser
+        le bouton Choose."""
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
         from pathlib import Path
 
@@ -352,11 +353,11 @@ class MainWindow(QMainWindow):
         msg.setText("Que veux-tu faire ?")
         msg.setIcon(QMessageBox.Icon.Question)
         btn_scan = msg.addButton(
-            "📁 Scan un dossier (cartographier le repo)",
+            "📁 Scan TOUT un dossier (cartographier le projet)",
             QMessageBox.ButtonRole.AcceptRole,
         )
         btn_pick = msg.addButton(
-            "📄 Reconstruct un fichier",
+            "📄 Reconstruct UN SEUL fichier (cube par cube)",
             QMessageBox.ButtonRole.AcceptRole,
         )
         msg.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
@@ -364,14 +365,21 @@ class MainWindow(QMainWindow):
         clicked = msg.clickedButton()
 
         if clicked is btn_scan:
-            folder = QFileDialog.getExistingDirectory(
-                self,
-                "Select folder to scan",
-                "",
-                QFileDialog.Option.DontUseNativeDialog,
-            )
-            if folder:
-                self._scan_folder(folder)
+            # Mode dossier — mais si user sélectionne un fichier, route vers reco.
+            dlg = QFileDialog(self, "Sélectionne un dossier (ou un fichier pour /reconstruct)")
+            dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+            dlg.setFileMode(QFileDialog.FileMode.AnyFile)
+            if dlg.exec():
+                selected = dlg.selectedFiles()
+                if selected:
+                    p = Path(selected[0])
+                    if p.is_dir():
+                        self._scan_folder(str(p))
+                    elif p.is_file():
+                        self.terminal_panel._input.setText(
+                            f"/reconstruct {p} 112 0"
+                        )
+                        self.terminal_panel._input.setFocus()
         elif clicked is btn_pick:
             path, _ = QFileDialog.getOpenFileName(
                 self,
