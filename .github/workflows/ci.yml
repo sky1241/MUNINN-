@@ -203,6 +203,9 @@ jobs:
           # Qt's offscreen platform plugin. Requires libegl1/libxkbcommon0
           # apt deps installed in the previous step.
           QT_QPA_PLATFORM: offscreen
+          # 2026-05-20 (Sky request) : "rebrancher tout le pipeline tests"
+          # → MUNINN_RUN_PERF=1 active tests/test_perf_*.py (opt-in C13).
+          MUNINN_RUN_PERF: "1"
         run: |
           # Excludes:
           #   - eval_harness_*: cost money (Anthropic API), opt-in only
@@ -222,8 +225,11 @@ jobs:
           # H.2b (2026-05-12): test_ui_*.py REACTIVATED in CI — 173 tests
           # now run in QT_QPA_PLATFORM=offscreen. Were ignored pre-H.2b
           # because PyQt6 + pytest-qt + apt libs were missing in CI.
+          #
+          # 2026-05-20 (Sky request) : `-m "not slow"` retiré pour activer
+          # les 23 tests slow (MCP server scaffold, e6_hardened, f1_uninstall
+          # complet). CI passe de ~25min à ~50min mais teste TOUT le pipeline.
           python3 -m pytest tests/ -q --tb=short \
-            -m "not slow" \
             --ignore=tests/eval_harness_chunk9.py \
             --ignore=tests/eval_harness_chunk11.py \
             --ignore=tests/test_chunk1_auto_memory_disabled.py \
