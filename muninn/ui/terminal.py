@@ -656,15 +656,18 @@ class TerminalWidget(QWidget):
                 color="#EF4444",
             )
             return
+        # 2026-05-20 (Sky feedback) : prereq check soft. Le Mycelium
+        # s'auto-init via SQLite (cube_live.py:262 fait Mycelium(repo_root)
+        # qui crée mycelium.db si absent). Bloquer ici = UX cassée pour
+        # un repo fraîchement cloné. On WARN au lieu de fail.
         missing = self._reconstruction_prereqs_missing(repo_root)
         if missing:
             self._append_text(
-                "[reco] Reconstruction prerequisites missing in "
-                f"{repo_root}: " + ", ".join(missing)
-                + ". Run `muninn-mem scan <repo>` to populate mycelium.db.",
-                color="#EF4444",
+                f"[reco] note: mycelium.db absent dans {repo_root}/.muninn/, "
+                "il sera créé vide à la volée (pas de hints sémantiques, "
+                "reco moins guidée).",
+                color="#F59E0B",
             )
-            return
         lines_per_cube = int(args[1]) if len(args) >= 2 else 20
         max_cubes = int(args[2]) if len(args) >= 3 else 40
 
