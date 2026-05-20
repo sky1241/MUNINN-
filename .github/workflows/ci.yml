@@ -177,11 +177,13 @@ jobs:
           # as defense-in-depth for environments without [mcp] extra.
           # H.2b (2026-05-12): added PyQt6 + pytest-qt so the 173 UI tests
           # can run in QT_QPA_PLATFORM=offscreen mode (no X server needed).
-          # 2026-05-20 : `build` ajouté pour test_e6_sdist_excludes_internal
-          # (slow test précédemment skippé par `-m "not slow"`, maintenant actif).
+          # 2026-05-20 : `build` + `setuptools>=68` ajoutés pour
+          # test_e6_sdist_excludes_internal (slow, précédemment skippé).
+          # Le test fait `python -m build --sdist --no-isolation` qui
+          # exige setuptools.build_meta dans l'env runner (pas isolé).
           python3 -m pip install -c constraints.txt \
             pytest hypothesis tiktoken anthropic numpy cryptography freezegun \
-            forge-shield mcp PyQt6 pytest-qt build
+            forge-shield mcp PyQt6 pytest-qt build "setuptools>=68" wheel
 
       - name: Configure git identity (required by sync_backend tests)
         run: |
