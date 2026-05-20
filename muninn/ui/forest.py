@@ -191,14 +191,18 @@ class ColorModeToggle(QWidget):
         layout.setSpacing(4)
 
         self._btn = QPushButton(self._label())
-        self._btn.setFixedSize(110, 28)
+        # 2026-05-20 : 110→140 — la bordure droite était clipped par
+        # le sizeHint du container (Sky a remonté le bug sur sandbox UI).
+        self._btn.setFixedSize(140, 28)
         self._btn.setFont(QFont(FONT_BODY, 10))
         self._btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn.clicked.connect(self.toggle)
         self._update_style()
         layout.addWidget(self._btn)
 
-        self.setFixedHeight(36)
+        # Force container width so eventFilter pin_top_right ne fail pas
+        # sur un sizeHint trop étroit (causait clipping bordure droite).
+        self.setFixedSize(150, 36)
 
     def toggle(self):
         self._mode = "reconstruction" if self._mode == "mycelium" else "mycelium"
