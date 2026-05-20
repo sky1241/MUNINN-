@@ -224,8 +224,9 @@ runbook file (proven by test pins `test_tools_dont_touch_*`).
 For deeper config (auto-calibration thresholds, RRF fusion, dual-mycelium
 routing), see [`docs/MCP_SETUP.md`](MCP_SETUP.md).
 
-For internals, see [`docs/BATTLE_PLAN_MASTER_MCP.md`](BATTLE_PLAN_MASTER_MCP.md)
-(roadmap & methodology) and [`README.md`](../README.md) §Architecture.
+For internals, see [`docs/archive/BATTLE_PLAN_MASTER_MCP.md`](archive/BATTLE_PLAN_MASTER_MCP.md)
+(roadmap & methodology, archived 2026-05-20 — phases A-F delivered)
+and [`README.md`](../README.md) §Architecture.
 
 For known issues, see [`BUGS.md`](../BUGS.md). All bugs are FIXED at the
 time of writing — but check `bugs_list(status_filter="OPEN")` from Claude

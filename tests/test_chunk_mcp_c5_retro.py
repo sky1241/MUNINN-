@@ -85,8 +85,17 @@ def test_c5_changelog_references_retro():
 
 
 def test_c5_master_mcp_references_retro():
-    """BATTLE_PLAN_MASTER_MCP should reference the RETRO for lessons learned."""
-    p = REPO_ROOT / "docs" / "BATTLE_PLAN_MASTER_MCP.md"
+    """BATTLE_PLAN_MASTER_MCP should reference the RETRO for lessons learned.
+
+    2026-05-20 : MASTER_MCP archivé vers docs/archive/ (phases A-F livrées).
+    Le test cherche le doc dans les 2 emplacements pour rester robuste.
+    """
+    candidates = [
+        REPO_ROOT / "docs" / "BATTLE_PLAN_MASTER_MCP.md",
+        REPO_ROOT / "docs" / "archive" / "BATTLE_PLAN_MASTER_MCP.md",
+    ]
+    p = next((c for c in candidates if c.exists()), None)
+    assert p is not None, f"BATTLE_PLAN_MASTER_MCP introuvable (cherché : {candidates})"
     text = p.read_text(encoding="utf-8")
     assert "RETRO_PHASE_AB" in text or "RETRO" in text, (
         "MASTER_MCP should cross-link to the RETRO"

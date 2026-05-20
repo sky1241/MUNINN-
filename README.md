@@ -341,7 +341,7 @@ Wire it into `~/.claude.json`:
 
 Recall results are filtered by the universal degree-based stopword filter (G.1, opt-out via `MUNINN_RECALL_STOPWORD_PERCENTILE=0`).
 
-Full spec in [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md) and [`docs/BATTLE_PLAN_MASTER_MCP.md`](docs/BATTLE_PLAN_MASTER_MCP.md) §Phase B.
+Full spec in [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md) and [`docs/archive/BATTLE_PLAN_MASTER_MCP.md`](docs/archive/BATTLE_PLAN_MASTER_MCP.md) §Phase B.
 
 ## Multilingual offline (K.1 + K.1.bis, 2026-05-13)
 
@@ -393,7 +393,7 @@ CI Python: 3.13 (the only version actively tested, per honest claim from G.8). `
 | Phase K.1 (multilingual offline) | ✅ 2026-05-13 | 946 curated MIT entries, ConceptTranslator backend swap, API opt-in |
 | Phase K.1.bis | ✅ 2026-05-13 | +389 CC0 Wikidata entries, gap test fix, total 1336 entries |
 
-See [`docs/CHANGELOG.md`](CHANGELOG.md), [`docs/BATTLE_PLAN_MASTER_MCP.md`](docs/BATTLE_PLAN_MASTER_MCP.md), and [`docs/PROMPT_EXEC_PHASE_H.md`](docs/PROMPT_EXEC_PHASE_H.md) for detailed timelines.
+See [`docs/CHANGELOG.md`](CHANGELOG.md), [`docs/archive/BATTLE_PLAN_MASTER_MCP.md`](docs/archive/BATTLE_PLAN_MASTER_MCP.md), and [`docs/archive/PROMPT_EXEC_PHASE_H.md`](docs/archive/PROMPT_EXEC_PHASE_H.md) for detailed timelines.
 
 ## Benchmarks (tiktoken, March 2026)
 
@@ -519,10 +519,10 @@ docs/
   BENCHMARK_*.md          Benchmark results
   SYSTEM_MAP.md           Visual architecture map
   TIER1_SUMMARY.md / TIER2_SUMMARY.md / TIER3_PLAN.md
-  BATTLE_PLAN_MASTER_MCP.md   MCP roadmap (A→F delivered)
-  PROMPT_EXEC_PHASE_H.md      Phase G+H+I master executable prompt
-  BATTLE_PLAN_PHASE_K_MULTILINGUAL_OFFLINE.md  K.1 + K.2 plan
-  ANTI_BULLSHIT_BATTLE_PLAN.md  RULE 4 contract
+  archive/BATTLE_PLAN_MASTER_MCP.md   MCP roadmap (A→F delivered, archived 2026-05-20)
+  archive/PROMPT_EXEC_PHASE_H.md      Phase G+H+I master executable prompt (consumed)
+  archive/BATTLE_PLAN_PHASE_K_MULTILINGUAL_OFFLINE.md  K.1 + K.2 plan (delivered)
+  ANTI_BULLSHIT_BATTLE_PLAN.md  RULE 4 contract (active)
 CHANGELOG.md              Project changelog
 BUGS.md                   Bug tracker (121 RESOLVED, 0 OPEN)
 constraints.txt           Pinned versions for reproducible builds
