@@ -728,6 +728,16 @@ class FIMReconstructor:
         ext = os.path.splitext(cube.file_origin or '')[1].lower()
         cmt = '#' if ext in self._HASH_COMMENT_EXTS else '//'
 
+        # 2026-05-21 (Sky observation) : même en mode FIM raw tokens,
+        # certains modèles décrochent en chat. Préfixer le prefix par un
+        # bandeau comment force le modèle à interpréter le contexte comme
+        # du code à compléter, pas une question conversationnelle.
+        system_banner = (
+            f"{cmt} === CODE COMPLETION — fill the missing lines below ===\n"
+            f"{cmt} Output ONLY code, no prose, no markdown fences."
+        )
+        ext_prefix = system_banner + "\n" + ext_prefix if ext_prefix else system_banner
+
         hint_lines: list[str] = []
         if ast_hints:
             anchors_list = ast_hints.get('anchors') or []
@@ -785,8 +795,22 @@ class FIMReconstructor:
         elif not suffix:
             position = " (END of file)"
         prompt_parts = [
+            # 2026-05-21 (Sky observation) : qwen 1.5b, qwen 7b, deepseek 6.7b
+            # tous chat-tuned → répondent "I'm sorry but your question seems
+            # incomplete..." ou "It looks like you're trying to implement..."
+            # au lieu de produire du code. Instruction SYSTEM stricte requise.
+            "[CODE COMPLETION TASK — NO CHAT, NO PROSE]",
+            "You are a deterministic code-completion engine.",
+            "Output rules — STRICT:",
+            "  - Output ONLY raw code, EXACTLY the missing lines.",
+            "  - NO markdown fences (no ```).",
+            "  - NO explanation, NO 'I'm sorry', NO 'It seems', NO 'Here is'.",
+            "  - NO comments unless they exist in the original file.",
+            "  - If you cannot complete with confidence, output a best-guess",
+            "    code stub (no prose) — never refuse, never ask for clarification.",
+            "",
             f"File: {cube.file_origin} (lines {cube.line_start}-{cube.line_end} missing{position})",
-            f"Write EXACTLY {n_lines} lines. Output ONLY code. No fences. No explanation.",
+            f"Write EXACTLY {n_lines} lines. Output ONLY code.",
         ]
         if indent_hint:
             prompt_parts.append("Indentation: tabs" if '\t' in indent_hint
