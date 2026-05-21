@@ -352,8 +352,13 @@ class MainWindow(QMainWindow):
         clicked = msg.clickedButton()
 
         if clicked is btn_scan:
-            # Mode dossier — mais si user sélectionne un fichier, route vers reco.
-            dlg = QFileDialog(self, "Sélectionne un dossier (ou un fichier pour /reconstruct)")
+            # Mode SCAN — l'utilisateur veut cartographier le repo.
+            # 2026-05-21 : si user sélectionne un fichier (clic accidentel
+            # dans le file dialog), on scan le DOSSIER PARENT au lieu de
+            # basculer en /reconstruct. Avant: routait vers reconstruct
+            # = mauvaise intention (Sky : "j'ai appuyé sur scanner et ça
+            # m'a préétabli /reconstruct alors qu'on faisait un scan").
+            dlg = QFileDialog(self, "Sélectionne le dossier à scanner")
             dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
             dlg.setFileMode(QFileDialog.FileMode.AnyFile)
             if dlg.exec():
@@ -363,10 +368,14 @@ class MainWindow(QMainWindow):
                     if p.is_dir():
                         self._scan_folder(str(p))
                     elif p.is_file():
-                        self.terminal_panel._input.setText(
-                            f"/reconstruct {p} 112 0"
+                        # User a cliqué un fichier alors qu'on demandait
+                        # un dossier — on scan son dossier parent.
+                        parent = p.parent
+                        self.status_bar.showMessage(
+                            f"Tu as cliqué un fichier, je scan le dossier "
+                            f"parent : {parent}", 6000
                         )
-                        self.terminal_panel._input.setFocus()
+                        self._scan_folder(str(parent))
         elif clicked is btn_pick:
             path, _ = QFileDialog.getOpenFileName(
                 self,
