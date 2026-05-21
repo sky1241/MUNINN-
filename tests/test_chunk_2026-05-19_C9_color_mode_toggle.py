@@ -165,12 +165,20 @@ def test_palette_toggle_mode_calls_color_toggle(qtbot):
 
 
 def test_main_window_has_color_mode_toggle(qtbot):
-    """MainWindow instantiates _color_mode_toggle as an overlay."""
+    """MainWindow color mode is switchable via palette (no overlay widget).
+
+    2026-05-20 : l'overlay ColorModeToggle (top-right du neuron panel) a été
+    viré (commit 757981b) — bordure droite clippait + "sa sert a rien"
+    (Sky). Le mode color reste switchable :
+      - via le neuron_panel._color_mode (default "mycelium")
+      - via la palette action "toggle_mode" (test_palette_toggle_mode_calls_color_toggle)
+      - via NeuronMapWidget.set_color_mode() (test_set_color_mode_to_reconstruction)
+    Le widget overlay lui-même n'existe plus.
+    """
     pytest_qt = __import__("pytest")
     pytest_qt.importorskip("PyQt6")
     from muninn.ui.main_window import MainWindow
-    from muninn.ui.forest import ColorModeToggle
     win = MainWindow()
     qtbot.addWidget(win)
-    assert hasattr(win, "_color_mode_toggle")
-    assert isinstance(win._color_mode_toggle, ColorModeToggle)
+    # Plus de widget overlay, mais le mode color reste accessible.
+    assert win.neuron_panel._color_mode in ("mycelium", "reconstruction")
