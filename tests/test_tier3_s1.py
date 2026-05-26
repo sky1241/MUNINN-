@@ -5,6 +5,10 @@ import shutil
 import sqlite3
 import tempfile
 import sys
+from datetime import datetime, timedelta
+
+def _days_ago(n):
+    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from muninn.mycelium import Mycelium
@@ -137,7 +141,7 @@ def test_s1_5_wal_mode():
 
 def test_s2_1_date_conversion():
     """date_to_days and days_to_date are inverse functions."""
-    test_dates = ["2020-01-01", "2026-03-11", "2025-12-31", "2030-06-15"]
+    test_dates = ["2020-01-01", "2026-03-11", _days_ago(147), "2030-06-15"]
     for d in test_dates:
         days = date_to_days(d)
         back = days_to_date(days)

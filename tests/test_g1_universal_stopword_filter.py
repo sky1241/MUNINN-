@@ -143,7 +143,9 @@ def test_g1_recall_meta_no_french_stopwords(tmp_path: Path,
     conn.close()
 
     monkeypatch.setenv("MUNINN_META_PATH", str(meta_dir))
-    monkeypatch.delenv("MUNINN_RECALL_STOPWORD_PERCENTILE", raising=False)
+    # R3 fix: Phase 1.5 changed default MUNINN_RECALL_STOPWORD_PERCENTILE 0.05 -> 0.0.
+    # This test verifies the FILTER WORKS when enabled (opt-in). Set explicitly.
+    monkeypatch.setenv("MUNINN_RECALL_STOPWORD_PERCENTILE", "0.05")
 
     from muninn.mcp import server as srv
 

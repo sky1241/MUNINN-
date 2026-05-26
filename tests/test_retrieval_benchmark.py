@@ -84,13 +84,14 @@ def _load_tree_and_nodes():
 
 
 def _ebbinghaus_recall(node):
-    from datetime import datetime
+    from datetime import datetime, timedelta
     now = datetime.now()
-    last_str = node.get("last_access", node.get("created", "2025-01-01"))
+    _default = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    last_str = node.get("last_access", node.get("created", _default))
     try:
         last = datetime.strptime(last_str[:10], "%Y-%m-%d")
     except (ValueError, TypeError):
-        last = datetime(2025, 1, 1)
+        last = now - timedelta(days=30)
     delta_days = max(0.01, (now - last).total_seconds() / 86400)
     reviews = node.get("access_count", 1)
     h = 7.0 * (2 ** min(reviews, 10))
@@ -100,15 +101,16 @@ def _ebbinghaus_recall(node):
 
 
 def _actr_activation(node):
-    from datetime import datetime
+    from datetime import datetime, timedelta
     now = datetime.now()
     d = 0.5
     reviews = node.get("access_count", 1)
-    last_str = node.get("last_access", node.get("created", "2025-01-01"))
+    _default = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    last_str = node.get("last_access", node.get("created", _default))
     try:
         last = datetime.strptime(last_str[:10], "%Y-%m-%d")
     except (ValueError, TypeError):
-        last = datetime(2025, 1, 1)
+        last = now - timedelta(days=30)
     total_days = max(1.0, (now - last).total_seconds() / 86400)
     if reviews <= 1:
         t_j = [total_days]

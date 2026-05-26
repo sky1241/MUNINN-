@@ -11,7 +11,11 @@ import pytest
 import sys
 import os
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
+
+def _days_ago(n):
+    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 # Ensure engine/core is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "core"))
@@ -76,7 +80,7 @@ class TestM1UpsertConnectionMAX:
                                 first_seen="2026-01-01", last_seen="2026-01-01")
             # Import lower count — should NOT downgrade
             db.upsert_connection("a", "b", count=50,
-                                first_seen="2025-12-01", last_seen="2026-02-01")
+                                first_seen=_days_ago(177), last_seen=_days_ago(114))
             conn = db.get_connection("a", "b")
             assert conn["count"] == 100, f"Expected 100, got {conn['count']}"
             db.close()

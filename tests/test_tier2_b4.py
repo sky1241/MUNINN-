@@ -13,6 +13,10 @@ need a per-test 90s timeout because spread_activation on Sky's
 The default suite timeout is 10s which is too tight for these.
 """
 import sys, os, tempfile, json, time
+from datetime import datetime, timedelta
+
+def _days_ago(n):
+    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 import pytest
 def _setup_temp_repo(tmpdir):
     """Create minimal Muninn repo structure"""
@@ -86,7 +90,7 @@ def test_b4_3_penalize_fresh():
                 },
                 "b0002": {
                     "type": "branch", "tags": ["beta", "gamma"],
-                    "access_count": 1, "last_access": "2025-01-01",
+                    "access_count": 1, "last_access": _days_ago(511),
                     "usefulness": 0.5,
                 },
             }

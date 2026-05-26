@@ -429,7 +429,7 @@ def test_regen_9_end_to_end():
 
     nodes = {
         "branch_io": {"file": "branch_io.mn", "tags": ["io", "async", "performance"],
-                      "last_access": "2025-12-01"},
+                      "last_access": _DAYS_AGO(177)},
         "branch_pipeline": {"file": "branch_pipeline.mn", "tags": ["pipeline", "compression"],
                            "last_access": _DAYS_AGO(1)},
     }

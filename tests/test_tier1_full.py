@@ -3,6 +3,10 @@
 Run: python tests/test_tier1_full.py
 """
 import sys, os, math, time, json, tempfile
+from datetime import datetime, timedelta
+
+def _days_ago(n):
+    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 PASS = 0
 FAIL = 0
 SKIP = 0
@@ -40,24 +44,24 @@ def run_a1():
     check("A1.1 backward_compat", abs(r - 1.0) < 0.01, f"recall={r}")
 
     # A1.2: usefulness=0.5 reduces half-life
-    r1 = _ebbinghaus_recall(node(5, "2025-07-30", 1.0))
-    r05 = _ebbinghaus_recall(node(5, "2025-07-30", 0.5))
+    r1 = _ebbinghaus_recall(node(5, _days_ago(301), 1.0))
+    r05 = _ebbinghaus_recall(node(5, _days_ago(301), 0.5))
     check("A1.2 usefulness_effect", r05 < r1, f"r(u=0.5)={r05:.4f} >= r(u=1.0)={r1:.4f}")
 
     # A1.3: monotonicity
     vals = [0.1, 0.3, 0.5, 0.7, 1.0]
-    recalls = [_ebbinghaus_recall(node(5, "2025-07-30", u)) for u in vals]
+    recalls = [_ebbinghaus_recall(node(5, _days_ago(301), u)) for u in vals]
     mono = all(recalls[i] < recalls[i+1] for i in range(len(recalls)-1))
     check("A1.3 monotonicity", mono, f"recalls={[f'{r:.3f}' for r in recalls]}")
 
     # A1.5: differentiation (different usefulness => different temperature)
-    t_low = compute_temperature(node(3, "2025-12-01", 0.3))
-    t_high = compute_temperature(node(3, "2025-12-01", 0.9))
+    t_low = compute_temperature(node(3, _days_ago(177), 0.3))
+    t_high = compute_temperature(node(3, _days_ago(177), 0.9))
     check("A1.5 differentiation", abs(t_high - t_low) > 0.01,
           f"t(0.3)={t_low:.3f}, t(0.9)={t_high:.3f}")
 
     # A1.7: usefulness=0 => clamped, no crash
-    r = _ebbinghaus_recall(node(5, "2025-07-30", 0.0))
+    r = _ebbinghaus_recall(node(5, _days_ago(301), 0.0))
     check("A1.7 zero_safety", r > 0 and not math.isnan(r) and not math.isinf(r), f"r={r}")
 
     # COMPARATIVE: half-life before vs after
@@ -83,8 +87,6 @@ def run_a2():
         return base
 
     # A2.1: arithmetic (compute expected dynamically to avoid date drift)
-    from datetime import datetime, timedelta
-    _days_ago = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
     n = node(access_history=[_days_ago(6), _days_ago(8), _days_ago(35)])
     B = _actr_activation(n)
     expected = math.log(6**(-0.5) + 8**(-0.5) + 35**(-0.5))
@@ -97,7 +99,7 @@ def run_a2():
 
     # A2.3: recent > old
     B_recent = _actr_activation(node(access_count=5, last_access=_days_ago(5)))
-    B_old = _actr_activation(node(access_count=5, last_access="2025-06-01"))
+    B_old = _actr_activation(node(access_count=5, last_access=_days_ago(360)))
     check("A2.3 recency", B_recent > B_old, f"recent={B_recent:.4f}, old={B_old:.4f}")
 
     # A2.4: clustered vs spread (raw ACT-R)
@@ -345,11 +347,11 @@ def run_cross():
 
     # Test: A1 + A2 interact correctly
     # Use delta=100 days so usefulness actually differentiates
-    n_good = {"access_count": 3, "last_access": "2025-12-01", "usefulness": 0.9,
-              "access_history": ["2025-12-01", "2025-10-01", "2025-08-01"],
+    n_good = {"access_count": 3, "last_access": _days_ago(177), "usefulness": 0.9,
+              "access_history": [_days_ago(177), _days_ago(238), _days_ago(299)],
               "lines": 50, "max_lines": 150}
-    n_bad = {"access_count": 3, "last_access": "2025-12-01", "usefulness": 0.2,
-             "access_history": ["2025-12-01", "2025-12-01", "2025-12-01"],
+    n_bad = {"access_count": 3, "last_access": _days_ago(177), "usefulness": 0.2,
+             "access_history": [_days_ago(177), _days_ago(177), _days_ago(177)],
              "lines": 50, "max_lines": 150}
 
     recall_good = _ebbinghaus_recall(n_good)
