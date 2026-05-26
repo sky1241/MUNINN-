@@ -12,6 +12,17 @@ Tests:
 import sys, os, tempfile, time, socket, ssl
 import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine", "core"))
+
+
+def _wait_server_ready(server, port, timeout=5.0):
+    """Poll server._running flag instead of blind sleep. No TCP probe — TLS
+    servers reject plain connections and that exhausts a single-accept loop."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if getattr(server, "_running", False):
+            return
+        time.sleep(0.05)
+    raise TimeoutError(f"server not ready after {timeout}s")
 def test_t1_1_generate_certs():
     """generate_certs creates cert + key files"""
     from pathlib import Path
@@ -51,7 +62,7 @@ def test_t1_2_server_lifecycle():
             port = s.getsockname()[1]
         server.port = port
         server.start(background=True)
-        time.sleep(0.3)
+        _wait_server_ready(server, port)
         assert server._running, "T1.2 FAIL: server not running"
         server.stop()
         assert not server._running, "T1.2 FAIL: server still running after stop"
@@ -78,7 +89,7 @@ def test_t1_3_ping_pong():
             port=port,
         )
         server.start(background=True)
-        time.sleep(0.5)
+        _wait_server_ready(server, port)
 
         try:
             client = SyncClient(
@@ -114,7 +125,7 @@ def test_t1_4_push():
             port=port,
         )
         server.start(background=True)
-        time.sleep(0.5)
+        _wait_server_ready(server, port)
 
         try:
             client = SyncClient(host="localhost", port=port,
@@ -147,7 +158,7 @@ def test_t1_5_pull():
             port=port,
         )
         server.start(background=True)
-        time.sleep(0.5)
+        _wait_server_ready(server, port)
 
         try:
             client = SyncClient(host="localhost", port=port,
@@ -179,7 +190,7 @@ def test_t1_6_tls_enforced():
             port=port,
         )
         server.start(background=True)
-        time.sleep(0.5)
+        _wait_server_ready(server, port)
 
         try:
             # Try plain TCP (no TLS)
@@ -259,7 +270,7 @@ def test_t1_9_rate_limit_server():
             max_requests_per_min=3,
         )
         server.start(background=True)
-        time.sleep(0.5)
+        _wait_server_ready(server, port)
 
         try:
             client = SyncClient(host="localhost", port=port,
@@ -309,7 +320,7 @@ def test_t1_10_mtls():
             require_client_cert=True,
         )
         server.start(background=True)
-        time.sleep(0.5)
+        _wait_server_ready(server, port)
 
         try:
             # Client WITHOUT client cert — should fail

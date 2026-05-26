@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -11,6 +12,8 @@ import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 from tokenizer import token_count
 from _secrets import redact_secrets_text as _redact_secrets_text
@@ -159,10 +162,10 @@ def cleanup_tmp_files():
                         if stale.stat().st_mtime < cutoff:
                             stale.unlink()
                             removed += 1
-                    except (OSError, PermissionError):
-                        pass
+                    except (OSError, PermissionError) as exc:
+                        _log.warning("cannot remove stale file %s: %s", stale, exc)
     except Exception:
-        pass
+        _log.exception("cleanup_stale_files failed, %d removed before error", removed)
     return removed
 
 

@@ -109,7 +109,7 @@ def test_manifest_uses_repo_relative_paths():
     assert not bare, (
         f"Manifest still has bare-name paths (sha256sum -c fails from repo root): "
         f"{bare[:3]}. Regenerate via:\n"
-        f"  cd /home/sky/Bureau/MUNINN- && sha256sum .claude/hooks/*.py "
+        f"  cd {REPO} && sha256sum .claude/hooks/*.py "
         f"> .claude/hooks/hooks.sha256sum"
     )
 

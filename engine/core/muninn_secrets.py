@@ -15,11 +15,14 @@ Chunk C.1 of docs/BATTLE_PLAN_MASTER_MCP.md (2026-05-11 nuit).
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sys
 import time
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 # Shared secret regex patterns — _secrets.py is the single source of truth.
 try:
@@ -160,8 +163,8 @@ def purge_secrets_db(repo_path: Path = None):
             mp = cfg.get("meta_path")
             if mp:
                 meta_db = Path(mp) / "meta_mycelium.db"
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("corrupt config.json at %s, skipping meta_path override: %s", config_path, exc)
 
     if meta_db.exists():
         db = MyceliumDB(meta_db)

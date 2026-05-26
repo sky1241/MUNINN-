@@ -5,10 +5,13 @@ Designed for future Git (Phase 3) and TLS (Phase 4) backends.
 """
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 import subprocess
 import time
+
+_log = logging.getLogger(__name__)
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -477,8 +480,8 @@ def _load_sync_config() -> dict:
                     if ".." not in p.parts:
                         config["meta_path"] = str(p)
                 config["backend"] = cfg.get("backend", "shared_file")
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as exc:
+            _log.warning("failed to read sync config %s: %s", config_path, exc)
 
     return config
 
@@ -603,8 +606,8 @@ class GitBackend(SyncBackend):
             try:
                 meta = json.loads(meta_file.read_text(encoding="utf-8"))
                 last_sync_str = str(meta.get("last_sync_day", "0"))
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as exc:
+                _log.warning("failed to read git sync meta %s: %s", meta_file, exc)
         last_sync_day = int(last_sync_str) if last_sync_str.isdigit() else 0
 
         # Export edges from local DB
@@ -781,8 +784,8 @@ class GitBackend(SyncBackend):
                 try:
                     meta = json.loads(meta_file.read_text(encoding="utf-8"))
                     result["repos"] = meta.get("repos", [])
-                except (ValueError, OSError):
-                    pass
+                except (ValueError, OSError) as exc:
+                    _log.warning("failed to read git status meta %s: %s", meta_file, exc)
         return result
 
     @staticmethod
@@ -1103,8 +1106,8 @@ def export_meta_json(output_path: Path) -> dict:
     try:
         for row in db._conn.execute("SELECT key, value FROM meta"):
             meta_info[row[0]] = row[1]
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        _log.warning("meta table missing or unreadable during export: %s", exc)
 
     export = {
         "version": 1,

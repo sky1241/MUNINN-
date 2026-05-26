@@ -23,9 +23,12 @@ Dependencies on core mixin:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import time
+
+_log = logging.getLogger(__name__)
 
 
 class _MyceliumDreamMixin:
@@ -556,6 +559,6 @@ class _MyceliumDreamMixin:
         except BaseException:
             try:
                 os.unlink(_tmp)
-            except OSError:
-                pass
+            except OSError as exc:
+                _log.warning("failed to clean temp file %s: %s", _tmp, exc)
             raise
