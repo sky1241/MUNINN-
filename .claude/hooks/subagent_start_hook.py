@@ -21,15 +21,6 @@ import os
 import sys
 from pathlib import Path
 
-# --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
-try:  # PIPELINE_TRACE
-    _pt_dir = str(Path(__file__).resolve().parent.parent.parent / "engine" / "core")  # PIPELINE_TRACE
-    if _pt_dir not in sys.path: sys.path.insert(0, _pt_dir)  # PIPELINE_TRACE
-    from pipeline_trace import log_event  # PIPELINE_TRACE
-except Exception:  # PIPELINE_TRACE
-    def log_event(*a, **kw): pass  # PIPELINE_TRACE
-# --- end PIPELINE_TRACE block ---  # PIPELINE_TRACE
-
 MAX_INJECT_CHARS = 20000  # ~5000 tokens
 
 
@@ -115,10 +106,11 @@ def _log_subagent_error(context, exc):
         try:
             sys.stderr.write(
                 f"[MUNINN HOOK LOG fallback] [subagent_start_hook:"
-                f"{{context}}] {{type(exc).__name__}}: {{exc}}\n"
+                f"{context}] {type(exc).__name__}: {exc}\n"
             )
+            sys.stderr.flush()
         except Exception:
-            pass
+            pass  # true last resort — nowhere to write if stderr fails
 
 
 def main():
@@ -144,7 +136,6 @@ def main():
         return
 
     agent_type = payload.get("agent_type", "")
-    log_event("pipeline.hook.subagent_start.begin", {"agent_type": agent_type})  # PIPELINE_TRACE
     repo_path_str = payload.get("cwd") or os.getcwd()
     repo_path = Path(repo_path_str).resolve()
 
@@ -177,7 +168,6 @@ def main():
 
         injected = "\n".join(parts)
         injected = _truncate_with_marker(injected, MAX_INJECT_CHARS)
-        log_event("pipeline.hook.subagent_start.emit", {"agent_type": agent_type, "len": len(injected), "branch": branch_name})  # PIPELINE_TRACE
 
         print(json.dumps({
             "hookSpecificOutput": {
