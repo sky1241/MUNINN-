@@ -556,6 +556,11 @@ def bootstrap_mycelium(repo_path: Path, max_files=None):
     # Universal scanner (CHUNK 10 phase 2, 2026-05-18): same logic as
     # scan_repo, accepts any UTF-8 text file. .tex routing kept (special
     # path that calls observe_latex instead of observe_text).
+    # R13 (2026-05-26): progress logging every 50 files — nightly was
+    # timing out at 3h with zero visibility on where it hung.
+    import time as _time_mod
+    _start_ts = _time_mod.monotonic()
+    _last_progress_ts = _start_ts
     for f in iter_scannable_files(repo_path, skip_dirs):
         try:
             text = f.read_text(encoding="utf-8", errors="ignore")
@@ -565,6 +570,12 @@ def bootstrap_mycelium(repo_path: Path, max_files=None):
             else:
                 m.observe_text(clean)
             file_count += 1
+            if file_count % 50 == 0:
+                now = _time_mod.monotonic()
+                elapsed = now - _start_ts
+                delta = now - _last_progress_ts
+                _last_progress_ts = now
+                print(f"  [progress] {file_count} files | total {elapsed:.0f}s | last 50 in {delta:.0f}s | current={f.name}", flush=True)
             if max_files is not None and file_count >= max_files:
                 capped = True
                 break
@@ -634,10 +645,17 @@ def _bootstrap_branches(repo_path: Path, skip_dirs: set):
     mn_dir.mkdir(parents=True, exist_ok=True)
 
     total_branches = 0
-    for _size, f in candidates:
+    # R13: progress logging — _bootstrap_branches was the silent hang point
+    # in the nightly timeout. Each iteration = compress_file + grow_branches.
+    import time as _time_mod
+    _bb_start = _time_mod.monotonic()
+    print(f"  [branches] processing top {len(candidates)} prose files...", flush=True)
+    for idx, (_size, f) in enumerate(candidates, 1):
+        _file_start = _time_mod.monotonic()
         try:
             compressed = compress_file(f)
             if len(compressed.strip()) < 30:
+                print(f"  [branches {idx}/{len(candidates)}] skip {f.name} (compressed<30 chars)", flush=True)
                 continue
             mn_temp = mn_dir / f"_bootstrap_{f.stem}.mn"
             mn_temp.write_text(compressed, encoding="utf-8")
@@ -646,9 +664,13 @@ def _bootstrap_branches(repo_path: Path, skip_dirs: set):
             total_branches += created
             if mn_temp.exists():
                 mn_temp.unlink()
+            _elapsed = _time_mod.monotonic() - _file_start
+            print(f"  [branches {idx}/{len(candidates)}] {f.name} +{created} branches in {_elapsed:.1f}s", flush=True)
         except Exception as exc:
             print(f"  WARNING: branch creation failed for {f.name}: {exc}", file=sys.stderr)
             continue
+    _bb_total = _time_mod.monotonic() - _bb_start
+    print(f"  [branches] done: {total_branches} branches in {_bb_total:.0f}s", flush=True)
 
     if total_branches > 0:
         print(f"  P40: {len(candidates)} docs -> {total_branches} branches created")
