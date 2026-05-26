@@ -10,14 +10,16 @@ Tests:
   A1.7  usefulness=0.0 => clamped to 0.1, no crash
 """
 import sys, os, math
+from datetime import date, timedelta
 from muninn import _ebbinghaus_recall, compute_temperature
 
 TOLERANCE = 0.01
 
 def _today():
-    """Use today's date so delta=0 tests don't drift over time."""
-    import time
-    return time.strftime("%Y-%m-%d")
+    return date.today().strftime("%Y-%m-%d")
+
+def _days_ago(n):
+    return (date.today() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 def make_node(access_count=5, last_access=None, usefulness=1.0):
     return {
@@ -45,8 +47,8 @@ def test_a1_2_arithmetic_half():
     # Use last_access far enough that delta = 224 days
     # With usefulness=1.0: h=224, recall = 2^(-224/224) = 0.5
     # With usefulness=0.5: h=158.39, recall = 2^(-224/158.39) = 2^(-1.414) = 0.375
-    node_u1 = make_node(access_count=5, usefulness=1.0, last_access="2025-07-30")  # ~224 days ago (fixed reference)
-    node_u05 = make_node(access_count=5, usefulness=0.5, last_access="2025-07-30")
+    node_u1 = make_node(access_count=5, usefulness=1.0, last_access=_days_ago(224))
+    node_u05 = make_node(access_count=5, usefulness=0.5, last_access=_days_ago(224))
     recall_u1 = _ebbinghaus_recall(node_u1)
     recall_u05 = _ebbinghaus_recall(node_u05)
     # recall_u1 should be ~0.5 (delta ~= h = 224)
@@ -60,7 +62,7 @@ def test_a1_3_monotonicity():
     usefulness_values = [0.1, 0.3, 0.5, 0.7, 1.0]
     recalls = []
     for u in usefulness_values:
-        node = make_node(access_count=5, usefulness=u, last_access="2025-07-30")
+        node = make_node(access_count=5, usefulness=u, last_access=_days_ago(224))
         recalls.append(_ebbinghaus_recall(node))
     for i in range(len(recalls) - 1):
         assert recalls[i] < recalls[i + 1], (
@@ -71,8 +73,8 @@ def test_a1_3_monotonicity():
 
 def test_a1_5_differentiation():
     """Different usefulness => different temperatures"""
-    node_low = make_node(access_count=3, usefulness=0.3, last_access="2025-12-01")
-    node_high = make_node(access_count=3, usefulness=0.9, last_access="2025-12-01")
+    node_low = make_node(access_count=3, usefulness=0.3, last_access=_days_ago(180))
+    node_high = make_node(access_count=3, usefulness=0.9, last_access=_days_ago(180))
     temp_low = compute_temperature(node_low)
     temp_high = compute_temperature(node_high)
     diff = abs(temp_high - temp_low)
@@ -81,7 +83,7 @@ def test_a1_5_differentiation():
 
 def test_a1_7_usefulness_zero():
     """usefulness=0.0 should be clamped to 0.1, no crash"""
-    node = make_node(access_count=5, usefulness=0.0, last_access="2025-07-30")
+    node = make_node(access_count=5, usefulness=0.0, last_access=_days_ago(224))
     recall = _ebbinghaus_recall(node)
     assert recall > 0, f"A1.7 FAIL: recall={recall}, expected > 0"
     assert not math.isnan(recall), f"A1.7 FAIL: recall is NaN"
