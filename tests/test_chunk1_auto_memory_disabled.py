@@ -96,6 +96,8 @@ def test_hooks_still_point_to_muninn(settings):
         "notification_audit_hook.py",
         "post_tool_use_edit_log.py",
         "config_change_hook.py",
+        # R10.5 (2026-05-26): PreCompact hook → muninn_install.py feed --repo …
+        "muninn_install.py",
     )
 
     def _extract_commands(entries):
