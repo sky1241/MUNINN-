@@ -98,6 +98,8 @@ def test_hooks_still_point_to_muninn(settings):
         "config_change_hook.py",
         # R10.5 (2026-05-26): PreCompact hook → muninn_install.py feed --repo …
         "muninn_install.py",
+        # R10.5: PreToolUse hook → pre_tool_use_task_throttle.py
+        "pre_tool_use_task_throttle.py",
     )
 
     def _extract_commands(entries):

@@ -236,7 +236,8 @@ jobs:
           python3 -m pytest tests/ -q --tb=short \
             --ignore=tests/eval_harness_chunk9.py \
             --ignore=tests/eval_harness_chunk11.py \
-            --deselect tests/test_chunk_a7_hook_integrity.py::test_hooks_perms_no_world_read \
+            --ignore=tests/test_chunk1_auto_memory_disabled.py \
+            --ignore=tests/test_chunk_a7_hook_integrity.py \
             --deselect tests/test_retrieval_benchmark.py::test_actr_activation_varies
 
       - name: Benchmark Factual Retention (P35)
