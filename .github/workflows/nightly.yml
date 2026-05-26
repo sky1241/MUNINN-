@@ -46,18 +46,22 @@ jobs:
       - name: Reset .muninn state
         run: rm -rf .muninn
 
-      - name: Full bootstrap on this repo (cap 300 — keep <90min on GHA)
+      - name: Full bootstrap on this repo (cap 100 — GHA is 17× slower than local)
         run: |
-          # R13 (2026-05-26): cap raised but still bounded.
-          # Historical: was uncapped, hit 3h timeout 3 nights in a row
-          # (cancelled 2026-05-24/25/26). Repo grew to 567 files; full
-          # uncapped scan exceeds 180min on free-tier GHA runners.
-          # Cap 300 = ~53% of repo, catches scale bugs the smoke (10) can't,
-          # and stays well under the 90min job timeout.
-          # Progress logging added in bootstrap_mycelium (every 50 files).
-          # If a future run gets close to 90min with --max-files 300, the
-          # PER-FILE compute has regressed — find the slow file in the log.
-          python3 engine/core/muninn.py bootstrap . --max-files 300
+          # R14 (2026-05-27): cap reduced from 300 → 100 after measurement.
+          # R13 progress logs (commit bf75d67) revealed: GHA runner takes
+          # ~19s/file vs ~1.1s/file locally (free-tier shared CPU, slow disk).
+          # Observed timing (2026-05-26 manual run, cap=300):
+          #   50 files / 920s   (18.4s/file)
+          #   100 files / 1868s (18.7s/file)
+          #   150 files / 2818s (18.8s/file)
+          #   250 files / 5331s (21.3s/file — at 89min, cancelled)
+          # Cap 100 → ~31min scan + ~25min _bootstrap_branches (~20 prose
+          # candidates, 1-3s each) + sanity check = ~58min total. Sub-90min.
+          # ROOT-CAUSE PERF investigation deferred (mycelium.observe_text on
+          # GHA is the slow path — likely SQLite write amplification on the
+          # slow runner disk).
+          python3 engine/core/muninn.py bootstrap . --max-files 100
 
       - name: Sanity check the output
         run: |
