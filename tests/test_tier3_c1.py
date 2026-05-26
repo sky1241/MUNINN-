@@ -11,7 +11,8 @@ import sys, os, json, tempfile, shutil
 from datetime import datetime, timedelta
 
 import pytest
-from freezegun import freeze_time
+freezegun = pytest.importorskip("freezegun")
+freeze_time = freezegun.freeze_time
 
 from muninn.mycelium import Mycelium
 

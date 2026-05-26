@@ -12,7 +12,8 @@ import sys, os, math
 from datetime import datetime, timedelta
 
 import pytest
-from freezegun import freeze_time
+freezegun = pytest.importorskip("freezegun")
+freeze_time = freezegun.freeze_time
 
 from muninn import _actr_activation, _ebbinghaus_recall
 
