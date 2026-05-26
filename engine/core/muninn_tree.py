@@ -577,8 +577,8 @@ def refresh_tree_metadata(tree: dict):
             try:
                 actual_lines = len(filepath.read_text(encoding="utf-8").split("\n"))
                 node["lines"] = actual_lines
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as exc:
+                _log.warning("refresh_tree: read_text failed for %s, lines stale: %s", filepath, exc)
         node["temperature"] = compute_temperature(node)
     log_event("pipeline.engine.refresh_tree.end", {"nodes": _pt_n, "elapsed_ms": round((time.perf_counter() - _pt_t0) * 1000, 2)})  # PIPELINE_TRACE
 
@@ -1356,8 +1356,8 @@ def recall(query: str) -> str:
                     history.append(time.strftime("%Y-%m-%d"))
                     node["access_history"] = history[-10:]
             save_tree(tree)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("recall: save_tree failed after warming %d branches: %s", len(matched_branches), exc)
     log_event("pipeline.engine.recall.branches_warmed", {"count": len(matched_branches)})  # PIPELINE_TRACE
 
     # Sort by relevance (overlap score), dedup, take top 10

@@ -33,10 +33,13 @@ except Exception:
 import argparse
 import io
 import json
+import logging
 import os
 import re
 import sys
 import time
+
+_log = logging.getLogger("muninn.muninn")
 from collections import Counter
 from pathlib import Path
 
@@ -416,7 +419,8 @@ def scan_repo(repo_path: Path, output_path: str = None):
             for text in all_text:
                 try:
                     myc.observe_text(text)
-                except Exception:
+                except Exception as exc:
+                    _log.warning("growth: observe_text failed for text len=%d: %s", len(text), exc)
                     continue
             myc.save()
             db_size = myc.db_path.stat().st_size if myc.db_path.exists() else 0

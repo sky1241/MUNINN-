@@ -20,12 +20,15 @@ Usage:
 """
 import io
 import json
+import logging
 import os
 import re
 import sqlite3
 import sys
 import threading
 import time
+
+_log = logging.getLogger(__name__)
 from collections import Counter
 from pathlib import Path
 
@@ -1108,8 +1111,8 @@ class Mycelium(_MyceliumMetaMixin, _MyceliumZonesMixin,
             if dead_ids:
                 try:
                     self._db.delete_stale_fusions(min_edge_count=1)
-                except (sqlite3.OperationalError, AttributeError):
-                    pass
+                except (sqlite3.OperationalError, AttributeError) as exc:
+                    _log.warning("decay: delete_stale_fusions failed (dead_ids=%d): %s", len(dead_ids), exc)
             # BUG-M8: cleanup orphan concepts left behind by dead edges
             if dead_ids:
                 self.cleanup_orphan_concepts()
@@ -1726,8 +1729,8 @@ def concept_to_file_lines(content: str, mycelium) -> dict:
             try:
                 if mycelium.has_concept(tok):
                     concepts.add(tok)
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.warning("concept_to_file_lines: has_concept failed for token '%s': %s", tok, exc)
         out[idx] = concepts
     return out
 

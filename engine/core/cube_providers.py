@@ -19,11 +19,14 @@ Bare `from cube_providers import …` now works cold without pre-loading `cube`.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import urllib.error
 import urllib.request
 import zlib
+
+_log = logging.getLogger(__name__)
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING
@@ -1362,7 +1365,8 @@ def _fill_one_gap_with_retries(provider: LLMProvider, *, line_before: str,
 
         try:
             raw = provider.generate(prompt, max_tokens=100, temperature=schedule[retry])
-        except Exception:
+        except Exception as exc:
+            _log.warning("FIM retry %d/%d: %s failed: %s", retry + 1, len(schedule), provider.__class__.__name__, exc)
             continue
         cleaned = raw.strip().split('\n', 1)[0]
         if cleaned.startswith('```'):
