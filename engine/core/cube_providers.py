@@ -1888,8 +1888,9 @@ def _compress_attempt(text: str) -> str:
             lines = text.split('\n')
             compressed = [compress_line(line) for line in lines]
             return '\n'.join(line for line in compressed if line.strip())
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("compress_line failed (%d lines, falling back to truncate): %s",
+                         len(text.split('\n')), exc)
 
     # Fallback: keep first 20 lines max
     lines = text.split('\n')

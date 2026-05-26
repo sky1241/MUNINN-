@@ -886,7 +886,7 @@ def boot(query: str = "") -> str:
     if total_tokens > BUDGET["max_loaded_tokens"]:
         full_text = _m._kicomp_filter(full_text, BUDGET["max_loaded_tokens"])
 
-    # A8: Prune warning — warn if many dead branches
+    # A8: Prune warning — warn if many dead branches (best-effort hint append)
     try:
         branches = {k: v for k, v in nodes.items() if k != "root"}
         if branches:
@@ -897,7 +897,8 @@ def boot(query: str = "") -> str:
                 full_text += (f"\n\n[MUNINN] {pct:.0f}% branches are cold "
                               f"({cold_count}/{len(branches)}). "
                               f"Consider running: muninn-mem prune --force")
-    except Exception:
+    except (ZeroDivisionError, KeyError, TypeError, AttributeError):
+        # Cold-branch hint is non-critical; boot text returns without it.
         pass
 
     return full_text
