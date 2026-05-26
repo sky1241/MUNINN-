@@ -33,6 +33,7 @@ Requires: Python 3.10+ (ssl stdlib). No pip dependency.
 """
 import collections
 import json
+import logging
 import socket
 import sqlite3
 import ssl
@@ -41,6 +42,8 @@ import threading
 import time
 import warnings
 from pathlib import Path
+
+_log = logging.getLogger("muninn.sync_tls")
 
 # Protocol: 4-byte length prefix (big-endian uint32) + JSON payload
 _HEADER_SIZE = 4
@@ -332,8 +335,8 @@ class SyncServer:
             # H1: audit log
             try:
                 db.log_sync(action="push_tls", repo=repo_name, count=merged)
-            except (sqlite3.Error, OSError):
-                pass
+            except (sqlite3.Error, OSError) as exc:
+                _log.warning("H1 audit log write failed for repo=%s: %s", repo_name, exc)
         finally:
             db.close()
         return merged
@@ -562,8 +565,8 @@ class TLSBackend:
         try:
             for ts in local_db.get_tombstones():
                 local_tombstones.add((ts[0], ts[1]))
-        except (sqlite3.Error, AttributeError):
-            pass
+        except (sqlite3.Error, AttributeError) as exc:
+            _log.warning("tombstone load failed (deleted edges may resurrect): %s", exc)
 
         for conn in result.get("connections", []):
             a, b = conn["a"], conn["b"]

@@ -11,6 +11,7 @@ Classes: GodsNumberResult, CubeScheduler, CubeConfig.
 
 import hashlib
 import json
+import logging
 import math
 import os
 import sqlite3
@@ -21,6 +22,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+_log = logging.getLogger("muninn.cube_analysis")
 
 from cube import (
     Cube, CubeStore, ScannedFile, Dependency,
@@ -382,8 +385,8 @@ def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
                     try:
                         fed = feed_anomalies_to_mycelium(anomaly_path, mycelium)
                         analysis['anomalies_fed_to_mycelium'] = len(fed)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        _log.warning("B38 feedback: feed_anomalies_to_mycelium failed: %s", exc)
         except (OSError, ValueError, json.JSONDecodeError):
             pass
 
@@ -742,14 +745,14 @@ def feed_mycelium_from_results(results: list[ReconstructionResult],
                             if cc != nc:
                                 mycelium._db.upsert_connection(
                                     cc, nc, increment=weight, zone="mechanical")
-                except (AttributeError, ValueError, TypeError):
-                    pass
+                except (AttributeError, ValueError, TypeError) as exc:
+                    _log.warning("mechanical zone learn: upsert_connection failed: %s", exc)
             elif mycelium is not None and hasattr(mycelium, 'observe_text'):
                 # Fallback: dict mode — at least do co-occurrence
                 try:
                     mycelium.observe_text(f"{cube.content}\n{neighbor.content}")
-                except (AttributeError, ValueError, TypeError):
-                    pass
+                except (AttributeError, ValueError, TypeError) as exc:
+                    _log.warning("mechanical zone learn fallback: observe_text failed: %s", exc)
 
     return mechanical_pairs
 
@@ -1939,7 +1942,8 @@ def feed_anomalies_to_mycelium(anomaly_path: str, mycelium=None) -> list[dict]:
         try:
             concepts = [p['source'] for p in pairs] + [p['target'] for p in pairs]
             mycelium.observe(list(set(concepts)))
-        except (AttributeError, ValueError, TypeError):
-            pass
+        except (AttributeError, ValueError, TypeError) as exc:
+            _log.warning("pair concept observe failed (%d concepts dropped): %s",
+                         len(set(concepts)) if 'concepts' in dir() else 0, exc)
 
     return pairs
