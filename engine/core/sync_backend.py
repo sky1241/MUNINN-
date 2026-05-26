@@ -392,7 +392,12 @@ class SharedFileBackend(SyncBackend):
                 if (a_key, b_key) in local_tombstones:
                     continue
 
-                if local_db is not None and not local_db.has_connection(a_name, b_name):
+                if local_db is not None:
+                    # R11: removed `not has_connection` guard — upsert_connection
+                    # already has CRDT MAX/MIN merge on existing edges (M1 fix).
+                    # Without this change, sync was push-only: existing edges never
+                    # got updated count/last_seen from meta (PC2 R10.5 diagnostic).
+                    existed = local_db.has_connection(a_name, b_name)
                     local_db.upsert_connection(
                         a_name, b_name,
                         count=row[2],
@@ -405,7 +410,8 @@ class SharedFileBackend(SyncBackend):
                         (row[0], row[1])
                     ):
                         local_db.add_zone_to_edge(a_name, b_name, zr[0])
-                    pulled += 1
+                    if not existed:
+                        pulled += 1
 
             # Pull fusions
             if local_db is not None:
