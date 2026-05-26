@@ -362,14 +362,21 @@ def _tokenize_for_meta(query: str) -> list[str]:
 # ── G.1 (2026-05-12): universal degree-based stopword filter at query time ──
 
 def _recall_stopword_percentile() -> float:
-    """Read MUNINN_RECALL_STOPWORD_PERCENTILE (default 0.05). 0 disables filter.
+    """Read MUNINN_RECALL_STOPWORD_PERCENTILE (default 0.0). 0 disables filter.
 
     Bounded to [0.0, 0.5] — beyond 50% we'd strip the entire result list.
+
+    PHASE 1.5 fix (2026-05-26 pc2 audit finding): default lowered 0.05 → 0.0.
+    Reason: 5% percentile filter wipes legitimate concepts on small DBs.
+    Example pc2 meta DB (2427 concepts): `fleet` rank 13 = top 0.5% =
+    filtered as "stopword" even though it's the user's primary domain
+    concept. The percentile-based approach fundamentally fails on small DBs.
+    Users who want stopword filter can opt-in via env var.
     """
     try:
-        pct = float(os.environ.get("MUNINN_RECALL_STOPWORD_PERCENTILE", "0.05"))
+        pct = float(os.environ.get("MUNINN_RECALL_STOPWORD_PERCENTILE", "0.0"))
     except ValueError:
-        pct = 0.05
+        pct = 0.0
     return max(0.0, min(0.5, pct))
 
 
