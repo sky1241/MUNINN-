@@ -225,9 +225,20 @@ class SharedFileBackend(SyncBackend):
                     ("created", time.strftime("%Y-%m-%d")))
 
             # Push edges from local DB
+            # PHASE 1.5 (2026-05-26 pc1 finding): incremental push via last_sync_day
+            # Avant: SELECT a,b,count,first_seen,last_seen FROM edges (full table 409k rows/cycle).
+            # Après: WHERE last_seen >= last_sync_day (only changed edges).
+            # last_sync_day est stocké dans meta table de la WORKING DB (per repo).
             if local_db is not None:
+                # Read last_sync_day from local working DB meta table
+                _row = local_db._conn.execute(
+                    "SELECT value FROM meta WHERE key='last_sync_day'"
+                ).fetchone()
+                last_sync_day = int(_row[0]) if _row and str(_row[0]).isdigit() else 0
+
                 for row in local_db._conn.execute(
-                    "SELECT a, b, count, first_seen, last_seen FROM edges"
+                    "SELECT a, b, count, first_seen, last_seen FROM edges WHERE last_seen >= ?",
+                    (last_sync_day,)
                 ):
                     a_name = local_db._id_to_name.get(row[0])
                     b_name = local_db._id_to_name.get(row[1])
@@ -249,6 +260,15 @@ class SharedFileBackend(SyncBackend):
                             "INSERT OR IGNORE INTO edge_zones (a, b, zone) VALUES (?, ?, ?)",
                             (a_id, b_id, payload.zone))
                     n_synced += 1
+
+                # PHASE 1.5: update last_sync_day in working DB meta after successful push
+                today_day = int(time.time() / 86400)
+                local_db._conn.execute(
+                    "INSERT INTO meta (key, value) VALUES ('last_sync_day', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (str(today_day),)
+                )
+                local_db._conn.commit()
 
                 # Push fusions — H5: zone-voted conflict resolution
                 for row in local_db._conn.execute(
