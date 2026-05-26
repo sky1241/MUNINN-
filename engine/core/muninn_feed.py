@@ -1,6 +1,7 @@
 """Muninn feed pipeline — transcript parsing, compression, hooks."""
 
 import json
+import logging
 import os
 import re
 import sys
@@ -9,6 +10,8 @@ import traceback
 import zlib
 from datetime import datetime
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 # --- PIPELINE_TRACE block (removable, see docs/PIPELINE_TRACE_REMOVAL.md) ---  # PIPELINE_TRACE
 try:  # PIPELINE_TRACE
@@ -1094,8 +1097,8 @@ class _MuninnLock:
                 if not self._is_pid_alive(owner_pid):
                     _hook_log(self._repo_path, f"STALE LOCK: PID {owner_pid} dead")
                     return True
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as exc:
+            _log.warning("lock stale check: PID read failed for %s: %s", self.pid_file, exc)
 
         # Layer 2: Heartbeat — is the owner stuck/frozen?
         try:
@@ -1125,8 +1128,8 @@ class _MuninnLock:
         """Update heartbeat timestamp. Call this periodically in long operations."""
         try:
             self.heartbeat_file.write_text(str(time.time()), encoding="utf-8")
-        except OSError:
-            pass
+        except OSError as exc:
+            _log.warning("heartbeat write failed for %s: %s", self.heartbeat_file, exc)
 
     def __enter__(self):
         deadline = time.time() + self.timeout
@@ -1137,8 +1140,8 @@ class _MuninnLock:
                 try:
                     self.pid_file.write_text(str(os.getpid()), encoding="utf-8")
                     self.touch_heartbeat()
-                except OSError:
-                    pass
+                except OSError as exc:
+                    _log.warning("lock PID/heartbeat init failed for %s: %s", self.lock_dir, exc)
                 return self
             except FileExistsError:
                 if self._is_lock_stale():
