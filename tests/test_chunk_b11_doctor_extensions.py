@@ -22,13 +22,7 @@ import pytest
 # `sys.stdout.buffer` — an attribute absent on the StringIO that pytest's
 # redirect_stdout provides, raising AttributeError before the test body
 # runs. Pre-existing bug, only visible under pytest stdout capture
-# (production Linux stdout encoding == "utf-8" so the if-branch never
-# fires). Re-enable after wrapping mycelium.py:65 in
-# `hasattr(sys.stdout, "buffer")`.
-pytestmark = pytest.mark.skip(
-    reason="mycelium.py:65 reads sys.stdout.buffer absent under pytest "
-           "redirect_stdout — re-enable after hasattr guard"
-)
+# hasattr(sys.stdout, "buffer") guard added — skip removed.
 
 
 REPO = Path(__file__).resolve().parent.parent

@@ -47,7 +47,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import anthropic
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
 # ── Config ──────────────────────────────────────────────────────
 
@@ -410,7 +413,7 @@ def load_claude_md() -> str:
     return CLAUDE_MD_PATH.read_text(encoding="utf-8")
 
 
-def call_claude(client: anthropic.Anthropic, system: str, user: str, model: str) -> dict:
+def call_claude(client: "anthropic.Anthropic", system: str, user: str, model: str) -> dict:
     """One API call. Returns response text + usage."""
     msg = client.messages.create(
         model=model,

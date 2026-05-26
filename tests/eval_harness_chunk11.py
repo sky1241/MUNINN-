@@ -56,7 +56,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import anthropic
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
 # ── Config ──────────────────────────────────────────────────────
 

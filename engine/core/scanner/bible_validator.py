@@ -13,11 +13,14 @@ Dependencies: B-SCAN-01, B-SCAN-02
 """
 
 import json
+import logging
 import os
 import re
 import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 
 
@@ -270,8 +273,8 @@ def validate_against_code(
                 try:
                     matches = re.findall(pattern, content)
                     raw_finds += len(matches)
-                except re.error:
-                    pass  # invalid regex — skip
+                except re.error as exc:
+                    _log.warning("invalid bible regex_per_language for %s lang=%s: %s", eid, lang, exc)
 
         results[eid] = {
             "raw_finds": raw_finds,
@@ -320,16 +323,16 @@ def validate_against_code_with_mn(
             if raw_pattern:
                 try:
                     raw_finds += len(re.findall(raw_pattern, content))
-                except re.error:
-                    pass
+                except re.error as exc:
+                    _log.warning("invalid raw regex for %s lang=%s: %s", eid, lang, exc)
 
             # .mn regex scan
             mn_pattern = mn_regex_map.get(lang, "")
             if mn_pattern:
                 try:
                     mn_finds += len(re.findall(mn_pattern, content))
-                except re.error:
-                    pass
+                except re.error as exc:
+                    _log.warning("invalid mn regex for %s lang=%s: %s", eid, lang, exc)
 
         results[eid] = {
             "raw_finds": raw_finds,

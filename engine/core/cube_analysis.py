@@ -227,8 +227,8 @@ def run_destruction_cycle(cubes: list[Cube], store: CubeStore,
                      'survival': getattr(hc, '_km_survival', 0),
                      'cycle': cycle_num},
                     [hc.id], label='hot_cube')
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as exc:
+                _log.warning("record_anomaly failed for %s: %s", hc.file_origin, exc)
 
     return results
 
@@ -369,8 +369,8 @@ def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
                                   reconstructor=reconstructor, max_patches=5)
             analysis['auto_repair_candidates'] = len(patches)
             analysis['auto_repair_patches'] = [p for p in patches if p.get('patch')]
-        except (ValueError, OSError, TypeError):
-            pass
+        except (ValueError, OSError, TypeError) as exc:
+            _log.warning("auto_repair failed on %d hot files: %s", len(hot_files), exc)
 
     # B38: Feedback loop — validate past anomaly predictions
     if repo_path:

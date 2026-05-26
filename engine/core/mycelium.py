@@ -72,7 +72,7 @@ except ImportError:
     from mycelium_activation import _MyceliumActivationMixin  # type: ignore[no-redef]
     from mycelium_dream import _MyceliumDreamMixin  # type: ignore[no-redef]
 
-if sys.stdout.encoding != "utf-8":
+if sys.stdout.encoding != "utf-8" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 
