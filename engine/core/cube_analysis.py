@@ -387,8 +387,9 @@ def post_cycle_analysis(cubes: list[Cube], store: CubeStore,
                         analysis['anomalies_fed_to_mycelium'] = len(fed)
                     except Exception as exc:
                         _log.warning("B38 feedback: feed_anomalies_to_mycelium failed: %s", exc)
-        except (OSError, ValueError, json.JSONDecodeError):
-            pass
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            _log.warning("B38 feedback: outer check failed (anomaly_path=%s): %s",
+                         anomaly_path if 'anomaly_path' in dir() else '<unset>', exc)
 
     return analysis
 
