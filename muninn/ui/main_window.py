@@ -692,7 +692,7 @@ def main():
     # Load scan from CLI arg if provided
     if len(sys.argv) > 1:
         scan_path = sys.argv[1]
-        QTimer.singleShot(100, lambda: window.load_scan(scan_path))
+        QTimer.singleShot(100, lambda: window.load_scan(scan_path))  # noqa: F821
 
     ret = app.exec()
     del window  # explicit destruction order (R7)

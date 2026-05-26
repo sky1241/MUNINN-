@@ -22,6 +22,8 @@ import sys
 import time
 from pathlib import Path
 
+from muninn_layers import _safe_path
+
 _log = logging.getLogger(__name__)
 
 # Shared secret regex patterns — _secrets.py is the single source of truth.

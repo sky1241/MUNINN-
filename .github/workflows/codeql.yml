@@ -1,0 +1,45 @@
+name: CodeQL Security Scan
+
+# R13.5 (2026-05-26): Senior-dev security baseline. Catches SQL injection,
+# unsafe deserialize, path traversal, hardcoded credentials, type confusion,
+# and a wide set of CWEs not detected by pyflakes alone.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan Sunday 07:00 UTC. CodeQL DB rebuild catches new rules.
+    - cron: '0 7 * * 0'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          # security-extended adds rules tagged "security-extended" on top of
+          # the default suite. Doesn't include "experimental" rules.
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:python"

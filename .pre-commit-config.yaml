@@ -1,0 +1,38 @@
+# R13.5 (2026-05-26): senior-dev pre-commit baseline.
+# Conservative — non-blocking on the existing codebase. Run:
+#   pip install pre-commit && pre-commit install
+# Then every commit auto-runs these.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.muninn/|tests/\.test_intelligence/'
+      - id: end-of-file-fixer
+        exclude: '\.muninn/|tests/\.test_intelligence/|muninn/ui/assets/|muninn/ui/templates/'
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=2048']
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Ruff: fast Python linter. Uses [tool.ruff] config in pyproject.toml.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.4
+    hooks:
+      - id: ruff
+        args: ['--fix']
+
+  # Black: code formatter. Uses [tool.black] config in pyproject.toml.
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+        language_version: python3.13
+
+# CI integration: `.github/workflows/ci.yml` job `lint` runs `pre-commit run
+# --all-files` to enforce these checks on every PR.

@@ -11,7 +11,27 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    # R13.5: senior-dev linting gate. Runs ruff (pyflakes baseline) on
+    # engine/core/, muninn/, tests/. Config in pyproject.toml [tool.ruff].
+    # Fast (~5s) — gates the rest of the suite, fails the build on real
+    # bugs (F821 undefined name, F-class errors).
+    runs-on: ubuntu-latest
+    name: Lint (ruff)
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install ruff
+        run: python3 -m pip install ruff==0.15.12
+      - name: Run ruff check
+        run: ruff check engine/ muninn/ tests/
+
   validate:
+    needs: [lint]
     runs-on: ubuntu-latest
     name: Validate Engine + Mycelium + Tree
 

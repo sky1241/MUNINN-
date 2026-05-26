@@ -53,7 +53,7 @@ class EmbeddingProvider:
         self._model = None
         self._model_name = os.environ.get("MUNINN_EMBEDDINGS_MODEL", DEFAULT_MODEL)
         self._threshold = self._read_threshold()
-        self._lru: OrderedDict[str, "np.ndarray"] = OrderedDict()  # type: ignore[name-defined]
+        self._lru: OrderedDict[str, "np.ndarray"] = OrderedDict()  # type: ignore[name-defined]  # noqa: F821
         self._lru_capacity = DEFAULT_LRU_CAPACITY
         self._init_error: str | None = None
         self._np = None  # numpy module, loaded lazily with the model

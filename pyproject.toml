@@ -81,3 +81,77 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+# R13.5 (2026-05-26): senior-dev linting baseline. Conservative rules to avoid
+# breaking the existing 3000+ test suite — strict mode can be enabled later
+# once the codebase has been migrated.
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [
+    ".muninn",
+    "tests/.test_intelligence",
+    "muninn/ui/templates",
+    "muninn/ui/assets",
+    "docs/archive",
+]
+
+[tool.ruff.lint]
+# Start with a SAFE rule set — Pyflakes (F) catches real bugs without
+# stylistic noise. Sky can add E/W/I/B later as the codebase migrates.
+select = ["F", "E9"]
+ignore = [
+    "F401",  # unused imports (many shim files re-export)
+    "F403",  # star imports (documented at sites)
+    "F405",  # may be undefined (star import side-effect)
+    "F541",  # f-string without placeholder (cosmetic, 86 sites pre-existing)
+    "F811",  # redefinition (test fixtures sometimes need this)
+    "F841",  # unused local (intentional in some places)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["F"]  # test files have looser rules
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+extend-exclude = '''
+/(
+    \.muninn
+  | muninn/ui/templates
+  | muninn/ui/assets
+  | docs/archive
+)/
+'''
+
+[tool.mypy]
+# Mypy is OPT-IN for now (codebase has 71% return-type coverage per R13.5 audit).
+# Run manually: `mypy engine/core/ --ignore-missing-imports --no-strict-optional`
+python_version = "3.13"
+ignore_missing_imports = true
+no_strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = [
+    "\\.muninn",
+    "muninn/ui/templates",
+    "muninn/ui/assets",
+    "tests/\\.test_intelligence",
+]
+
+[tool.coverage.run]
+source = ["engine.core", "muninn"]
+omit = [
+    "*/tests/*",
+    "*/.muninn/*",
+    "muninn/ui/templates/*",
+    "muninn/ui/assets/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

@@ -13,6 +13,7 @@ Zero new dependencies (sqlite3 = Python stdlib).
 """
 import json
 import sqlite3
+import sys
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
