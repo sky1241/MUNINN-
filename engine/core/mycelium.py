@@ -1723,6 +1723,10 @@ def concept_to_file_lines(content: str, mycelium) -> dict:
     """
     lines = content.split("\n")
     out: dict = {}
+    # R10 rate-limit: tokenizer loop runs ~20k iters per file. If DB corrupt,
+    # every iteration logs. Cap warnings at 10 + aggregate count.
+    _warn_count = 0
+    _WARN_LIMIT = 10
     for idx, line in enumerate(lines):
         concepts = set()
         for tok in _CONCEPT_TOKEN_RE.findall(line.lower()):
@@ -1730,8 +1734,13 @@ def concept_to_file_lines(content: str, mycelium) -> dict:
                 if mycelium.has_concept(tok):
                     concepts.add(tok)
             except Exception as exc:
-                _log.warning("concept_to_file_lines: has_concept failed for token '%s': %s", tok, exc)
+                _warn_count += 1
+                if _warn_count <= _WARN_LIMIT:
+                    _log.warning("concept_to_file_lines: has_concept failed for token '%s': %s", tok, exc)
         out[idx] = concepts
+    if _warn_count > _WARN_LIMIT:
+        _log.warning("concept_to_file_lines: %d additional has_concept failures suppressed",
+                     _warn_count - _WARN_LIMIT)
     return out
 
 

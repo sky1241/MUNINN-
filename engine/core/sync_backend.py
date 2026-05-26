@@ -360,10 +360,27 @@ class SharedFileBackend(SyncBackend):
                     ORDER BY count DESC LIMIT ?
                 """, list(query_ids) + list(query_ids) + [max_pull]).fetchall()
             else:
-                rows = db._conn.execute(
+                # R10 (PC2 audit): "ORDER BY count DESC LIMIT N" alone never converges
+                # long-tail edges across PCs (top-N already shared). Mix top half +
+                # random half so rare edges eventually propagate.
+                # Pre-existing test_phase1_sync still passes (top half preserved).
+                half = max(1, max_pull // 2)
+                top_rows = db._conn.execute(
                     "SELECT a, b, count, first_seen, last_seen FROM edges "
-                    "ORDER BY count DESC LIMIT ?", (max_pull,)
+                    "ORDER BY count DESC LIMIT ?", (half,)
                 ).fetchall()
+                random_rows = db._conn.execute(
+                    "SELECT a, b, count, first_seen, last_seen FROM edges "
+                    "ORDER BY RANDOM() LIMIT ?", (max_pull - half,)
+                ).fetchall()
+                # Dedup by (a, b) preserving top-rows first
+                seen_pairs = set()
+                rows = []
+                for r in top_rows + random_rows:
+                    key = (r[0], r[1])
+                    if key not in seen_pairs:
+                        seen_pairs.add(key)
+                        rows.append(r)
 
             for row in rows:
                 a_name = db._id_to_name.get(row[0]) or db._concept_name(row[0])
