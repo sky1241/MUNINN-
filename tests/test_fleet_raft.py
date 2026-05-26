@@ -1,8 +1,15 @@
 """Tests for fleet_raft.py FleetState Raft consensus."""
+import os
 import time
 import sys
 import pytest
-sys.path.insert(0, "/home/sky/bin")
+
+# R2-006 fix (pc3 finding): hardcoded /home/sky/bin breaks pc1/pc2/pc3.
+# Use os.path.expanduser to work for any user.
+sys.path.insert(0, os.path.expanduser("~/bin"))
+
+# R2-005 fix: skip cleanly if pysyncobj missing in current Python env
+pytest.importorskip("pysyncobj")
 
 
 @pytest.fixture

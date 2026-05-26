@@ -1,9 +1,13 @@
 """Tests for fleet_raft 5-voter mode + client wrapper."""
+import os
 import time
 import sys
 import pytest
 
-sys.path.insert(0, "/home/sky/bin")
+# R2-006 fix (pc3 finding): use expanduser
+sys.path.insert(0, os.path.expanduser("~/bin"))
+
+pytest.importorskip("pysyncobj")
 from pysyncobj import SyncObj, SyncObjConf
 
 
