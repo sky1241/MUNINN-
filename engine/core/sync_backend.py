@@ -354,11 +354,27 @@ class SharedFileBackend(SyncBackend):
                 if not query_ids:
                     return 0
                 placeholders = ",".join("?" * len(query_ids))
-                rows = db._conn.execute(f"""
+                # R11 (PC2 audit): apply top-half + random-half mix here too.
+                # Previous R10 fix was only in `else` branch but SQLite mode
+                # always passes query_concepts → inert. Now both branches mix.
+                half = max(1, max_pull // 2)
+                top_rows = db._conn.execute(f"""
                     SELECT a, b, count, first_seen, last_seen FROM edges
                     WHERE a IN ({placeholders}) OR b IN ({placeholders})
                     ORDER BY count DESC LIMIT ?
-                """, list(query_ids) + list(query_ids) + [max_pull]).fetchall()
+                """, list(query_ids) + list(query_ids) + [half]).fetchall()
+                random_rows = db._conn.execute(f"""
+                    SELECT a, b, count, first_seen, last_seen FROM edges
+                    WHERE a IN ({placeholders}) OR b IN ({placeholders})
+                    ORDER BY RANDOM() LIMIT ?
+                """, list(query_ids) + list(query_ids) + [max_pull - half]).fetchall()
+                seen_pairs = set()
+                rows = []
+                for r in top_rows + random_rows:
+                    key = (r[0], r[1])
+                    if key not in seen_pairs:
+                        seen_pairs.add(key)
+                        rows.append(r)
             else:
                 # R10 (PC2 audit): "ORDER BY count DESC LIMIT N" alone never converges
                 # long-tail edges across PCs (top-N already shared). Mix top half +

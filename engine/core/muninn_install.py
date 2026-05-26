@@ -368,10 +368,11 @@ def _log_failure(context, exc):
         try:
             sys.stderr.write(
                 f"[MUNINN HOOK LOG fallback] [post_tool_failure_hook:"
-                f"{{context}}] {{type(exc).__name__}}: {{exc}}\\n"
+                f"{context}] {type(exc).__name__}: {exc}\n"
             )
+            sys.stderr.flush()
         except Exception:
-            pass
+            pass  # true last resort — nowhere to write if stderr fails
 
 
 def main():
@@ -532,10 +533,11 @@ def _log_subagent_error(context, exc):
         try:
             sys.stderr.write(
                 f"[MUNINN HOOK LOG fallback] [subagent_start_hook:"
-                f"{{context}}] {{type(exc).__name__}}: {{exc}}\\n"
+                f"{context}] {type(exc).__name__}: {exc}\n"
             )
+            sys.stderr.flush()
         except Exception:
-            pass
+            pass  # true last resort — nowhere to write if stderr fails
 
 
 def main():

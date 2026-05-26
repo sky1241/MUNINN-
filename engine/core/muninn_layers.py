@@ -1,8 +1,11 @@
 """Muninn compression layers — L0-L11 pipeline + verify."""
 
+import logging
 import re
 import sys
 from pathlib import Path
+
+_log = logging.getLogger("muninn.layers")
 
 from tokenizer import count_tokens, token_count
 
@@ -178,11 +181,11 @@ def _l12_budget_pass(text, repo_path=None, source_id: str = ""):
                                 f"{n_facts} fact-chunk{'s' if n_facts != 1 else ''} preserved in tree]"
                             )
                             return kept_text + stub
-                except Exception:
-                    pass  # spill failed, fallback to kept_text only
+                except Exception as exc:
+                    _log.warning("L12 spill-to-tree failed, facts may be lost: %s", exc)
             return kept_text
-        except Exception:
-            pass  # fall through to legacy path
+        except Exception as exc:
+            _log.warning("budget_select_with_dropped failed, falling back to legacy: %s", exc)
 
     # Legacy / fallback path (no spill, original behaviour)
     try:
