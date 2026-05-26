@@ -70,23 +70,27 @@ def test_gitattributes_parses_to_at_least_5_rules(rules):
     )
 
 
-def test_png_routed_to_lfs(rules):
-    """*.png must declare lfs filter + diff + merge handlers."""
+def test_png_marked_binary(rules):
+    """*.png must declare binary handling.
+
+    R6 (2026-05-26): switched from LFS routing to plain `binary` after sky-master
+    audit found 16 phantom diffs on every fresh clone — existing PNG blobs were
+    regular blobs not LFS pointers, so the LFS filter mangled them on checkout.
+    `binary` is `-text -diff` in one keyword, which matches the actual storage.
+    See .gitattributes comment + 0ada773 commit.
+    """
     attrs = _attrs_for(rules, "*.png")
-    assert "filter=lfs" in attrs, (
-        f"*.png missing filter=lfs (got attrs: {attrs})"
-    )
-    assert "diff=lfs" in attrs, "*.png missing diff=lfs"
-    assert "merge=lfs" in attrs, "*.png missing merge=lfs"
-    assert "-text" in attrs, (
-        "*.png must declare -text (binary marker for LFS)"
+    assert "binary" in attrs or "-text" in attrs, (
+        f"*.png must declare binary (or -text), got attrs: {attrs}"
     )
 
 
-def test_db_routed_to_lfs(rules):
+def test_db_marked_binary(rules):
+    """*.db marked binary (R6 — no LFS routing, see test_png_marked_binary)."""
     attrs = _attrs_for(rules, "*.db")
-    assert "filter=lfs" in attrs, ".db missing filter=lfs"
-    assert "-text" in attrs, ".db must declare -text"
+    assert "binary" in attrs or "-text" in attrs, (
+        f"*.db must declare binary (or -text), got attrs: {attrs}"
+    )
 
 
 def test_python_files_text_with_lf_eol(rules):
