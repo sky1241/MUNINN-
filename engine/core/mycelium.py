@@ -1543,10 +1543,16 @@ _STOPWORDS = {
     "before", "into", "about", "between", "through", "during", "again",
     "further", "more", "most", "other", "very", "here", "your", "does",
     "doing", "done", "being", "were", "because", "both", "same",
-    # French
+    # French — grammatical words (zero semantic value, pollute mycelium)
+    # Top offenders measured 2026-05-27: est=16726 edges, les=16257,
+    # pas=15688, que=15541 — all above "muninn" (15332) in meta DB.
+    "est", "les", "pas", "que", "des", "une", "qui", "sur", "par",
+    "ces", "aux", "ses", "son", "mon", "ton", "lui", "nos", "vos",
+    "soit", "dont", "donc", "car", "voir", "dit", "mis",
     "pour", "dans", "avec", "sont", "plus", "tout", "mais", "cette",
     "comme", "elle", "nous", "vous", "leur", "faire", "peut", "bien",
     "encore", "aussi", "autre", "quand", "etre", "avoir", "fait",
+    "sans", "non", "oui", "bon", "peu", "très", "trop",
     # Programming
     "print", "return", "import", "from", "self", "class", "function",
     "const", "true", "false", "none", "else", "elif", "pass", "break",
