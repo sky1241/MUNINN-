@@ -1,5 +1,75 @@
 # MUNINN — Changelog
 
+## 2026-05-28 (MCP/feed repair + fleet alignment — sky-master + 3 cousins)
+
+Session de réparation guidée par audits fleet (multi-agent effort max,
+cross-vérification anti-hallucination par cousin indépendant).
+
+**1. Fix feed SessionEnd/PreCompact `transcript not found` (commit `ab1fcd4`, poussé)**
+- Symptôme : `claude mcp list` (et toute invocation éphémère) affichait
+  `SessionEnd hook failed: transcript not found`. Mesuré ~52% des
+  `feed.begin` sur sky-master + pc1.
+- Root cause : `feed_from_hook` ([muninn_feed.py:1393](engine/core/muninn_feed.py))
+  faisait `sys.exit(1)` + stderr quand le transcript `.jsonl` n'existait pas.
+  Les invocations CLI éphémères créent un session-id sans transcript → faux
+  "failed". Les VRAIES sessions n'étaient jamais touchées (50 sessions
+  indexées, `.mn` produits, DBs fraîches — feed réel OK).
+- Fix : transcript absent → `return` (exit 0) comme `feed_from_stop_hook`.
+  Le refus sécurité CHUNK A4 (path hors `~/.claude/projects`) GARDE `sys.exit(1)`.
+- Preuves : forge --gen-props (1 prop, 7 destructives skippées BUG-102),
+  **41 tests pass** (props + feed_* + hook integrity + a4 + mcp_a2),
+  test live `transcript absent → EXIT 0 silencieux` / `/etc/passwd → EXIT 1`.
+  Déployé + vérifié EXIT=0 sur les **4 machines** (sky-master + pc1/pc2/pc3,
+  toutes HEAD `ab1fcd4`).
+- Cross-vérifié par pc1 (a corrigé le marqueur : discriminant = existence du
+  `.jsonl`, pas `session_id`).
+
+**2. MCP `muninn` rendu global sur les 3 cousins**
+- Avant : MCP dispo seulement dans le repo `claude-channel` (project-scope
+  `.mcp.json`), `~/.claude.json` user-scope VIDE → absent ailleurs.
+- Fix : `claude mcp add -s user muninn <~/.local/bin/muninn-mcp-mem> -e MUNINN_REPO=<repo>`
+  sur pc1/pc2/pc3. Vérifié `✓ Connected` depuis `/tmp` (dossier neutre) sur les 3.
+
+**3. `.mcp.json` fossile supprimé (sky-master)**
+- Reste du 12 mai pointant sur `/tmp/muninn_session_venv/...` (mort au reboot),
+  gitignored/jamais tracké, qui écrasait le bon config user-scope (project >
+  user) → MCP `✗ Failed`. `rm` → MCP reconnecte via user-scope pyenv stable.
+
+**4. Hooks morts `muninn_install.py feed` retirés (sky-master, settings.local.json)**
+- 3 hooks (PreCompact/SessionEnd/Stop) pointaient sur `muninn_install.py`,
+  qui n'a AUCUN dispatch `feed` (no-op confirmé EXIT 0 / 0 octet). Doublons
+  silencieux du vrai feed (global `muninn.py`). Les cousins ne les avaient pas.
+- **Bug latent identifié** : `install_hooks()` ([muninn_install.py:960](engine/core/muninn_install.py))
+  utilise `muninn_engine = Path(__file__)` → pointe sur l'installeur lui-même
+  au lieu de `muninn.py`. Le refactor `40af0c4` (split muninn.py) a déplacé
+  `install_hooks` → `__file__` a changé de cible → toute install fraîche génère
+  des hooks feed morts. **À corriger (engine, séparé) : pointer sur muninn.py.**
+
+**5. Split-brain tree corrigé — `--repo` dynamique (4 machines)**
+- Le déploiement avait `sed`-gelé `${CLAUDE_PROJECT_DIR}` → chemin absolu
+  MUNINN- dans les hooks feed de `~/.claude/settings.json`. Donc feed écrivait
+  toujours dans MUNINN- alors que SessionStart lit le repo courant → split-brain.
+- Fix : `--repo "<abs>"` → `--repo "${CLAUDE_PROJECT_DIR}"` (chemin du script
+  reste absolu). Aligne sur le design 2 étages voulu : meta global fédéré
+  (cron 5 min) + spécialisation par-repo. Appliqué sky-master + pc1 + pc2 + pc3
+  (backup par machine, JSON validé).
+
+**6. pc2 aligné en Python 3.13**
+- pc2 (Debian) tournait sur 3.11 système (3.13 jamais installé — étape de
+  provisioning sautée, pyenv vide). Installé build-deps (dont `libsqlite3-dev`,
+  `libssl-dev` — sinon CPython sans sqlite3 = MUNINN mort), `pyenv install
+  3.13.3`, `pyenv global`, réinstall editable `[mcp,tokens,llm,quality]` +
+  numpy/pysyncobj/joblib. Binaire shebang → 3.13.3, sqlite3 3.40.1, MCP
+  `✓ Connected`. Note : 3.13 actif via pyenv (shells interactifs) ; binaire MCP
+  robuste (shebang) ; pc1/pc3 sont sur 3.13 système (robuste partout).
+
+**7. Orphelins 0-octet supprimés** : `~/.muninn/mycelium.db` vide sur pc1 + pc3
+(DB active = celle du repo).
+
+**Reste (non bloquant)** : corriger le bug installeur `Path(__file__)` (#4) ;
+restart session cousin pc2 pour purger le process muninn 3.11 résiduel ;
+parité robuste pc2 (pyenv en shell non-interactif) si besoin.
+
 ## 2026-05-28 (Mycelium stopword cleanup — fleet-wide + G.1 dead-code flag)
 
 **Problème** : `est` avait 16 726 edges dans le meta-mycelium (#1, au-dessus
