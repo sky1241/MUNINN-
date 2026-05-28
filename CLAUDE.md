@@ -104,6 +104,19 @@ because primacy bias is real and these are the rules that actually matter.
   See docs/ANTI_BULLSHIT_BATTLE_PLAN.md defense 4 for the contract.
 </RULE>
 
+<RULE id="6" name="Read a file fully before summarizing or judging it" priority="HIGH">
+  Before you summarize, audit, or report on a file, you must have read it
+  to the end. Read returns ~2000 lines max — run `wc -l` first, and if the
+  file is longer than what you read, read the rest (offset) BEFORE any
+  summary. If you only read part, SAY SO explicitly ("read lines 1-200 of
+  800, not the rest"). Never summarize a partially-read file as if complete.
+  Avoid: judging/auditing a file from its first chunk only; claiming
+  "I read X" when you saw the first 100 lines of 900. An audit built on an
+  undeclared partial read is a lie by omission.
+  If you do: stop, `wc -l` the file, read the unread range, THEN summarize.
+  See docs/ANTI_BULLSHIT_BATTLE_PLAN.md defense 11 for the contract.
+</RULE>
+
 </MUNINN_RULES>
 
 ## C'est quoi Muninn ?
@@ -363,5 +376,11 @@ completion and BUG-105/BUG-106 demonstrated the cost of skipping forge.
    falsifying example is your next test case. BUG-101, BUG-102, BUG-105,
    BUG-106 were ALL caught (or would have been caught) by this discipline.
    (RULE 5, HIGH — written after BUG-106)
+
+6. READ A FILE FULLY BEFORE SUMMARIZING OR JUDGING IT. `wc -l` first; if
+   it's longer than what Read returned, read the rest (offset) before any
+   summary. Only read part? Say "read lines A-B of N, not the rest" — never
+   summarize a partial read as complete. A partial-read audit is a lie by
+   omission. (RULE 6, HIGH — added 2026-05-28 after report errors)
 
 </MUNINN_SANDWICH_RECENCY>
