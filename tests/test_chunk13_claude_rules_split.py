@@ -206,12 +206,17 @@ def test_claude_md_still_under_360_lines():
     pour tests/run_bench_multi_llm_2026_05_14.py, gitignored mais
     détectées par test_chunk_c10_c11_doc_drift). 2 lignes ajoutées.
 
+    Bumped to 390 (2026-05-28) : ajout de RULE 6 "read a file fully
+    before summarizing/auditing" (bloc MUNINN_RULES + entrée sandwich
+    recency), demande de Sky après des erreurs de compte rendu sur
+    lecture partielle de fichiers. ~19 lignes ajoutées.
+
     Cap stays binding so the file doesn't grow without intent.
     """
     text = CLAUDE_MD.read_text(encoding="utf-8")
     line_count = len(text.splitlines())
-    assert line_count <= 370, (
-        f"CLAUDE.md should stay under 370 lines, got {line_count}. "
+    assert line_count <= 390, (
+        f"CLAUDE.md should stay under 390 lines, got {line_count}. "
         f"If you added content, justify it in the test docstring before "
         f"bumping the cap."
     )

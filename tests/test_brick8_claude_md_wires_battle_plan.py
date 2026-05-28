@@ -50,11 +50,13 @@ def test_claude_md_has_rule_4(claude_md_text):
     assert "No claim without command output" in claude_md_text
 
 
-def test_claude_md_has_5_rules(claude_md_text):
-    """We must have exactly 5 RULES (1-3 empirical, 4 anti-bullshit, 5 forge).
-    Brick 16 added RULE 5 (forge after every engine module touch)."""
+def test_claude_md_has_6_rules(claude_md_text):
+    """We must have exactly 6 RULES (1-3 empirical, 4 anti-bullshit, 5 forge,
+    6 read-files-fully). Brick 16 added RULE 5; RULE 6 added 2026-05-28
+    (read a file to the end before summarizing/auditing — Sky request after
+    partial-read report errors)."""
     count = claude_md_text.count('<RULE id=')
-    assert count == 5, f"expected 5 RULES, found {count}"
+    assert count == 6, f"expected 6 RULES, found {count}"
 
 
 def test_claude_md_has_rule_5(claude_md_text):
@@ -120,8 +122,10 @@ def test_battle_plan_has_section_4_questions():
 
 
 def test_battle_plan_has_sources_section():
-    """Section 5 lists the sources that prove the pattern is real."""
+    """The Sources section documents the origin. Renumbered §5 -> §4 on
+    2026-05-28 when the dated Windows-era proof prose (old §2) + the past
+    model's signature (old §6) were trimmed as archaeology."""
     text = BATTLE_PLAN.read_text(encoding="utf-8")
-    assert "## 5. Sources" in text or "## 5." in text
-    # Must reference the master prompt path that started it all
+    assert "## 4. Sources" in text or "Sources" in text
+    # Must still reference the master prompt that started it all
     assert "CLAUDE_ONE_PAGE_MASTER_PROMPT" in text

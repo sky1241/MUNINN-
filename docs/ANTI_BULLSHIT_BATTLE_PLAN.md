@@ -241,3 +241,17 @@ Si Claude tique sur l'une d'elles, tu sais qu'il a triché :
 Si une seule de ces questions met Claude en défaut, ce document a
 servi : la prochaine session, Claude le relira et saura qu'il ne peut
 pas tricher cette fois.
+
+---
+
+## 4. Sources
+
+L'origine documentée — pourquoi ce document existe (la longue section de
+preuves datées février-avril a été retirée le 2026-05-28 comme archéologie ;
+l'index ci-dessous reste comme trace) :
+
+| Source | Type | Date |
+|--------|------|------|
+| `CLAUDE_ONE_PAGE_MASTER_PROMPT.md` (3d-printer, ère Windows) | Master prompt 125 lignes que Sky a dû écrire pour forcer un workflow basique | 2026-02-12 |
+| MUNINN- `BUGS.md` BUG-102 | forge a corrompu 165 fichiers — coût direct du skip forge | 2026-04-10 |
+| Conversation Sky↔Claude | Réveil après le 9e "c'est fait" mensonger | 2026-04-10 |
