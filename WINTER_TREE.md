@@ -3,6 +3,36 @@
 > Ce fichier est une CARTE DE NAVIGATION pour Claude. Pas un changelog.
 > Objectif: savoir EXACTEMENT ou chercher quoi dans le code, avec les numeros de lignes.
 >
+> ### 📍 SNAPSHOT 2026-05-28 (Mycelium stopword cleanup + G.1 dead-code)
+>
+> **Filtrage stopword mycelium — où c'est, comment ça marche** :
+>
+> - **`_STOPWORDS`** = `engine/core/mycelium.py:1537` — set de 209 mots
+>   grammaticaux (FR + EN + programming). C'est LE filtre actif. Bloque
+>   les concepts À L'ENTRÉE dans `observe_text` (mycelium.py:459, 645-668).
+>   Filtre par SENS (liste de mots), pas par degré.
+> - **K.1 ConceptTranslator** = `engine/core/lang_lexicons.py` — traduit
+>   FR→EN au write-time (`fonction→function`, 1331 entrées
+>   `engine/core/data/lexicons/fr_en.json`). TOUJOURS ACTIF. Ne touche
+>   PAS aux mots grammaticaux (`est`/`les` ne sont pas traduits, ils sont
+>   bloqués par `_STOPWORDS`).
+> - **G.1 degree-filter** = `muninn/mcp/server.py:362` —
+>   ⚠️ **DEAD CODE depuis 2026-05-28**. Filtre par degré au query-time.
+>   NE PAS RÉACTIVER (`MUNINN_RECALL_STOPWORD_PERCENTILE` doit rester 0.0).
+>   Raison : degré-based confond `fleet`/`code` (concepts centraux) avec
+>   `est`/`and` (stopwords) → tue les concepts légitimes sur petites DBs.
+>   Bloc d'explication complet en tête de la fonction dans server.py.
+> - **S3 degree-filter fusion** = `mycelium.py:80` `DEGREE_FILTER_PERCENTILE`
+>   — bloque les FUSIONS (abréviations) pour concepts high-degree, PAS
+>   l'observation. Distinct de G.1.
+>
+> **Purge edges existantes** : `/tmp/purge_stopwords.py` (script ad-hoc,
+> pas committé). 539K edges de bruit purgées sur 6 DBs fleet le 28 mai.
+>
+> **Leçon process** : G.1 a été désactivé depuis le projet linux-upgrade
+> (cousin fleet) sans trace CHANGELOG → régression silencieuse, 2h reperdues.
+> Toute modif cross-repo DOIT laisser une trace dans CHANGELOG + ce fichier.
+>
 > ### 📍 SNAPSHOT 2026-05-19 (REMEDIATION-3 COMPLETE — F1-F5 + hotfix CI)
 >
 > **REMEDIATION-3 COMPLETE post-3ème-audit (`a6f7773` HEAD vert)** :

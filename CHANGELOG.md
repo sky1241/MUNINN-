@@ -1,5 +1,47 @@
 # MUNINN — Changelog
 
+## 2026-05-28 (Mycelium stopword cleanup — fleet-wide + G.1 dead-code flag)
+
+**Problème** : `est` avait 16 726 edges dans le meta-mycelium (#1, au-dessus
+de `muninn` 15 332). Les 4 premiers concepts du graphe le plus important du
+projet étaient des mots grammaticaux FR (`est`, `les`, `pas`, `que`) — zéro
+valeur sémantique, pur bruit. Pareil sur les 3 cousins (pc1/pc2/pc3).
+
+**Root cause** : `_STOPWORDS` (mycelium.py) avait une section FR incomplète
+(manquait `est`/`les`/`pas`/`que`) ET une section EN incomplète (manquait
+`and`/`all`/`the`/`for`). Ces mots passaient le filtre à l'entrée
+(`observe_text`) et accumulaient des edges sans fin.
+
+**Pourquoi le filtre G.1 (degree-based) n'a pas sauvé** : G.1 (créé 12 mai
+`fb6739e`) devait virer les stopwords automatiquement par degré au query-time.
+Mais l'hypothèse "haut degré = stopword" est FAUSSE — les concepts centraux
+légitimes (`fleet`, `code`, `muninn`) ont aussi un haut degré. Sur la petite
+DB pc2, `fleet` (rang 13 = top 0.5%) était filtré comme stopword →
+`recall_meta('fleet')` retournait 0 résultats. Le cousin pc2 a désactivé G.1
+le 26 mai (`f44fdb5`, default 0.05 → 0.0). **G.1 est maintenant marqué DEAD
+CODE dans `server.py` avec explication complète + date** pour qu'on ne
+retombe pas dans le piège.
+
+**Le vrai fix** (filtre par SENS, pas par degré) :
+1. `_STOPWORDS` complété : +30 mots FR + ~34 mots EN grammaticaux. Total 209.
+   Bloque à l'ENTRÉE (observe_text), pas juste au query-time. `fleet`/`code`
+   survivent (0 faux positif vérifié).
+2. **Purge fleet-wide** des edges existantes :
+   - sky-master meta : 386 048 edges / local : 2 557
+   - pc1 : 92 133 / pc2 : 30 179 / pc3 : 28 939
+   - **Total : ~539 000 edges de bruit purgées sur 6 DBs**
+3. Les 3 cousins git pull → HEAD `286114f` + purge appliquée.
+
+**Leçon de process** : le cousin fleet a touché au code MUNINN depuis le
+projet linux-upgrade sans ligne dans CHANGELOG/WINTER_TREE → régression
+silencieuse, 2h re-perdues à re-diagnostiquer. Toute modif cross-repo doit
+laisser une trace ici.
+
+**Commits** : `a1a86e4` (FR stopwords + purge), `286114f` (EN stopwords +
+G.1 dead-code flag).
+
+---
+
 ## 2026-05-19 (REMEDIATION-3 hotfix CI — whitelist BENCH vars)
 
 Post-F1-F5 CI fail prévisible : `tests/test_h0_no_orphan.py::test_h0_all_env_vars_documented_read`
