@@ -957,8 +957,12 @@ def install_hooks(repo_path: Path):
     Also registers repo in ~/.muninn/repos.json for P20c cross-repo discovery.
     """
     repo_path = repo_path.resolve()
-    muninn_engine = Path(__file__).resolve()
-    engine_core_dir = muninn_engine.parent
+    engine_core_dir = Path(__file__).resolve().parent
+    # The `feed` CLI dispatch lives in muninn.py, NOT this installer
+    # (muninn_install.py). Using Path(__file__) here wires the feed hooks to a
+    # script with no `feed` command -> silent no-op (regression from the
+    # 40af0c4 split that moved install_hooks into muninn_install.py).
+    muninn_engine = engine_core_dir / "muninn.py"
     claude_dir = repo_path / ".claude"
     claude_dir.mkdir(exist_ok=True)
     settings_path = claude_dir / "settings.local.json"
