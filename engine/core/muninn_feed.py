@@ -1380,8 +1380,10 @@ def feed_from_hook(repo_path: Path):
 
     transcript_path = hook_input.get("transcript_path")
     if not transcript_path:
-        print(f"MUNINN {hook_event}: no transcript_path in hook data", file=sys.stderr)
-        sys.exit(1)
+        # Ephemeral invocations (e.g. `claude mcp list`) fire SessionEnd with no
+        # transcript. Legitimate no-op, not a failure — skip with exit 0.
+        log_event("pipeline.engine.feed.end", {"reason": "no_transcript_path"})  # PIPELINE_TRACE
+        return
 
     jsonl_path = Path(transcript_path)
     # CHUNK A4: refuse anything outside ~/.claude/projects/
@@ -1391,9 +1393,10 @@ def feed_from_hook(repo_path: Path):
               f"{_m._safe_path(jsonl_path)}", file=sys.stderr)
         sys.exit(1)
     if not jsonl_path.exists():
-        log_event("pipeline.engine.feed.end", {"reason": "transcript_missing"}, level="warn")  # PIPELINE_TRACE
-        print(f"MUNINN {hook_event}: transcript not found: {_m._safe_path(jsonl_path)}", file=sys.stderr)
-        sys.exit(1)
+        # No transcript on disk = legitimate no-op (ephemeral CLI sessions never
+        # write a .jsonl). Skip with exit 0, matching feed_from_stop_hook.
+        log_event("pipeline.engine.feed.end", {"reason": "transcript_missing"})  # PIPELINE_TRACE
+        return
     log_event("pipeline.engine.feed.transcript_validated", {"hook_event": hook_event, "transcript": jsonl_path.name})  # PIPELINE_TRACE
 
     print(f"MUNINN {hook_event}: processing {jsonl_path.name} for {repo_path.name}", file=sys.stderr)
