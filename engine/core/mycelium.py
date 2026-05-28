@@ -1543,6 +1543,14 @@ _STOPWORDS = {
     "before", "into", "about", "between", "through", "during", "again",
     "further", "more", "most", "other", "very", "here", "your", "does",
     "doing", "done", "being", "were", "because", "both", "same",
+    # English — grammatical words missed by the original list (2026-05-28).
+    # Measured in meta DB top concepts after the FR purge: all=8963,
+    # and=8728, the=11004, for=9558 were polluting the top alongside
+    # legitimate concepts. These are pure grammar, zero semantic value.
+    "and", "all", "the", "for", "not", "you", "are", "but", "its", "out",
+    "can", "had", "has", "was", "our", "who", "why", "how", "his", "her",
+    "any", "may", "one", "two", "get", "got", "let", "yes", "now", "off",
+    "use", "via", "per", "etc",
     # French — grammatical words (zero semantic value, pollute mycelium)
     # Top offenders measured 2026-05-27: est=16726 edges, les=16257,
     # pas=15688, que=15541 — all above "muninn" (15332) in meta DB.

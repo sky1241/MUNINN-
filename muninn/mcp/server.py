@@ -360,18 +360,50 @@ def _tokenize_for_meta(query: str) -> list[str]:
 
 
 # ── G.1 (2026-05-12): universal degree-based stopword filter at query time ──
+#
+# ⚠️ DEAD CODE — DÉSACTIVÉ PAR DÉFAUT, NE PAS RÉACTIVER SANS LIRE CECI ⚠️
+# (flag posé 2026-05-28 après 2h perdues à re-diagnostiquer le même piège)
+#
+# POURQUOI ON A CRÉÉ G.1 (12 mai) :
+#   recall_meta("compression") renvoyait `est/les/pas` (stopwords FR) parce
+#   que _STOPWORDS dans mycelium.py était anglais-only. Au lieu d'ajouter les
+#   mots FR à la main, on a voulu un filtre "intelligent universel" : virer
+#   les concepts top-N% par degré, en supposant "haut degré = stopword".
+#
+# POURQUOI C'EST DEAD CODE (désactivé f44fdb5 le 26 mai, confirmé mort le 28) :
+#   L'hypothèse "haut degré = stopword" est FAUSSE. Les concepts CENTRAUX
+#   légitimes (`fleet`, `code`, `muninn`, `claude`) ont aussi un haut degré.
+#   Le filtre ne sait pas les distinguer. Sur la petite DB pc2 (2427 concepts)
+#   `fleet` était rang 13 = top 0.5% → filtré comme stopword alors que c'est
+#   LE concept-domaine #1. Le cousin pc2 a vu recall_meta('fleet') = 0 result
+#   et a désactivé (default 0.05 → 0.0).
+#
+# LE VRAI FIX (2026-05-28) : compléter _STOPWORDS (mycelium.py) avec les mots
+#   grammaticaux FR + EN manquants. Filtre par SENS (liste de mots-grammaire),
+#   pas par degré → `fleet`/`code` survivent, `est`/`and`/`the` sont bloqués
+#   À L'ENTRÉE (observe_text), pas juste au query-time. Plus simple, plus
+#   correct. Le "truc intelligent topologique" était sur-ingénié.
+#
+# NE PAS réactiver G.1 (env var MUNINN_RECALL_STOPWORD_PERCENTILE > 0) sauf
+# si tu as une whitelist de concepts-domaine à protéger. Sinon tu re-casses
+# fleet/code/claude exactement comme le 26 mai.
 
 def _recall_stopword_percentile() -> float:
     """Read MUNINN_RECALL_STOPWORD_PERCENTILE (default 0.0). 0 disables filter.
 
     Bounded to [0.0, 0.5] — beyond 50% we'd strip the entire result list.
 
+    ⚠️ DEAD CODE depuis 2026-05-28 — voir le bloc de commentaire au-dessus.
+    Default 0.0 = filtre désactivé. Le vrai filtrage stopword se fait
+    maintenant À L'ENTRÉE via _STOPWORDS dans mycelium.py (filtre par sens,
+    pas par degré). Réactiver ce filtre degree-based re-casse les concepts
+    centraux légitimes (`fleet`, `code`, `muninn`) sur petites DBs.
+
     PHASE 1.5 fix (2026-05-26 pc2 audit finding): default lowered 0.05 → 0.0.
     Reason: 5% percentile filter wipes legitimate concepts on small DBs.
     Example pc2 meta DB (2427 concepts): `fleet` rank 13 = top 0.5% =
     filtered as "stopword" even though it's the user's primary domain
     concept. The percentile-based approach fundamentally fails on small DBs.
-    Users who want stopword filter can opt-in via env var.
     """
     try:
         pct = float(os.environ.get("MUNINN_RECALL_STOPWORD_PERCENTILE", "0.0"))
