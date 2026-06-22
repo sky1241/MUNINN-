@@ -25,7 +25,7 @@ jobs:
                          # 180min cap was hit 3 nights running (uncapped scan
                          # >3h on 567-file repo). 90min is now the real budget.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
