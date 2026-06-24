@@ -75,9 +75,22 @@ class _MyceliumZonesMixin:
             from scipy.sparse.linalg import eigsh
             from sklearn.cluster import KMeans
         except ImportError:
-            print("detect_zones requires: pip install numpy scipy scikit-learn",
+            # BUGFIX: tenir la promesse du docstring (fallback BFS connected-components)
+            # au lieu de retourner {} en silence quand scipy/sklearn manque. Degrade le
+            # clustering spectral en composantes connexes, mais ne disparait pas sans bruit.
+            print("detect_zones: scipy/sklearn absent -> fallback BFS (connected components)",
                   file=sys.stderr)
-            return {}
+            if self._db is not None:
+                degree = self._db.all_degrees()
+            else:
+                degree = {}
+                for key in self.data["connections"]:
+                    parts = key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    degree[parts[0]] = degree.get(parts[0], 0) + 1
+                    degree[parts[1]] = degree.get(parts[1], 0) + 1
+            return self._bfs_zones(degree)
 
         # 1. Build concept index and sparse matrix
         # Cap concepts to avoid eigsh hanging on massive matrices (>2000 concepts)

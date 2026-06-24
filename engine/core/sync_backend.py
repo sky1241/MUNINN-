@@ -265,7 +265,11 @@ class SharedFileBackend(SyncBackend):
                     n_synced += 1
 
                 # PHASE 1.5: update last_sync_day in working DB meta after successful push
-                today_day = int(time.time() / 86400)
+                # BUGFIX: utiliser today_days() (epoch 2020-01-01) — int(time.time()/86400)
+                # donnait un jour-epoch-1970 (~20628) incompatible avec last_seen (jours
+                # depuis 2020, max ~2352) -> filtre WHERE last_seen >= last_sync_day TOUJOURS
+                # faux -> push=0 permanent depuis 2026-05-26. today_days() est deja importe (l.19).
+                today_day = today_days()
                 local_db._conn.execute(
                     "INSERT INTO meta (key, value) VALUES ('last_sync_day', ?) "
                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
