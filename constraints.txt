@@ -30,7 +30,7 @@ cryptography==48.0.0
 # mycelium_zones (graph entropy), engine/core/scanner/propagation.py, and
 # muninn/ui/neuron_map.py. Was installed in CI without version pin → builds
 # non-reproductible. 2.4.4 = currently tested locally (pyenv 3.13.13).
-numpy==2.4.4
+numpy==2.4.5
 
 # HTTP client used transitively by anthropic/requests; 2.7.0 stable.
 urllib3==2.7.0
