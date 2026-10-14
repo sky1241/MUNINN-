@@ -36,7 +36,7 @@ numpy==2.4.4
 urllib3==2.7.0
 
 # Used by sync_backend git ops + benchmark scripts.
-requests==2.33.1
+requests==2.34.2
 
 # Used by .claude/settings parsers + a few CI inline scripts.
 PyYAML==6.0.3
