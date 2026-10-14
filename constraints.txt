@@ -16,7 +16,7 @@
 # Source: docs/CHUNKS_AUDIT2_FIX_LIST_2026-05-08.md §C1
 
 # Token counting (used by L4, L12, scoring) — currently tested with 0.12.0
-tiktoken==0.12.0
+tiktoken==0.13.0
 
 # Optional LLM compression (L9) — bumped to 0.100.0 (2026-05-09 v3 audit;
 # 0.97 = CMA Memory beta, 0.95 = Bedrock auth breaking change).
