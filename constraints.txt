@@ -42,7 +42,7 @@ requests==2.33.1
 PyYAML==6.0.3
 
 # Property testing (forge --gen-props consumers). 6.152.2 currently tested.
-hypothesis==6.152.5
+hypothesis==6.152.7
 
 # CRIT-2 (2026-05-10): freeze datetime in tests that compute time deltas
 # (test_tier1_a2.py, test_tier3_c1.py). Without this lock, the test pair
